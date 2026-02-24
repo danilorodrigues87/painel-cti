@@ -6,6 +6,7 @@ use \App\Model\Entity\Trilhas as EntityTrilhas;
 use \App\Model\Entity\CategoryCourses as Category_Courses;
 use \App\Model\Db\Pagination;
 use \App\Common\Upload;
+use \App\Common\Helpers\NumeroHelper;
 
 class Trilhas extends Page{
 
@@ -43,17 +44,26 @@ class Trilhas extends Page{
 
 		$innerJoin = 'INNER JOIN categorias_curso ON trilhas.id_categoria = categorias_curso.id';
 
-		$fields = 'trilhas.id, trilhas.nome as trilha, categorias_curso.nome as categoria, trilhas.carga_h';
+		$fields = 'trilhas.id,trilhas.img, trilhas.nome as trilha, categorias_curso.nome as categoria, trilhas.carga_h';
 
 		//RESULTADOS DA PAGINA
 		$results = EntityTrilhas::getTrilha('trilhas.id_admin = ' . (int)$id_admin, 'id DESC', $obPagination->getLimit(),$fields,$innerJoin);
 
+// Defina a base da URL uma única vez fora do loop
+$caminhoImg = URL . '/uploads/img/site/curso/';
 
-		//REDERIZA O ITEM
-		while ($obDados = $results->fetchObject(EntityTrilhas::class)) {
+while ($obDados = $results->fetchObject(EntityTrilhas::class)) {
+    
+    // Simplificação: se img não for vazio, use ela, caso contrário use a padrão
+    // O trim remove espaços e o (string) garante que valores nulos não quebrem a lógica
+    $imgExibe = (!empty(trim((string)$obDados->img))) 
+                ? $caminhoImg . $obDados->img 
+                : $caminhoImg . 'sem-foto.png';
 
-			$itens .= '<tr>
-
+    $itens .= '<tr>
+                <td>
+                    <img src="' . $imgExibe . '" alt="Capa da Trilha" style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px;">
+                </td>
 			<td>'.$obDados->trilha.'</td>
 			<td>'.$obDados->categoria.'</td>
 			<td>'.$obDados->carga_h.'</td>
@@ -82,6 +92,7 @@ class Trilhas extends Page{
 		<table class="table table-striped" id="dataTable" width="100%" cellspacing="0">
 		<thead>
 		<tr>
+		<th>Foto</th>
 		<th>Nome</th>
 		<th>Categoria</th>
 		<th>Carga Horária</th>
@@ -156,10 +167,11 @@ $scriptJs = "<script>
 
 <style>
 .ck-editor__editable_inline {
-    min-height: 300px;
-    max-height: 500px; /* Se o texto passar disso, aparece o scroll */
+    min-height: 200px;
+    max-height: 300px; /* Se o texto passar disso, aparece o scroll */
     overflow-y: auto;
 }
+
 </style>
 ";
 
@@ -188,7 +200,14 @@ $scriptJs = "<script>
 
     // Lógica da Imagem: Definimos o caminho antes de montar o formulário
     $caminhoImg = URL . '/uploads/img/site/curso/';
-    $imagemExibir = (!empty($dados['img'])) ? $caminhoImg . $dados['img'] : $caminhoImg . 'sem-foto.png';
+	// 1. Pegamos o valor do banco ou uma string vazia se não existir
+	$nomeImagem = isset($dados['img']) ? trim($dados['img']) : '';
+
+    if ($nomeImagem !== '' && $nomeImagem !== null) {
+    $imagemExibir = $caminhoImg . $nomeImagem;
+	} else {
+    $imagemExibir = $caminhoImg . 'sem-foto.png';
+	}
 
     // Criação do formulário
     $form = '<form id="form" method="post" enctype="multipart/form-data">
@@ -212,25 +231,33 @@ $scriptJs = "<script>
                 <label>Imagem</label>
                 <input type="file" name="img" id="input-img" class="form-control" accept="image/*">
                 <div class="row">
-                <div class="mt-3 col-md-6">
+                <div class="mt-3 col-md-4">
                     <img id="preview-img" src="' . $imagemExibir . '" 
                          style="max-width: 200px; display: block; border: 1px solid #ddd; padding: 5px; border-radius: 5px;">
                 </div>
-                <div class="col-md-6">
-    <div class="form-group form-check my-3">
-        <input type="checkbox" name="ativoSite" value="1" class="form-check-input" ' . (isset($dados['site']) && $dados['site'] == 1 ? 'checked' : '') . '>
-        <label class="form-check-label">Ativo no site</label>
-    </div>
+                <div class="col-md-8">
+                <div class="row my-3">
+                <div class="form-group col-md-6">
+    <label>Valor mensal</label>
+    <input type="text"  name="valor_mensal" id="valor_mensal" value="' . (isset($dados['valor_mensal']) ? NumeroHelper::moedaBr($dados['valor_mensal']) : '') . '" class="form-control mascara-dinheiro" required>
 </div>
-		<div class="form-group ">
+    
+    <div class="form-group col-md-6">
                 <label>Carga Horária</label>
                 <input type="text" name="carga_h" value="' . (isset($dados['carga_h']) ? htmlspecialchars($dados['carga_h']) : '') . '" class="form-control" required>
             </div>
+
+           	
             <div class="form-group ">
                 <label>Categoria</label>
                 <select class="form-control" name="id_categoria">
                     ' . $optionSelect . '
                 </select>                   
+            </div>
+             <div class="form-group form-check col-md-6 mt-3">
+        <input type="checkbox" name="ativoSite" value="1" class="form-check-input" ' . (isset($dados['site']) && $dados['site'] == 1 ? 'checked' : '') . '>
+        <label class="form-check-label">Ativo no site</label>
+    </div>
             </div>
 		</div>
                 </div>
@@ -238,7 +265,8 @@ $scriptJs = "<script>
         </div>
     </div>
     <div class="modal-footer">
-        <input value="' . (isset($dados['id']) ? $dados['id'] : '') . '" type="hidden" name="id">
+		<input type="hidden" name="id" value="' . ($dados['id'] ?? '') . '">
+		<input type="hidden" name="img_atual" value="' . ($dados['img'] ?? '') . '">
         <button type="button" id="btn-fechar" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="submit" class="btn btn-primary">Salvar</button>
     </div>
@@ -254,81 +282,56 @@ $scriptJs = "<script>
 		$form = self::getForm($request);
 		return json_encode($form);
 	}
+public static function setNewTrilha($request){
+    // DADOS DO ADMIN
+    $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 
-	public static function setNewTrilha($request){
+    $fileVars = $request->getFileVars();
+    $postVars = $request->getPostVars();
 
-		//DADOS DO ADMIN
-		$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
+    $valorLimpo = filter_var($postVars['valor_mensal'] ?? 0, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION | FILTER_FLAG_ALLOW_THOUSAND);
+    
+    $resposta = ["filtro" => null];
 
-		$fileVars = $request->getFileVars();
-		$postVars = $request->getPostVars();
+    // Inicializamos a variável de imagem com o que já existe no banco ou vazio
+    $img = $postVars['img_atual'] ?? ''; 
 
-		
-		$resposta = [
-			"filtro" => null
-		];
+    // Processamento do Upload (Novo ou Edição)
+    if(isset($fileVars['img']) && !empty($fileVars['img']['name'])){
+        $obUpload = new Upload($fileVars['img']);
+        $obUpload->generateNewName();
+        // Se for edição, passamos o nome da imagem antiga para deletar
+        $imagemAntiga = ($postVars['id'] != '') ? $img : false;
+        $obUpload->Upload('/img/site/curso/', false, $imagemAntiga);
+        $img = $obUpload->getBasename();
+    }
 
-		// VEREFICA SE TEM UM ID
-		if($postVars['id'] != ''){
+    // Instancia o objeto (Camada de persistência)
+    $obData = new EntityTrilhas;
+    
+    // Mapeamento comum (tanto para insert quanto update)
+    $obData->nome         = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
+    $obData->descricao    = isset($postVars['descricao']) ? trim($postVars['descricao']) : '';
+    $obData->id_categoria = (int)($postVars['id_categoria'] ?? 0);
+    $obData->id_admin     = (int)$id_admin; // Limpo de caracteres invisíveis
+    $obData->carga_h      = filter_var($postVars['carga_h'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
+    $obData->site         = isset($postVars['ativoSite']) ? 1 : 0;
+    $obData->valor_mensal = NumeroHelper::moedaEN($valorLimpo) ?: 0.00;
+    $obData->img          = $img;
 
-			if($postVars['img'] == ''){
-				$img = false;
-			} else {
-				$img = $postVars['img'];
-			}
-			if(isset($fileVars['img'])){
+    if($postVars['id'] != ''){
+        $obData->id = (int)$postVars['id'];
+        $sucesso = $obData->atualizar();
+    } else {
+        $sucesso = $obData->cadastrar();
+    }
 
-			$obUpload = new Upload($fileVars['img']);
-			$obUpload->generateNewName();
-			$obUpload->Upload('/img/site/',false,$img);
-			$img = $obUpload->getBasename();
+    if(!$sucesso){
+        $resposta["erro"] = 'Erro ao registrar os dados no banco.';
+    }
 
-		}
-
-			//NOVA INSTANCIA
-			$obData = new EntityTrilhas;
-			$obData->id = (int)$postVars['id'];
-			$obData->nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
-			$obData->descricao = isset($postVars['descricao']) ? trim($postVars['descricao']) : '';
-			$obData->id_categoria = (int)($postVars['id_categoria'] ?? 0);
-			$obData->id_admin     = (int)$id_admin;
-			$obData->carga_h = filter_var($postVars['carga_h'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
-			$obData->site = isset($postVars['ativoSite']) ? 1 : 0;
-			$obData->img = $img;
-			$obData->atualizar();
-
-		} else {
-
-		if(isset($fileVars['img'])){
-
-			$obUpload = new Upload($fileVars['img']);
-			$obUpload->generateNewName();
-			$obUpload->Upload('/img/site/',false);
-			$img = $obUpload->getBasename();
-
-		}
-
-
-		//NOVA INSTANCIA
-		$obData = new EntityTrilhas;
-		$obData->nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
-		$obData->descricao = isset($postVars['descricao']) ? trim($postVars['descricao']) : '';
-		$obData->id_categoria = (int)($postVars['id_categoria'] ?? 0);
-		$obData->id_admin     = (int)$id_admin;
-		$obData->carga_h = filter_var($postVars['carga_h'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
-		$obData->site = isset($postVars['ativoSite']) ? 1 : 0;
-		$obData->img = $img;
-		$obData->cadastrar();
-		}
-
-		if(!$obData){
-			$resposta ["erro"] = 'Erro ao registrar os dados';
-		}
-
-		return json_encode($resposta);
-		
-
-	}
+    return json_encode($resposta);
+}
 
 
 	public static function deleteTrilha($request){

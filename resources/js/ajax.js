@@ -184,20 +184,25 @@ $(document).on("submit", "#formEmpresa", function(event) {
 $(document).on("submit", "#form", function(event) {
     event.preventDefault();
 
-    // Criamos o objeto FormData com os dados do formulário atual
+    // === ADICIONE ISSO AQUI ===
+    // Sincroniza o conteúdo do CKEditor com o textarea original
+    if (typeof meuEditor !== 'undefined') {
+        document.querySelector('#editor').value = meuEditor.getData();
+    }
+    // ==========================
+
+    // Agora o FormData vai capturar o texto já atualizado com as tags HTML
     var formData = new FormData(this);
 
     $.ajax({
         url: url_base + edicao,
         type: "POST",
         dataType: "json",
-        data: formData, // <--- Enviando o objeto FormData
-        processData: false, // <--- Importante: não processar os dados
-        contentType: false, // <--- Importante: não definir o content-type manualmente
+        data: formData,
+        processData: false,
+        contentType: false,
         success: function(response) {
-
-            console.log(response);
-            
+     
             if (response.erro) {
                 $("#response").html('<div class="alert alert-danger">' + response.erro + '</div>');
             } else {

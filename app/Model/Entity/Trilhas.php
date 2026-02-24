@@ -5,7 +5,14 @@ use App\Model\Db\Database;
 
 class Trilhas{
 
-	public $id,$nome,$id_categoria,$carga_h;
+	public $id,
+	$nome,
+	$id_categoria,
+	$carga_h,
+	$descricao,
+	$valor_mensal,
+	$site,
+	$img;
 
 	//RETORNA COM BASE NO ID
 	public static function getTrilhaById($id){
@@ -23,7 +30,11 @@ class Trilhas{
 			'nome' => $this->nome,
 			'id_categoria' => $this->id_categoria,
 			'carga_h' => $this->carga_h,
-			'id_admin' => $this->id_admin
+			'id_admin' => $this->id_admin,
+			'descricao' => $this->descricao,
+			'valor_mensal' => $this->valor_mensal,
+			'site' => $this->site,
+			'img' => $this->img
 		]);
 		
 		return true;
@@ -62,7 +73,11 @@ class Trilhas{
 		return (new Database('trilhas'))->update('id = '.$this->id,[
 			'nome' => $this->nome,
 			'id_categoria' => $this->id_categoria,
-			'carga_h' => $this->carga_h
+			'carga_h' => $this->carga_h,
+			'descricao' => $this->descricao,
+			'valor_mensal' => $this->valor_mensal,
+			'site' => $this->site,
+			'img' => $this->img
 		]);
 
 	}
