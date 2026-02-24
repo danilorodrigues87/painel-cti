@@ -1,0 +1,63 @@
+<h1 class="mt-4">Usuários</h1>
+<ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item active">Funcionários</li>
+</ol>
+
+<ul class="nav nav-tabs">
+
+	<li class="nav-item">
+		<a class="nav-link bg-success text-light" onclick="list_itens('','novo')" data-toggle="modal" href="#">Novo Usuário</a>
+	</li>
+
+	<li class="nav-item">
+		<a class="nav-link active" id="fil-todos" onclick="listar('',1)" href="#">Todos</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-diretor" onclick="listar('Diretor',1)" href="#">Diretor</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-secretario" onclick="listar('Secretario',1)" href="#">Secretário</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-financeiro" onclick="listar('Financeiro',1)" href="#">Financeiro</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-financeiro" onclick="listar('Comercial',1)" href="#">Comercial</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link bg-primary text-light" id="fil-inativo" onclick="listar('inativo',1)" href="#">Usuários Inativos</a>
+	</li>
+</ul>
+<hr>
+
+
+<div class="card shadow mb-4">
+	<div id="listar"></div>
+
+	<nav class="container">
+		<ul class="pagination">
+			<div id="pagination">
+			</div>	
+		</ul>
+	</nav>
+
+</div>
+
+<!-- Modal formulario -->
+<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div id="listar-dados">
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	let listagem = 'painel/user';
+	let formulario = 'painel/user/form';
+	let edicao = 'painel/user/save';
+	let exclusao = 'painel/user/exclusao';
+	let deletar = 'painel/user/excluir';
+</script>
+ <script src="{{URL}}/resources/js/ajax.js"></script> 

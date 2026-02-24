@@ -1,0 +1,313 @@
+<?php 
+
+namespace App\Controller\Admin;
+use \App\Utils\View;
+use \App\Model\Entity\Responsaveis as EntityRes;
+use \App\Model\Db\Pagination;
+use \App\Common\Helpers\DateTimeHelper;
+
+class Responsavel extends Page{
+
+	//RETORNA O FORMULARIO
+	public static function index($request){
+		//CONTEÚDO DE FORMULÁRIO
+		$content = View::render('admin/modules/responsavel/index',[]);
+
+		//RETORNA A PÁGINA COMPLETA
+		/**
+         * TITULO DA PAGINA
+         * CONTEUDO
+         * CURRENTSESSION SESSÃO ATUAL
+         * REQUEST SE NESCESSÁRIO
+         */
+		return parent::getPanel('Responsáveis',$content,'users');
+	}
+
+	private static function getResItems($request,&$obPagination){
+
+//DADOS DO ADMIN
+    $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
+
+    //PAGINA ATUAL
+		$postVars = $request->getPostVars();
+		$paginaAtual = $postVars['page'] ?? 1;
+
+    $id_cliente = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? intval($postVars['filtro']) : '';
+
+
+    // SELECT PARA PESQUISA POR CLIENTE
+    $selecteCliente =
+    '<div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
+    <select onchange="listar(this.value,1)" class="form-control" id="responsavel" name="responsavel">
+    <option value="0">Filtrar por Responsável</option>';
+
+    $results = EntityRes::getRes("id_admin = '". $id_admin ."'", 'nome ASC');
+
+    while ($obCliente = $results->fetchObject(EntityRes::class)) {
+
+      $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
+
+      $selecteCliente .=
+      '<option '.$selected.' value="'.$obCliente->id.'">'.$obCliente->nome.'</option>';
+
+    }
+
+    $selecteCliente .=
+    ' </select>
+    </div>';
+
+    if($id_cliente != '') {
+    $where = 'id =' . $id_cliente;
+} else {
+    $where = "id_admin = '" . $id_admin . "'";
+}
+
+$itens = '<div class="row">' . $selecteCliente . '
+    <div class="col">
+        <button type="button" class="btn btn-success" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Cadastrar novo</button>
+    </div>
+</div>';
+
+// QUANTIDADE TOTAL DE REGISTROS
+$quantidadeTotal = EntityRes::getRes($where, 'nome ASC', null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+
+// INSTANCIA DE PAGINAÇÃO
+$obPagination = new Pagination($quantidadeTotal, $paginaAtual, 5);
+
+// RESULTADOS DA PAGINA
+$results = EntityRes::getRes($where, 'id DESC', $obPagination->getLimit());
+
+
+		//REDERIZA O ITEM
+		while ($obUsers = $results->fetchObject(EntityRes::class)) {
+			$itens .= '<tr>
+			<td>'.$obUsers->nome.'</td>
+			<td>'.$obUsers->email.'</td>
+			<td class="mascara-celular">'.$obUsers->whatsapp.'</td>
+			<td>
+			<div class="dropdown">
+			<button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+			<i class="far fa-edit fa-lg"></i>
+			</button>
+			<ul class="dropdown-menu">
+			<li>
+			<a class="dropdown-item" href="#" onclick="list_itens('.$obUsers->id.', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
+			</li>
+			<li>
+			<a class="dropdown-item" href="#" onclick="excluir('.$obUsers->id.')" ><i class="far fa-trash-alt fa-lg"></i> Excluir</a>
+			</li>
+			</ul>
+			</div>
+			</td>
+			</tr>';
+
+		}
+
+
+		$table = '
+		<div class="card-body">
+		<div class="table-responsive">
+		<table class="table table-striped" id="dataTable" width="100%" cellspacing="0">
+		<thead>
+		<tr>
+		<th>Nome</th>
+		<th>Email</th>
+		<th>Whatsapp</th>
+		<th>Ações</th>
+		</tr>
+		</thead>
+		<tbody>'.$itens.'</tbody>
+		</table>
+		</div>
+		</div>
+		<script src="'.URL.'/resources/js/js_mascara.js"></script>';
+
+		//RETORNA OS USUÁRIOS
+		return $table;
+	}
+
+	public static function getInfo($request){
+
+
+	//CONTEÚDO DE USUÁRIOS
+		$conteudo = [
+			'itens' => self::getResItems($request,$obPagination),
+			'pagination' => parent::getPagination($request,$obPagination)
+		];
+
+		return json_encode($conteudo);
+
+	}
+
+
+	private static function getForm($request) {
+
+		$postVars = $request->getPostVars();
+
+		if ($postVars['funcao'] == 'editar') {
+			$dados = (array) EntityRes::getResById($postVars['id']);
+		}
+
+
+		// COMEÇA O FORM
+		$form = '<form id="form" method="post">
+
+		<!-- HEADER -->
+		<div class="modal-header">
+		<h1 class="modal-title fs-5" id="exampleModalLabel">Responsável</h1>
+		<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+		</div>
+
+		<!-- BODY -->
+		<div class="modal-body">
+		<div id="response"></div>
+
+		<!-- INICIA A ROW PRINCIPAL -->
+		<div class="row">
+
+		<div class="form-group col-md-6">
+		<label>Nome</label>
+		<input type="text" name="nome" value="' . @$dados['nome'] . '" class="form-control" required>
+		</div>
+
+		<div class="form-group col-md-6">
+		<label>Nascimento</label>
+		<input type="date" name="nascimento" value="' . @$dados['nascimento'] . '" class="form-control" required>
+		</div>
+
+		<div class="form-group col-md-6">
+		<label>RG</label>
+		<input type="text" name="rg" value="' . @$dados['rg'] . '" class="form-control mascara-rg"  required>
+		</div>
+
+		<div class="form-group col-md-6">
+		<label>CPF</label>
+		<input type="text" name="cpf" value="' . @$dados['cpf'] . '" class="form-control mascara-cpf"  required>
+		</div>
+
+		<div class="form-group col-md-6">
+		<label>Whatsapp</label>
+		<input type="text" name="whatsapp" value="' . @$dados['whatsapp'] . '" class="form-control mascara-celular"  required>
+		</div>
+
+		<div class="form-group col-md-6">
+		<label>Email</label>
+		<input type="email" name="email" value="' . @$dados['email'] . '" class="form-control">
+		</div>
+
+		
+		<!-- FIM DA ROW PRINCIPAL -->
+		</div>
+
+		<!-- FIM DO BODY -->
+		</div>
+
+		<!-- FOOTER -->
+
+		<div class="modal-footer">
+		<input value="' . @$dados['id'] . '" type="hidden" name="id">
+		<button type="button" id="btn-fechar" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+		<button type="submit" class="btn btn-primary">Salvar</button>
+		</div>
+		<script src="'.URL.'/resources/js/js_mascara.js"></script>
+		<!-- TERMINA O FORM -->
+		</form>';
+ 
+		return $form;
+	}
+
+
+	public static function getNewUser($request){
+
+		$form = self::getForm($request);
+		return json_encode($form);
+	}
+
+	public static function setNewUser($request){
+
+
+		//DADOS DO ADMIN
+		$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
+
+		$postVars = $request->getPostVars();
+
+		$permission = array();
+
+if (empty($permission)) {
+    $permission[]='home';
+} 
+
+$acesso = json_encode($permission);
+
+$resposta = [
+			"filtro" => null
+	];
+
+
+// Sanitização dos campos utilizando funções nativas do PHP
+    $nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_STRING);
+    $email = filter_var($postVars['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $whatsapp = filter_var($postVars['whatsapp'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
+    $rg = filter_var($postVars['rg'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
+    $cpf = filter_var($postVars['cpf'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
+
+
+		if($postVars['id'] != ''){
+
+			$resposta ["filtro"] = $postVars['id'];
+
+			//NOVA INSTANCIA
+			$obUsers = new EntityRes;
+			$obUsers->id = $postVars['id'];
+			$obUsers->nome = $nome;
+			$obUsers->email = $email;
+			$obUsers->whatsapp = $whatsapp;
+			$obUsers->rg = $rg;
+			$obUsers->cpf = $cpf;
+			$obUsers->nascimento = $postVars['nascimento'] ?? '';
+			$obUsers->atualizar();
+
+		} else {
+
+
+		//NOVA INSTANCIA
+			$obUsers = new EntityRes;
+			$obUsers->nome = $nome;
+			$obUsers->email = $email;
+			$obUsers->whatsapp = $whatsapp;
+			$obUsers->rg = $rg;
+			$obUsers->cpf = $cpf;
+			$obUsers->nascimento = $postVars['nascimento'] ?? '';
+			$obUsers->id_admin = $id_admin;
+			$obUsers->cadastrar();
+		}
+
+
+		if(!$obUsers){
+			$resposta ["erro"] = 'Erro ao cadastrar usuário';
+		}
+
+
+		return json_encode($resposta);
+		
+	}
+
+
+	public static function deleteUser($request){
+
+		$postVars = $request->getPostVars();
+
+		//NOVA INSTANCIA
+		$obUsers = new EntityRes;
+		$obUsers->id = $postVars['id'];
+		$obUsers->excluir();
+
+		if($obUsers){
+			return true;
+		} else {
+			return 'Erro ao excluir usuário';
+		}
+		
+	}
+
+}

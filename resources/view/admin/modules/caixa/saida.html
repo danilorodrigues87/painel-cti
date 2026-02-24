@@ -1,0 +1,99 @@
+<h1 class="mt-4">Saída</h1>
+
+<ul class="nav nav-tabs">
+
+	<li class="nav-item">
+		<a class="nav-link bg-success text-light" onclick="list_itens('','novo')" data-toggle="modal" href="#">Nova Movimentação</a>
+	</li>
+
+	<li class="nav-item">
+		<a class="nav-link active" id="fil-hoje" onclick="listar('hoje',1)" href="#">Hoje</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-semana" onclick="listar('semana',1)" href="#">Essa semana</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-mes" onclick="listar('mes',1)" href="#">Esse mês</a>
+	</li>
+	<li class="nav-item">
+		<a class="nav-link" id="fil-atraso" onclick="listar('atraso',1)" href="#">Em atraso</a>
+	</li>
+</ul>
+<hr>
+
+
+<div class="card shadow mb-4">
+	<div id="listar"></div>
+
+	<nav class="container">
+		<ul class="pagination">
+			<div id="pagination">
+			</div>	
+		</ul>
+	</nav>
+
+</div>
+
+<!-- Modal formulario -->
+<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div id="listar-dados">
+			</div>
+		</div>
+	</div>
+</div>
+
+
+<script>
+	let listagem = 'painel/caixa/saida';
+	let formulario = 'painel/caixa/saida/form';
+	let edicao = 'painel/caixa/saida/save';
+</script>
+<script src="{{URL}}/resources/js/ajax.js"></script>
+
+<script>
+
+ 	// CHAMA A FUNÇÃO LISTAR AO CARREGAR A PAGINA
+	$(document).ready(function(){
+		listar('hoje',1);
+
+	})
+ 	// FUNÇÃO LITSAR MOVIMENTAÇÃ CAIXA
+	function listar(filtro=null,page=1) {
+
+		$.ajax({
+			url: url_base+listagem,
+			method: "post",
+			data: {filtro,page},
+			dataType: "json",
+			success: function(result){
+
+				$('#listar').html(result.itens);
+				$('#pagination').html(result.pagination);
+
+				$('#fil-hoje').removeClass('active')
+				$('#fil-semana').removeClass('active')
+				$('#fil-mes').removeClass('active')
+				$('#fil-atraso').removeClass('active')
+
+				if(filtro == ''){
+					$('#fil-hoje').addClass('active')
+				} else if(filtro == 'hoje'){
+					$('#fil-hoje').addClass('active')
+				} else if(filtro == 'semana'){
+					$('#fil-semana').addClass('active')
+				} else if(filtro == 'mes'){
+					$('#fil-mes').addClass('active')
+				} else if(filtro == 'atraso'){
+					$('#fil-atraso').addClass('active')
+				} else {
+					$('#fil-hoje').addClass('active')
+				}
+
+
+			},
+
+		})
+	}
+</script>

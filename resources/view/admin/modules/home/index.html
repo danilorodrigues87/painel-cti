@@ -1,0 +1,228 @@
+<h1 class="mt-4">Dashboard</h1>
+<ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item active">Dashboard</li>
+</ol>
+
+<div class="row">
+
+  <div class="col-xl-4 col-md-6 mb-4">
+    <div class="card shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+            Clientes Cadastrados</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{clientes-cadastrados}}</div>
+          </div>
+          <div class="col-auto">
+            <i class="fa-regular fa-user fa-3x" style="color: #FFD43B;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4 col-md-6 mb-4">
+    <div class="card shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+            Clientes Ativos</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">{{qtt-clientes}}</div>
+          </div>
+          <div class="col-auto">
+            <i class="fa-regular fa-face-smile fa-3x" style="color: #FFD43B;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4 col-md-6 mb-4 {{visible}}">
+    <div class="card shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+            Recebido Hoje</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{recebido-hoje}}</div>
+          </div>
+          <div class="col-auto">
+            <i class="fa-regular fa-money-bill-1 fa-3x" style="color: #FFD43B;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4 col-md-6 mb-4">
+    <div class="card shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+            Dinheiro em caixa</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{balanco}}</div>
+          </div>
+          <div class="col-auto">
+            <i class="fa-solid fa-cash-register fa-3x" style="color: #FFD43B;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4 col-md-6 mb-4 {{visible}}">
+    <div class="card shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+            A Receber na Semana</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{receber-semana}}</div>
+          </div>
+          <div class="col-auto">
+            <i class="fa-solid fa-money-bill-trend-up fa-3x" style="color: #FFD43B;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4 col-md-6 mb-4 {{visible}}">
+    <div class="card shadow h-100 py-2">
+      <div class="card-body">
+        <div class="row no-gutters align-items-center">
+          <div class="col mr-2">
+            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+            Inadimplentes esse mês</div>
+            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{inadimplentesDoMes}}</div>
+          </div>
+          <div class="col-auto">
+            <i class="fa-regular fa-calendar-xmark fa-3x" style="color: #FFD43B;"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+</div>
+
+<div class="row">
+
+  <div class="col-md-6 col-xl-6">
+    <div class="card mb-4 shadow">
+      <div class="card-header">
+        <i class="fas fa-chart-area me-1"></i>
+        Nossas vendas
+      </div>
+      <div class="card-body">
+        <canvas id="graficoVendas" width="100%" height="40"></canvas>
+      </div>
+    </div>
+  </div>
+ 
+  <div class="col-md-6 col-xl-6 {{visible}}">
+   <div class="card mb-4 shadow">
+     <div class="card-header">
+      <i class="fa-solid fa-coins me-1"></i>
+       Financeiro
+     </div>
+     <div class="card-body">
+      <canvas id="graficoFinanceiro" width="100%" height="40"></canvas>
+    </div>
+   </div>
+ </div>
+
+ <div class="col-md-6 col-xl-6">
+   <div class="card mb-4 shadow">
+     <div class="card-header">
+      <i class="fa-solid fa-chart-pie me-1"></i>
+       Cursos Mais Vendidos
+     </div>
+     <div class="card-body">
+      <canvas id="myPieChart" width="100%" height="40"></canvas>
+    </div>
+   </div>
+ </div>
+
+ <div class="col-md-6 col-xl-6 {{visible}} ">
+   <div class="card mb-4 shadow">
+     <div class="card-header">
+      <i class="fa-solid fa-ranking-star me-1"></i>
+       Top 3 Melhores Vendedores
+     </div>
+     <div class="card-body">
+     <table class="table align-middle bg-white">
+ 
+  <tbody>
+
+    <tr>
+      <td>1</td>
+      <td>
+        <div class="d-flex align-items-center">
+          <img
+              src="https://mdbootstrap.com/img/new/avatars/8.jpg"
+              alt=""
+              style="width: 10%"
+              class="rounded-circle"
+              />
+          <div class="ms-3">
+            <p class="fw-bold mb-1">John Doe</p>
+            <p class="text-muted mb-0">john.doe@gmail.com</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+
+    <tr>
+      <td>2</td>
+      <td>
+        <div class="d-flex align-items-center">
+          <img
+              src="https://mdbootstrap.com/img/new/avatars/6.jpg"
+              class="rounded-circle"
+              alt=""
+              style="width: 10%"
+              />
+          <div class="ms-3">
+            <p class="fw-bold mb-1">Alex Ray</p>
+            <p class="text-muted mb-0">alex.ray@gmail.com</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>
+        <div class="d-flex align-items-center">
+          <img
+              src="https://mdbootstrap.com/img/new/avatars/7.jpg"
+              class="rounded-circle"
+              alt=""
+              style="width: 10%"
+              />
+          <div class="ms-3">
+            <p class="fw-bold mb-1">Kate Hunington</p>
+            <p class="text-muted mb-0">kate.hunington@gmail.com</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+    </div>
+   </div>
+ </div>
+
+</div>
+
+<scripT>
+  let carregaDadosHome = 'painel/'; 
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.js" crossorigin="anonymous"></script>
+<script src="{{URL}}/resources/js/graficos.js"></script>

@@ -1,0 +1,52 @@
+
+<div class="row">
+	<h1 class="mt-4 col-9">Conversa com o cliente </h1>
+	<div class="mt-4 col-3">
+		<a type="button" class="btn btn-success" href="{{URL}}/painel/whatsappatm" >Voltar</a> 
+	</div>
+</div>
+
+<section>
+	<div class="container py-5">
+
+		<div class="row">
+
+			<div class="col-md-6 col-lg-7 col-xl-8">
+
+				<ul class="list-unstyled">
+
+					{{chat}}
+
+					<form id="msgForm" method="post">
+						{{msgBox}}
+						<button type="submit" data-mdb-button-init data-mdb-ripple-init class="btn btn-info btn-rounded float-end">Enviar</button> 
+					</form> 
+
+
+				</ul>
+
+			</div>
+
+			<div class="col-md-6 bg-danger col-lg-5 col-xl-4 mb-4 mb-md-0">
+
+				<div class="card text-bg-danger my-3 mb-3">
+					{{info_cliente}}
+					
+				</div>
+
+			</div>
+
+
+
+		</div>
+
+	</div>
+</section>
+
+
+<script>
+	let mensagemEnviar = 'painel/mensagens/enviar';
+	let listagemChat = 'painel/mensagens/chat';
+</script>
+<script src="{{URL}}/resources/js/script.js"></script>
+

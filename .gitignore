@@ -1,0 +1,10 @@
+.env
+/vendor/
+*.log
+webhook_log.txt
+webhook_test_log.txt
+.cursor/
+.vscode/
+teste.php
+resources/views/admin/page.html
+uploads/img/*

@@ -1,0 +1,36 @@
+<h1 class="mt-4">Pedagógico</h1>
+<ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item active">Certificações</li>
+</ol>
+
+<div class="card shadow mb-4">
+	<div id="listar"></div>
+
+	<nav class="container">
+		<ul class="pagination">
+			<div id="pagination">
+			</div>	
+		</ul>
+	</nav>
+	
+
+</div>
+
+<!-- Modal formulario -->
+<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div id="listar-dados">
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	let listagem = 'painel/certificados';
+	let formulario = 'painel/certificados/form';
+	let edicao = 'painel/certificados/save';
+	let deletar = 'painel/certificados/excluir';
+	let download = 'painel/certificados/download';
+</script>
+<script src="{{URL}}/resources/js/ajax.js"></script>

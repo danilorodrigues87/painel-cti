@@ -1,0 +1,43 @@
+<h1 class="mt-4">Carnês Gerados</h1>
+
+<hr>
+
+<div class="card shadow mb-4">
+	<div id="listar"></div>
+
+	<nav class="container">
+		<ul class="pagination">
+			<div id="pagination">
+			</div>	
+		</ul>
+	</nav>
+	
+</div>
+
+<!-- Modal formulario -->
+<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	<div class="modal-dialog modal-xl">
+		<div class="modal-content">
+			<div id="listar-dados">
+			</div>
+		</div>
+	</div>
+</div>
+ 
+<!-- Modal Baixa -->
+<div class="modal fade" id="modalDarBaixa" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div id="body_dar_baixa"></div>
+		</div>
+	</div>
+</div>
+
+<script>
+	let listagem = 'painel/carnes';
+	let formulario = 'painel/carnes/form';
+	let edicao = 'painel/carnes/save';
+	let formBaixa = 'painel/carnes/dar-baixa';
+
+</script>
+ <script src="{{URL}}/resources/js/ajax.js"></script>

@@ -1,0 +1,34 @@
+<h1 class="mt-4">Parcerias</h1>
+<ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item active">Gerentes</li>
+</ol>
+
+	<div class="card shadow mb-4">
+		<div id="listar"></div>
+
+		<nav class="container">
+			<ul class="pagination">
+				<div id="pagination">
+				</div>	
+			</ul>
+		</nav>
+
+	</div>
+
+	<!-- Modal formulario -->
+	<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+		<div class="modal-dialog">
+			<div class="modal-content">
+			<div id="listar-dados">
+			</div>
+        </div>
+		</div>
+	</div>
+
+<script>
+	let listagem = 'painel/gerentes';
+	let formulario = 'painel/gerentes/form';
+	let edicao = 'painel/gerentes/save';
+	let deletar = 'painel/gerentes/excluir';
+</script>
+ <script src="{{URL}}/resources/js/ajax.js"></script>
