@@ -80,7 +80,6 @@ $obRouter->post('/painel/certificados/excluir',[
 
 
 
-//ROTA DE CONFIRMA EXCLUSAO
 $obRouter->get('/painel/certificado/download/{id}',[
 	'middlewares' => [
 		'required-admin-login'

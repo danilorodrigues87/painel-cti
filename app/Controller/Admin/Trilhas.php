@@ -283,6 +283,7 @@ $scriptJs = "<script>
 		return json_encode($form);
 	}
 public static function setNewTrilha($request){
+    
     // DADOS DO ADMIN
     $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 

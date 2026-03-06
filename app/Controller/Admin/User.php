@@ -165,7 +165,7 @@ private static function getForm($request) {
 		$optEstadoSelect .= '<option ' . $selected . ' value="' . htmlspecialchars($obDados->id, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($obDados->nome, ENT_QUOTES, 'UTF-8') . '</option>';
 	}
 	$optEstadoSelect .= '</select>';
-
+ 
     // Formulário HTML
 	$form = '<form id="form" method="post">
 

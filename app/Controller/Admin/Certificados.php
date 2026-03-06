@@ -88,7 +88,7 @@ class Certificados extends Page{
  ';
 
     // Resultados da Página
- $results = EntityCertificados::getCertificados($where, 'certificados.id DESC', $obPagination->getLimit(), $fields, $innerJoin);
+ $results = EntityCertificados::getCertificados($where, 'certificados.id ASC', $obPagination->getLimit(), $fields, $innerJoin);
 
     // Renderiza o Item
  while ($obDados = $results->fetchObject(EntityCertificados::class)) {
