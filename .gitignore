@@ -6,5 +6,5 @@ webhook_test_log.txt
 .cursor/
 .vscode/
 teste.php
-resources/views/admin/page.html
-uploads/img/*
+resources/views/assets/img/*
+
