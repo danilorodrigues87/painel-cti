@@ -7,4 +7,5 @@ webhook_test_log.txt
 .vscode/
 teste.php
 resources/views/assets/img/*
-
+uploads/img/site/*
+uploads/img/certificado/qr_*.png
