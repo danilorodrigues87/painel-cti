@@ -171,7 +171,7 @@ $script = <<<SCRIPT
         
         // Código de Autenticação (opcional, perto do QR Code)
         ctx.font = "8pt Arial";
-        ctx.fillText("Cód: " + codigoCert, 50, 565);
+        //ctx.fillText("Cód: " + codigoCert, 50, 565);
     }
 
     // Evento para baixar PDF
