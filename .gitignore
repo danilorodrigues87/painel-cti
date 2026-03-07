@@ -1,11 +1,8 @@
 .env
 /vendor/
 *.log
-webhook_log.txt
-webhook_test_log.txt
 .cursor/
 .vscode/
-teste.php
 resources/views/assets/img/*
 uploads/img/site/*
 uploads/img/certificado/qr_*.png

@@ -106,8 +106,9 @@
         <i class="far fa-edit fa-lg"></i>
         </button>
         <ul class="dropdown-menu">
+        <li>
         <a class="dropdown-item" href="#" onclick="list_itens('.$dados->id.', \'listar_titulos\')">
-        <i class="far fa-edit fa-lg"></i> Dar Baixa</a>
+        <i class="fa-regular fa-file-lines fa-lg"></i> Ver títulos</a>
         </li>
         <li>
         <a class="dropdown-item" target="_blank" href="'.URL.'/painel/carnes/'.$dados->id.'" >
@@ -202,8 +203,8 @@
       <td>'.$data_pagamento.'</td>
       <td>'.$status.'</td>
       <td>
-      <a class="dropdown-item '.$baixaIcon.'" href="#"  title="Dar baixa" onclick="darBaixa('.$obDados->id.')">
-      '.$icon.'
+      <a class="dropdown-item '.$baixaIcon.'" href="#"  title="Adicionar ao carrinho" onclick="addCarrinhoTitulo('.$obDados->id.')">
+      <i class="fa-solid fa-cart-plus fa-lg"></i>
       </a>
 
       <a class="dropdown-item '.$reciboIcon.'" title="Imprimir Recibo" target="_blank" href="'.URL.'/painel/carnes/recibo/'.$obDados->id.'" >
@@ -374,141 +375,140 @@
 
   }
 
-  public static function recibo($request,$id){
+ public static function recibo($request, $id, $larguraPapel = '58mm') {
+    $dados = (array) Caixa::getCaixaById($id);
 
-   $dados = (array) Caixa::getCaixaById($id);
+    // Definimos a largura útil (Safe Zone)
+    // Para 58mm, o ideal é usar entre 48mm e 52mm para evitar cortes físicos
+    $larguraUtil = ($larguraPapel == '58mm') ? '52mm' : '72mm';
 
+    $reciboHtml = '
+    <style>
+    /* Força o tamanho da página no driver do navegador */
+    @page {
+        size: 58mm auto;
+        margin: 0;
+    }
 
-   $reciboHtml = '
-
-     <style>
-            * {
-     margin: 0;
-     padding: 0;
-     font-family: Arial, Helvetica, sans-serif;
-     font-size: 12px;
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: Arial, sans-serif;
+        font-size: 11px; /* Reduzi 1px para garantir que caiba na linha */
+        color: #000;
     }
 
     body {
-      width: 80mm; /* use 58mm se sua impressora for menor */
-      margin: 0 auto;
+        width: 48mm; /* Largura segura para impressoras de 58mm */
+        margin-left: 0; /* Cola na margem esquerda física da impressora */
+        margin-right: 0;
+        padding: 0;
+        overflow: hidden;
     }
 
-    .center {
-      text-align: center;
-    }
-
-    .right {
-      text-align: right;
-    }
-
+    .center { text-align: center; width: 100%; }
+    .right { text-align: right; }
+    
     .line {
-      border-top: 1px dashed #000;
-      margin: 6px 0;
+        border-top: 1px dashed #000;
+        margin: 4px 0;
+        width: 100%;
     }
 
     table {
-      width: 100%;
-      border-collapse: collapse;
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed; /* Força a tabela a respeitar a largura de 48mm */
     }
 
     td {
-      padding: 2px 0;
+        padding: 1px 0;
+        word-wrap: break-word;
     }
 
-    .small {
-      font-size: 10px;
-    }
-    </style>
+    .small { font-size: 10px; }
+    
+    strong { font-weight: bold; }
+</style>
 
+<body>
+        <div class="center">
+            <strong>CTI EDUCACIONAL</strong><br>
+            <span class="small">Cursos Profissionalizantes e Tecnologia</span><br>
+            Guapiara - SP<br>
+            CNPJ: 41.371.814/0001-31
+        </div>
 
-  </head>
-  <body>
+        <div class="line"></div>
 
-      <!-- CABEÇALHO -->
-      <div class="center">
-          <strong>CTI EDUCACIONAL</strong><br>
-          Cursos Profissionalizantes e Tecnologia<br>
-          Guapiara - SP<br>
-          CNPJ: 41.371.814/0001-31
-      </div>
+        <div>
+            Recibo nº: <strong>'.$dados['id'].'</strong><br>
+            Data: '.DateTimeHelper::databr($dados['data_pagamento']).'<br>
+            Hora: '.DateTimeHelper::extrairHorario($dados['data_pagamento']).'
+        </div>
 
-      <div class="line"></div>
+        <div class="line"></div>
 
-      <!-- DADOS DO RECIBO -->
-      <div>
-          Recibo nº: <strong>'.$dados['id'].'</strong><br>
-          Data: '.DateTimeHelper::databr($dados['data_pagamento']).'<br>
-          Hora: '.DateTimeHelper::extrairHorario($dados['data_pagamento']).'
-      </div>
+        <div>
+            Cliente / Descrição:<br>
+            <strong>'.mb_strtoupper($dados['descricao']).'</strong>
+        </div>
 
-      <div class="line"></div>
+        <div class="line"></div>
 
-      <!-- DADOS DO CLIENTE / ALUNO -->
-      <div>
-          Cliente / Descrição da compra:<br>
-          <strong>'.$dados['descricao'].'</strong>
-      </div>
+        <table>
+            <thead>
+                <tr>
+                    <th align="left">Item</th>
+                    <th align="right">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Mensalidade</td>
+                    <td class="right">R$ '.NumeroHelper::moedaBr($dados['valor_pago']).'</td>
+                </tr>
+            </tbody>
+        </table>
 
-      <div class="line"></div>
+        <div class="line"></div>
 
-      <!-- ITENS -->
-      <table>
-          <tr>
-              <td>Item</td>
-              <td class="right">Valor</td>
-          </tr>
+        <table>
+            <tr>
+                <td><strong>Total</strong></td>
+                <td class="right"><strong>R$ '.NumeroHelper::moedaBr($dados['valor_pago']).'</strong></td>
+            </tr>
+            <tr>
+                <td class="small">Forma de Pgto:</td>
+                <td class="right small">'.$dados['tipo_pagamento'].'</td>
+            </tr>
+        </table>
 
-          <tr>
-              <td>Mensalidade</td>
-              <td class="right">R$ '.NumeroHelper::moedaBr($dados['valor_pago']).'</td>
-          </tr>
+        <div class="line"></div>
 
-      </table>
+        <div class="small center">
+            Referente a baixa de mensalidade.<br>
+            Documento sem valor fiscal.
+        </div>
 
+        <div class="line"></div>
 
+        <div class="center small">
+            Obrigado pela preferência!<br>
+            <strong>www.ctieducacional.com.br</strong>
+        </div>
 
-      <!-- TOTAIS -->
-      <table>
-          <tr>
-              <td><strong>Total</strong></td>
-              <td class="right"><strong>R$ '.NumeroHelper::moedaBr($dados['valor_pago']).'</strong></td>
-          </tr>
-          <tr>
-              <td>Forma de pagamento</td>
-              <td class="right">'.$dados['tipo_pagamento'].'</td>
-          </tr>
-      </table>
+        <br>
+        <div class="center">.</div> </body>';
 
-      <div class="line"></div>
-
-      <!-- OBSERVAÇÕES -->
-      <div class="small">
-          Referente a baixa de mensalidade / venda de produto.<br>
-          Documento sem valor fiscal.
-      </div>
-
-      <div class="line"></div>
-
-      <!-- RODAPÉ -->
-      <div class="center small">
-          Obrigado pela preferência!<br>
-          www.ctieducacional.com.br
-      </div>
-
-  </div>';
-
-
-       //CONTEÚDO DE FORMULÁRIO
-    $content = View::render('admin/modules/carnes/recibo',[
-     'title' => 'Recibo de pagamento',
-     'show-recibo' => $reciboHtml,
-
-   ]);
+    $content = View::render('admin/modules/carnes/recibo', [
+        'title' => 'Recibo de pagamento',
+        'show-recibo' => $reciboHtml,
+    ]);
 
     return $content;
-
-  }
+}
 
 
 public static function registrarPagamento($request){

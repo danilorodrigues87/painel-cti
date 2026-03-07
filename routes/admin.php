@@ -28,12 +28,6 @@ include __DIR__.'/admin/autentication.php';
 
 include __DIR__.'/admin/users.php';
 
-include __DIR__.'/admin/entrada_caixa.php';
-
-include __DIR__.'/admin/saida_caixa.php';
-
-include __DIR__.'/admin/vendas.php';
-
 include __DIR__.'/admin/gerentes.php';
 
 include __DIR__.'/admin/diretores.php';
@@ -45,5 +39,3 @@ include __DIR__.'/admin/functions.php';
 include __DIR__.'/admin/agenda.php';
 
 include __DIR__.'/admin/relatorios.php';
-
-include __DIR__.'/admin/webhooks.php';

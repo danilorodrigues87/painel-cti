@@ -33,7 +33,7 @@ class Certificados{
 			'id_admin' => $this->id_admin,
 			'carga_h' => $this->carga_h,
 			'modulos' => $this->modulos,
-			'codigo' => ($this->codigo) ? $this->codigo : bin2hex(random_bytes(32)),
+			'codigo' => ($this->codigo) ? $this->codigo : bin2hex(random_bytes(8)),
 			'conclusao' => $this->conclusao
 			
 		]);
