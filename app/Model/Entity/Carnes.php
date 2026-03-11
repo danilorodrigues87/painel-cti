@@ -1,5 +1,5 @@
 <?php
-
+/*
 namespace App\Model\Entity;
 use App\Model\Db\Database;
 
@@ -53,3 +53,4 @@ class Carnes{
 	}
 
 }
+*/

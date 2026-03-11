@@ -158,7 +158,7 @@ $obUserLoged = SessionUser::getUserLogedData();
 $id_admin = $obUserLoged['usuario']['id_admin'];
 
 // WHERE clause
-$where = 'id_admin = "' . $id_admin . '" AND status = 1 AND data_pagamento >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)';
+$where = 'tipo_transacao = "Entrada" AND id_admin = "' . $id_admin . '" AND status = 1 AND data_pagamento >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)';
 
 // GROUP BY clause
 $group = 'DATE_FORMAT(data_pagamento, "%Y-%m")'; 
