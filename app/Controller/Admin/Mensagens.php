@@ -21,7 +21,7 @@ class Mensagens extends Page {
         ]);
 
         // RETORNA A PÁGINA COMPLETA
-        return parent::getPanel('Suporte', $content, 'Suporte');
+        return parent::getPanel('Mensagens', $content, 'CRM');
     }
 
     public static function msgBox($request){

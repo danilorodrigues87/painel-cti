@@ -9,6 +9,7 @@ class SystemModules {
         "Funcionários",
         "Responsáveis",
         "Leads",
+        "Tarefas",
         "Vouchers",
         "Categorias",
         "Trilhas",
@@ -149,13 +150,21 @@ class SystemModules {
                 ]
             ]
         ],
-        'Suporte' => [
-            'label' => 'Suporte',
-            'icon' => 'fa-brands fa-whatsapp',
+        'CRM' => [
+            'label' => 'CRM',
+            'icon' => 'fa-regular fa-address-book',
             'subsections' => [
-                'name' => 'Layouts-Suporte',
+                'name' => 'Layouts-CRM',
                 'icon' => 'fas fa-caret-down',
                 'items' => [
+                    [
+                        'label' => 'Leads',
+                        'link' => URL.'/painel/crm'
+                    ],
+                    [
+                        'label' => 'Tarefas',
+                        'link' => URL.'/painel/crm/tarefas'
+                    ],
                     [
                         'label' => 'Mensagens',
                         'link' => URL.'/painel/whatsappatm'

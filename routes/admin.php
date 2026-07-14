@@ -39,3 +39,7 @@ include __DIR__.'/admin/functions.php';
 include __DIR__.'/admin/agenda.php';
 
 include __DIR__.'/admin/relatorios.php';
+
+include __DIR__.'/admin/crm.php';
+
+include __DIR__.'/admin/tarefas.php';
