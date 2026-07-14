@@ -7,6 +7,7 @@ class Horarios{
 
 	public $id,
 	$id_admin,
+	$laboratorio_id,
 	$inicio,
 	$final,
 	$vagas_ocupadas,
@@ -26,6 +27,7 @@ class Horarios{
 		$obDatabase = new Database('horarios');
 		$this->id = $obDatabase->insert([
 			'id_admin' => $this->id_admin,
+			'laboratorio_id' => $this->laboratorio_id,
 			'inicio' => $this->inicio,
 			'final' => $this->final,
 			'vagas_ocupadas' => $this->vagas_ocupadas,
@@ -52,6 +54,7 @@ class Horarios{
 
 		//ATUALIZA OS DADOS PARA O BANCO DE DADOS
 		return (new Database('horarios'))->update('id = '.$this->id,[
+			'laboratorio_id' => $this->laboratorio_id,
 			'inicio' => $this->inicio,
 			'final' => $this->final,
 			'vagas_ocupadas' => $this->vagas_ocupadas,

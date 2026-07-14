@@ -6,6 +6,8 @@ use \App\Utils\View;
 use \App\Session\User\Login as SessionUser;
 use \App\Model\Entity\User;
 use \App\Common\SystemModules;
+use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\ModuleGateHelper;
 
 class Page {
 
@@ -27,6 +29,10 @@ class Page {
 		return SessionUser::getUserLogedData();
 	}
 
+	public static function getIdAdminInt(): int {
+		return TenantHelper::getIdAdmin();
+	}
+
 
 	// RETORNA O CONTEUDO (VIEW) ESTRUTURA GENERICA PAGINA PAINEL
 	public static function getPage($title,$content){
@@ -36,8 +42,8 @@ class Page {
 			'title' => $title,
 			'content' => $content,
 			'user' => $userLogedData['usuario']['nome'],
-			'company' => $userLogedData['empresa']['nome'],
-			'logo' => $userLogedData['empresa']['logo'] ?? ''
+			'company' => $userLogedData['escola']['nome'] ?? '',
+			'logo' => $userLogedData['escola']['logo'] ?? ''
 		]);
 	}
 
@@ -61,7 +67,20 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
         // Verifica se há subseções e se alguma delas está na lista de itens permitidos
         if (isset($module['subsections'])) {
             foreach ($module['subsections']['items'] as $subSection) {
-                if (in_array($subSection['label'], $permittedModules)) {
+                $labelsPermitidos = [$subSection['label']];
+                if ($subSection['label'] === 'Agendamentos') {
+                    $labelsPermitidos[] = 'Laboratório';
+                }
+
+                $subPermitido = false;
+                foreach ($labelsPermitidos as $labelPerm) {
+                    if (in_array($labelPerm, $permittedModules)) {
+                        $subPermitido = true;
+                        break;
+                    }
+                }
+
+                if ($subPermitido) {
                     $includeModule = true;
 
                     // Adiciona subseção ao subLinks
@@ -123,7 +142,9 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 
 		if($termosAceito){
-			$permittedModules = $userLogedData['usuario']['acesso'];
+			$id_admin = (int)$userLogedData['usuario']['id_admin'];
+			$acessoBruto = $userLogedData['usuario']['acesso'] ?? [];
+			$permittedModules = ModuleGateHelper::getModulosEfetivos($id_admin, $acessoBruto);
 		} 
 
 
@@ -131,8 +152,12 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 		$allPermittedModules = array_merge($defaultModules, $permittedModules);
 
+		$temAcesso = in_array($currentModule, $allPermittedModules);
+		if(!$temAcesso && $currentModule === 'Agendamentos' && in_array('Laboratório', $allPermittedModules)){
+			$temAcesso = true;
+		}
 
-		if (in_array($currentModule,$allPermittedModules)) {
+		if ($temAcesso) {
 
 		$contentPanel = View::render('admin/panel',[
 			'menu' => self::getMenu($currentSessionMenu,$allPermittedModules),

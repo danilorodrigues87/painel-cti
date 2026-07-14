@@ -10,7 +10,11 @@ class RequireAdminLogin{
 
 		//VERIFICA SE O USUÁRIO ESTÁ LOGADO
 		if(!SessionAdminLogin::isUserLogged()){
+			$request->getRouter()->redirect('/');
+		}
 
+		//ATUALIZA PERMISSÕES E STATUS DA SESSÃO
+		if(!SessionAdminLogin::syncSessionFromDatabase()){
 			$request->getRouter()->redirect('/');
 		}
 

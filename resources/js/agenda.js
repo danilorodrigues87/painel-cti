@@ -1,11 +1,14 @@
 // CHAMA A FUNÇÃO LISTAR AO CARREGAR A PAGINA
-$(document).ready(function(){
- listar(null,1);
+function diaAtualAgenda() {
+ var d = new Date().getDay();
+ return d === 0 ? 1 : d;
+}
 
+$(document).ready(function(){
+ listar(diaAtualAgenda(), 1);
 })
 
-
-// FUNÇÃO LITSAR CONTEUDOS DA PAGINA
+// FUNÇÃO LISTAR CONTEUDOS DA PAGINA
 function listar(filtro=null,page=1) {
 
  $.ajax({
@@ -38,14 +41,10 @@ function listar(filtro=null,page=1) {
   } else if(result.filtro  == 6){
       $('#fil-6').addClass('active')
   } 
-      
-
 },
 
 })
 }
-
-
 
 // FUNÇÃO QUE CARREGA A MODAL E OS DADOS
 function ver_info(id, funcao) {
@@ -66,19 +65,19 @@ function ver_info(id, funcao) {
 
 }
 
-
-// FUNÇÃO DE EXCLUSÃO
+// FUNÇÃO DE EXCLUSÃO (remove slot do plano semanal)
 function excluir(id) {
 
+    $('#formModal').modal('hide');
     $('#formAgendamento').modal('hide');
     Swal.fire({
-      title: "Você tem certeza que quer excluir esse item?",
-      text: "Isso não poderá ser recuperado!",
+      title: "Remover este horário do plano do aluno?",
+      text: "O aluno deixará de frequentar este horário.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#3085d6",
       cancelButtonColor: "#d33",
-      confirmButtonText: "Sim, excluir!"
+      confirmButtonText: "Sim, remover!"
   }).then((result) => {
 
       if (result.isConfirmed) {
@@ -91,34 +90,32 @@ function excluir(id) {
         success: function(result){
 
             if(result){
-                result = "Item excluido com sucesso!"
-                let status = "success"
                 Swal.fire({
-              title: "Excluido!",
-              text: result,
-              icon: status
+              title: "Removido!",
+              text: "Horário removido do plano.",
+              icon: "success"
           });
             } else {
-                let status = "error"
+                Swal.fire({
+              title: "Erro",
+              text: "Não foi possível remover.",
+              icon: "error"
+          });
             }
             
-            listar(null,1);
+            listar(diaAtualAgenda(), 1);
 
         },
 
     
     })
 
-
    }
 });
 
 }
 
-
-
 function editar(id_agenda=null,funcao) {
-
 
    $.ajax({
     url: url_base+edicao,
@@ -129,8 +126,7 @@ function editar(id_agenda=null,funcao) {
 
     $('#body_agendamento').html(result.form);
     $('#formAgendamento').modal('show');
-    select_dia_semana(result.id_horario)
-    $('#btn-fechar').click();
+    select_dia_semana(result.id_horario || 0);
 
 },
 
@@ -138,14 +134,42 @@ function editar(id_agenda=null,funcao) {
 
 }
 
+function infoAlunoPlano() {
+  var id_aluno = document.getElementById("id_aluno").value;
+  if(!id_aluno || id_aluno == 0){
+    $('#info-plano').addClass('d-none');
+    return;
+  }
+
+  $.ajax({
+    url: url_base + 'painel/agenda/laboratorio/aluno',
+    method: 'post',
+    data: { id_aluno },
+    dataType: 'json',
+    success: function(info){
+      var limite = info.aulas_semanais || 0;
+      var atual = info.planos_ativos || 0;
+      var txt = 'Aulas/semana na matrícula: <strong>'+limite+'</strong> · No plano: <strong>'+atual+'</strong>';
+      if(limite > 0 && atual >= limite){
+        txt += ' <span class="text-danger">(limite atingido)</span>';
+      }
+      $('#info-plano').html(txt).removeClass('d-none');
+
+      if(info.id_trilha){
+        $('#id_trilha').val(info.id_trilha);
+      }
+    }
+  });
+}
 
 function select_dia_semana(id_horario=null) {
   var dia_semana = document.getElementById("dia_semana").value;
+  var laboratorio_id = document.getElementById("laboratorio_id") ? document.getElementById("laboratorio_id").value : 0;
   
   $.ajax({
    type: 'POST',
    url: url_base+'painel/agenda/laboratorio/horarios',
-   data: {dia_semana,id_horario},
+   data: {dia_semana, id_horario, laboratorio_id},
    success: function(e) {
     document.getElementById("horarios").innerHTML = e;
   }
@@ -153,39 +177,35 @@ function select_dia_semana(id_horario=null) {
   
 }
 
-
-
 // FUNÇÃO QUE EXECUTA UM CREATE OU UPDATE DE DADOS
 $(document).on("submit", "#form", function(event) {
-    event.preventDefault(); // Evita o envio do formulário de forma tradicional
+    event.preventDefault();
 
     $.ajax({
         url: url_base + salvar,
         type: "POST",
         dataType: "text",
-        data: $(this).serialize(), // Serializa os dados do formulário
+        data: $(this).serialize(),
         success: function(response) {
 
-
-          if (!response == "salvo") {
+          if (response.trim() !== "salvo") {
                 $("#response").html('<div class="alert alert-danger">' + response + '</div>');
 
             } else {
 
                 Swal.fire({
-                    title: "Óttimo!",
-                    text: "Os dados foram atualizados com sucesso.",
+                    title: "Ótimo!",
+                    text: "Horário adicionado ao plano semanal.",
                     icon: "success"
                });
                 $('#btn-fechar-ag').click();
 
-                listar(null,1);
+                listar(diaAtualAgenda(), 1);
 
             }
 
         },
         error: function(xhr, status, error) {
-            // Lida com erros de requisição
             $("#response").html('<div class="alert alert-danger">Ocorreu um erro ao processar a solicitação.</div>');
             console.log("Erro:", error);
         }

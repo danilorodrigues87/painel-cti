@@ -6,6 +6,7 @@ use \App\Model\Entity\Caixa as EntityCaixa;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\TenantHelper;
 
 class CaixaEntrada extends Page{
 
@@ -145,7 +146,12 @@ private static function getForm($request) {
 
     $dados = [];
     if (isset($postVars['funcao']) && $postVars['funcao'] == 'editar') {
-        $dados = (array) EntityCaixa::getCaixaById($postVars['id']);
+        $id = (int)($postVars['id'] ?? 0);
+        $id_admin = parent::getIdAdminInt();
+        if (!TenantHelper::pertenceCaixa($id, $id_admin)) {
+            return json_encode(['erro' => 'Registro não encontrado.']);
+        }
+        $dados = (array) EntityCaixa::getCaixaById($id);
 
         //$obMatricula = (array) EntityMatri::getMatriculaById($dados['id_ref']);
 
@@ -326,9 +332,15 @@ if($postVars['id'] == ''){
 
 } else {
 
+    $caixaId = (int)($postVars['id'] ?? 0);
+    if (!TenantHelper::pertenceCaixa($caixaId, (int)$id_admin)) {
+      $resposta['erro'] = 'Registro não encontrado.';
+      return json_encode($resposta);
+    }
+
     // EDIÇÃO
   $obCaixa = new EntityCaixa;
-  $obCaixa->id = $postVars['id'];
+  $obCaixa->id = $caixaId;
   $obCaixa->valor_pago = $valor_pagar;
   $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
   $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';

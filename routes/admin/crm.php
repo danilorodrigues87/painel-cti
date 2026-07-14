@@ -82,3 +82,33 @@ $obRouter->post('/painel/crm/atualizar',[
 		return new Response(200,Admin\CrmLeads::atualizarDados($request));
 	}
 ]);
+
+//ROTA LISTAR FUNIS
+$obRouter->post('/painel/crm/funis',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\CrmLeads::getFunis($request));
+	}
+]);
+
+//ROTA CADASTRAR FUNIL
+$obRouter->post('/painel/crm/funis/save',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\CrmLeads::cadastrarFunil($request));
+	}
+]);
+
+//ROTA EXCLUIR FUNIL
+$obRouter->post('/painel/crm/funis/delete',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\CrmLeads::excluirFunil($request));
+	}
+]);

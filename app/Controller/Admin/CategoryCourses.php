@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 use \App\Utils\View;
 use \App\Model\Entity\CategoryCourses as Category_Courses;
 use \App\Model\Db\Pagination;
+use \App\Common\Helpers\TenantHelper;
 
 class CategoryCourses extends Page{
 
@@ -110,7 +111,12 @@ class CategoryCourses extends Page{
 		$postVars = $request->getPostVars();
 
 		if ($postVars['funcao'] == 'editar') {
-			$dados = (array) Category_Courses::getCategoryById($postVars['id']);
+			$id = (int)($postVars['id'] ?? 0);
+			$id_admin = parent::getIdAdminInt();
+			if (!TenantHelper::pertence('categorias_curso', $id, $id_admin)) {
+				return json_encode(['erro' => 'Registro não encontrado.']);
+			}
+			$dados = (array) Category_Courses::getCategoryById($id);
 		}
 
 		$form = '<form id="form" method="post">
@@ -162,9 +168,15 @@ class CategoryCourses extends Page{
 
     // Verificação de ID para atualizar ou cadastrar nova categoria
     if (!empty($postVars['id'])) {
+        $id = (int)$postVars['id'];
+        if (!TenantHelper::pertence('categorias_curso', $id, (int)$id_admin)) {
+            $resposta['erro'] = 'Registro não encontrado.';
+            return json_encode($resposta);
+        }
+
         // Instância para atualização
         $obData = new Category_Courses;
-        $obData->id = $postVars['id'];
+        $obData->id = $id;
         $obData->nome = $nome;
         $obData->descricao = $descricao;
 
@@ -195,10 +207,16 @@ class CategoryCourses extends Page{
 	public static function deleteCategory($request){
 
 		$postVars = $request->getPostVars();
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+
+		if (!TenantHelper::pertence('categorias_curso', $id, $id_admin)) {
+			return 'Registro não encontrado.';
+		}
 
 		//NOVA INSTANCIA
 		$obData = new Category_Courses;
-		$obData->id = $postVars['id'];
+		$obData->id = $id;
 		$obData->excluir();
 
 		if($obData){

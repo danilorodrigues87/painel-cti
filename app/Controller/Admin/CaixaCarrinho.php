@@ -86,6 +86,11 @@ class CaixaCarrinho extends Page{
 			return json_encode($resposta);
 		}
 
+		if((int)$obCaixa->id_admin !== (int)$id_admin){
+			$resposta['erro'] = 'Título não encontrado.';
+			return json_encode($resposta);
+		}
+
 		if($obCaixa->status == 1){
 			$resposta['erro'] = 'Este título já está pago.';
 			return json_encode($resposta);

@@ -5,7 +5,8 @@ namespace App\Controller\Autentication;
 use \App\Utils\View;
 use \App\Controller\Admin\Alert;
 use \App\Session\User\Login as SessionUser;
-use \App\Model\Entity\User; 
+use \App\Model\Entity\User;
+use \App\Common\Helpers\TenantHelper; 
 use \App\Common\Communication\Email;
 
 class Recovery{
@@ -100,7 +101,12 @@ class Recovery{
 
 		if(isset($postVars['id']) AND $postVars['id'] !=''){
 
-			$id_user = $postVars['id'];
+			$id_user = (int)$postVars['id'];
+			$id_admin = (int)$userLogedData['usuario']['id_admin'];
+
+			if(!TenantHelper::pertenceUsuario($id_user, $id_admin)){
+				return 'Usuário não encontrado.';
+			}
 
 		} else {
 

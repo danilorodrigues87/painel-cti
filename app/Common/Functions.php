@@ -4,6 +4,7 @@ namespace App\Common;
 use \App\Model\Entity\EstadoCidades;
 use \App\Session\User\Login as SessionUser;
 use \App\Model\Entity\User as EntityUser;
+use \App\Common\Helpers\TenantHelper;
 
 class Functions{
 
@@ -200,7 +201,7 @@ class Functions{
 
 			//NOVA INSTANCIA
 			$obUsers = new EntityUser;
-			$obUsers->id = $postVars['id'];
+			$obUsers->id = (int)$userLogedData['usuario']['id'];
 			$obUsers->nome = $nome;
 			$obUsers->email = $email;
 			$obUsers->whatsapp = $whatsapp;

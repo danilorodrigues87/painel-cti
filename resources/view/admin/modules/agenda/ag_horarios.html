@@ -1,0 +1,29 @@
+<h1 class="mt-4">Agenda e Horários</h1>
+<ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item active">Horários</li>
+</ol>
+
+<div class="card shadow mb-4">
+	<div id="listar"></div>
+	<nav class="container">
+		<ul class="pagination">
+			<div id="pagination"></div>
+		</ul>
+	</nav>
+</div>
+
+<div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div id="listar-dados"></div>
+		</div>
+	</div>
+</div>
+
+<script>
+	let listagem = 'painel/agenda/horarios';
+	let formulario = 'painel/agenda/horarios/form';
+	let edicao = 'painel/agenda/horarios/salvar';
+	let deletar = 'painel/agenda/horarios/excluir';
+</script>
+<script src="{{URL}}/resources/js/agenda-horarios.js"></script>

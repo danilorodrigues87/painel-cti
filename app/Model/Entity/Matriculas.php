@@ -28,6 +28,7 @@ class Matriculas{
 	$primeiro_ano,
 	$inicio,
 	$fim,
+	$matriculado_em,
 	$tipo_parcelamento,
 	$desconto_pontualidade = 0,
 	$status = 0;
@@ -57,6 +58,7 @@ class Matriculas{
 			'primeiro_ano' => $this->primeiro_ano,
 			'inicio' => $this->inicio,
 			'fim' => $this->fim,
+			'matriculado_em' => $this->inicio ?: date('Y-m-d'),
 			'tipo_parcelamento' => $this->tipo_parcelamento,
 			'desconto_pontualidade' => $this->desconto_pontualidade,
 			'status' => $this->status,
@@ -237,6 +239,11 @@ class Matriculas{
 	}
 
 
+	// Campo de data usado nos relatórios (fallback para inicio quando matriculado_em inválido)
+	public static function campoDataMatricula($alias = 'matriculas'){
+		return 'COALESCE(NULLIF('.$alias.'.matriculado_em, "0000-00-00"), '.$alias.'.inicio)';
+	}
+
 	public static function getCursosMaisMatriculadosMes(
 		int $id_admin,
 		?int $mes = null,
@@ -262,10 +269,12 @@ class Matriculas{
 		COUNT(matriculas.id) AS total_matriculas
 		';
 
+		$dataCampo = self::campoDataMatricula('matriculas');
+
 		$where = '
 		matriculas.id_admin = ' . (int)$id_admin . '
-		AND matriculas.matriculado_em >= "' . $dataInicio . '"
-		AND matriculas.matriculado_em <  "' . $dataFim . '"
+		AND ' . $dataCampo . ' >= "' . $dataInicio . '"
+		AND ' . $dataCampo . ' < "' . $dataFim . '"
 		';
 
 		$group = 'trilhas.id';

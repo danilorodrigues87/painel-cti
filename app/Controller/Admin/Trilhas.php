@@ -7,6 +7,7 @@ use \App\Model\Entity\CategoryCourses as Category_Courses;
 use \App\Model\Db\Pagination;
 use \App\Common\Upload;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\TenantHelper;
 
 class Trilhas extends Page{
 
@@ -181,7 +182,12 @@ $scriptJs = "<script>
     // Verifica se a função é 'editar' e carrega os dados correspondentes
     $dados = [];
     if (isset($postVars['funcao']) && $postVars['funcao'] == 'editar') {
-        $dados = (array) EntityTrilhas::getTrilhaById($postVars['id']);
+        $id = (int)($postVars['id'] ?? 0);
+        $id_admin = parent::getIdAdminInt();
+        if (!TenantHelper::pertence('trilhas', $id, $id_admin)) {
+            return json_encode(['erro' => 'Registro não encontrado.']);
+        }
+        $dados = (array) EntityTrilhas::getTrilhaById($id);
     }
 
     // DADOS DO ADMIN
@@ -321,7 +327,12 @@ public static function setNewTrilha($request){
     $obData->img          = $img;
 
     if($postVars['id'] != ''){
-        $obData->id = (int)$postVars['id'];
+        $id = (int)$postVars['id'];
+        if (!TenantHelper::pertence('trilhas', $id, (int)$id_admin)) {
+            $resposta['erro'] = 'Registro não encontrado.';
+            return json_encode($resposta);
+        }
+        $obData->id = $id;
         $sucesso = $obData->atualizar();
     } else {
         $sucesso = $obData->cadastrar();
@@ -338,10 +349,16 @@ public static function setNewTrilha($request){
 	public static function deleteTrilha($request){
 
 		$postVars = $request->getPostVars();
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+
+		if (!TenantHelper::pertence('trilhas', $id, $id_admin)) {
+			return 'Registro não encontrado.';
+		}
 
 		//NOVA INSTANCIA
 		$obData = new EntityTrilhas;
-		$obData->id = $postVars['id'];
+		$obData->id = $id;
 		$obData->excluir();
 
 		if($obData){

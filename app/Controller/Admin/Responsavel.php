@@ -5,6 +5,7 @@ use \App\Utils\View;
 use \App\Model\Entity\Responsaveis as EntityRes;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
+use \App\Common\Helpers\TenantHelper;
 
 class Responsavel extends Page{
 
@@ -56,11 +57,8 @@ class Responsavel extends Page{
     ' </select>
     </div>';
 
-    if($id_cliente != '') {
-    $where = 'id =' . $id_cliente;
-} else {
-    $where = "id_admin = '" . $id_admin . "'";
-}
+    $wherePadrao = "id_admin = '" . $id_admin . "'";
+    $where = TenantHelper::whereComFiltroId((int)$id_cliente, (int)$id_admin, $wherePadrao);
 
 $itens = '<div class="row">' . $selecteCliente . '
     <div class="col">
@@ -145,7 +143,12 @@ $results = EntityRes::getRes($where, 'id DESC', $obPagination->getLimit());
 		$postVars = $request->getPostVars();
 
 		if ($postVars['funcao'] == 'editar') {
-			$dados = (array) EntityRes::getResById($postVars['id']);
+			$id = (int)($postVars['id'] ?? 0);
+			$id_admin = parent::getIdAdminInt();
+			if (!TenantHelper::pertence('responsaveis', $id, $id_admin)) {
+				return json_encode(['erro' => 'Registro não encontrado.']);
+			}
+			$dados = (array) EntityRes::getResById($id);
 		}
 
 
@@ -254,6 +257,14 @@ $resposta = [
 
 		if($postVars['id'] != ''){
 
+			$id = (int)$postVars['id'];
+			$id_admin = parent::getIdAdminInt();
+
+			if (!TenantHelper::pertence('responsaveis', $id, $id_admin)) {
+				$resposta['erro'] = 'Registro não encontrado.';
+				return json_encode($resposta);
+			}
+
 			$resposta ["filtro"] = $postVars['id'];
 
 			//NOVA INSTANCIA
@@ -296,10 +307,16 @@ $resposta = [
 	public static function deleteUser($request){
 
 		$postVars = $request->getPostVars();
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+
+		if (!TenantHelper::pertence('responsaveis', $id, $id_admin)) {
+			return 'Registro não encontrado.';
+		}
 
 		//NOVA INSTANCIA
 		$obUsers = new EntityRes;
-		$obUsers->id = $postVars['id'];
+		$obUsers->id = $id;
 		$obUsers->excluir();
 
 		if($obUsers){

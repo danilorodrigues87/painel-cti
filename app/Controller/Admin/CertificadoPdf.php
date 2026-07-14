@@ -6,6 +6,7 @@ use \App\Utils\View;
 use \App\Model\Entity\Trilhas as EntityTrilhas;
 use \App\Model\Entity\User as EntityUser;
 use \App\Model\Entity\Certificados as EntityCertificados;
+use \App\Common\Helpers\TenantHelper;
 
 class CertificadoPdf extends Page {
 
@@ -13,6 +14,13 @@ class CertificadoPdf extends Page {
      * Método responsável por retornar o formulário/página do certificado
      */
     public static function index($request, $id) {
+        $id = (int)$id;
+        $id_admin = parent::getIdAdminInt();
+
+        if (!TenantHelper::pertence('certificados', $id, $id_admin)) {
+            return 'Certificado não encontrado.';
+        }
+
         $dados = self::geraCertPdf($id);
 
         return View::render('admin/modules/certificados/certificado', [

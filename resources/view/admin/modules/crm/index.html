@@ -11,17 +11,23 @@
 				<input type="text" name="email" tabindex="-1" aria-hidden="true" class="crm-autofill-trap" autocomplete="email">
 				<input type="text" name="username" tabindex="-1" aria-hidden="true" class="crm-autofill-trap" autocomplete="username">
 			<div class="row g-2 align-items-end">
-				<div class="col-md-5">
+				<div class="col-md-3">
+					<label class="form-label small mb-1" for="filtro-funil">Funil</label>
+					<select id="filtro-funil" class="form-control form-control-sm">
+						<option value="">Carregando...</option>
+					</select>
+				</div>
+				<div class="col-md-3">
 					<label class="form-label small mb-1" for="filtro-busca-lead">Buscar por nome</label>
 					<input type="text" id="filtro-busca-lead" class="form-control form-control-sm" placeholder="Digite o nome do lead..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly value="">
 				</div>
-				<div class="col-md-5">
+				<div class="col-md-3">
 					<label class="form-label small mb-1">Filtrar por curso</label>
 					<select id="filtro-curso" class="form-control form-control-sm">
 						<option value="">Todos os cursos</option>
 					</select>
 				</div>
-				<div class="col-md-2">
+				<div class="col-md-3">
 					<button type="button" class="btn btn-outline-secondary btn-sm w-100" id="btn-limpar-filtros">
 						<i class="fas fa-times"></i> Limpar
 					</button>
@@ -36,6 +42,9 @@
 		</button>
 		<button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarLeads">
 			<i class="fas fa-file-import"></i> Importar planilha
+		</button>
+		<button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalGerenciarFunis">
+			<i class="fas fa-filter"></i> Gerenciar funis
 		</button>
 	</div>
 </div>
@@ -102,6 +111,36 @@
 	</ul>
 </nav>
 
+<!-- Modal Gerenciar Funis -->
+<div class="modal fade" id="modalGerenciarFunis" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header py-2">
+				<h5 class="modal-title">Gerenciar funis</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body py-2">
+				<div id="response-funis"></div>
+
+				<form id="form-novo-funil" class="mb-3">
+					<label class="form-label small mb-1">Novo funil</label>
+					<div class="input-group input-group-sm">
+						<input type="text" name="nome" id="input-novo-funil" class="form-control" placeholder="Ex: Macrocaptação" maxlength="100" required>
+						<button type="submit" class="btn btn-primary">
+							<i class="fas fa-plus"></i> Adicionar
+						</button>
+					</div>
+				</form>
+
+				<div id="lista-funis"></div>
+			</div>
+			<div class="modal-footer py-2">
+				<button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+			</div>
+		</div>
+	</div>
+</div>
+
 <!-- Modal Importar Planilha -->
 <div class="modal fade" id="modalImportarLeads" tabindex="-1" aria-hidden="true">
 	<div class="modal-dialog">
@@ -118,6 +157,13 @@
 						<label class="form-label small mb-1">Arquivo da planilha *</label>
 						<input type="file" name="planilha" class="form-control form-control-sm" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" required>
 						<small class="text-muted">Formatos aceitos: .csv ou .xlsx (máx. 5MB)</small>
+					</div>
+
+					<div class="mb-3">
+						<label class="form-label small mb-1">Funil dos leads importados *</label>
+						<select name="funil_id" id="importar-funil" class="form-control form-control-sm" required>
+							<option value="">Selecione...</option>
+						</select>
 					</div>
 
 					<div class="mb-3">
@@ -165,6 +211,12 @@
 					<div id="response-lead"></div>
 
 					<div class="row g-2">
+						<div class="col-md-6">
+							<label class="form-label small mb-1">Funil *</label>
+							<select name="funil_id" id="novo-lead-funil" class="form-control form-control-sm" required>
+								<option value="">Selecione...</option>
+							</select>
+						</div>
 						<div class="col-md-6">
 							<label class="form-label small mb-1">Nome *</label>
 							<input type="text" name="nome" class="form-control form-control-sm" required>
@@ -313,6 +365,12 @@
 										<option value="Indicação">Indicação</option>
 										<option value="Panfleto">Panfleto</option>
 										<option value="Outros">Outros</option>
+									</select>
+								</div>
+								<div class="col-md-6">
+									<label class="form-label">Funil *</label>
+									<select name="funil_id" id="editar-funil" class="form-control" required>
+										<option value="">Selecione...</option>
 									</select>
 								</div>
 								<div class="col-md-6">
@@ -497,5 +555,8 @@
 	let comentarioLead = 'painel/crm/comentario';
 	let atualizarLead = 'painel/crm/atualizar';
 	let importarLeads = 'painel/crm/importar';
+	let listarFunis   = 'painel/crm/funis';
+	let salvarFunil   = 'painel/crm/funis/save';
+	let excluirFunil  = 'painel/crm/funis/delete';
 </script>
-<script src="{{URL}}/resources/js/crm.js"></script>
+<script src="{{URL}}/resources/js/crm.js?v=20260714b"></script>

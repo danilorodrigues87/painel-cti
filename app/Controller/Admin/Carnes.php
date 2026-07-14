@@ -10,6 +10,7 @@
   use \App\Common\Helpers\DateTimeHelper;
   use \App\Common\Helpers\NumeroHelper;
   use \App\Model\Entity\Caixa;
+  use \App\Common\Helpers\TenantHelper;
 
   class Carnes extends Page{
 
@@ -170,7 +171,14 @@
     $postVars = $request->getPostVars();
 
     if (isset($postVars['funcao']) && $postVars['funcao'] == 'listar_titulos') {
-      $results = Caixa::getCaixa('id_ref = '.$postVars['id']);
+      $id_admin = parent::getIdAdminInt();
+      $matriculaId = (int)($postVars['id'] ?? 0);
+
+      if (!TenantHelper::pertenceMatricula($matriculaId, $id_admin)) {
+        return json_encode(['erro' => 'Matrícula não encontrada.']);
+      }
+
+      $results = Caixa::getCaixa('id_ref = '.$matriculaId.' AND id_admin = '.$id_admin);
     } 
     
       // Inicializa a tabela
@@ -251,8 +259,14 @@
    $habilitado = ($nivel == 'Diretor') ? '' : 'readonly';
 
    $postVars = $request->getPostVars();
+   $id_admin = parent::getIdAdminInt();
+   $caixaId = (int)($postVars['id'] ?? 0);
 
-   $dados = (array) Caixa::getCaixaById($postVars['id']);
+   if (!TenantHelper::pertenceCaixa($caixaId, $id_admin)) {
+     return json_encode(['erro' => 'Título não encontrado.']);
+   }
+
+   $dados = (array) Caixa::getCaixaById($caixaId);
    $obMatricula = (array) EntityMatri::getMatriculaById($dados['id_ref']);
 
   $dadosUser = (array) EntityUser::getUserById($obMatricula['id_aluno']);
@@ -376,6 +390,13 @@
   }
 
  public static function recibo($request, $id, $larguraPapel = '58mm') {
+    $id = (int)$id;
+    $id_admin = parent::getIdAdminInt();
+
+    if (!TenantHelper::pertenceCaixa($id, $id_admin)) {
+      return 'Recibo não encontrado.';
+    }
+
     $dados = (array) Caixa::getCaixaById($id);
 
     // Definimos a largura útil (Safe Zone)
@@ -561,6 +582,13 @@ $valor_pagar = floatval($valor_pagar);
 
   public static function imprimeCarne($request,$id){
 
+    $id = (int)$id;
+    $id_admin = parent::getIdAdminInt();
+
+    if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
+      return 'Matrícula não encontrada.';
+    }
+
     // DADOS DA EMPRESA
     $userLogedData = SessionUser::getUserLogedData();
     // DADOS DO CONTRATO
@@ -622,9 +650,9 @@ $valor_pagar = floatval($valor_pagar);
       </td>
       </tr>
       <tr>
-      <td colspan="2" class="tag"><b>'.$userLogedData['empresa']['nome'].'</b>
+      <td colspan="2" class="tag"><b>'.$userLogedData['escola']['nome'].'</b>
       <br>
-      <span>CNPJ: '.$userLogedData['empresa']['cpf_cnpj'].'</span>
+      <span>CNPJ: '.$userLogedData['escola']['cpf_cnpj'].'</span>
       </td>
       </tr>
       <tr>

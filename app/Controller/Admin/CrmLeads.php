@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use \App\Utils\View;
 use \App\Model\Entity\CrmLeads as EntityCrmLeads;
+use \App\Model\Entity\CrmFunis as EntityCrmFunis;
 use \App\Model\Entity\CrmHistorico as EntityCrmHistorico;
 use \App\Model\Entity\User as EntityUser;
 use \App\Common\Helpers\DateTimeHelper;
@@ -62,13 +63,30 @@ class CrmLeads extends Page{
 
 	public static function getInfo($request){
 
+		$postVars = $request->getPostVars();
+		$acao = $postVars['acao'] ?? '';
+
+		if($acao === 'listar_funis'){
+			return self::getFunis($request);
+		}
+
+		if($acao === 'salvar_funil'){
+			return self::cadastrarFunil($request);
+		}
+
+		if($acao === 'excluir_funil'){
+			return self::excluirFunil($request);
+		}
+
 		$dadosUser = parent::getIdAdmin();
-		$postVars  = $request->getPostVars();
+		$id_admin  = (int)$dadosUser['usuario']['id_admin'];
 		$paginaAtual = $postVars['page'] ?? 1;
 		$limite = (int)(getenv('PAGINATION_LIMIT') ?: 5);
 
+		$funilAtivo = self::resolverFunilFiltro($postVars, $id_admin);
+
 		$whereBase = self::montarWhereListagem($dadosUser);
-		$whereFiltro = $whereBase.self::montarFiltrosBusca($postVars);
+		$whereFiltro = $whereBase.self::montarFiltroFunil($funilAtivo).self::montarFiltrosBusca($postVars);
 
 		$colunas = [];
 		$totais  = [];
@@ -111,7 +129,9 @@ class CrmLeads extends Page{
 			];
 		}
 
-		$cursos = self::getCursosDisponiveis($whereBase);
+		$whereCursos = $whereBase.self::montarFiltroFunil($funilAtivo);
+		$cursos = self::getCursosDisponiveis($whereCursos);
+		$funis  = self::listarFunisAdmin($id_admin);
 
 		$totaisFormatados = [];
 		foreach($totais as $status => $valor){
@@ -119,11 +139,115 @@ class CrmLeads extends Page{
 		}
 
 		return json_encode([
-			'colunas'    => $colunas,
-			'totais'     => $totaisFormatados,
-			'cursos'     => $cursos,
-			'pagination' => parent::getPagination($request, $obPagination)
+			'colunas'     => $colunas,
+			'totais'      => $totaisFormatados,
+			'cursos'      => $cursos,
+			'funis'       => $funis,
+			'funil_ativo' => $funilAtivo,
+			'pagination'  => parent::getPagination($request, $obPagination)
 		]);
+	}
+
+	public static function getFunis($request){
+
+		$dadosUser = parent::getIdAdmin();
+		$id_admin  = (int)$dadosUser['usuario']['id_admin'];
+
+		self::garantirFunilPadrao($id_admin);
+
+		return json_encode([
+			'funis' => self::listarFunisAdmin($id_admin, true)
+		]);
+	}
+
+	public static function cadastrarFunil($request){
+
+		$postVars = $request->getPostVars();
+		$resposta = [];
+
+		$nome = trim($postVars['nome'] ?? '');
+
+		if($nome === ''){
+			$resposta['erro'] = 'Informe o nome do funil.';
+			return json_encode($resposta);
+		}
+
+		if(strlen($nome) > 100){
+			$resposta['erro'] = 'O nome do funil deve ter no máximo 100 caracteres.';
+			return json_encode($resposta);
+		}
+
+		$dadosUser = parent::getIdAdmin();
+		$id_admin  = (int)$dadosUser['usuario']['id_admin'];
+
+		$existe = EntityCrmFunis::getFunis(
+			'id_admin = '.$id_admin.' AND nome = "'.addslashes($nome).'"',
+			null,
+			1
+		)->fetchObject(EntityCrmFunis::class);
+
+		if($existe instanceof EntityCrmFunis){
+			$resposta['erro'] = 'Já existe um funil com este nome.';
+			return json_encode($resposta);
+		}
+
+		$obFunil = new EntityCrmFunis;
+		$obFunil->id_admin = $id_admin;
+		$obFunil->nome     = $nome;
+		$obFunil->cadastrar();
+
+		$resposta['sucesso'] = true;
+		$resposta['funil']   = [
+			'id'   => (int)$obFunil->id,
+			'nome' => $obFunil->nome
+		];
+		$resposta['funis'] = self::listarFunisAdmin($id_admin, true);
+
+		return json_encode($resposta);
+	}
+
+	public static function excluirFunil($request){
+
+		$postVars = $request->getPostVars();
+		$resposta = [];
+
+		$id = isset($postVars['id']) ? (int)$postVars['id'] : 0;
+
+		if($id <= 0){
+			$resposta['erro'] = 'Funil inválido.';
+			return json_encode($resposta);
+		}
+
+		$dadosUser = parent::getIdAdmin();
+		$id_admin  = (int)$dadosUser['usuario']['id_admin'];
+
+		$obFunil = EntityCrmFunis::getFunis(
+			'id = '.$id.' AND id_admin = '.$id_admin
+		)->fetchObject(EntityCrmFunis::class);
+
+		if(!$obFunil instanceof EntityCrmFunis){
+			$resposta['erro'] = 'Funil não encontrado.';
+			return json_encode($resposta);
+		}
+
+		$qtdLeads = (int)EntityCrmLeads::getLeads(
+			'funil_id = '.$id.' AND id_admin = '.$id_admin,
+			null,
+			null,
+			'COUNT(*) as qtd'
+		)->fetchObject()->qtd;
+
+		if($qtdLeads > 0){
+			$resposta['erro'] = 'Este funil possui '.$qtdLeads.' lead(s). Mova ou exclua os leads antes de remover o funil.';
+			return json_encode($resposta);
+		}
+
+		$obFunil->excluir();
+
+		$resposta['sucesso'] = true;
+		$resposta['funis']   = self::listarFunisAdmin($id_admin, true);
+
+		return json_encode($resposta);
 	}
 
 	public static function cadastrar($request){
@@ -162,10 +286,17 @@ class CrmLeads extends Page{
 		$id_admin  = $dadosUser['usuario']['id_admin'];
 		$id_usuario = $dadosUser['usuario']['id'];
 
+		$funilId = (int)($postVars['funil_id'] ?? 0);
+		if(!self::validarFunil($funilId, (int)$id_admin)){
+			$resposta['erro'] = 'Selecione um funil válido.';
+			return json_encode($resposta);
+		}
+
 		$obLead = new EntityCrmLeads;
 		$obLead->id_admin        = $id_admin;
 		$obLead->usuario_id      = $id_usuario;
 		$obLead->visibilidade    = $visibilidade;
+		$obLead->funil_id        = $funilId;
 		$obLead->nome            = $nome;
 		$obLead->whatsapp        = $whatsapp;
 		$obLead->curso_interesse = $curso;
@@ -189,6 +320,11 @@ class CrmLeads extends Page{
 		}
 		$msgHistorico .= ' Visibilidade: '.($visibilidade === 'privado' ? 'Privado' : 'Público').'.';
 
+		$nomeFunil = self::getNomeFunil($funilId);
+		if($nomeFunil !== ''){
+			$msgHistorico .= ' Funil: '.$nomeFunil.'.';
+		}
+
 		self::registrarHistorico($obLead->id, $id_usuario, 'lead_cadastrado', $msgHistorico);
 
 		self::dispararMensagemWhatsApp($obLead, null, 'novo');
@@ -209,6 +345,18 @@ class CrmLeads extends Page{
 			$resposta['erro'] = 'Visibilidade inválida.';
 			return json_encode($resposta);
 		}
+
+		$dadosUser  = parent::getIdAdmin();
+		$id_admin   = $dadosUser['usuario']['id_admin'];
+		$id_usuario = $dadosUser['usuario']['id'];
+
+		$funilId = (int)($postVars['funil_id'] ?? 0);
+		if(!self::validarFunil($funilId, (int)$id_admin)){
+			$resposta['erro'] = 'Selecione um funil válido para a importação.';
+			return json_encode($resposta);
+		}
+
+		$nomeFunil = self::getNomeFunil($funilId);
 
 		$arquivo = $fileVars['planilha'] ?? null;
 
@@ -231,10 +379,6 @@ class CrmLeads extends Page{
 			$resposta['erro'] = 'Arquivo muito grande. O limite é 5MB.';
 			return json_encode($resposta);
 		}
-
-		$dadosUser  = parent::getIdAdmin();
-		$id_admin   = $dadosUser['usuario']['id_admin'];
-		$id_usuario = $dadosUser['usuario']['id'];
 
 		try{
 			$linhas = PlanilhaHelper::lerArquivo($arquivo['tmp_name'], $extensao);
@@ -276,6 +420,7 @@ class CrmLeads extends Page{
 			$obLead->id_admin         = $id_admin;
 			$obLead->usuario_id       = $id_usuario;
 			$obLead->visibilidade     = $visibilidade;
+			$obLead->funil_id         = $funilId;
 			$obLead->nome             = $dadosLinha['nome'];
 			$obLead->whatsapp         = $dadosLinha['whatsapp'];
 			$obLead->email            = $dadosLinha['email'];
@@ -290,7 +435,7 @@ class CrmLeads extends Page{
 				$obLead->id,
 				$id_usuario,
 				'lead_importado',
-				'Lead importado via planilha com visibilidade "'.($visibilidade === 'privado' ? 'Privado' : 'Público').'".'
+				'Lead importado via planilha com visibilidade "'.($visibilidade === 'privado' ? 'Privado' : 'Público').'" no funil "'.$nomeFunil.'".'
 			);
 
 			$importados++;
@@ -422,6 +567,7 @@ class CrmLeads extends Page{
 		}
 
 		$resposta['lead'] = self::formatarLeadDetalhes($obLead);
+		$resposta['funis'] = self::listarFunisAdmin($id_admin);
 
 		$resposta['whatsapp_link'] = self::montarLinkWhatsApp($obLead->whatsapp);
 		$resposta['timeline']      = self::montarTimeline($obLead->id);
@@ -524,6 +670,14 @@ class CrmLeads extends Page{
 			return json_encode($resposta);
 		}
 
+		$funilId = (int)($postVars['funil_id'] ?? 0);
+		if(!self::validarFunil($funilId, (int)$id_admin)){
+			$resposta['erro'] = 'Selecione um funil válido.';
+			return json_encode($resposta);
+		}
+
+		$funilAnterior = (int)($obLead->funil_id ?? 0);
+
 		$obLead->nome             = $nome;
 		$obLead->whatsapp         = $whatsapp;
 		$obLead->curso_interesse  = $curso;
@@ -534,13 +688,21 @@ class CrmLeads extends Page{
 		$obLead->cidade           = $dadosCadastrais['cidade'];
 		$obLead->idade            = $dadosCadastrais['idade'];
 		$obLead->responsavel_nome = $dadosCadastrais['responsavel_nome'];
+		$obLead->funil_id         = $funilId;
 		$obLead->atualizarDados();
+
+		$msgHistorico = 'Dados cadastrais do lead foram atualizados.';
+		if($funilAnterior !== $funilId){
+			$nomeAnterior = self::getNomeFunil($funilAnterior) ?: 'Sem funil';
+			$nomeNovo     = self::getNomeFunil($funilId);
+			$msgHistorico .= ' Funil alterado de "'.$nomeAnterior.'" para "'.$nomeNovo.'".';
+		}
 
 		self::registrarHistorico(
 			$obLead->id,
 			$id_usuario,
 			'dados_atualizados',
-			'Dados cadastrais do lead foram atualizados.'
+			$msgHistorico
 		);
 
 		$resposta['sucesso'] = true;
@@ -608,6 +770,8 @@ class CrmLeads extends Page{
 			'status_label'     => self::$labelsStatus[$obLead->status] ?? $obLead->status,
 			'visibilidade'     => $obLead->visibilidade ?? 'publico',
 			'visibilidade_label' => ($obLead->visibilidade ?? 'publico') === 'privado' ? 'Privado' : 'Público',
+			'funil_id'         => (int)($obLead->funil_id ?? 0),
+			'funil_nome'       => self::getNomeFunil((int)($obLead->funil_id ?? 0)),
 			'data_cadastro'    => DateTimeHelper::databr($obLead->data_cadastro),
 			'status_wa'        => $obLead->status_wa
 		];
@@ -640,6 +804,109 @@ class CrmLeads extends Page{
 		}
 
 		return $filtros;
+	}
+
+	private static function montarFiltroFunil($funilId){
+		return ' AND funil_id = '.(int)$funilId;
+	}
+
+	private static function resolverFunilFiltro($postVars, $id_admin){
+
+		$funilId = (int)($postVars['filtro_funil'] ?? 0);
+
+		if($funilId > 0 && self::validarFunil($funilId, $id_admin)){
+			return $funilId;
+		}
+
+		return self::garantirFunilPadrao($id_admin);
+	}
+
+	private static function garantirFunilPadrao($id_admin){
+
+		$obFunil = EntityCrmFunis::getFunis(
+			'id_admin = '.(int)$id_admin.' AND nome = "Geral"',
+			null,
+			1
+		)->fetchObject(EntityCrmFunis::class);
+
+		if($obFunil instanceof EntityCrmFunis){
+			return (int)$obFunil->id;
+		}
+
+		$obFunil = EntityCrmFunis::getFunis(
+			'id_admin = '.(int)$id_admin.' AND ativo = 1',
+			'nome ASC',
+			1
+		)->fetchObject(EntityCrmFunis::class);
+
+		if($obFunil instanceof EntityCrmFunis){
+			return (int)$obFunil->id;
+		}
+
+		$obNovoFunil = new EntityCrmFunis;
+		$obNovoFunil->id_admin = (int)$id_admin;
+		$obNovoFunil->nome     = 'Geral';
+		$obNovoFunil->cadastrar();
+
+		return (int)$obNovoFunil->id;
+	}
+
+	private static function validarFunil($funilId, $id_admin){
+
+		if($funilId <= 0){
+			return false;
+		}
+
+		$obFunil = EntityCrmFunis::getFunis(
+			'id = '.(int)$funilId.' AND id_admin = '.(int)$id_admin.' AND ativo = 1'
+		)->fetchObject(EntityCrmFunis::class);
+
+		return $obFunil instanceof EntityCrmFunis;
+	}
+
+	private static function getNomeFunil($funilId){
+
+		if($funilId <= 0){
+			return '';
+		}
+
+		$obFunil = EntityCrmFunis::getFunilById($funilId);
+
+		return ($obFunil instanceof EntityCrmFunis) ? $obFunil->nome : '';
+	}
+
+	private static function listarFunisAdmin($id_admin, $comContagem = false){
+
+		self::garantirFunilPadrao($id_admin);
+
+		$funis = [];
+
+		$results = EntityCrmFunis::getFunis(
+			'id_admin = '.(int)$id_admin.' AND ativo = 1',
+			'nome ASC'
+		);
+
+		while ($row = $results->fetch(\PDO::FETCH_ASSOC)) {
+			$item = [
+				'id'   => (int)$row['id'],
+				'nome' => $row['nome']
+			];
+
+			if($comContagem){
+				$countRow = EntityCrmLeads::getLeads(
+					'funil_id = '.(int)$row['id'].' AND id_admin = '.(int)$id_admin,
+					null,
+					null,
+					'COUNT(*) as qtd'
+				)->fetch(\PDO::FETCH_ASSOC);
+
+				$item['qtd_leads'] = (int)($countRow['qtd'] ?? 0);
+			}
+
+			$funis[] = $item;
+		}
+
+		return $funis;
 	}
 
 	private static function getCursosDisponiveis($where){

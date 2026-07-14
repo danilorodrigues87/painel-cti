@@ -110,6 +110,9 @@ $forma_pgtoChbx = $campos['forma_pgtoChbx'];
 
   $conditions = [];
 
+  // Isolamento por escola
+  $conditions[] = 'id_admin = '.(int)$id_admin;
+
   // Condição padrão
   $conditions[] = 'status = 1';
 

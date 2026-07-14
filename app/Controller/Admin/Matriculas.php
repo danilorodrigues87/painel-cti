@@ -12,6 +12,7 @@ use \App\Model\Entity\EstadoCidades;
 use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\TenantHelper;
 
 
 class Matriculas extends Page{
@@ -67,11 +68,8 @@ class Matriculas extends Page{
     </div>';
 
 
-if($id_cliente != '') {
-    $where = 'id_aluno =' . $id_cliente;
-} else {
-    $where = "id_admin = '" . (int)$id_admin . "'";
-}
+    $wherePadrao = "id_admin = '" . (int)$id_admin . "'";
+    $where = TenantHelper::whereMatriculaFiltro((int)$id_cliente, (int)$id_admin, $wherePadrao);
 
     $itens = '<div class="row">' . $selecteCliente . '
     <div class="col">
@@ -437,9 +435,16 @@ if($id_aluno == '' or $id_aluno ==0){
 }
 
 if (!empty($postVars['id'])) {
+        $matriculaId = (int)filter_var($postVars['id'], FILTER_SANITIZE_NUMBER_INT);
+
+        if (!TenantHelper::pertenceMatricula($matriculaId, (int)$id_admin)) {
+            $resposta['erro'] = 'Matrícula não encontrada.';
+            return json_encode($resposta);
+        }
+
         // Atualizar se ID estiver presente
   $obMatricula = new EntityMatri;
-  $obMatricula->id = filter_var($postVars['id'], FILTER_SANITIZE_NUMBER_INT);
+  $obMatricula->id = $matriculaId;
   $obMatricula->id_aluno = $id_aluno;
   $obMatricula->id_responsavel = $id_responsavel;
   $obMatricula->id_trilha = $id_trilha;
@@ -498,10 +503,16 @@ if(!$obMatricula){
 public static function cancelarMatricula($request){
 
   $postVars = $request->getPostVars();
+  $id = (int)($postVars['id'] ?? 0);
+  $id_admin = parent::getIdAdminInt();
+
+  if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
+    return 'Matrícula não encontrada.';
+  }
 
         //NOVA INSTANCIA
   $obUsers = new EntityMatri;
-  $obUsers->id = $postVars['id'];
+  $obUsers->id = $id;
   $obUsers->cancelar();
 
   if($obUsers){
@@ -520,11 +531,17 @@ public static function cancelarMatricula($request){
 public static function verContrato($request,$id){
 
   $userLogedData = SessionUser::getUserLogedData();
+  $id = (int)$id;
+  $id_admin = (int)$userLogedData['usuario']['id_admin'];
 
-  $cidade = EstadoCidades::getCidades('id = ' . $userLogedData['empresa']['cidade'])->fetchObject();
-  $estado = EstadoCidades::getEstados('id = ' . $userLogedData['empresa']['estado'])->fetchObject();
+  if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
+    return 'Matrícula não encontrada.';
+  }
 
-  $endereco_empresa = $userLogedData['empresa']['endereco'].', '.$userLogedData['empresa']['numero'].' '.$userLogedData['empresa']['bairro'].' '.$cidade->nome.'/'.$estado->sigla;
+  $cidade = EstadoCidades::getCidades('id = ' . $userLogedData['escola']['cidade'])->fetchObject();
+  $estado = EstadoCidades::getEstados('id = ' . $userLogedData['escola']['estado'])->fetchObject();
+
+  $endereco_escola = $userLogedData['escola']['endereco'].', '.$userLogedData['escola']['numero'].' '.$userLogedData['escola']['bairro'].' '.$cidade->nome.'/'.$estado->sigla;
 
   $categoria1 = 2; // PROFISSIONALIZANTES
   $categoria2 = 7; // MUSICA
@@ -539,12 +556,12 @@ public static function verContrato($request,$id){
 
   $empresa .= '<b>CONTRATADA</b><br>';
 
-  $empresa .= '<b>Escola: </b><span>'.$userLogedData['empresa']['nome'].' - <b>CNPJ: </b>'.$userLogedData['empresa']['cpf_cnpj'].'</span><br>';
+  $empresa .= '<b>Escola: </b><span>'.$userLogedData['escola']['nome'].' - <b>CNPJ: </b>'.$userLogedData['escola']['cpf_cnpj'].'</span><br>';
 
-  $empresa .= '<b>Telefone: </b><span>'.$userLogedData['empresa']['telefone']. '</span>
-  <b>Endereço: </b><span>'.$endereco_empresa.'</span><br>';
+  $empresa .= '<b>Telefone: </b><span>'.$userLogedData['escola']['telefone']. '</span>
+  <b>Endereço: </b><span>'.$endereco_escola.'</span><br>';
 
-  $empresa .= '<b>Site: </b><span>'.$userLogedData['empresa']['site']. '</span><b> Email: </b><span>'.$userLogedData['empresa']['email'].'</span><br><br>';
+  $empresa .= '<b>Site: </b><span>'.$userLogedData['escola']['site']. '</span><b> Email: </b><span>'.$userLogedData['escola']['email'].'</span><br><br>';
 
 
         // PEGA OS DADOS DO CONTRATO

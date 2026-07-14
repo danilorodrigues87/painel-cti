@@ -9,8 +9,25 @@ use \App\Model\Entity\CrmTarefasChecklists as EntityChecklists;
 use \App\Model\Entity\CrmTarefasComentarios as EntityComentarios;
 use \App\Model\Entity\User as EntityUser;
 use \App\Common\Helpers\DateTimeHelper;
+use \App\Common\Helpers\TenantHelper;
 
 class CrmTarefas extends Page{
+
+	private static function obterLista($id, $id_admin){
+		$obLista = EntityListas::getListaById($id, $id_admin);
+		return ($obLista instanceof EntityListas) ? $obLista : null;
+	}
+
+	private static function obterCartao($id, $id_admin){
+		$obCartao = EntityCartoes::getCartaoById($id);
+		if(!$obCartao instanceof EntityCartoes){
+			return null;
+		}
+		if(!self::obterLista((int)$obCartao->lista_id, $id_admin)){
+			return null;
+		}
+		return $obCartao;
+	}
 
 	public static function index($request){
 		$content = View::render('admin/modules/crm/tarefas',[]);
@@ -19,9 +36,10 @@ class CrmTarefas extends Page{
 
 	public static function getInfo($request){
 
+		$id_admin = parent::getIdAdminInt();
 		$listas = [];
 
-		$resultsListas = EntityListas::getListas(null,'posicao ASC');
+		$resultsListas = EntityListas::getListas('id_admin = '.$id_admin,'posicao ASC');
 
 		while ($obLista = $resultsListas->fetchObject(EntityListas::class)) {
 
@@ -70,6 +88,7 @@ class CrmTarefas extends Page{
 		}
 
 		$obLista = new EntityListas;
+		$obLista->id_admin = parent::getIdAdminInt();
 		$obLista->titulo = $titulo;
 		$obLista->cadastrar();
 
@@ -97,9 +116,10 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obLista = EntityListas::getListaById($id);
+		$id_admin = parent::getIdAdminInt();
+		$obLista = self::obterLista($id, $id_admin);
 
-		if(!$obLista instanceof EntityListas){
+		if(!$obLista){
 			$resposta['erro'] = 'Lista não encontrada.';
 			return json_encode($resposta);
 		}
@@ -123,9 +143,9 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obLista = EntityListas::getListaById($id);
+		$id_admin = parent::getIdAdminInt();
 
-		if(!$obLista instanceof EntityListas){
+		if(!self::obterLista($id, $id_admin)){
 			$resposta['erro'] = 'Lista não encontrada.';
 			return json_encode($resposta);
 		}
@@ -154,9 +174,10 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obLista = EntityListas::getListaById($listaId);
+		$id_admin = parent::getIdAdminInt();
+		$obLista = self::obterLista($listaId, $id_admin);
 
-		if(!$obLista instanceof EntityListas){
+		if(!$obLista){
 			$resposta['erro'] = 'Lista não encontrada.';
 			return json_encode($resposta);
 		}
@@ -186,9 +207,10 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obCartao = EntityCartoes::getCartaoById($id);
+		$id_admin = parent::getIdAdminInt();
+		$obCartao = self::obterCartao($id, $id_admin);
 
-		if(!$obCartao instanceof EntityCartoes){
+		if(!$obCartao){
 			$resposta['erro'] = 'Cartão não encontrado.';
 			return json_encode($resposta);
 		}
@@ -219,9 +241,9 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obCartao = EntityCartoes::getCartaoById($id);
+		$id_admin = parent::getIdAdminInt();
 
-		if(!$obCartao instanceof EntityCartoes){
+		if(!self::obterCartao($id, $id_admin)){
 			$resposta['erro'] = 'Cartão não encontrado.';
 			return json_encode($resposta);
 		}
@@ -244,6 +266,8 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
+		$id_admin = parent::getIdAdminInt();
+
 		foreach($posicoes as $item){
 
 			$id      = isset($item['id']) ? (int)$item['id'] : 0;
@@ -254,9 +278,13 @@ class CrmTarefas extends Page{
 				continue;
 			}
 
-			$obCartao = EntityCartoes::getCartaoById($id);
+			$obCartao = self::obterCartao($id, $id_admin);
 
-			if(!$obCartao instanceof EntityCartoes){
+			if(!$obCartao){
+				continue;
+			}
+
+			if(!self::obterLista($listaId, $id_admin)){
 				continue;
 			}
 
@@ -281,9 +309,10 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obCartao = EntityCartoes::getCartaoById($id);
+		$id_admin = parent::getIdAdminInt();
+		$obCartao = self::obterCartao($id, $id_admin);
 
-		if(!$obCartao instanceof EntityCartoes){
+		if(!$obCartao){
 			$resposta['erro'] = 'Cartão não encontrado.';
 			return json_encode($resposta);
 		}
@@ -337,9 +366,10 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obCartao = EntityCartoes::getCartaoById($cartaoId);
+		$id_admin = parent::getIdAdminInt();
+		$obCartao = self::obterCartao($cartaoId, $id_admin);
 
-		if(!$obCartao instanceof EntityCartoes){
+		if(!$obCartao){
 			$resposta['erro'] = 'Cartão não encontrado.';
 			return json_encode($resposta);
 		}
@@ -385,6 +415,11 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
+		if(!self::obterCartao((int)$obItem->cartao_id, parent::getIdAdminInt())){
+			$resposta['erro'] = 'Item não encontrado.';
+			return json_encode($resposta);
+		}
+
 		$obItem->concluido = $concluido ? 1 : 0;
 		$obItem->atualizarConcluido();
 
@@ -415,6 +450,11 @@ class CrmTarefas extends Page{
 		$obItem = EntityChecklists::getItemById($id);
 
 		if(!$obItem instanceof EntityChecklists){
+			$resposta['erro'] = 'Item não encontrado.';
+			return json_encode($resposta);
+		}
+
+		if(!self::obterCartao((int)$obItem->cartao_id, parent::getIdAdminInt())){
 			$resposta['erro'] = 'Item não encontrado.';
 			return json_encode($resposta);
 		}
@@ -452,9 +492,10 @@ class CrmTarefas extends Page{
 			return json_encode($resposta);
 		}
 
-		$obCartao = EntityCartoes::getCartaoById($cartaoId);
+		$id_admin = parent::getIdAdminInt();
+		$obCartao = self::obterCartao($cartaoId, $id_admin);
 
-		if(!$obCartao instanceof EntityCartoes){
+		if(!$obCartao){
 			$resposta['erro'] = 'Cartão não encontrado.';
 			return json_encode($resposta);
 		}

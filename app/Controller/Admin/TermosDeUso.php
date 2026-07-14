@@ -31,7 +31,7 @@ class TermosDeUso extends Page{
 
 		$userLogedData = SessionUser::getUserLogedData();
 
-		$dadosEmpresa = $userLogedData['empresa'];
+		$dadosEscola = $userLogedData['escola'];
 
 		$id_user = (int)$userLogedData['usuario']['id'];
 
@@ -41,13 +41,13 @@ class TermosDeUso extends Page{
 
 		$checkDisabled = ($termosAceito) ? 'checked disabled' : '';
 
-		$cidade = EstadoCidades::getCidades('id = ' . $userLogedData['empresa']['cidade'])->fetchObject();
-		$estado = EstadoCidades::getEstados('id = ' . $userLogedData['empresa']['estado'])->fetchObject();
+		$cidade = EstadoCidades::getCidades('id = ' . $userLogedData['escola']['cidade'])->fetchObject();
+		$estado = EstadoCidades::getEstados('id = ' . $userLogedData['escola']['estado'])->fetchObject();
 
 		$enderecoUser = $dadosUser['endereco'].', '.$dadosUser['numero'].' '.$dadosUser['bairro'].' '.$cidade->nome.'/'.$estado->sigla;
 
 
-		$declaracao = 'Declaro estar ciente e concordar com os termos deste documento, assumindo total responsabilidade pelo uso adequado dos dados dos clientes da empresa <b>'.$dadosEmpresa['nome'].'.</b>';
+		$declaracao = 'Declaro estar ciente e concordar com os termos deste documento, assumindo total responsabilidade pelo uso adequado dos dados dos clientes da escola <b>'.$dadosEscola['nome'].'.</b>';
 
 		$termo = '
 		<div class="row mt-5">
@@ -55,7 +55,7 @@ class TermosDeUso extends Page{
 		<h2>Termo de Responsabilidade do Funcionário</h2><br>
 
 		<p>
-		Eu, <strong>'.$dadosUser['nome'].'</strong>, inscrito(a) no CPF sob o nº <strong class="mascara-cpf">'.$dadosUser['cpf'].'</strong>, residente e domiciliado(a) em <strong>'.$enderecoUser.'</strong>, funcionário(a) da empresa <b>'.$dadosEmpresa['nome'].'</b> com CNPJ <b class="mascara-cnpj">'.$dadosEmpresa['cpf_cnpj'].'</b> em que presto serviços e assumo total responsabilidade pelo cadastramento e utilização dos dados pessoais dos clientes nesta plataforma online.
+		Eu, <strong>'.$dadosUser['nome'].'</strong>, inscrito(a) no CPF sob o nº <strong class="mascara-cpf">'.$dadosUser['cpf'].'</strong>, residente e domiciliado(a) em <strong>'.$enderecoUser.'</strong>, funcionário(a) da escola <b>'.$dadosEscola['nome'].'</b> com CNPJ <b class="mascara-cnpj">'.$dadosEscola['cpf_cnpj'].'</b> em que presto serviços e assumo total responsabilidade pelo cadastramento e utilização dos dados pessoais dos clientes nesta plataforma online.
 		</p>
 
 		<h4>1. Dados Pessoais Cadastrados</h4>
@@ -65,7 +65,7 @@ class TermosDeUso extends Page{
 
 		<h4>2. Uso Adequado dos Dados</h4>
 		<p>
-		Comprometo-me a utilizar os dados cadastrados exclusivamente para fins relacionados às atividades da empresa <b>'.$dadosEmpresa['nome'].'.</b>, não compartilhando, divulgando ou utilizando esses dados de forma indevida ou para benefício próprio.
+		Comprometo-me a utilizar os dados cadastrados exclusivamente para fins relacionados às atividades da escola <b>'.$dadosEscola['nome'].'.</b>, não compartilhando, divulgando ou utilizando esses dados de forma indevida ou para benefício próprio.
 		</p>
 
 		<h4>3. Proteção e Segurança dos Dados</h4>
@@ -75,7 +75,7 @@ class TermosDeUso extends Page{
 
 		<h4>4. Responsabilidade Legal</h4>
 		<p>
-		Estou ciente de que a violação desta responsabilidade poderá resultar em medidas disciplinares, legais e financeiras, conforme estabelecido pelas leis aplicáveis e pela política interna da empresa <b>'.$dadosEmpresa['nome'].'.</b>.
+		Estou ciente de que a violação desta responsabilidade poderá resultar em medidas disciplinares, legais e financeiras, conforme estabelecido pelas leis aplicáveis e pela política interna da escola <b>'.$dadosEscola['nome'].'.</b>.
 		</p> 
 		<div class="form-check my-5">
 		<input onchange="ativaBtn()" class="form-check-input" type="checkbox" '.$checkDisabled.' id="termo_uso">

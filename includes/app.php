@@ -13,8 +13,31 @@ use \App\Http\Middleware\Queue as MiddlewareQueue;
 //CARREGA VARIAVEIS DE AMBIENTE
 Environment::load(__DIR__.'/../');
 
+//DETECTA URL DA APLICAÇÃO (local ou produção)
+$detectRequestUrl = function(){
+	$https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+		|| (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+	$scheme = $https ? 'https' : 'http';
+	$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+	$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+	if($scriptDir === '/' || $scriptDir === '.'){
+		$scriptDir = '';
+	}
+	return rtrim($scheme.'://'.$host.$scriptDir, '/');
+};
+
+$envUrl = getenv('URL') ?: '';
+$requestUrl = $detectRequestUrl();
+$envHost = parse_url($envUrl, PHP_URL_HOST);
+$requestHost = $_SERVER['HTTP_HOST'] ?? '';
+
+// Em ambiente local, prioriza a URL real da requisição
+$appUrl = ($envHost && $requestHost && $envHost !== $requestHost)
+	? $requestUrl
+	: ($envUrl ?: $requestUrl);
+
 //DEFINE A CONSTANTE DE URL
-define('URL', getenv('URL'));
+define('URL', $appUrl);
 define('SITE', getenv('SITE'));
 define('TIMEZONE', getenv('TIMEZONE'));
 date_default_timezone_set(TIMEZONE);

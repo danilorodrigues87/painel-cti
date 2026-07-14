@@ -3,6 +3,11 @@ const STATUS_COLUNAS = ['novo','em_atendimento','matriculado','perdido'];
 let crmArrastando = false;
 let crmPaginaAtual = 1;
 let crmFiltroTimer = null;
+let crmFunilAtivo  = null;
+let crmFunisCache  = [];
+
+const CRM_FUNIL_STORAGE = 'crm_funil_ativo';
+let crmFunisRequest = null;
 
 function montarCardLead(lead){
 	const classeEsquecido = lead.esquecido ? ' lead-esquecido' : '';
@@ -31,6 +36,148 @@ function atualizarTotais(totais){
 		const valor = totais[status] || '0,00';
 		$('#total-'+status).text('R$ '+valor);
 	});
+}
+
+function popularSelectFunis($select, funis, valorSelecionado, placeholder){
+	const valorAtual = valorSelecionado || $select.val();
+	$select.empty();
+
+	if(placeholder){
+		$select.append('<option value="">'+placeholder+'</option>');
+	}
+
+	(funis || []).forEach(function(funil){
+		$select.append('<option value="'+funil.id+'">'+funil.nome+'</option>');
+	});
+
+	if(valorAtual){
+		$select.val(String(valorAtual));
+	}
+}
+
+function atualizarTodosSelectsFunis(funis, funilAtivo){
+	crmFunisCache = funis || [];
+	let funilId = funilAtivo || crmFunilAtivo;
+
+	if(funilId && !crmFunisCache.some(function(f){ return String(f.id) === String(funilId); })){
+		funilId = crmFunisCache[0] ? String(crmFunisCache[0].id) : null;
+		sessionStorage.removeItem(CRM_FUNIL_STORAGE);
+	}
+
+	popularSelectFunis($('#filtro-funil'), crmFunisCache, funilId, null);
+	popularSelectFunis($('#novo-lead-funil'), crmFunisCache, funilId, 'Selecione...');
+	popularSelectFunis($('#importar-funil'), crmFunisCache, funilId, 'Selecione...');
+	popularSelectFunis($('#editar-funil'), crmFunisCache, $('#editar-funil').val(), 'Selecione...');
+
+	if(funilId){
+		crmFunilAtivo = String(funilId);
+		sessionStorage.setItem(CRM_FUNIL_STORAGE, crmFunilAtivo);
+	}
+}
+
+function aplicarErroFunilFiltro(){
+	if(crmFunisCache.length > 0){
+		return;
+	}
+	$('#filtro-funil').html('<option value="">Erro ao carregar</option>');
+}
+
+function renderizarListaFunis(funis){
+	if(!funis || funis.length === 0){
+		$('#lista-funis').html('<p class="text-muted small mb-0">Nenhum funil cadastrado.</p>');
+		return;
+	}
+
+	let html = '<div class="list-group list-group-flush">';
+
+	funis.forEach(function(funil){
+		const qtd = funil.qtd_leads || 0;
+		const podeExcluir = qtd === 0;
+		const btnExcluir = podeExcluir
+			? '<button type="button" class="btn btn-outline-danger btn-sm btn-excluir-funil" data-id="'+funil.id+'" data-nome="'+funil.nome+'"><i class="fas fa-trash"></i></button>'
+			: '<span class="badge bg-light text-muted">'+qtd+' lead(s)</span>';
+
+		html += `
+		<div class="list-group-item d-flex justify-content-between align-items-center px-0">
+			<span>${funil.nome}</span>
+			${btnExcluir}
+		</div>`;
+	});
+
+	html += '</div>';
+	$('#lista-funis').html(html);
+}
+
+function carregarFunis(callback, tentativa){
+	tentativa = tentativa || 1;
+
+	if(crmFunisRequest){
+		crmFunisRequest.abort();
+	}
+
+	const usarRotaDedicada = typeof listarFunis !== 'undefined';
+	const url = url_base + (usarRotaDedicada ? listarFunis : listagemCrm);
+	const dados = usarRotaDedicada ? {} : { acao: 'listar_funis' };
+
+	crmFunisRequest = $.ajax({
+		url: url,
+		method: 'post',
+		data: dados,
+		dataType: 'json',
+		success: function(result){
+			crmFunisRequest = null;
+
+			if(result.erro){
+				console.error('Erro funis:', result.erro);
+				$('#response-funis').html('<div class="alert alert-danger py-1">'+result.erro+'</div>');
+				aplicarErroFunilFiltro();
+				if(typeof callback === 'function') callback([]);
+				return;
+			}
+
+			const funis = result.funis || [];
+			const salvo = sessionStorage.getItem(CRM_FUNIL_STORAGE);
+			const funilAtivo = salvo || obterFunilAtivo() || (funis[0] ? String(funis[0].id) : null);
+
+			atualizarTodosSelectsFunis(funis, funilAtivo);
+			renderizarListaFunis(funis);
+
+			if(typeof callback === 'function'){
+				callback(funis);
+			}
+		},
+		error: function(xhr, status){
+			crmFunisRequest = null;
+
+			if(status === 'abort'){
+				return;
+			}
+
+			console.error('Erro ao carregar funis (tentativa '+tentativa+'):', url, xhr.status, xhr.responseText);
+
+			if(tentativa < 3){
+				setTimeout(function(){
+					carregarFunis(callback, tentativa + 1);
+				}, 600 * tentativa);
+				return;
+			}
+
+			aplicarErroFunilFiltro();
+			if(typeof callback === 'function'){
+				callback([]);
+			}
+		}
+	});
+}
+
+function obterFunilAtivo(){
+	return $('#filtro-funil').val() || crmFunilAtivo || '';
+}
+
+function preencherFunilModais(){
+	const funilAtivo = obterFunilAtivo();
+	$('#novo-lead-funil').val(funilAtivo);
+	$('#importar-funil').val(funilAtivo);
 }
 
 function popularFiltroCursos(cursos){
@@ -80,11 +227,16 @@ function carregarLeads(page){
 		method: 'post',
 		data: {
 			page: page,
+			filtro_funil: obterFunilAtivo(),
 			filtro_nome: ($('#filtro-busca-lead').val() || '').trim(),
 			filtro_curso: ($('#filtro-curso').val() || '').trim()
 		},
 		dataType: 'json',
 		success: function(result){
+			if(Array.isArray(result.funis)){
+				atualizarTodosSelectsFunis(result.funis, result.funil_ativo);
+			}
+
 			if(result.colunas){
 				popularFiltroCursos(result.cursos || []);
 				renderizarKanban(result.colunas, result.totais || {});
@@ -93,6 +245,15 @@ function carregarLeads(page){
 			if(result.pagination !== undefined){
 				$('#pagination').html(result.pagination);
 			}
+		},
+		error: function(xhr){
+			console.error('Erro ao carregar leads:', xhr.status, xhr.responseText);
+			aplicarErroFunilFiltro();
+			Swal.fire({
+				title: 'Erro ao carregar leads',
+				text: 'Não foi possível carregar o kanban. Recarregue a página.',
+				icon: 'error'
+			});
 		}
 	});
 }
@@ -156,6 +317,12 @@ function preencherModalDetalhes(result){
 	$('#editar-bairro').val(lead.bairro);
 	$('#editar-cidade').val(lead.cidade);
 	$('#editar-motivo-perda').val(lead.motivo_perda !== '-' ? lead.motivo_perda : '');
+
+	if(result.funis){
+		popularSelectFunis($('#editar-funil'), result.funis, lead.funil_id, 'Selecione...');
+	} else if(lead.funil_id){
+		$('#editar-funil').val(String(lead.funil_id));
+	}
 
 	$('#detalhe-timeline').html(result.timeline);
 	$('#detalhe-observacao').val('');
@@ -227,6 +394,12 @@ $(document).on('input', '#filtro-busca-lead', function(){
 	}, 400);
 });
 
+$(document).on('change', '#filtro-funil', function(){
+	crmFunilAtivo = $(this).val();
+	sessionStorage.setItem(CRM_FUNIL_STORAGE, crmFunilAtivo);
+	carregarLeads(1);
+});
+
 $(document).on('change', '#filtro-curso', function(){
 	carregarLeads(1);
 });
@@ -235,6 +408,97 @@ $(document).on('click', '#btn-limpar-filtros', function(){
 	$('#filtro-busca-lead').val('').removeAttr('readonly');
 	$('#filtro-curso').val('');
 	carregarLeads(1);
+});
+
+$('#modalNovoLead').on('show.bs.modal', function(){
+	preencherFunilModais();
+});
+
+$('#modalImportarLeads').on('show.bs.modal', function(){
+	preencherFunilModais();
+});
+
+$('#modalGerenciarFunis').on('show.bs.modal', function(){
+	carregarFunis();
+});
+
+$(document).on('submit', '#form-novo-funil', function(event){
+	event.preventDefault();
+
+	const nome = ($('#input-novo-funil').val() || '').trim();
+
+	$.ajax({
+		url: url_base + listagemCrm,
+		method: 'post',
+		data: { acao: 'salvar_funil', nome },
+		dataType: 'json',
+		success: function(result){
+			if(result.erro){
+				$('#response-funis').html('<div class="alert alert-danger py-1">'+result.erro+'</div>');
+				return;
+			}
+
+			$('#response-funis').html('<div class="alert alert-success py-1">Funil criado com sucesso.</div>');
+			$('#form-novo-funil')[0].reset();
+
+			if(result.funis){
+				const funilAtivo = result.funil ? String(result.funil.id) : obterFunilAtivo();
+				atualizarTodosSelectsFunis(result.funis, funilAtivo);
+				renderizarListaFunis(result.funis);
+			}
+
+			setTimeout(function(){
+				$('#response-funis').html('');
+			}, 2000);
+		},
+		error: function(xhr){
+			console.error('Erro ao salvar funil:', xhr.status, xhr.responseText);
+			$('#response-funis').html('<div class="alert alert-danger py-1">Erro ao salvar o funil. Verifique se a rota está disponível no servidor.</div>');
+		}
+	});
+});
+
+$(document).on('click', '.btn-excluir-funil', function(){
+	const id   = $(this).data('id');
+	const nome = $(this).data('nome');
+
+	Swal.fire({
+		title: 'Excluir funil?',
+		text: 'Deseja excluir o funil "'+nome+'"?',
+		icon: 'warning',
+		showCancelButton: true,
+		confirmButtonText: 'Sim, excluir',
+		cancelButtonText: 'Cancelar'
+	}).then(function(confirmacao){
+		if(!confirmacao.isConfirmed) return;
+
+		$.ajax({
+			url: url_base + listagemCrm,
+			method: 'post',
+			data: { acao: 'excluir_funil', id },
+			dataType: 'json',
+			success: function(result){
+				if(result.erro){
+					Swal.fire({ title: 'Ops...', text: result.erro, icon: 'error' });
+					return;
+				}
+
+				if(String(id) === String(obterFunilAtivo())){
+					sessionStorage.removeItem(CRM_FUNIL_STORAGE);
+					crmFunilAtivo = null;
+				}
+
+				if(result.funis){
+					const novoAtivo = result.funis[0] ? String(result.funis[0].id) : null;
+					atualizarTodosSelectsFunis(result.funis, novoAtivo);
+					renderizarListaFunis(result.funis);
+				}
+
+				carregarLeads(1);
+				Swal.fire({ title: 'Funil excluído!', icon: 'success', timer: 1200, showConfirmButton: false });
+			}
+		});
+	});
 });
 
 $(document).on('click', '.btn-motivo', function(){

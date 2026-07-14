@@ -7,6 +7,7 @@ use \App\Model\Entity\Responsaveis as EntityRes;
 use \App\Model\Entity\EstadoCidades;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
+use \App\Common\Helpers\TenantHelper;
 
 class Clientes extends Page{
 
@@ -59,11 +60,8 @@ class Clientes extends Page{
 
 
 
-    if($id_cliente != '') {
-    $where = 'id =' . $id_cliente;
-} else {
-    $where = "nivel = 'Cliente' AND id_admin = '" . $id_admin . "'";
-}
+    $wherePadrao = "nivel = 'Cliente' AND id_admin = '" . $id_admin . "'";
+    $where = TenantHelper::whereComFiltroId((int)$id_cliente, (int)$id_admin, $wherePadrao);
 
 $itens = '<div class="row">' . $selecteCliente . '
     <div class="col">
@@ -154,7 +152,12 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 		$postVars = $request->getPostVars();
 
 		if ($postVars['funcao'] == 'editar') {
-			$dados = (array) EntityUser::getUserById($postVars['id']);
+			$id = (int)($postVars['id'] ?? 0);
+			$id_admin = parent::getIdAdminInt();
+			if (!TenantHelper::pertenceUsuario($id, $id_admin, 'Cliente')) {
+				return json_encode(['erro' => 'Registro não encontrado.']);
+			}
+			$dados = (array) EntityUser::getUserById($id);
 		}
 
 		$acesso = array();
@@ -378,6 +381,14 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 
 		if($postVars['id'] != ''){
 
+			$id = (int)$postVars['id'];
+			$id_admin = parent::getIdAdminInt();
+
+			if (!TenantHelper::pertenceUsuario($id, $id_admin, 'Cliente')) {
+				$resposta['erro'] = 'Registro não encontrado.';
+				return json_encode($resposta);
+			}
+
 			$resposta ["filtro"] = $postVars['id'];
 
 			//NOVA INSTANCIA
@@ -447,10 +458,16 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 	public static function deleteUser($request){
 
 		$postVars = $request->getPostVars();
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+
+		if (!TenantHelper::pertenceUsuario($id, $id_admin, 'Cliente')) {
+			return 'Registro não encontrado.';
+		}
 
 		//NOVA INSTANCIA
 		$obUsers = new EntityUser;
-		$obUsers->id = $postVars['id'];
+		$obUsers->id = $id;
 		$obUsers->excluir();
 
 		if($obUsers){

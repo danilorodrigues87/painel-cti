@@ -7,6 +7,8 @@ use \App\Model\Entity\EstadoCidades;
 use \App\Model\Db\Pagination;
 use \App\Session\User\Login as SessionUser;
 use \App\Common\SystemModules;
+use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\ModuleGateHelper;
 
 class User extends Page{
 
@@ -146,15 +148,24 @@ private static function getForm($request) {
 	$dados = [];
 
 	if (isset($postVars['funcao']) && $postVars['funcao'] === 'editar') {
-        // Obtém os dados do usuário apenas se 'funcao' for 'editar'
-		$dados = (array) EntityUser::getUserById($postVars['id']);
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+		if (!TenantHelper::pertenceUsuario($id, $id_admin)) {
+			return json_encode(['erro' => 'Registro não encontrado.']);
+		}
+		$dados = (array) EntityUser::getUserById($id);
 	}
 
     // Decodifica o JSON das permissões, caso esteja vazio define como '[0]'
 	$acesso = isset($dados['acesso']) && $dados['acesso'] !== '' ? json_decode($dados['acesso'], true) : [0];
 
+	$id_admin = parent::getIdAdminInt();
+	$modulosDisponiveis = ModuleGateHelper::getModulosDisponiveisParaEscola($id_admin);
+	$avisoPlano = ModuleGateHelper::escolaTemTodosModulos($id_admin) ? '' :
+		'<p class="text-muted small mb-2">Somente módulos liberados para esta escola.</p>';
+
     // Obtém as permissões formatadas
-	$permissoes = self::getAcessos(SystemModules::getPermissions(), $acesso);
+	$permissoes = self::getAcessos($modulosDisponiveis, $acesso);
 
     // Carrega os estados para o select 
 	$results = EstadoCidades::getEstados();
@@ -264,6 +275,7 @@ private static function getForm($request) {
 	<!-- GRUPO DA DIREITA -->
 	<div class="pl-4 col-md-9 col-sm-6">
 	<label>Permissões de acesso</label>
+	'.$avisoPlano.'
 	<div class="row">
 	' . $permissoes . '
 	</div>
@@ -305,21 +317,25 @@ public static function getNewUser($request){
 
 public static function setNewUser($request) {
     // DADOS DO ADMIN
-	$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
+	$id_admin = parent::getIdAdminInt();
 	$postVars = $request->getPostVars();
 
 	$resposta = [
 		"filtro" => null
-	]; 
+	];
 
-    // Lista de permissões
+	$modulosDisponiveis = ModuleGateHelper::getModulosDisponiveisParaEscola($id_admin);
+
+    // Lista de permissões (apenas módulos liberados para a escola)
 	$permissionsList = [];
-	foreach (SystemModules::getPermissions() as $permission) {
+	foreach ($modulosDisponiveis as $permission) {
 		$permissionName = lcfirst(iconv('UTF-8', 'ASCII//TRANSLIT', $permission));
 		if (isset($postVars[$permissionName])) {
 			$permissionsList[] = $postVars[$permissionName];
 		}
 	}
+
+	$permissionsList = ModuleGateHelper::sanitizarAcesso($id_admin, $permissionsList);
 
     // Caso nenhuma permissão seja adicionada
 	if (empty($permissionsList)) {
@@ -362,9 +378,18 @@ public static function setNewUser($request) {
 
     // Adicionar ou atualizar o usuário
 	if ($postVars['id'] != '') {
+
+		$id = (int)$postVars['id'];
+		$id_admin = parent::getIdAdminInt();
+
+		if (!TenantHelper::pertenceUsuario($id, $id_admin)) {
+			$resposta['erro'] = 'Registro não encontrado.';
+			return json_encode($resposta);
+		}
+
         // NOVA INSTANCIA
 		$obUsers = new EntityUser;
-		$obUsers->id = $postVars['id'];
+		$obUsers->id = $id;
 		$obUsers->nome = $nome;
 		$obUsers->email = $email;
 		$obUsers->nivel = $nivel;
@@ -426,10 +451,16 @@ public static function setNewUser($request) {
 public static function deleteUser($request){
 
 	$postVars = $request->getPostVars();
+	$id = (int)($postVars['id'] ?? 0);
+	$id_admin = parent::getIdAdminInt();
+
+	if (!TenantHelper::pertenceUsuario($id, $id_admin)) {
+		return 'Registro não encontrado.';
+	}
 
 		//NOVA INSTANCIA
 	$obUsers = new EntityUser;
-	$obUsers->id = $postVars['id'];
+	$obUsers->id = $id;
 	$obUsers->excluir();
 
 	if($obUsers){

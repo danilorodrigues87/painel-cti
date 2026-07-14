@@ -2,9 +2,13 @@
 
 namespace App\Session\User;
 
-use \App\Model\Entity\Empresas;
+use \App\Model\Entity\User as EntityUser;
+use \App\Model\Entity\EscolasAssinantes;
+use \App\Common\Helpers\ModuleGateHelper;
 
 class Login {
+
+    private static $sessionSynced = false;
 
     //INICIA A SESSÃO COM TEMPO ESTENDIDO
     private static function init() {
@@ -49,6 +53,54 @@ class Login {
         return true;
     }
 
+    /**
+     * Atualiza dados da sessão com o banco (permissões, nível, status).
+     * Executa no máximo uma vez por requisição.
+     */
+    public static function syncSessionFromDatabase(): bool {
+        self::init();
+
+        if (self::$sessionSynced) {
+            return isset($_SESSION['usuario-mvc-1']);
+        }
+        self::$sessionSynced = true;
+
+        if (!isset($_SESSION['usuario-mvc-1']['id'])) {
+            return false;
+        }
+
+        $obUser = EntityUser::getUser(
+            'id = '.(int)$_SESSION['usuario-mvc-1']['id'],
+            null,
+            1,
+            'id, nome, email, nivel, id_admin, termos_uso, acesso, ativo'
+        )->fetchObject(EntityUser::class);
+
+        if (!$obUser) {
+            unset($_SESSION['usuario-mvc-1']);
+            return false;
+        }
+
+        if ($obUser->ativo !== 's') {
+            unset($_SESSION['usuario-mvc-1']);
+            return false;
+        }
+
+        if ($obUser->nivel === 'Cliente' || $obUser->nivel === 'Empresa') {
+            unset($_SESSION['usuario-mvc-1']);
+            return false;
+        }
+
+        $_SESSION['usuario-mvc-1']['nome']       = $obUser->nome;
+        $_SESSION['usuario-mvc-1']['email']      = $obUser->email;
+        $_SESSION['usuario-mvc-1']['nivel']      = $obUser->nivel;
+        $_SESSION['usuario-mvc-1']['id_admin']   = $obUser->id_admin;
+        $_SESSION['usuario-mvc-1']['termos_uso'] = (int)$obUser->termos_uso;
+        $_SESSION['usuario-mvc-1']['acesso']     = json_decode($obUser->acesso, true) ?? [];
+
+        return true;
+    }
+
     // VERIFICA SE O USUÁRIO ESTÁ LOGADO E SE É UM ADMIN
     public static function isUserLogged() {
         // INICIA A SESSÃO
@@ -65,17 +117,27 @@ class Login {
         return null;
     }
 
+    if (!self::syncSessionFromDatabase()) {
+        return null;
+    }
+
     if (!isset($_SESSION['usuario-mvc-1']['id_admin'])) {
         return null;
     }
 
-    $dadosEmpresa = Empresas::getEmpresaById(
+    $dadosEscola = EscolasAssinantes::getEscolaById(
         $_SESSION['usuario-mvc-1']['id_admin']
     );
 
+    $usuario = $_SESSION['usuario-mvc-1'];
+    $usuario['acesso'] = ModuleGateHelper::getModulosEfetivos(
+        (int)$usuario['id_admin'],
+        $usuario['acesso'] ?? []
+    );
+
     return [
-        'usuario' => $_SESSION['usuario-mvc-1'],
-        'empresa' => $dadosEmpresa ? (array) $dadosEmpresa : null
+        'usuario' => $usuario,
+        'escola'  => $dadosEscola ? (array) $dadosEscola : null
     ];
 }
 

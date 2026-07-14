@@ -1,472 +1,347 @@
-<?php 
+<?php
 
 namespace App\Controller\Admin;
+
 use \App\Utils\View;
 use \App\Model\Entity\Horarios;
-use \App\Model\Entity\AgendaAula;
+use \App\Model\Entity\AgendaPlano;
+use \App\Model\Entity\Laboratorios;
 use \App\Model\Entity\Trilhas as EntityTrilhas;
 use \App\Model\Entity\Matriculas as EntityMatri;
 use \App\Model\Db\Pagination;
+use \App\Common\Helpers\AgendaHelper;
+use \App\Common\Helpers\TenantHelper;
+use PDO;
 
-class AgendaLaboratorio extends Page{
+class AgendaLaboratorio extends Page {
 
-	private static $vagas = 10;
+	private static $dias = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb'];
 
-	//RETORNA O FORMULARIO
-	public static function index($request){
-		//CONTEÚDO DE FORMULÁRIO
-		$content = View::render('admin/modules/agenda/ag_laboratorio',[]);
+	private static function garantirLabPadrao($id_admin) {
+		$total = (int)Laboratorios::getLabs('id_admin = '.(int)$id_admin, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+		if($total > 0){
+			return;
+		}
 
-		//RETORNA A PÁGINA COMPLETA
-		/**
-         * TITULO DA PAGINA
-         * CONTEUDO
-         * CURRENTSESSION SESSÃO ATUAL
-         * REQUEST SE NESCESSÁRIO
-         */
-		return parent::getPanel('Laboratório',$content,'agenda');
+		$ob = new Laboratorios;
+		$ob->id_admin = $id_admin;
+		$ob->nome = 'Laboratório Principal';
+		$ob->qtd_computadores = 10;
+		$ob->cadastrar();
+
+		$labId = (int)$ob->id;
+		$horarios = Horarios::getHorarios('id_admin = '.(int)$id_admin.' AND laboratorio_id IS NULL');
+		while ($h = $horarios->fetchObject(Horarios::class)) {
+			$upd = new Horarios;
+			$upd->id = (int)$h->id;
+			$upd->laboratorio_id = $labId;
+			$upd->inicio = $h->inicio;
+			$upd->final = $h->final;
+			$upd->vagas_ocupadas = (int)$h->vagas_ocupadas;
+			$upd->dia_semana = (int)$h->dia_semana;
+			$upd->atualizar();
+		}
 	}
 
 	private static function getDadosItem($request, &$obPagination) {
-    // Aqui podemos usar a data atual ou qualquer outra data no formato Ano-mês-dia (2014-02-28)
-		$data = date('Y-m-d');
+		$id_admin = parent::getIdAdminInt();
+		self::garantirLabPadrao($id_admin);
+		AgendaHelper::migrarLegado($id_admin);
 
-    // Variável que recebe o dia da semana (0 = Domingo, 1 = Segunda ...)
+		$data = date('Y-m-d');
 		$dia = date('w', strtotime($data));
-		if ($dia == 0) {
+		if($dia == 0){
 			$dia = 1;
 		}
 
-     // DADOS DO ADMIN
-		$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
-
-    // PAGINA ATUAL
 		$postVars = $request->getPostVars();
 		$paginaAtual = $postVars['page'] ?? 1;
-		if($postVars['filtro'] != null){
-			$filtro = $postVars['filtro'];
-		} else {
-			$filtro = $dia;
-		}
+		$filtro = !empty($postVars['filtro']) ? (int)$postVars['filtro'] : $dia;
 
+		$where = 'horarios.id_admin = '.(int)$id_admin.' AND horarios.dia_semana = '.(int)$filtro;
+		$innerJoin = 'LEFT JOIN laboratorios ON laboratorios.id = horarios.laboratorio_id';
+		$fields = 'horarios.*, laboratorios.nome as lab_nome, laboratorios.qtd_computadores';
 
-
-		$where = " AND dia_semana = " . $filtro;
-
-    // QUANTIDADE TOTAL DE REGISTROS
-		$quantidadeTotal = Horarios::getHorarios('id_admin = ' . (int)$id_admin . $where, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
-
-    // INSTANCIA DE PAGINAÇÃO
+		$quantidadeTotal = (int)Horarios::getHorarios($where, null, null, 'COUNT(*) as qtd', $innerJoin)->fetchObject()->qtd;
 		$obPagination = new Pagination($quantidadeTotal, $paginaAtual, 6);
+		$results = Horarios::getHorarios($where, 'inicio ASC', $obPagination->getLimit(), $fields, $innerJoin);
 
-
-    // RESULTADOS DA PAGINA
-		$results = Horarios::getHorarios('id_admin = ' . (int)$id_admin . $where, 'id ASC', $obPagination->getLimit());
-
-		$itens='';
-
-    // RENDERIZA O ITEM
+		$itens = '';
 		while ($obDados = $results->fetchObject(Horarios::class)) {
+			AgendaHelper::recalcularVagasHorario((int)$obDados->id);
+			$cap = (int)($obDados->qtd_computadores ?? 10);
+			$ocupadas = AgendaHelper::contarPlanosHorario((int)$obDados->id);
+			$lab = htmlspecialchars($obDados->lab_nome ?? '—');
+
 			$itens .= '<tr>
-			<td>' . $obDados->inicio . '</td>
-			<td>' . $obDados->final . '</td>
-			<td>' . $obDados->vagas_ocupadas . ' / '  .self::$vagas. '</td>
-			<td> 
-			<a class="btn btn-secondary btn-sm" href="#" onclick="ver_info(' . $obDados->id . ', \'editar\')"><i class="fa-solid fa-user-clock fa-lg"></i> Ver</a>
-			</td>
+				<td>'.$lab.'</td>
+				<td>'.$obDados->inicio.'</td>
+				<td>'.$obDados->final.'</td>
+				<td>'.$ocupadas.' / '.$cap.'</td>
+				<td><a class="btn btn-secondary btn-sm" href="#" onclick="ver_info('.$obDados->id.', \'editar\')"><i class="fa-solid fa-user-clock"></i> Ver</a></td>
 			</tr>';
 		}
 
-		$table = '<div class="card-body">
-		<div class="table-responsive">
-		<table class="table table-striped" id="dataTable" width="100%" cellspacing="0">
-		<thead>
-		<tr>
-		<th>Inicia</th>
-		<th>Termina</th>
-		<th>Vagas Ocupadas </th>
-		<th>Info</th>
-		</tr>
-		</thead>
-		<tbody>' . $itens . '</tbody>
-		</table>
-		</div>
-		</div>
-		';
+		$table = '<div class="card-body"><div class="table-responsive">
+			<table class="table table-striped"><thead><tr>
+			<th>Laboratório</th><th>Inicia</th><th>Termina</th><th>Vagas</th><th>Info</th>
+			</tr></thead><tbody>'.$itens.'</tbody></table></div></div>';
 
-    // RETORNA
-		$dados = [
-			"table" => $table,
-			"filtro" => $filtro
-		];
-		return $dados;
+		return ['table' => $table, 'filtro' => $filtro];
+	}
+
+	public static function index($request) {
+		$content = View::render('admin/modules/agenda/ag_laboratorio', []);
+		return parent::getPanel('Agendamentos', $content, 'agenda', $request);
 	}
 
 	public static function getInfo($request) {
 		$dados = self::getDadosItem($request, $obPagination);
-    // CONTEÚDO
-		$conteudo = [
-			'itens' => $dados['table'],
-			'filtro' => $dados['filtro'],
+		return json_encode([
+			'itens'      => $dados['table'],
+			'filtro'     => $dados['filtro'],
 			'pagination' => parent::getPagination($request, $obPagination)
-		];
-
-		return json_encode($conteudo);
+		]);
 	}
-
-
 
 	public static function verDados($request) {
-    $postVars = $request->getPostVars();
-
-    if (isset($postVars['funcao']) && $postVars['funcao'] == 'editar') {
-        
-        // Ajustando o INNER JOIN
-        $innerJoin = 'INNER JOIN usuarios ON agenda_aula.id_aluno = usuarios.id ';
-        $innerJoin .= 'INNER JOIN trilhas ON agenda_aula.id_trilha = trilhas.id ';
-
-        // Definindo os campos
-        $fields = 'agenda_aula.id as id_agenda,usuarios.nome as aluno, trilhas.nome as trilha, agenda_aula.id';
-
-        // Chamando o método para obter agendamentos
-        $results = AgendaAula::getAgendamentos('id_horario = ' . (int)$postVars['id'], 'id ASC', null, $fields, $innerJoin);
-
-       // Inicializa a variável de itens para o conteúdo da tabela
-	$listaItens = '';
-
-	// Verifica se há resultados para serem processados
-	while ($obDados = $results->fetchObject(AgendaAula::class)) {
-	    // Gera cada linha da tabela dinamicamente com os dados obtidos
-	    $listaItens .= '
-	        <tr>
-	            <td>' . htmlspecialchars($obDados->aluno, ENT_QUOTES, 'UTF-8') . '</td>
-	            <td>' . htmlspecialchars($obDados->trilha, ENT_QUOTES, 'UTF-8') . '</td>
-	            <td>
-	                <div class="dropdown">
-			<button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-				<i class="far fa-edit fa-lg"></i>
-			</button>
-			<ul class="dropdown-menu">
-				<li>
-					<a class="dropdown-item" href="#" onclick="editar(' . $obDados->id_agenda . ', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
-				</li>
-				<li>
-					<a class="dropdown-item" href="#" onclick="excluir('.$obDados->id_agenda.')" ><i class="far fa-trash-alt fa-lg"></i> Excluir</a>
-				</li>
-			</ul>
-		</div>
-	            </td>
-	        </tr>
-	    ';
-	}
-
-    }
-
-    // Criação do formulário
-    $form = 
-    '
-    <div class="modal-header">
-        <h1 class="modal-title fs-5" id="exampleModalLabel">Agendamentos</h1>
-        <button type="button" class="btn-close" id="btn-fechar" data-bs-dismiss="modal" aria-label="Close"></button>
-    </div>
-    <div class="modal-body">
-        <div id="response"></div>
-        <div class="table-responsive">
-            <table class="table table-striped" width="100%" cellspacing="0">
-                <thead>
-                    <tr>
-                        <th>Aluno</th>
-                        <th>Curso</th>    
-                        <th>Opções</th>    
-                    </tr>
-                </thead>
-                <tbody>
-                    '.$listaItens.'
-                </tbody>
-            </table>
-        </div>
-    </div>';
-
-    return $form;
-}
-
-public static function editar($request){
-
-	$postVars = $request->getPostVars();
-	$dia_semana = 1;
-
-
-	if ($postVars['funcao'] == 'editar') {
-
-		$dadosAgenda = (array) AgendaAula::getAgendaById($postVars['id_agenda']);
-		$obHorarios = (array) Horarios::getHorarioById($dadosAgenda['id_horario']);
-		$dia_semana = $obHorarios['dia_semana'];
-
-	}
-
-// DADOS DO ADMIN
-$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
-
-// Ajustando o INNER JOIN
-$innerJoin = 'INNER JOIN usuarios ON matriculas.id_aluno = usuarios.id';
-
-// Definindo os campos
-$fields = 'DISTINCT usuarios.id, usuarios.nome AS aluno';
-
-// Chamando o método para obter agendamentos
-// Especificando a tabela "matriculas" para o campo id_admin na condição
-$resultsUser = EntityMatri::getMatriculas("status = 0 AND matriculas.id_admin = $id_admin", 'aluno ASC', null, $fields, $innerJoin);
-
-// Carrega o SELECT dos Alunos
-$optSlqUsers = '<select class="form-control" name="id_aluno">
-                   <option value="0">Selecione um aluno</option>';
-
-while ($obAlunos = $resultsUser->fetchObject(EntityMatri::class)) {
-    $userSelected = (isset($dadosAgenda['id_aluno']) && $dadosAgenda['id_aluno'] == $obAlunos->id) ? 'selected' : '';
-    $optSlqUsers .= '<option ' . $userSelected . ' value="' . (int)$obAlunos->id . '">' . $obAlunos->aluno . '</option>';
-}
-$optSlqUsers .= '</select>';
-
-
-// Chamando o método para obter Trilhas
-$resultsTrilhas = EntityTrilhas::getTrilha("id_admin = $id_admin", 'nome ASC');
-
-// Carrega o SELECT das Trilhas
-$optSlqTrilhas = '<select class="form-control" name="id_trilha">
-                     <option value="0">Selecione a trilha</option>';
-
-while ($obTrilha = $resultsTrilhas->fetchObject(EntityTrilhas::class)) {
-    $trilhaSelected = (isset($dadosAgenda['id_trilha']) && $dadosAgenda['id_trilha'] == $obTrilha->id) ? 'selected' : '';
-    $optSlqTrilhas .= '<option ' . $trilhaSelected . ' value="' . (int)$obTrilha->id . '">' . $obTrilha->nome . '</option>';
-}
-$optSlqTrilhas .= '</select>';
-
-$sql = '';
-if ($dia_semana != 0) {
-    $sql = " AND dia_semana = " . (int)$dia_semana;
-}
-$where = "id_admin = " . (int)$id_admin . $sql;
-
-$resultHoras = Horarios::getHorarios($where, 'inicio ASC');
-
-$optHorarios = '<select class="form-control" name="id_horario">
-                     <option value="0">Selecione a horario</option>';
-
-while ($obHorarios = $resultHoras->fetchObject(Horarios::class)) {
-    $horaSelected = (isset($dadosAgenda['id_horario']) && $dadosAgenda['id_horario'] == $obHorarios->id) ? 'selected' : '';
-    $optHorarios .= '<option ' . $horaSelected . ' value="' . (int)$obHorarios->id . '">' . $obHorarios->inicio . ' as ' . $obHorarios->final . '</option>';
-}
-$optHorarios .= '</select>';
-
-
-
-		$form = 
-    '<form id="form" method="POST">
-        <div class="modal-header">
-            <h1 class="modal-title fs-5" id="exampleModalLabel">Detalhes do agendamento</h1>
-        	<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
-        	</button>
-        </div>
-        <div class="modal-body">
-            <div class="row">
-            <div id="response"></div>
-                <div class="form-group col-md-6">
-                    <label>Nome do Aluno</label>
-                    ' . $optSlqUsers . '
-                </div>
-                <div class="form-group col-md-6">
-                    <label>Trilhas</label>
-                    ' . $optSlqTrilhas . '
-                </div>
-                <div class="form-group col-md-6">
-			    <label>Dia da Semana</label>
-			    <select onchange="select_dia_semana('.(int)@$dadosAgenda['id_horario'].')" name="dia_semana" id="dia_semana" class="form-control">
-			        <option ' . ((@$dia_semana == 1) ? 'selected' : '') . ' value="1">Segunda-feira</option>
-			        <option ' . ((@$dia_semana == 2) ? 'selected' : '') . ' value="2">Terça-feira</option>
-			        <option ' . ((@$dia_semana == 3) ? 'selected' : '') . ' value="3">Quarta-feira</option>
-			        <option ' . ((@$dia_semana == 4) ? 'selected' : '') . ' value="4">Quinta-feira</option>
-			        <option ' . ((@$dia_semana == 5) ? 'selected' : '') . ' value="5">Sexta-feira</option>
-			        <option ' . ((@$dia_semana == 6) ? 'selected' : '') . ' value="6">Sábado</option>
-			    </select>
-				</div>
-
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Horário</label>
-                        <div id="horarios"></div>
-                    </div>
-                </div>
-
-            </div>
-
-        </div>
-        <div class="modal-footer">
-        	<input value="' . (isset($dadosAgenda['id_horario']) ? $dadosAgenda['id_horario'] : '') . '" type="hidden" name="id_horario_antigo">
-        	<input value="' . (isset($dadosAgenda['id']) ? $dadosAgenda['id'] : '') . '" type="hidden" name="id">
-		    <button type="button" id="btn-fechar-ag" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-    		<button type="submit" class="btn btn-primary">Salvar</button>
-		</div>
-
-    </form>'; 
-
-  	$dadosCompletos = [
-
-  		"form" => $form,
-  		"id_horario" => $dadosAgenda['id_horario'] ?? 0
-
-  	];
-
-  	return json_encode($dadosCompletos);
-
-
-
-}
-
-public static function listarHorarios($request) {
-
-	$postVars = $request->getPostVars();
-
-	$dia_semana = $postVars['dia_semana'];
-	$id_horario = $postVars['id_horario'];
-
-    $resultHoras = Horarios::getHorarios("dia_semana = " . (int)$dia_semana, 'inicio ASC');
-    $optHorarios = '<select class="form-control" name="id_horario">
-                         <option value="0">Selecione o horário</option>';
-
-    // Gerando as opções do select
-    while ($obHorarios = $resultHoras->fetchObject(Horarios::class)) {
-        $horaSelected = (isset($id_horario) && $id_horario == $obHorarios->id) ? 'selected' : '';
-        $optHorarios .= '<option ' . $horaSelected . ' value="' . (int)$obHorarios->id . '">' . $obHorarios->inicio . ' às ' . $obHorarios->final . '</option>';
-    }
-
-    $optHorarios .= '</select>';
-
-    return $optHorarios;
-}
-
-
-
-	public static function salvar($request) {
-    $vagas = self::$vagas;
-
-    // DADOS DO ADMIN
-    $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
-
-    // Obtém os dados da requisição
-    $postVars = $request->getPostVars();
-
-    // Verificações de campos obrigatórios
-    if (empty($postVars['id_aluno'])) {
-        echo "Erro ao selecionar aluno";
-        exit;
-    }
-
-    if (empty($postVars['id_trilha'])) {
-        echo "Erro ao selecionar trilha";
-        exit;
-    }
-
-    if (empty($postVars['dia_semana'])) {
-        echo "Erro ao selecionar dia da semana";
-        exit;
-    }
-
-
-    if (empty($postVars['id_horario'])) {
-        echo "Erro ao selecionar horário";
-        exit;
-    }
-
-    // VERIFICA SE O ALUNO JÁ ESTÁ CADASTRADO NESSE HORÁRIO
-    $qtd = AgendaAula::getAgendamentos("id_horario = " . (int)$postVars['id_horario'] . " AND id_aluno = " . (int)$postVars['id_aluno'], null, null, 'COUNT(*) as qtd')->fetchObject(self::class);
-    $quantidade = $qtd->qtd ?? 0;
-
-    if ($quantidade > 0) {
-        echo "O aluno já está cadastrado nesse horário";
-        exit;
-    }
-
-    // VERIFICA A DISPONIBILIDADE DE VAGAS
-    $horario = Horarios::getHorarios("id = " . (int)$postVars['id_horario'], null, null, 'vagas_ocupadas')->fetchObject();
-    $vagas_ocupadas = $horario->vagas_ocupadas ?? 0;
-    $vagas_disponiveis = $vagas - $vagas_ocupadas;
-
-    if ($vagas_disponiveis <= 0) {
-        echo "Não há vagas disponíveis para esse horário.";
-        exit;
-    }
-
- 	$vaga_horario_anterior=0;
-    // VERIFICA A QTD VAGS NO HORARIO ANTERIOR
-    if (!empty($postVars['id_horario_antigo'])) {
-
-    $h_anterior = Horarios::getHorarios("id = " . (int)$postVars['id_horario_antigo'], null, null, 'vagas_ocupadas')->fetchObject();
-    $vaga_horario_anterior = $h_anterior->vagas_ocupadas ?? 0;
-
-	}
-
-    // Se houver ID, atualiza, senão cadastra
-    $obData = new AgendaAula;
-    if (!empty($postVars['id'])) {
-        $obData->id = (int)$postVars['id'];
-    }
-    $obData->id_aluno = (int)$postVars['id_aluno'];
-    $obData->id_trilha = (int)$postVars['id_trilha'];
-    $obData->dia_semana = $postVars['dia_semana'];
-    $obData->id_horario = (int)$postVars['id_horario'];
-
-    if (!empty($postVars['id'])) {
-        $obData->atualizar();
-    } else {
-        $obData->cadastrar();
-    }
-
-    if (!$obData) {
-        echo "Erro ao cadastrar trilha.";
-        exit;
-    }
-
-    // Atualiza as vagas ocupadas caso o horário tenha sido alterado
-    if (isset($postVars['id_horario_antigo']) && $postVars['id_horario'] != $postVars['id_horario_antigo']) {
-        $obHorarioAntigo = new Horarios;
-        $obHorarioAntigo->id = (int)$postVars['id_horario_antigo'];
-        $obHorarioAntigo->vagas_ocupadas = $vaga_horario_anterior - 1;
-        $obHorarioAntigo->atualizarVaga();
-    }
-
-    $obHorarioNovo = new Horarios;
-    $obHorarioNovo->id = (int)$postVars['id_horario'];
-    $obHorarioNovo->vagas_ocupadas = $vagas_ocupadas + 1;
-    $obHorarioNovo->atualizarVaga();
-
-    if (!$obHorarioNovo) {
-        echo "Erro ao atualizar horários.";
-        exit;
-    }
-
-    echo "Salvo";
-}
-
-
-
-	public static function excluir($request){
-
 		$postVars = $request->getPostVars();
+		$id_admin = parent::getIdAdminInt();
+		$listaItens = '';
 
-		//NOVA INSTANCIA
-		$obData = new AgendaAula;
-		$obData->id = $postVars['id'];
-		$obData->excluir();
+		if(($postVars['funcao'] ?? '') === 'editar'){
+			$idHorario = (int)($postVars['id'] ?? 0);
+			if(!TenantHelper::pertence('horarios', $idHorario, $id_admin)){
+				return 'Horário não encontrado.';
+			}
 
-		if($obData){
-			return true;
-		} else {
-			return 'Erro ao excluir essa trilha';
+			$innerJoin = 'INNER JOIN usuarios ON agenda_plano.id_aluno = usuarios.id
+				INNER JOIN trilhas ON agenda_plano.id_trilha = trilhas.id';
+			$fields = 'agenda_plano.id, usuarios.nome as aluno, trilhas.nome as trilha';
+
+			$results = AgendaPlano::getPlanos(
+				'agenda_plano.id_horario = '.$idHorario.' AND agenda_plano.ativo = 1',
+				'usuarios.nome ASC', null, $fields, $innerJoin
+			);
+
+			while ($row = $results->fetch(PDO::FETCH_ASSOC)) {
+				$listaItens .= '<tr>
+					<td>'.htmlspecialchars($row['aluno']).'</td>
+					<td>'.htmlspecialchars($row['trilha']).'</td>
+					<td><button class="btn btn-sm btn-danger" onclick="excluir('.$row['id'].')"><i class="far fa-trash-alt"></i></button></td>
+				</tr>';
+			}
 		}
 
-		
+		return '
+		<div class="modal-header"><h5 class="modal-title">Alunos agendados</h5>
+		<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+		<div class="modal-body"><div class="table-responsive"><table class="table table-striped">
+		<thead><tr><th>Aluno</th><th>Curso</th><th></th></tr></thead>
+		<tbody>'.($listaItens ?: '<tr><td colspan="3" class="text-muted text-center">Nenhum aluno neste horário</td></tr>').'</tbody>
+		</table></div></div>';
 	}
 
+	public static function infoAluno($request) {
+		$id_admin = parent::getIdAdminInt();
+		$idAluno = (int)($request->getPostVars()['id_aluno'] ?? 0);
 
+		$matricula = AgendaHelper::getMatriculaAtivaAluno($idAluno, $id_admin);
+		$planos = AgendaHelper::contarPlanosAluno($idAluno, $id_admin);
 
+		return json_encode([
+			'aulas_semanais' => (int)($matricula['aulas_semanais'] ?? 0),
+			'planos_ativos'  => $planos,
+			'id_trilha'      => (int)($matricula['id_trilha'] ?? 0),
+			'matricula_id'   => (int)($matricula['id'] ?? 0)
+		]);
+	}
+
+	private static function selectLabs($id_admin, $selected = 0) {
+		$html = '<select name="laboratorio_id" id="laboratorio_id" class="form-control" onchange="select_dia_semana()"><option value="0">Todos os laboratórios</option>';
+		$results = Laboratorios::getLabs('id_admin = '.(int)$id_admin.' AND ativo = 1', 'nome ASC');
+		while ($lab = $results->fetchObject(Laboratorios::class)) {
+			$sel = ((int)$selected === (int)$lab->id) ? 'selected' : '';
+			$html .= '<option '.$sel.' value="'.$lab->id.'">'.htmlspecialchars($lab->nome).' ('.$lab->qtd_computadores.' PCs)</option>';
+		}
+		$html .= '</select>';
+		return $html;
+	}
+
+	public static function editar($request) {
+		$postVars = $request->getPostVars();
+		$id_admin = parent::getIdAdminInt();
+
+		$dia_semana = (int)date('w');
+		if($dia_semana === 0){
+			$dia_semana = 1;
+		}
+
+		$innerJoin = 'INNER JOIN usuarios ON matriculas.id_aluno = usuarios.id';
+		$fields = 'DISTINCT usuarios.id, usuarios.nome AS aluno';
+		$resultsUser = EntityMatri::getMatriculas(
+			'matriculas.status = 0 AND matriculas.id_admin = '.$id_admin,
+			'aluno ASC', null, $fields, $innerJoin
+		);
+
+		$optUsers = '<select class="form-control" name="id_aluno" id="id_aluno" onchange="infoAlunoPlano()" required>
+			<option value="0">Selecione um aluno</option>';
+		while ($row = $resultsUser->fetch(PDO::FETCH_ASSOC)) {
+			$optUsers .= '<option value="'.(int)$row['id'].'">'.htmlspecialchars($row['aluno']).'</option>';
+		}
+		$optUsers .= '</select>';
+
+		$optTrilhas = '<select class="form-control" name="id_trilha" id="id_trilha" required>
+			<option value="0">Selecione a trilha</option>';
+		$resultsTrilhas = EntityTrilhas::getTrilha('id_admin = '.$id_admin, 'nome ASC');
+		while ($t = $resultsTrilhas->fetchObject(EntityTrilhas::class)) {
+			$optTrilhas .= '<option value="'.(int)$t->id.'">'.htmlspecialchars($t->nome).'</option>';
+		}
+		$optTrilhas .= '</select>';
+
+		$diasOpt = '';
+		for($d = 1; $d <= 6; $d++){
+			$sel = ($dia_semana == $d) ? 'selected' : '';
+			$diasOpt .= '<option '.$sel.' value="'.$d.'">'.self::$dias[$d].'-feira</option>';
+		}
+
+		$form = '<form id="form" method="POST">
+		<div class="modal-header"><h5 class="modal-title">Novo horário no plano semanal</h5>
+		<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+		<div class="modal-body">
+			<div id="response"></div>
+			<div id="info-plano" class="alert alert-info small d-none"></div>
+			<div class="mb-3"><label>Aluno</label>'.$optUsers.'</div>
+			<div class="mb-3"><label>Trilha</label>'.$optTrilhas.'</div>
+			<div class="mb-3"><label>Laboratório</label>'.self::selectLabs($id_admin).'</div>
+			<div class="mb-3"><label>Dia da semana</label>
+			<select onchange="select_dia_semana()" name="dia_semana" id="dia_semana" class="form-control">'.$diasOpt.'</select></div>
+			<div class="mb-3"><label>Horário</label><div id="horarios"></div></div>
+		</div>
+		<div class="modal-footer">
+			<button type="button" id="btn-fechar-ag" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+			<button type="submit" class="btn btn-primary">Adicionar ao plano</button>
+		</div></form>';
+
+		return json_encode(['form' => $form, 'id_horario' => 0]);
+	}
+
+	public static function listarHorarios($request) {
+		$postVars = $request->getPostVars();
+		$id_admin = parent::getIdAdminInt();
+		$dia_semana = (int)($postVars['dia_semana'] ?? 1);
+		$id_horario = (int)($postVars['id_horario'] ?? 0);
+		$labId = (int)($postVars['laboratorio_id'] ?? 0);
+
+		$innerJoin = 'LEFT JOIN laboratorios ON laboratorios.id = horarios.laboratorio_id';
+		$fields = 'horarios.id, horarios.inicio, horarios.final, horarios.vagas_ocupadas, laboratorios.nome as lab, laboratorios.qtd_computadores';
+
+		$where = 'horarios.id_admin = '.$id_admin.' AND horarios.dia_semana = '.$dia_semana;
+		if($labId > 0){
+			$where .= ' AND horarios.laboratorio_id = '.$labId;
+		}
+
+		$resultHoras = Horarios::getHorarios($where, 'inicio ASC', null, $fields, $innerJoin);
+
+		$opt = '<select class="form-control" name="id_horario" required><option value="0">Selecione o horário</option>';
+		$temHorario = false;
+		while ($h = $resultHoras->fetch(PDO::FETCH_ASSOC)) {
+			$temHorario = true;
+			$cap = (int)($h['qtd_computadores'] ?? 10);
+			$ocup = AgendaHelper::contarPlanosHorario((int)$h['id']);
+			$disp = $cap - $ocup;
+			$sel = ($id_horario === (int)$h['id']) ? 'selected' : '';
+			$lab = $h['lab'] ? ' · '.$h['lab'] : '';
+			$opt .= '<option '.$sel.' value="'.$h['id'].'" '.($disp <= 0 ? 'disabled' : '').'>
+				'.$h['inicio'].'–'.$h['final'].$lab.' ('.$disp.' vagas)</option>';
+		}
+		$opt .= '</select>';
+
+		if(!$temHorario){
+			$opt .= '<p class="text-muted small mt-2 mb-0">Nenhum horário neste dia/laboratório. <a href="'.URL.'/painel/agenda/horarios">Cadastre horários</a> primeiro.</p>';
+		}
+
+		return $opt;
+	}
+
+	public static function salvar($request) {
+		$id_admin = parent::getIdAdminInt();
+		$postVars = $request->getPostVars();
+
+		$idAluno = (int)($postVars['id_aluno'] ?? 0);
+		$idTrilha = (int)($postVars['id_trilha'] ?? 0);
+		$idHorario = (int)($postVars['id_horario'] ?? 0);
+		$diaSemana = (int)($postVars['dia_semana'] ?? 0);
+
+		if($idAluno <= 0 || $idTrilha <= 0 || $idHorario <= 0 || $diaSemana <= 0){
+			echo 'Preencha todos os campos.';
+			return;
+		}
+
+		if(!TenantHelper::pertence('horarios', $idHorario, $id_admin)){
+			echo 'Horário inválido.';
+			return;
+		}
+
+		$matricula = AgendaHelper::getMatriculaAtivaAluno($idAluno, $id_admin);
+		if(!$matricula){
+			echo 'Aluno sem matrícula ativa.';
+			return;
+		}
+
+		$limite = (int)$matricula['aulas_semanais'];
+		$atual = AgendaHelper::contarPlanosAluno($idAluno, $id_admin);
+
+		if($limite > 0 && $atual >= $limite){
+			echo 'Este aluno já atingiu o limite de '.$limite.' aula(s) por semana.';
+			return;
+		}
+
+		$dup = AgendaPlano::getPlanos(
+			'id_aluno = '.$idAluno.' AND id_horario = '.$idHorario.' AND ativo = 1',
+			null, 1, 'id'
+		)->fetch(PDO::FETCH_ASSOC);
+		if($dup){
+			echo 'Este aluno já está neste horário.';
+			return;
+		}
+
+		$cap = AgendaHelper::getCapacidadeHorario($idHorario);
+		$ocup = AgendaHelper::contarPlanosHorario($idHorario);
+		if($ocup >= $cap){
+			echo 'Não há vagas disponíveis neste horário.';
+			return;
+		}
+
+		$ob = new AgendaPlano;
+		$ob->id_admin = $id_admin;
+		$ob->matricula_id = (int)$matricula['id'];
+		$ob->id_aluno = $idAluno;
+		$ob->id_trilha = $idTrilha;
+		$ob->id_horario = $idHorario;
+		$ob->dia_semana = $diaSemana;
+		$ob->data_inicio = date('Y-m-d');
+		$ob->cadastrar();
+
+		AgendaHelper::recalcularVagasHorario($idHorario);
+		echo 'salvo';
+	}
+
+	public static function excluir($request) {
+		$id = (int)($request->getPostVars()['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+
+		if(!TenantHelper::pertence('agenda_plano', $id, $id_admin)){
+			return 'Registro não encontrado.';
+		}
+
+		$plano = AgendaPlano::getById($id, $id_admin);
+		if(!$plano){
+			return 'Registro não encontrado.';
+		}
+
+		$plano->inativar();
+		AgendaHelper::recalcularVagasHorario((int)$plano->id_horario);
+		return true;
+	}
 }

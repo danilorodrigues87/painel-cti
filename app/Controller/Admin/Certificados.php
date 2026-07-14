@@ -6,6 +6,7 @@ use \App\Model\Entity\Trilhas as EntityTrilhas;
 use \App\Model\Entity\User as EntityUser;
 use \App\Model\Entity\Certificados as EntityCertificados;
 use \App\Model\Db\Pagination;
+use \App\Common\Helpers\TenantHelper;
 
 class Certificados extends Page{
 
@@ -176,7 +177,12 @@ private static function getForm($request) {
     // Verifica se a função é 'editar' e carrega os dados correspondentes
   $dados = [];
   if (isset($postVars['funcao']) && $postVars['funcao'] == 'editar') {
-    $dados = (array) EntityCertificados::getCertificadoById($postVars['id']);
+    $id = (int)($postVars['id'] ?? 0);
+    $id_admin = parent::getIdAdminInt();
+    if (!TenantHelper::pertence('certificados', $id, $id_admin)) {
+      return json_encode(['erro' => 'Registro não encontrado.']);
+    }
+    $dados = (array) EntityCertificados::getCertificadoById($id);
  }
 
     // DADOS DO ADMIN
@@ -273,9 +279,17 @@ public static function setNewCertificado($request){
 
  if($postVars['id'] != ''){
 
+   $id = (int)$postVars['id'];
+   $id_admin = parent::getIdAdminInt();
+
+   if (!TenantHelper::pertence('certificados', $id, $id_admin)) {
+     $resposta['erro'] = 'Registro não encontrado.';
+     return json_encode($resposta);
+   }
+
 			//NOVA INSTANCIA
    $obData = new EntityCertificados;
-   $obData->id = $postVars['id'];
+   $obData->id = $id;
    $obData->id_aluno = $postVars['id_aluno'];
    $obData->id_trilha = $postVars['id_trilha'];
    $obData->carga_h = $carga_h;
@@ -308,10 +322,16 @@ return json_encode($resposta);
 public static function deleteCertificado($request){
 
  $postVars = $request->getPostVars();
+ $id = (int)($postVars['id'] ?? 0);
+ $id_admin = parent::getIdAdminInt();
+
+ if (!TenantHelper::pertence('certificados', $id, $id_admin)) {
+   return 'Registro não encontrado.';
+ }
 
 		//NOVA INSTANCIA
  $obData = new EntityCertificados;
- $obData->id = $postVars['id'];
+ $obData->id = $id;
  $obData->excluir();
 
  if($obData){

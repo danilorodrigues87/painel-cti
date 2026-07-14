@@ -16,8 +16,6 @@ include __DIR__.'/admin/certificados.php';
 
 include __DIR__.'/admin/carnes.php';
 
-include __DIR__.'/admin/contratos.php';
-
 include __DIR__.'/admin/categoria_cursos.php';
 
 include __DIR__.'/admin/caixa.php';
@@ -27,12 +25,6 @@ include __DIR__.'/admin/gateways.php';
 include __DIR__.'/admin/autentication.php';
 
 include __DIR__.'/admin/users.php';
-
-include __DIR__.'/admin/gerentes.php';
-
-include __DIR__.'/admin/diretores.php';
-
-include __DIR__.'/admin/empresa.php';
 
 include __DIR__.'/admin/functions.php';
 

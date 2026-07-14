@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 use \App\Utils\View;
 use \App\Model\Entity\Contratos as EntityContratos;
 use \App\Model\Db\Pagination;
+use \App\Common\Helpers\TenantHelper;
 
 class Contratos extends Page{
 
@@ -102,7 +103,12 @@ class Contratos extends Page{
     $postVars = $request->getPostVars();
 
     if ($postVars['funcao'] == 'editar') {
-        $dados = (array) EntityContratos::getContratoById($postVars['id']);
+        $id = (int)($postVars['id'] ?? 0);
+        $id_admin = parent::getIdAdminInt();
+        if (!TenantHelper::pertence('contratos', $id, $id_admin)) {
+            return json_encode(['erro' => 'Registro não encontrado.']);
+        }
+        $dados = (array) EntityContratos::getContratoById($id);
     }
 
      $form = '<form id="form" method="post">
@@ -152,9 +158,14 @@ class Contratos extends Page{
 
 		if($postVars['id'] != ''){
 
+			$id = (int)$postVars['id'];
+			if (!TenantHelper::pertence('contratos', $id, (int)$id_admin)) {
+				return 'Registro não encontrado.';
+			}
+
 			//NOVA INSTANCIA
 		$obData = new EntityContratos;
-		$obData->id = $postVars['id'];
+		$obData->id = $id;
 		$obData->nome = $postVars['nome'] ?? '';
 		$obData->conteudo = $postVars['conteudo'] ?? '';
 		$obData->atualizar();
@@ -182,10 +193,16 @@ class Contratos extends Page{
 	public static function deleteContrato($request){
 
 		$postVars = $request->getPostVars();
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+
+		if (!TenantHelper::pertence('contratos', $id, $id_admin)) {
+			return 'Registro não encontrado.';
+		}
 
 		//NOVA INSTANCIA
 		$obData = new EntityContratos;
-		$obData->id = $postVars['id'];
+		$obData->id = $id;
 		$obData->excluir();
 
 		if($obData){
