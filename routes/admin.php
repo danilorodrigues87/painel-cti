@@ -35,3 +35,7 @@ include __DIR__.'/admin/relatorios.php';
 include __DIR__.'/admin/crm.php';
 
 include __DIR__.'/admin/tarefas.php';
+
+include __DIR__.'/admin/comunicacao.php';
+
+include __DIR__.'/admin/campanhas.php';

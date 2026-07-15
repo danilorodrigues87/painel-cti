@@ -57,9 +57,9 @@ class recCode{
 		$subject = 'Sua Nova Senha';
 		$body = '<p>Sua nova senha de acesso é:<p><br><b>'.$novaSenha.'</b>';
 
-		$obEmail = new Email;
+		$obEmail = Email::sistema();
 		$res = $obEmail->sendEmail($address,$subject,$body);
-		$res = $res ? true : $obEmail->getError;
+		$res = $res ? true : $obEmail->getError();
 		if(!$res){
 			return self::index($request,$res);
 		}

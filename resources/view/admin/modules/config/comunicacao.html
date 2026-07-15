@@ -1,0 +1,215 @@
+<h1 class="mt-4">Comunicação — E-mail</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Configuração SMTP da escola</li>
+</ol>
+
+<div class="alert alert-info" id="alert-modo-envio">
+	Carregando configurações...
+</div>
+
+<div class="row g-4">
+	<div class="col-lg-8">
+		<div class="card shadow-sm">
+			<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+				<strong>SMTP da escola</strong>
+				<div class="btn-group btn-group-sm" role="group">
+					<button type="button" class="btn btn-outline-secondary" id="btn-preset-gmail">Gmail</button>
+					<button type="button" class="btn btn-outline-secondary" id="btn-preset-outlook">Outlook</button>
+					<button type="button" class="btn btn-outline-secondary" id="btn-preset-corp">Corporativo</button>
+				</div>
+			</div>
+			<div class="card-body">
+				<form id="form-smtp-escola" autocomplete="off" onsubmit="return false;">
+					<div class="form-check form-switch mb-3">
+						<input class="form-check-input" type="checkbox" id="smtp_ativo" name="smtp_ativo" value="1">
+						<label class="form-check-label" for="smtp_ativo">Usar SMTP próprio da escola</label>
+					</div>
+
+					<div class="row g-3">
+						<div class="col-md-8">
+							<label class="form-label" for="smtp_host">Servidor SMTP</label>
+							<input type="text" class="form-control" id="smtp_host" name="smtp_host" placeholder="smtp.gmail.com">
+						</div>
+						<div class="col-md-4">
+							<label class="form-label" for="smtp_port">Porta</label>
+							<input type="number" class="form-control" id="smtp_port" name="smtp_port" value="587" min="1" max="65535">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="smtp_encryption">Criptografia</label>
+							<select class="form-control" id="smtp_encryption" name="smtp_encryption">
+								<option value="tls">TLS (recomendado — porta 587)</option>
+								<option value="ssl">SSL (porta 465)</option>
+								<option value="none">Nenhuma</option>
+							</select>
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="smtp_user">Usuário SMTP</label>
+							<input type="text" class="form-control" id="smtp_user" name="smtp_user" placeholder="seu-email@gmail.com" autocomplete="off">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="smtp_pass">Senha / App Password</label>
+							<input type="password" class="form-control" id="smtp_pass" name="smtp_pass" placeholder="Deixe em branco para manter a atual" autocomplete="new-password">
+							<small class="text-muted" id="hint-senha"></small>
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="smtp_from_email">E-mail remetente</label>
+							<input type="email" class="form-control" id="smtp_from_email" name="smtp_from_email" placeholder="contato@escola.com.br">
+						</div>
+						<div class="col-md-12">
+							<label class="form-label" for="smtp_from_name">Nome remetente</label>
+							<input type="text" class="form-control" id="smtp_from_name" name="smtp_from_name" placeholder="Nome da escola">
+						</div>
+					</div>
+
+					<hr class="my-4">
+
+					<h6 class="text-muted mb-3">Limites para envio em massa</h6>
+					<div class="row g-3">
+						<div class="col-md-6">
+							<label class="form-label" for="email_delay_segundos">Intervalo entre envios (segundos)</label>
+							<input type="number" class="form-control" id="email_delay_segundos" name="email_delay_segundos" value="3" min="1" max="60">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="email_max_hora">Máximo de e-mails por hora</label>
+							<input type="number" class="form-control" id="email_max_hora" name="email_max_hora" value="80" min="1" max="500">
+						</div>
+					</div>
+
+					<div class="d-flex gap-2 flex-wrap mt-4">
+						<button type="button" class="btn btn-primary" id="btn-salvar-smtp">
+							<i class="fas fa-save"></i> Salvar
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-lg-4">
+		<div class="card shadow-sm mb-4">
+			<div class="card-header"><strong>E-mail padrão do sistema</strong></div>
+			<div class="card-body">
+				<p class="small text-muted mb-2">
+					Usado em recuperação de senha e como fallback quando a escola não configura SMTP.
+				</p>
+				<div id="info-sistema" class="small">Carregando...</div>
+			</div>
+		</div>
+
+		<div class="card shadow-sm">
+			<div class="card-header"><strong>Testar envio</strong></div>
+			<div class="card-body">
+				<label class="form-label" for="email_teste">Enviar teste para</label>
+				<input type="email" class="form-control mb-3" id="email_teste" placeholder="seu-email@exemplo.com">
+				<button type="button" class="btn btn-outline-primary w-100" id="btn-testar-email">
+					<i class="fas fa-paper-plane"></i> Enviar e-mail de teste
+				</button>
+				<small class="text-muted d-block mt-2">
+					Se o SMTP da escola estiver desativado, o teste usa o remetente padrão CTI.
+				</small>
+			</div>
+		</div>
+
+		<div class="card shadow-sm mt-4 border-0 bg-light">
+			<div class="card-body small">
+				<strong>Gmail:</strong> ative verificação em 2 etapas e gere uma <em>senha de app</em> em
+				<a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">Conta Google</a>.
+				Use <code>smtp.gmail.com</code>, porta <code>587</code>, TLS.
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="row g-4 mt-1">
+	<div class="col-12">
+		<div class="card shadow-sm">
+			<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+				<strong><i class="fas fa-bell"></i> Cobrança automática por e-mail</strong>
+				<div class="d-flex gap-2">
+					<button type="button" class="btn btn-outline-warning btn-sm" id="btn-auditar-emails">
+						<i class="fas fa-user-check"></i> Auditar e-mails
+					</button>
+					<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-preview-cobranca">
+						<i class="fas fa-search"></i> Simular hoje
+					</button>
+					<button type="button" class="btn btn-outline-primary btn-sm" id="btn-executar-cobranca">
+						<i class="fas fa-paper-plane"></i> Enviar agora
+					</button>
+				</div>
+			</div>
+			<div class="card-body">
+				<div class="alert alert-warning small d-none" id="alert-cobranca-sql"></div>
+				<p class="small text-muted">
+					Avisos automáticos de mensalidades do carnê (títulos em aberto). Cada combinação título + tipo de aviso é enviada <strong>uma única vez</strong>.
+					Configure um cron diário: <code>php worker/cobranca.php</code>
+				</p>
+
+				<div class="form-check form-switch mb-3">
+					<input class="form-check-input" type="checkbox" id="cobranca_ativo" value="1">
+					<label class="form-check-label" for="cobranca_ativo">Ativar cobrança automática por e-mail</label>
+				</div>
+
+				<div class="row g-3">
+					<div class="col-md-4">
+						<label class="form-label" for="cobranca_dias_antes">Dias antes do vencimento</label>
+						<input type="text" class="form-control" id="cobranca_dias_antes" placeholder="3,5,7">
+						<small class="text-muted">Separados por vírgula</small>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label d-block">No dia do vencimento</label>
+						<div class="form-check mt-2">
+							<input class="form-check-input" type="checkbox" id="cobranca_aviso_vencimento" value="1" checked>
+							<label class="form-check-label" for="cobranca_aviso_vencimento">Enviar aviso</label>
+						</div>
+					</div>
+					<div class="col-md-4">
+						<label class="form-label" for="cobranca_dias_depois">Dias após o vencimento</label>
+						<input type="text" class="form-control" id="cobranca_dias_depois" placeholder="1,3,7">
+						<small class="text-muted">Separados por vírgula</small>
+					</div>
+					<div class="col-md-12">
+						<div class="form-check">
+							<input class="form-check-input" type="checkbox" id="cobranca_enviar_responsavel" value="1" checked>
+							<label class="form-check-label" for="cobranca_enviar_responsavel">Enviar também para o e-mail do responsável (se o aluno não tiver)</label>
+						</div>
+					</div>
+				</div>
+
+				<hr class="my-4">
+				<p class="small text-muted mb-3">
+					Variáveis: <code>{nome}</code> <code>{valor}</code> <code>{vencimento}</code> <code>{dias}</code> <code>{descricao}</code> <code>{link_carne}</code> <code>{escola}</code>
+				</p>
+
+				<ul class="nav nav-tabs" role="tablist">
+					<li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-antes" type="button">Antes</button></li>
+					<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vencimento" type="button">Vencimento</button></li>
+					<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-atraso" type="button">Atraso</button></li>
+				</ul>
+				<div class="tab-content border border-top-0 p-3">
+					<div class="tab-pane fade show active" id="tab-antes">
+						<label class="form-label" for="cobranca_assunto_antes">Assunto</label>
+						<input type="text" class="form-control mb-2" id="cobranca_assunto_antes">
+						<label class="form-label" for="cobranca_msg_antes">Mensagem</label>
+						<textarea class="form-control" id="cobranca_msg_antes" rows="5"></textarea>
+					</div>
+					<div class="tab-pane fade" id="tab-vencimento">
+						<label class="form-label" for="cobranca_assunto_vencimento">Assunto</label>
+						<input type="text" class="form-control mb-2" id="cobranca_assunto_vencimento">
+						<label class="form-label" for="cobranca_msg_vencimento">Mensagem</label>
+						<textarea class="form-control" id="cobranca_msg_vencimento" rows="5"></textarea>
+					</div>
+					<div class="tab-pane fade" id="tab-atraso">
+						<label class="form-label" for="cobranca_assunto_atraso">Assunto</label>
+						<input type="text" class="form-control mb-2" id="cobranca_assunto_atraso">
+						<label class="form-label" for="cobranca_msg_atraso">Mensagem</label>
+						<textarea class="form-control" id="cobranca_msg_atraso" rows="5"></textarea>
+					</div>
+				</div>
+
+				<div class="small text-muted mt-3" id="preview-cobranca-resultado"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/config-email.js?v=20260715e"></script>

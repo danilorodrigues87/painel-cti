@@ -1,0 +1,343 @@
+<?php
+
+namespace App\Controller\Admin;
+
+use App\Utils\View;
+use App\Session\User\Login as SessionUser;
+use App\Common\Helpers\TenantHelper;
+use App\Common\Communication\Email;
+use App\Common\Communication\CobrancaEmailService;
+use App\Common\Helpers\EmailAuditoriaHelper;
+use App\Common\Helpers\EmailValidator;
+use App\Model\Entity\EscolaIntegracoes;
+
+class ConfigComunicacao extends Page {
+
+	private static function assertDiretor($request, bool $api = false): bool {
+		$user = SessionUser::getUserLogedData();
+		if (($user['usuario']['nivel'] ?? '') !== 'Diretor') {
+			if (!$api) {
+				$request->getRouter()->redirect('/painel');
+			}
+			return false;
+		}
+		return true;
+	}
+
+	public static function index($request) {
+		if (!self::assertDiretor($request)) {
+			return '';
+		}
+
+		$content = View::render('admin/modules/config/comunicacao', []);
+		return parent::getPanel('Comunicação', $content, 'config');
+	}
+
+	public static function getInfo($request) {
+		if (!self::assertDiretor($request, true)) {
+			return json_encode(['success' => false, 'message' => 'Acesso negado.']);
+		}
+
+		$postVars = $request->getPostVars();
+		$acao = $postVars['acao'] ?? '';
+
+		if ($acao === 'carregar') {
+			return self::carregarConfig();
+		}
+
+		if ($acao === 'salvar') {
+			return self::salvarConfig($postVars);
+		}
+
+		if ($acao === 'testar') {
+			return self::testarEnvio($postVars);
+		}
+
+		if ($acao === 'preview_cobranca') {
+			return self::previewCobranca($postVars);
+		}
+
+		if ($acao === 'executar_cobranca') {
+			return self::executarCobranca();
+		}
+
+		if ($acao === 'auditar_emails') {
+			return self::auditarEmails();
+		}
+
+		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
+	}
+
+	private static function carregarConfig(): string {
+		if (!EscolaIntegracoes::tabelaExiste()) {
+			$sistema = Email::getRemetenteSistema();
+			return json_encode([
+				'success' => true,
+				'aviso'   => 'A tabela escola_integracoes ainda não foi criada. Execute o SQL no phpMyAdmin para salvar as configurações.',
+				'config'  => [
+					'smtp_host'            => '',
+					'smtp_port'            => 587,
+					'smtp_user'            => '',
+					'smtp_from_email'      => '',
+					'smtp_from_name'       => '',
+					'smtp_encryption'      => 'tls',
+					'smtp_ativo'           => 0,
+					'email_delay_segundos' => 3,
+					'email_max_hora'       => 80,
+					'tem_senha'            => false,
+				],
+				'sistema' => [
+					'from_email'  => $sistema['email'],
+					'from_name'   => $sistema['nome'],
+					'configurado' => !empty($sistema['email']),
+				],
+				'modo_envio' => 'sistema',
+				'cobranca' => self::formatCobrancaConfig(null),
+				'templates_padrao' => CobrancaEmailService::getTemplatesPadrao(),
+			]);
+		}
+
+		$idAdmin = TenantHelper::getIdAdmin();
+		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$sistema = Email::getRemetenteSistema();
+
+		$dados = [
+			'smtp_host'            => '',
+			'smtp_port'            => 587,
+			'smtp_user'            => '',
+			'smtp_from_email'      => '',
+			'smtp_from_name'       => '',
+			'smtp_encryption'      => 'tls',
+			'smtp_ativo'           => 0,
+			'email_delay_segundos' => 3,
+			'email_max_hora'       => 80,
+			'tem_senha'            => false,
+		];
+
+		if ($integracao instanceof EscolaIntegracoes) {
+			$dados = [
+				'smtp_host'            => $integracao->smtp_host ?? '',
+				'smtp_port'            => (int)($integracao->smtp_port ?? 587),
+				'smtp_user'            => $integracao->smtp_user ?? '',
+				'smtp_from_email'      => $integracao->smtp_from_email ?? '',
+				'smtp_from_name'       => $integracao->smtp_from_name ?? '',
+				'smtp_encryption'      => $integracao->smtp_encryption ?? 'tls',
+				'smtp_ativo'           => (int)($integracao->smtp_ativo ?? 0),
+				'email_delay_segundos' => (int)($integracao->email_delay_segundos ?? 3),
+				'email_max_hora'       => (int)($integracao->email_max_hora ?? 80),
+				'tem_senha'            => !empty($integracao->getSenhaDescriptografada()),
+			];
+		}
+
+		$modoEnvio = 'sistema';
+		if ($integracao instanceof EscolaIntegracoes && $integracao->temSmtpConfigurado()) {
+			$modoEnvio = 'escola';
+		}
+
+		return json_encode([
+			'success' => true,
+			'config'  => $dados,
+			'cobranca'=> self::formatCobrancaConfig($integracao),
+			'templates_padrao' => CobrancaEmailService::getTemplatesPadrao(),
+			'sistema' => [
+				'from_email' => $sistema['email'],
+				'from_name'  => $sistema['nome'],
+				'configurado' => !empty($sistema['email']),
+			],
+			'modo_envio' => $modoEnvio,
+		]);
+	}
+
+	private static function salvarConfig(array $postVars): string {
+		if (!EscolaIntegracoes::tabelaExiste()) {
+			return json_encode([
+				'success' => false,
+				'message' => 'Crie a tabela escola_integracoes no phpMyAdmin antes de salvar.',
+			]);
+		}
+
+		$idAdmin = TenantHelper::getIdAdmin();
+		$existente = EscolaIntegracoes::getByIdAdmin($idAdmin);
+
+		$host = trim($postVars['smtp_host'] ?? '');
+		$user = trim($postVars['smtp_user'] ?? '');
+		$fromEmail = trim($postVars['smtp_from_email'] ?? '');
+		$fromName = trim($postVars['smtp_from_name'] ?? '');
+		$encryption = $postVars['smtp_encryption'] ?? 'tls';
+		$ativo = !empty($postVars['smtp_ativo']) ? 1 : 0;
+		$senha = trim($postVars['smtp_pass'] ?? '');
+		if ($senha !== '') {
+			$senha = str_replace(' ', '', $senha);
+		}
+
+		if (!in_array($encryption, ['tls', 'ssl', 'none'], true)) {
+			$encryption = 'tls';
+		}
+
+		if ($ativo && (empty($host) || empty($user) || empty($fromEmail))) {
+			return json_encode([
+				'success' => false,
+				'message' => 'Preencha servidor, usuário e e-mail remetente para ativar o SMTP da escola.',
+			]);
+		}
+
+		if ($fromEmail !== '' && !filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) {
+			return json_encode(['success' => false, 'message' => 'E-mail remetente inválido.']);
+		}
+
+		if ($ativo && $senha === '' && !($existente instanceof EscolaIntegracoes && $existente->getSenhaDescriptografada())) {
+			return json_encode(['success' => false, 'message' => 'Informe a senha SMTP ou app password.']);
+		}
+
+		$ob = new EscolaIntegracoes;
+		$ob->id_admin = $idAdmin;
+		$ob->smtp_host = $host;
+		$ob->smtp_port = (int)($postVars['smtp_port'] ?? 587);
+		$ob->smtp_user = $user;
+		$ob->smtp_from_email = $fromEmail;
+		$ob->smtp_from_name = $fromName;
+		$ob->smtp_encryption = $encryption;
+		$ob->smtp_ativo = $ativo;
+		$ob->email_delay_segundos = max(1, (int)($postVars['email_delay_segundos'] ?? 3));
+		$ob->email_max_hora = max(1, (int)($postVars['email_max_hora'] ?? 80));
+
+		if ($senha !== '') {
+			$ob->smtp_pass = $senha;
+		}
+
+		self::aplicarCobrancaNoObjeto($ob, $postVars);
+
+		if (!$ob->salvar()) {
+			$msg = EscolaIntegracoes::getUltimoErro() ?: 'Não foi possível salvar as configurações.';
+			return json_encode(['success' => false, 'message' => $msg]);
+		}
+
+		return json_encode(['success' => true, 'message' => 'Configurações salvas com sucesso.']);
+	}
+
+	private static function testarEnvio(array $postVars): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$destino = trim($postVars['email_teste'] ?? '');
+
+		if ($destino === '' || !EmailValidator::isValido($destino)) {
+			return json_encode(['success' => false, 'message' => 'Informe um e-mail válido para o teste.']);
+		}
+
+		$override = [
+			'smtp_host'       => trim($postVars['smtp_host'] ?? ''),
+			'smtp_port'       => (int)($postVars['smtp_port'] ?? 587),
+			'smtp_user'       => trim($postVars['smtp_user'] ?? ''),
+			'smtp_from_email' => trim($postVars['smtp_from_email'] ?? ''),
+			'smtp_from_name'  => trim($postVars['smtp_from_name'] ?? ''),
+			'smtp_encryption' => $postVars['smtp_encryption'] ?? 'tls',
+			'smtp_ativo'      => !empty($postVars['smtp_ativo']) ? 1 : 0,
+			'manter_senha'    => true,
+		];
+
+		$senha = $postVars['smtp_pass'] ?? '';
+		if ($senha !== '') {
+			$senha = str_replace(' ', '', trim($senha));
+			$override['smtp_pass'] = $senha;
+		}
+
+		$email = Email::escolaParaTeste($idAdmin, $override);
+		$usandoSistema = $email->isUsandoSistema();
+
+		$assunto = 'Teste de e-mail - Painel CTI';
+		$corpo = '<p>Este é um e-mail de teste enviado pelo painel CTI.</p>'
+			.'<p>'.($usandoSistema
+				? 'Remetente: e-mail padrão do sistema.'
+				: 'Remetente: SMTP configurado pela escola.').'</p>';
+
+		$enviado = $email->sendEmail($destino, $assunto, $corpo);
+
+		if (!$enviado) {
+			return json_encode([
+				'success' => false,
+				'message' => $email->getError() ?: 'Falha ao enviar e-mail de teste.',
+			]);
+		}
+
+		return json_encode([
+			'success' => true,
+			'message' => $usandoSistema
+				? 'Teste enviado usando o e-mail padrão do sistema.'
+				: 'Teste enviado usando o SMTP da escola.',
+			'modo' => $usandoSistema ? 'sistema' : 'escola',
+		]);
+	}
+
+	private static function formatCobrancaConfig($integracao): array {
+		$padrao = [
+			'cobranca_ativo'             => 0,
+			'cobranca_dias_antes'        => '3,5',
+			'cobranca_aviso_vencimento'  => 1,
+			'cobranca_dias_depois'       => '1,3,7',
+			'cobranca_enviar_responsavel'=> 1,
+			'cobranca_assunto_antes'     => '',
+			'cobranca_assunto_vencimento'=> '',
+			'cobranca_assunto_atraso'    => '',
+			'cobranca_msg_antes'         => '',
+			'cobranca_msg_vencimento'    => '',
+			'cobranca_msg_atraso'        => '',
+			'colunas_ok'                 => EscolaIntegracoes::temColunasCobranca(),
+			'log_ok'                     => \App\Model\Entity\EmailCobrancaLog::tabelaExiste(),
+		];
+
+		if ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunasCobranca()) {
+			$padrao['cobranca_ativo'] = (int)($integracao->cobranca_ativo ?? 0);
+			$padrao['cobranca_dias_antes'] = $integracao->cobranca_dias_antes ?? '3,5';
+			$padrao['cobranca_aviso_vencimento'] = (int)($integracao->cobranca_aviso_vencimento ?? 1);
+			$padrao['cobranca_dias_depois'] = $integracao->cobranca_dias_depois ?? '1,3,7';
+			$padrao['cobranca_enviar_responsavel'] = (int)($integracao->cobranca_enviar_responsavel ?? 1);
+			$padrao['cobranca_assunto_antes'] = $integracao->cobranca_assunto_antes ?? '';
+			$padrao['cobranca_assunto_vencimento'] = $integracao->cobranca_assunto_vencimento ?? '';
+			$padrao['cobranca_assunto_atraso'] = $integracao->cobranca_assunto_atraso ?? '';
+			$padrao['cobranca_msg_antes'] = $integracao->cobranca_msg_antes ?? '';
+			$padrao['cobranca_msg_vencimento'] = $integracao->cobranca_msg_vencimento ?? '';
+			$padrao['cobranca_msg_atraso'] = $integracao->cobranca_msg_atraso ?? '';
+		}
+
+		return $padrao;
+	}
+
+	private static function aplicarCobrancaNoObjeto(EscolaIntegracoes $ob, array $postVars): void {
+		if (!EscolaIntegracoes::temColunasCobranca()) {
+			return;
+		}
+
+		$ob->cobranca_ativo = !empty($postVars['cobranca_ativo']) ? 1 : 0;
+		$ob->cobranca_dias_antes = trim($postVars['cobranca_dias_antes'] ?? '3,5');
+		$ob->cobranca_aviso_vencimento = !empty($postVars['cobranca_aviso_vencimento']) ? 1 : 0;
+		$ob->cobranca_dias_depois = trim($postVars['cobranca_dias_depois'] ?? '1,3,7');
+		$ob->cobranca_enviar_responsavel = !empty($postVars['cobranca_enviar_responsavel']) ? 1 : 0;
+		$ob->cobranca_assunto_antes = trim($postVars['cobranca_assunto_antes'] ?? '');
+		$ob->cobranca_assunto_vencimento = trim($postVars['cobranca_assunto_vencimento'] ?? '');
+		$ob->cobranca_assunto_atraso = trim($postVars['cobranca_assunto_atraso'] ?? '');
+		$ob->cobranca_msg_antes = trim($postVars['cobranca_msg_antes'] ?? '');
+		$ob->cobranca_msg_vencimento = trim($postVars['cobranca_msg_vencimento'] ?? '');
+		$ob->cobranca_msg_atraso = trim($postVars['cobranca_msg_atraso'] ?? '');
+	}
+
+	private static function previewCobranca(array $postVars = []): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$preview = CobrancaEmailService::preview($idAdmin, $postVars);
+		return json_encode(['success' => true, 'preview' => $preview]);
+	}
+
+	private static function executarCobranca(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$resumo = CobrancaEmailService::processar($idAdmin, false);
+		return json_encode([
+			'success' => true,
+			'message' => 'Enviados: '.($resumo['enviados'] ?? 0).'. Erros: '.($resumo['erros'] ?? 0).'.',
+			'resumo'  => $resumo,
+		]);
+	}
+
+	private static function auditarEmails(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$relatorio = EmailAuditoriaHelper::auditarEscola($idAdmin, 150);
+		return json_encode(['success' => true, 'auditoria' => $relatorio]);
+	}
+}

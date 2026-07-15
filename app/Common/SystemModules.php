@@ -13,6 +13,8 @@ class SystemModules {
 		'leads'           => 'Leads',
 		'tarefas'         => 'Tarefas',
 		'mensagens'       => 'Mensagens',
+		'comunicacao'     => 'Comunicação',
+		'campanhas'       => 'Campanhas',
 		'vouchers'        => 'Vouchers',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
@@ -232,6 +234,24 @@ class SystemModules {
 			'label' => 'Termos de Uso',
 			'link' => URL.'/painel/termos-de-uso',
 			'icon' => 'fa-solid fa-file-circle-check'
+		],
+		'config' => [
+			'label' => 'Configurações',
+			'icon' => 'fa-solid fa-gear',
+			'subsections' => [
+				'name' => 'Layouts-config',
+				'icon' => 'fas fa-caret-down',
+				'items' => [
+					[
+						'label' => 'Comunicação',
+						'link' => URL.'/painel/config/comunicacao'
+					],
+					[
+						'label' => 'Campanhas',
+						'link' => URL.'/painel/campanhas'
+					]
+				]
+			]
 		]
 
 	];

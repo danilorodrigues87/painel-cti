@@ -1,98 +1,183 @@
 <?php
+
 namespace App\Common\Communication;
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 use App\Common\Environment;
-
-Environment::load(__DIR__.'/../../');
-
-define('SMTP_HOST', getenv('SMTP_HOST'));
-define('SMTP_USER', getenv('SMTP_USER'));
-define('SMTP_PASS', getenv('SMTP_PASS'));
-define('SMTP_PORT', getenv('SMTP_PORT'));
-define('SMTP_CHARSET', getenv('SMTP_CHARSET'));
-define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL'));
-define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME'));
+use App\Model\Entity\EscolaIntegracoes;
 
 class Email {
 
-    // CREDENCIAIS
-    const HOST    = SMTP_HOST;
-    const USER    = SMTP_USER;
-    const PASS    = SMTP_PASS;
-    const PORT    = SMTP_PORT;
-    const CHARSET = SMTP_CHARSET;
+	private $config;
+	private $error = null;
+	private $usandoSistema = false;
 
-    // REMETENTE
-    const FROM_EMAIL = SMTP_FROM_EMAIL;
-    const FROM_NAME  = SMTP_FROM_NAME;
+	private function __construct($config, $usandoSistema = false) {
+		$this->config = $config;
+		$this->usandoSistema = $usandoSistema;
+	}
 
-    private $error;
+	public function getError() {
+		return $this->error;
+	}
 
-    public function getError(){
-        return $this->error;
-    }
+	public function isUsandoSistema(): bool {
+		return $this->usandoSistema;
+	}
 
-    public function sendEmail(
-        $addresses,
-        $subject,
-        $body,
-        $attachments = [],
-        $ccs = [],
-        $bccs = []
-    ){
-        $this->error = null;
+	public static function sistema(): self {
+		return new self(self::configSistema(), true);
+	}
 
-        $mail = new PHPMailer(true);
+	public static function escola(int $idAdmin): self {
+		$configEscola = self::configEscola($idAdmin);
+		if ($configEscola !== null) {
+			return new self($configEscola, false);
+		}
+		return self::sistema();
+	}
 
-        try {
-            $mail->isSMTP();
-            $mail->Host       = self::HOST;
-            $mail->SMTPAuth   = true;
-            $mail->Username   = self::USER;
-            $mail->Password   = self::PASS;
-            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port       = self::PORT;
-            $mail->CharSet    = self::CHARSET;
-            $mail->Encoding   = 'base64';
+	public static function escolaParaTeste(int $idAdmin, array $override = []): self {
+		$config = self::configEscola($idAdmin, $override);
+		if ($config === null) {
+			return self::sistema();
+		}
+		return new self($config, false);
+	}
 
-            $mail->setFrom(self::FROM_EMAIL, self::FROM_NAME);
+	public static function getRemetenteSistema(): array {
+		$config = self::configSistema();
+		return [
+			'email' => $config['from_email'] ?? '',
+			'nome'  => $config['from_name'] ?? '',
+		];
+	}
 
-            foreach ((array)$addresses as $address) {
-                if (!empty($address)) {
-                    $mail->addAddress($address);
-                }
-            }
+	private static function configSistema(): array {
+		return [
+			'host'        => Environment::get('SMTP_HOST', ''),
+			'user'        => Environment::get('SMTP_USER', ''),
+			'pass'        => Environment::get('SMTP_PASS', ''),
+			'port'        => (int)Environment::get('SMTP_PORT', 587),
+			'charset'     => Environment::get('SMTP_CHARSET', 'UTF-8'),
+			'from_email'  => Environment::get('SMTP_FROM_EMAIL', ''),
+			'from_name'   => Environment::get('SMTP_FROM_NAME', 'CTI Educacional'),
+			'encryption'  => Environment::get('SMTP_ENCRYPTION', 'tls'),
+		];
+	}
 
-            foreach ((array)$attachments as $attachment) {
-                if (!empty($attachment)) {
-                    $mail->addAttachment($attachment);
-                }
-            }
+	private static function configEscola(int $idAdmin, array $override = []): ?array {
+		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if (!$integracao instanceof EscolaIntegracoes) {
+			return null;
+		}
 
-            foreach ((array)$ccs as $cc) {
-                if (!empty($cc)) {
-                    $mail->addCC($cc);
-                }
-            }
+		$host = $override['smtp_host'] ?? $integracao->smtp_host;
+		$user = $override['smtp_user'] ?? $integracao->smtp_user;
+		$fromEmail = $override['smtp_from_email'] ?? $integracao->smtp_from_email;
+		$ativo = isset($override['smtp_ativo'])
+			? (int)$override['smtp_ativo'] === 1
+			: (int)$integracao->smtp_ativo === 1;
 
-            foreach ((array)$bccs as $bcc) {
-                if (!empty($bcc)) {
-                    $mail->addBCC($bcc);
-                }
-            }
+		$pass = $override['smtp_pass'] ?? null;
+		if (($pass === null || $pass === '') && !empty($override['manter_senha'])) {
+			$pass = $integracao->getSenhaDescriptografada();
+		} elseif ($pass === null || $pass === '') {
+			$pass = $integracao->getSenhaDescriptografada();
+		}
 
-            $mail->isHTML(true);
-            $mail->Subject = $subject;
-            $mail->Body    = $body;
-            $mail->AltBody = strip_tags($body);
+		if (!$ativo || empty($host) || empty($user) || empty($fromEmail) || empty($pass)) {
+			return null;
+		}
 
-            return $mail->send();
+		return [
+			'host'        => $host,
+			'user'        => $user,
+			'pass'        => $pass,
+			'port'        => (int)($override['smtp_port'] ?? $integracao->smtp_port ?? 587),
+			'charset'     => 'UTF-8',
+			'from_email'  => $fromEmail,
+			'from_name'   => $override['smtp_from_name'] ?? $integracao->smtp_from_name ?? '',
+			'encryption'  => $override['smtp_encryption'] ?? $integracao->smtp_encryption ?? 'tls',
+		];
+	}
 
-        } catch (Exception $e) {
-            $this->error = $e->getMessage();
-            return false;
-        }
-    }
+	private function resolveEncryption(string $encryption) {
+		$encryption = strtolower($encryption);
+		if ($encryption === 'ssl') {
+			return PHPMailer::ENCRYPTION_SMTPS;
+		}
+		if ($encryption === 'none') {
+			return false;
+		}
+		return PHPMailer::ENCRYPTION_STARTTLS;
+	}
+
+	public function sendEmail(
+		$addresses,
+		$subject,
+		$body,
+		$attachments = [],
+		$ccs = [],
+		$bccs = []
+	) {
+		$this->error = null;
+
+		if (empty($this->config['host']) || empty($this->config['user']) || empty($this->config['from_email'])) {
+			$this->error = 'Configuração SMTP incompleta.';
+			return false;
+		}
+
+		$mail = new PHPMailer(true);
+
+		try {
+			$mail->isSMTP();
+			$mail->Host       = $this->config['host'];
+			$mail->SMTPAuth   = true;
+			$mail->Username   = $this->config['user'];
+			$mail->Password   = $this->config['pass'] ?? '';
+			$mail->SMTPSecure = $this->resolveEncryption($this->config['encryption'] ?? 'tls');
+			$mail->Port       = (int)($this->config['port'] ?? 587);
+			$mail->CharSet    = $this->config['charset'] ?? 'UTF-8';
+			$mail->Encoding   = 'base64';
+
+			$mail->setFrom($this->config['from_email'], $this->config['from_name'] ?? '');
+
+			foreach ((array)$addresses as $address) {
+				if (!empty($address)) {
+					$mail->addAddress($address);
+				}
+			}
+
+			foreach ((array)$attachments as $attachment) {
+				if (!empty($attachment)) {
+					$mail->addAttachment($attachment);
+				}
+			}
+
+			foreach ((array)$ccs as $cc) {
+				if (!empty($cc)) {
+					$mail->addCC($cc);
+				}
+			}
+
+			foreach ((array)$bccs as $bcc) {
+				if (!empty($bcc)) {
+					$mail->addBCC($bcc);
+				}
+			}
+
+			$mail->isHTML(true);
+			$mail->Subject = $subject;
+			$mail->Body    = $body;
+			$mail->AltBody = strip_tags($body);
+
+			return $mail->send();
+
+		} catch (Exception $e) {
+			$this->error = $e->getMessage();
+			return false;
+		}
+	}
 }

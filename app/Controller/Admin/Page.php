@@ -152,6 +152,11 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 		$allPermittedModules = array_merge($defaultModules, $permittedModules);
 
+		if (($userLogedData['usuario']['nivel'] ?? '') === 'Diretor') {
+			$allPermittedModules[] = 'Comunicação';
+			$allPermittedModules[] = 'Campanhas';
+		}
+
 		$temAcesso = in_array($currentModule, $allPermittedModules);
 		if(!$temAcesso && $currentModule === 'Agendamentos' && in_array('Laboratório', $allPermittedModules)){
 			$temAcesso = true;

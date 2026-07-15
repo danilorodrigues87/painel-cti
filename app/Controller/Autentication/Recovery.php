@@ -76,9 +76,9 @@ class Recovery{
 		$subject = 'Recuperação de senha';
 		$body = '<p>Seu código de recuepração de senha é:<p><br><b>'.$code.'</b>';
 
-		$obEmail = new Email;
+		$obEmail = Email::sistema();
 		$res = $obEmail->sendEmail($address,$subject,$body);
-		$res = $res ? true : $obEmail->getError;
+		$res = $res ? true : $obEmail->getError();
 		if(!$res){
 			return self::index($request,$res);
 
