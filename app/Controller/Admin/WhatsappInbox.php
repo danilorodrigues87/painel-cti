@@ -191,7 +191,13 @@ class WhatsappInbox extends Page {
 		}
 
 		if (!$ok) {
-			return self::json(['success' => false, 'message' => 'Falha ao enviar mídia pelo WhatsApp.']);
+			$detalhe = WhatsappChatbotService::getLastError();
+			return self::json([
+				'success' => false,
+				'message' => $detalhe
+					? ('Falha ao enviar mídia: '.$detalhe)
+					: 'Falha ao enviar mídia pelo WhatsApp.',
+			]);
 		}
 
 		return self::json(['success' => true, 'message' => 'Mídia enviada.']);

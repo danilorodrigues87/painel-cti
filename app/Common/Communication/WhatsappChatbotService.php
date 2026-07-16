@@ -13,6 +13,12 @@ use App\Model\Entity\EscolaIntegracoes;
  */
 class WhatsappChatbotService {
 
+	private static $lastError = null;
+
+	public static function getLastError(): ?string {
+		return self::$lastError;
+	}
+
 	public static function aoReceberMensagem(WhatsappConversa $conversa, ?string $texto, bool $fromMe): void {
 		if ($fromMe) {
 			return;
@@ -164,15 +170,21 @@ class WhatsappChatbotService {
 	}
 
 	public static function enviarTexto(WhatsappConversa $conversa, string $texto): bool {
+		self::$lastError = null;
 		$idAdmin = (int)$conversa->id_admin;
 		$instance = self::instanceDaConversa($conversa);
 		if ($instance === '') {
+			self::$lastError = 'Instância WhatsApp não encontrada.';
 			return false;
 		}
 
 		$api = EvolutionApiService::fromEnv();
 		$res = $api->sendText($instance, (string)$conversa->telefone, $texto);
 		$ok = $res !== null && $api->getLastHttpCode() < 400;
+		if (!$ok) {
+			self::$lastError = $api->getLastError() ?: 'Falha ao enviar texto.';
+			return false;
+		}
 
 		WhatsappMensagem::registrar([
 			'id_admin'      => $idAdmin,
@@ -181,123 +193,51 @@ class WhatsappChatbotService {
 			'tipo'          => 'text',
 			'corpo'         => $texto,
 			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
-			'status'        => $ok ? 'sent' : 'error',
+			'status'        => 'sent',
 		]);
 
 		$conversa->tocarUltimaMensagem();
-		return $ok;
+		return true;
 	}
 
 	/**
 	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
 	 */
 	public static function enviarImagem(WhatsappConversa $conversa, array $arquivo, ?string $caption = null): bool {
-		$instance = self::instanceDaConversa($conversa);
-		if ($instance === '') {
-			return false;
-		}
-
-		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
-		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
-		$path = $root.'/'.$relative;
-		$bin = is_file($path) ? file_get_contents($path) : false;
-		if ($bin === false) {
-			return false;
-		}
-
-		$mime = $arquivo['mimetype'] ?? 'image/jpeg';
-		$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
-
-		$api = EvolutionApiService::fromEnv();
-		$res = $api->sendMedia($instance, (string)$conversa->telefone, $dataUri, 'image', $mime, $caption);
-		$ok = $res !== null && $api->getLastHttpCode() < 400;
-
-		WhatsappMensagem::registrar([
-			'id_admin'      => (int)$conversa->id_admin,
-			'conversa_id'   => (int)$conversa->id,
-			'direction'     => 'out',
-			'tipo'          => 'image',
-			'corpo'         => $caption,
-			'media_url'     => $arquivo['relative'] ?? null,
-			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
-			'status'        => $ok ? 'sent' : 'error',
-		]);
-		$conversa->tocarUltimaMensagem();
-		return $ok;
+		return self::enviarArquivoMidia($conversa, $arquivo, 'image', $caption, null);
 	}
 
 	/**
 	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
 	 */
 	public static function enviarDocumento(WhatsappConversa $conversa, array $arquivo, ?string $caption = null, ?string $fileName = null): bool {
-		$instance = self::instanceDaConversa($conversa);
-		if ($instance === '') {
-			return false;
-		}
-
-		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
-		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
-		$path = $root.'/'.$relative;
-		$bin = is_file($path) ? file_get_contents($path) : false;
-		if ($bin === false) {
-			return false;
-		}
-
-		$mime = $arquivo['mimetype'] ?? 'application/octet-stream';
-		if (!$fileName) {
-			$fileName = basename($relative) ?: 'documento';
-		}
-		$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
-
-		$api = EvolutionApiService::fromEnv();
-		$res = $api->sendMedia(
-			$instance,
-			(string)$conversa->telefone,
-			$dataUri,
-			'document',
-			$mime,
-			$caption,
-			$fileName
-		);
-		$ok = $res !== null && $api->getLastHttpCode() < 400;
-
-		WhatsappMensagem::registrar([
-			'id_admin'      => (int)$conversa->id_admin,
-			'conversa_id'   => (int)$conversa->id,
-			'direction'     => 'out',
-			'tipo'          => 'document',
-			'corpo'         => $caption ?: $fileName,
-			'media_url'     => $arquivo['relative'] ?? null,
-			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
-			'status'        => $ok ? 'sent' : 'error',
-		]);
-		$conversa->tocarUltimaMensagem();
-		return $ok;
+		return self::enviarArquivoMidia($conversa, $arquivo, 'document', $caption, $fileName);
 	}
 
 	/**
 	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
 	 */
 	public static function enviarAudio(WhatsappConversa $conversa, array $arquivo): bool {
+		self::$lastError = null;
 		$instance = self::instanceDaConversa($conversa);
 		if ($instance === '') {
+			self::$lastError = 'Instância WhatsApp não encontrada.';
 			return false;
 		}
 
-		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
-		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
-		$path = $root.'/'.$relative;
-		$bin = is_file($path) ? file_get_contents($path) : false;
-		if ($bin === false) {
+		$path = self::caminhoAbsoluto($arquivo);
+		if ($path === null) {
+			self::$lastError = 'Arquivo de áudio não encontrado no servidor.';
 			return false;
 		}
-
-		$mime = $arquivo['mimetype'] ?? 'audio/ogg';
-		$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
 
 		$api = EvolutionApiService::fromEnv();
-		$res = $api->sendAudio($instance, (string)$conversa->telefone, $dataUri);
+		$res = $api->sendAudio($instance, (string)$conversa->telefone, $path);
 		$ok = $res !== null && $api->getLastHttpCode() < 400;
+		if (!$ok) {
+			self::$lastError = $api->getLastError() ?: 'Falha ao enviar áudio.';
+			return false;
+		}
 
 		WhatsappMensagem::registrar([
 			'id_admin'      => (int)$conversa->id_admin,
@@ -307,10 +247,79 @@ class WhatsappChatbotService {
 			'corpo'         => null,
 			'media_url'     => $arquivo['relative'] ?? null,
 			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
-			'status'        => $ok ? 'sent' : 'error',
+			'status'        => 'sent',
 		]);
 		$conversa->tocarUltimaMensagem();
-		return $ok;
+		return true;
+	}
+
+	/**
+	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
+	 */
+	private static function enviarArquivoMidia(
+		WhatsappConversa $conversa,
+		array $arquivo,
+		string $tipo,
+		?string $caption,
+		?string $fileName
+	): bool {
+		self::$lastError = null;
+		$instance = self::instanceDaConversa($conversa);
+		if ($instance === '') {
+			self::$lastError = 'Instância WhatsApp não encontrada.';
+			return false;
+		}
+
+		$path = self::caminhoAbsoluto($arquivo);
+		if ($path === null) {
+			self::$lastError = 'Arquivo de mídia não encontrado no servidor.';
+			return false;
+		}
+
+		$mime = $arquivo['mimetype'] ?? null;
+		if (!$fileName) {
+			$fileName = basename((string)($arquivo['relative'] ?? $path));
+		}
+
+		$api = EvolutionApiService::fromEnv();
+		$res = $api->sendMedia(
+			$instance,
+			(string)$conversa->telefone,
+			$path,
+			$tipo,
+			$mime,
+			$caption,
+			$fileName
+		);
+		$ok = $res !== null && $api->getLastHttpCode() < 400;
+		if (!$ok) {
+			self::$lastError = $api->getLastError() ?: ('Falha ao enviar '.$tipo.'.');
+			return false;
+		}
+
+		WhatsappMensagem::registrar([
+			'id_admin'      => (int)$conversa->id_admin,
+			'conversa_id'   => (int)$conversa->id,
+			'direction'     => 'out',
+			'tipo'          => $tipo,
+			'corpo'         => $caption ?: ($tipo === 'document' ? $fileName : null),
+			'media_url'     => $arquivo['relative'] ?? null,
+			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
+			'status'        => 'sent',
+		]);
+		$conversa->tocarUltimaMensagem();
+		return true;
+	}
+
+	/** @param array{relative?:string} $arquivo */
+	private static function caminhoAbsoluto(array $arquivo): ?string {
+		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
+		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
+		if ($relative === '') {
+			return null;
+		}
+		$path = $root.'/'.$relative;
+		return is_file($path) ? $path : null;
 	}
 
 	public static function instanceDaConversa(WhatsappConversa $conversa): string {

@@ -133,7 +133,7 @@ class EvolutionApiService {
 
 	/**
 	 * Envia imagem/documento/vídeo.
-	 * $media = URL pública ou data URI / base64.
+	 * Prefere arquivo local (multipart); fallback JSON base64.
 	 */
 	public function sendMedia(
 		string $instance,
@@ -150,10 +150,61 @@ class EvolutionApiService {
 			return null;
 		}
 
+		// Caminho de arquivo local → multipart (mais compatível)
+		if (is_file($media)) {
+			$res = $this->requestMultipart(
+				'/message/sendMedia/'.rawurlencode($instance),
+				[
+					'number'    => $number,
+					'mediatype' => $mediatype,
+					'caption'   => $caption,
+					'fileName'  => $fileName ?: basename($media),
+					'mimetype'  => $mimetype,
+				],
+				'media',
+				$media,
+				$mimetype,
+				$fileName ?: basename($media)
+			);
+			if ($res !== null && $this->lastHttpCode < 400) {
+				return $res;
+			}
+			// tenta campo "file" (algumas versões)
+			$res2 = $this->requestMultipart(
+				'/message/sendMedia/'.rawurlencode($instance),
+				[
+					'number'    => $number,
+					'mediatype' => $mediatype,
+					'caption'   => $caption,
+					'fileName'  => $fileName ?: basename($media),
+					'mimetype'  => $mimetype,
+				],
+				'file',
+				$media,
+				$mimetype,
+				$fileName ?: basename($media)
+			);
+			if ($res2 !== null && $this->lastHttpCode < 400) {
+				return $res2;
+			}
+		}
+
+		// JSON: data URI ou base64 puro
+		$payloadMedia = $media;
+		if (is_file($media)) {
+			$bin = file_get_contents($media);
+			if ($bin === false) {
+				$this->lastError = 'Não foi possível ler o arquivo de mídia.';
+				return null;
+			}
+			$mime = $mimetype ?: 'application/octet-stream';
+			$payloadMedia = 'data:'.$mime.';base64,'.base64_encode($bin);
+		}
+
 		$body = [
 			'number'    => $number,
 			'mediatype' => $mediatype,
-			'media'     => $media,
+			'media'     => $payloadMedia,
 		];
 		if ($mimetype) {
 			$body['mimetype'] = $mimetype;
@@ -163,9 +214,23 @@ class EvolutionApiService {
 		}
 		if ($fileName) {
 			$body['fileName'] = $fileName;
+		} elseif ($mediatype === 'document') {
+			$body['fileName'] = 'documento.pdf';
 		}
 
-		return $this->request('POST', '/message/sendMedia/'.rawurlencode($instance), $body);
+		$res = $this->request('POST', '/message/sendMedia/'.rawurlencode($instance), $body);
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+
+		// Última tentativa: base64 sem prefixo data:
+		if (strpos($payloadMedia, 'base64,') !== false) {
+			$parts = explode('base64,', $payloadMedia, 2);
+			$body['media'] = $parts[1] ?? $payloadMedia;
+			$res = $this->request('POST', '/message/sendMedia/'.rawurlencode($instance), $body);
+		}
+
+		return $res;
 	}
 
 	/** Envia áudio como nota de voz (PTT). */
@@ -176,9 +241,41 @@ class EvolutionApiService {
 			return null;
 		}
 
+		if (is_file($audio)) {
+			$res = $this->requestMultipart(
+				'/message/sendWhatsAppAudio/'.rawurlencode($instance),
+				[
+					'number'   => $number,
+					'encoding' => 'true',
+				],
+				'audio',
+				$audio,
+				null,
+				basename($audio)
+			);
+			if ($res !== null && $this->lastHttpCode < 400) {
+				return $res;
+			}
+			// fallback: enviar como media audio
+			$resMedia = $this->sendMedia($instance, $number, $audio, 'audio', null, null, basename($audio));
+			if ($resMedia !== null && $this->lastHttpCode < 400) {
+				return $resMedia;
+			}
+		}
+
+		$payload = $audio;
+		if (is_file($audio)) {
+			$bin = file_get_contents($audio);
+			if ($bin === false) {
+				$this->lastError = 'Não foi possível ler o áudio.';
+				return null;
+			}
+			$payload = 'data:audio/ogg;base64,'.base64_encode($bin);
+		}
+
 		return $this->request('POST', '/message/sendWhatsAppAudio/'.rawurlencode($instance), [
 			'number'   => $number,
-			'audio'    => $audio,
+			'audio'    => $payload,
 			'encoding' => true,
 		]);
 	}
@@ -382,7 +479,7 @@ class EvolutionApiService {
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_CUSTOMREQUEST  => strtoupper($method),
 			CURLOPT_HTTPHEADER     => $headers,
-			CURLOPT_TIMEOUT        => 60,
+			CURLOPT_TIMEOUT        => 120,
 			CURLOPT_CONNECTTIMEOUT => 20,
 			CURLOPT_SSL_VERIFYPEER => true,
 		]);
@@ -397,6 +494,71 @@ class EvolutionApiService {
 		$this->lastHttpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		curl_close($ch);
 
+		return $this->parseResponse($raw, $errno, $error);
+	}
+
+	/**
+	 * POST multipart (envio de arquivo).
+	 * @param array<string,mixed> $fields
+	 */
+	private function requestMultipart(
+		string $path,
+		array $fields,
+		string $fileField,
+		string $filePath,
+		?string $mime,
+		?string $fileName
+	): ?array {
+		$this->lastError = null;
+		$this->lastHttpCode = 0;
+
+		if (!$this->isConfigured()) {
+			$this->lastError = 'Evolution API não configurada no .env (EVOLUTION_URL / EVOLUTION_API_KEY).';
+			return null;
+		}
+		if (!is_file($filePath)) {
+			$this->lastError = 'Arquivo de mídia não encontrado.';
+			return null;
+		}
+
+		$post = [];
+		foreach ($fields as $k => $v) {
+			if ($v === null || $v === '') {
+				continue;
+			}
+			$post[$k] = is_bool($v) ? ($v ? 'true' : 'false') : (string)$v;
+		}
+
+		$post[$fileField] = new \CURLFile(
+			$filePath,
+			$mime ?: mime_content_type($filePath) ?: 'application/octet-stream',
+			$fileName ?: basename($filePath)
+		);
+
+		$url = $this->baseUrl.$path;
+		$ch = curl_init($url);
+		curl_setopt_array($ch, [
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_POST           => true,
+			CURLOPT_POSTFIELDS     => $post,
+			CURLOPT_HTTPHEADER     => [
+				'apikey: '.$this->apiKey,
+				'Accept: application/json',
+			],
+			CURLOPT_TIMEOUT        => 120,
+			CURLOPT_CONNECTTIMEOUT => 20,
+		]);
+
+		$raw = curl_exec($ch);
+		$errno = curl_errno($ch);
+		$error = curl_error($ch);
+		$this->lastHttpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+
+		return $this->parseResponse($raw, $errno, $error);
+	}
+
+	private function parseResponse($raw, int $errno, string $error): ?array {
 		if ($errno) {
 			$this->lastError = 'Falha de conexão com Evolution: '.$error;
 			return null;
@@ -409,16 +571,30 @@ class EvolutionApiService {
 		}
 
 		if ($this->lastHttpCode >= 400) {
-			$msg = $decoded['message'] ?? $decoded['error'] ?? $decoded['response']['message'] ?? null;
-			if (is_array($msg)) {
-				$msg = json_encode($msg, JSON_UNESCAPED_UNICODE);
-			}
-			$this->lastError = is_string($msg) && $msg !== ''
-				? $msg
-				: ('Erro Evolution HTTP '.$this->lastHttpCode);
+			$this->lastError = self::extrairMensagemErro($decoded) ?: ('Erro Evolution HTTP '.$this->lastHttpCode);
 			return $decoded;
 		}
 
 		return $decoded;
+	}
+
+	public static function extrairMensagemErro(array $decoded): ?string {
+		$msg = $decoded['message']
+			?? $decoded['error']['message']
+			?? $decoded['error']
+			?? $decoded['response']['message']
+			?? null;
+
+		if (is_array($msg)) {
+			$flat = [];
+			array_walk_recursive($msg, function ($v) use (&$flat) {
+				if (is_string($v) && $v !== '') {
+					$flat[] = $v;
+				}
+			});
+			$msg = $flat ? implode(' | ', $flat) : json_encode($msg, JSON_UNESCAPED_UNICODE);
+		}
+
+		return is_string($msg) && $msg !== '' ? $msg : null;
 	}
 }
