@@ -75,6 +75,47 @@ class EvolutionApiService {
 		return $this->request('GET', '/instance/fetchInstances');
 	}
 
+	/** Confirma se a instância existe (connectionState às vezes dá 404 falso durante o QR). */
+	public function instanciaExiste(string $instance): bool {
+		$state = $this->connectionState($instance);
+		if ($state !== null && $this->lastHttpCode < 400) {
+			return true;
+		}
+		if ($this->lastHttpCode !== 404) {
+			return $state !== null;
+		}
+
+		$list = $this->fetchInstances();
+		if (!is_array($list)) {
+			return false;
+		}
+
+		$itens = isset($list[0]) || $list === [] ? $list : ($list['instance'] ?? $list);
+		if (!is_array($itens)) {
+			return false;
+		}
+
+		$alvo = strtolower($instance);
+		foreach ($itens as $item) {
+			if (!is_array($item)) {
+				continue;
+			}
+			$sub = is_array($item['instance'] ?? null) ? $item['instance'] : [];
+			$nome = (string)(
+				$item['name']
+				?? $item['instanceName']
+				?? $sub['instanceName']
+				?? $sub['name']
+				?? ''
+			);
+			if ($nome !== '' && strtolower($nome) === $alvo) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	public function connectionState(string $instance): ?array {
 		return $this->request('GET', '/instance/connectionState/'.rawurlencode($instance));
 	}

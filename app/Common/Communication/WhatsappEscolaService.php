@@ -66,9 +66,15 @@ class WhatsappEscolaService {
 				self::garantirWebhook($api, $instance, $idAdmin);
 			}
 		} elseif ($api->getLastHttpCode() === 404) {
-			$out['status'] = 'not_created';
-			$out['erro'] = 'Instância não existe na Evolution. Use “Conectar / QR” ou “Trocar número”.';
-			self::persistirStatus($idAdmin, $instance, 'not_created', $integracao, 0, '');
+			// connectionState pode falhar no meio do QR; confirma na lista antes de alarmar
+			if ($api->instanciaExiste($instance)) {
+				$out['status'] = 'connecting';
+				$out['erro'] = null;
+			} else {
+				$out['status'] = 'not_created';
+				$out['erro'] = 'Instância não existe na Evolution. Use “Conectar / QR” ou “Trocar número”.';
+				self::persistirStatus($idAdmin, $instance, 'not_created', $integracao, 0, '');
+			}
 		} else {
 			$out['erro'] = $api->getLastError();
 		}
@@ -122,10 +128,15 @@ class WhatsappEscolaService {
 			];
 		}
 
-		// connecting/close travado = sessão Baileys suja → apaga e cria de novo
-		$precisaRecriar = $forcarRecriar
-			|| !$existe
-			|| in_array($estadoAtual, ['connecting', 'close', 'closed'], true);
+		// Só apaga/recria se pedido (Trocar número) ou se realmente não existe.
+		// NÃO recriar só por "connecting" — isso apaga o QR no meio do scan.
+		if (!$existe && !$forcarRecriar && $httpState === 404 && $api->instanciaExiste($instance)) {
+			$existe = true;
+			$estadoAtual = 'connecting';
+			$logs[] = 'state:existe-via-lista';
+		}
+
+		$precisaRecriar = $forcarRecriar || !$existe;
 
 		$created = null;
 		if ($precisaRecriar) {
@@ -134,7 +145,6 @@ class WhatsappEscolaService {
 				$logs[] = 'logout:HTTP '.$api->getLastHttpCode();
 				$api->deleteInstance($instance);
 				$logs[] = 'delete:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-				// Evolution precisa liberar o nome/sessão antes do create
 				usleep(1500000);
 			}
 
@@ -259,14 +269,15 @@ class WhatsappEscolaService {
 			: EvolutionApiService::nomeInstancia($idAdmin);
 
 		$state = $api->connectionState($instance);
-		if ($api->getLastHttpCode() === 404) {
+		if ($api->getLastHttpCode() === 404 && !$api->instanciaExiste($instance)) {
+			// Só cria se realmente não existir — evita apagar QR por 404 falso
 			return self::criarOuConectar($idAdmin);
 		}
 
-		// Só atualiza o QR — não apaga a instância (recriar fica em “Trocar número” / “Conectar”)
+		// Só atualiza o QR — não apaga a instância
 		$connect = $api->obterQrComRetry($instance, 2, 400);
 		if ($connect === null && $api->getLastHttpCode() >= 400) {
-			if ($api->getLastHttpCode() === 404) {
+			if ($api->getLastHttpCode() === 404 && !$api->instanciaExiste($instance)) {
 				return self::criarOuConectar($idAdmin);
 			}
 			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao obter QR.'];

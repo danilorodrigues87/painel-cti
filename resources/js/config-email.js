@@ -106,39 +106,60 @@ function normalizarSrcQr(qr){
 
 let waPairingTimer = null;
 let waLastQrAt = 0;
+let waPareando = false;
 
 function pararPareamentoWa(){
+	waPareando = false;
 	if(waPairingTimer){
 		clearInterval(waPairingTimer);
 		waPairingTimer = null;
 	}
 }
 
+function atualizarBadgeWa(w){
+	if(!w) return;
+	if(w.status !== undefined){
+		$('#wa-status-label').replaceWith('<span id="wa-status-label">'+badgeStatusWa(w.status, w.conectado)+'</span>');
+	}
+	if(w.instance) $('#wa-instance').text(w.instance);
+	if(w.numero !== undefined && w.numero !== null && w.numero !== ''){
+		$('#wa-numero').text(w.numero);
+	}
+}
+
 function iniciarPareamentoWa(){
 	pararPareamentoWa();
+	waPareando = true;
 	waLastQrAt = Date.now();
 	waPairingTimer = setInterval(function(){
+		if(!waPareando) return;
 		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_status' }, function(res){
-			if(!res || !res.success) return;
+			if(!res || !res.success || !waPareando) return;
 			const w = res.whatsapp || {};
-			preencherWhatsapp(w);
+			// Só badge/número — NUNCA limpa o QR nem acumula alerta (status não traz qrcode)
+			atualizarBadgeWa(w);
 			if(w.conectado){
 				pararPareamentoWa();
-				mostrarQr(null);
+				mostrarQr(null, false);
 				Swal.fire('Conectado!', 'WhatsApp pareado com sucesso.', 'success');
+				whatsappStatus();
 				return;
 			}
-			// QR do WhatsApp expira ~40s — renova só então (não a cada poucos segundos)
 			const st = String(w.status || '').toLowerCase();
-			if((st === 'connecting' || st === 'close' || st === 'closed') && (Date.now() - waLastQrAt > 35000)){
+			// Renova QR só se ainda estiver pareando e o código já tiver ~35s
+			if(st !== 'not_created' && (Date.now() - waLastQrAt > 35000)){
 				waLastQrAt = Date.now();
 				$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_qr' }, function(r2){
-					if(r2 && r2.success){
-						aplicarRespostaWhatsapp(r2);
-						if(r2.whatsapp && r2.whatsapp.conectado){
-							pararPareamentoWa();
-							Swal.fire('Conectado!', 'WhatsApp pareado com sucesso.', 'success');
-						}
+					if(!r2 || !r2.success || !waPareando) return;
+					const w2 = r2.whatsapp || r2;
+					atualizarBadgeWa(w2);
+					if(w2.qrcode){
+						mostrarQr(w2.qrcode, false);
+					}
+					if(w2.conectado){
+						pararPareamentoWa();
+						mostrarQr(null, false);
+						Swal.fire('Conectado!', 'WhatsApp pareado com sucesso.', 'success');
 					}
 				}, 'json');
 			}
@@ -146,54 +167,63 @@ function iniciarPareamentoWa(){
 	}, 5000);
 }
 
-function mostrarQr(qr){
+function mostrarQr(qr, iniciarPoll){
+	if(iniciarPoll === undefined) iniciarPoll = true;
 	const src = normalizarSrcQr(qr);
 	if(src){
 		$('#wa-qrcode').attr('src', src).removeClass('d-none');
 		$('#wa-qr-placeholder').addClass('d-none');
-		iniciarPareamentoWa();
+		if(iniciarPoll){
+			iniciarPareamentoWa();
+		} else {
+			waPareando = true;
+		}
 	} else {
 		$('#wa-qrcode').addClass('d-none').attr('src', '');
 		$('#wa-qr-placeholder').removeClass('d-none').text('Nenhum QR carregado. Use “Trocar número” se estiver travado em Connecting.');
 	}
 }
 
-function preencherWhatsapp(w){
+function preencherWhatsapp(w, opts){
+	opts = opts || {};
+	const msgs = [];
 	if(!w.colunas_ok || !w.tabelas_ok || !w.configurado_env){
-		let msgs = [];
 		if(!w.configurado_env) msgs.push('Configure EVOLUTION_URL e EVOLUTION_API_KEY no .env.');
 		if(!w.colunas_ok || !w.tabelas_ok) msgs.push('Execute o SQL de WhatsApp/Evolution no phpMyAdmin.');
-		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join(' '));
+	}
+	// Durante o pareamento, ignora "instância não existe" (falso positivo / corrida com o poll)
+	if(w.erro && !(waPareando && String(w.status || '') === 'not_created')){
+		msgs.push(w.erro);
+	}
+	if(msgs.length){
+		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join('<br>'));
 	} else {
-		$('#alert-whatsapp-sql').addClass('d-none');
+		$('#alert-whatsapp-sql').addClass('d-none').empty();
 	}
 
-	$('#wa-status-label').replaceWith('<span id="wa-status-label">'+badgeStatusWa(w.status, w.conectado)+'</span>');
-	$('#wa-instance').text(w.instance || '—');
-	$('#wa-numero').text(w.numero || '—');
+	atualizarBadgeWa(w);
 	$('#wa-webhook').text(w.webhook_url || '—');
 	$('#evolution_ativo').prop('checked', parseInt(w.ativo, 10) === 1);
 	$('#whatsapp_delay_segundos').val(w.delay || 5);
 	$('#whatsapp_max_hora').val(w.max_hora || 40);
-	mostrarQr(w.qrcode || null);
 
-	if(w.erro){
-		$('#alert-whatsapp-sql').removeClass('d-none').append('<br>'+w.erro);
+	// Só altera o QR se a resposta trouxe um código novo (status sempre manda null)
+	if(w.qrcode){
+		mostrarQr(w.qrcode, opts.iniciarPoll !== false);
+	} else if(!waPareando && opts.limparQr){
+		mostrarQr(null, false);
 	}
 }
 
 function aplicarRespostaWhatsapp(res){
 	const w = res.whatsapp || res;
-	if(w.instance || w.status || w.qrcode !== undefined){
-		preencherWhatsapp(Object.assign({}, {
-			colunas_ok: true,
-			tabelas_ok: true,
-			configurado_env: true
-		}, w));
-	}
-	mostrarQr(w.qrcode || null);
-	if(w.status !== undefined){
-		$('#wa-status-label').replaceWith('<span id="wa-status-label">'+badgeStatusWa(w.status, w.conectado)+'</span>');
+	preencherWhatsapp(Object.assign({}, {
+		colunas_ok: true,
+		tabelas_ok: true,
+		configurado_env: true
+	}, w), { iniciarPoll: true });
+	if(w.qrcode){
+		mostrarQr(w.qrcode, true);
 	}
 }
 
@@ -203,7 +233,7 @@ function whatsappStatus(){
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao consultar status.', 'error');
 			return;
 		}
-		preencherWhatsapp(res.whatsapp || {});
+		preencherWhatsapp(res.whatsapp || {}, { limparQr: !waPareando, iniciarPoll: false });
 	}, 'json');
 }
 
