@@ -313,9 +313,25 @@
 									<label class="form-label" for="whatsapp_max_hora">Máx./hora</label>
 									<input type="number" class="form-control" id="whatsapp_max_hora" value="40" min="1" max="200">
 								</div>
+								<div class="col-6">
+									<label class="form-label" for="whatsapp_horario_inicio">Expediente início</label>
+									<input type="time" class="form-control" id="whatsapp_horario_inicio">
+								</div>
+								<div class="col-6">
+									<label class="form-label" for="whatsapp_horario_fim">Expediente fim</label>
+									<input type="time" class="form-control" id="whatsapp_horario_fim">
+								</div>
+								<div class="col-12">
+									<label class="form-label" for="whatsapp_dias">Dias (1=seg … 7=dom)</label>
+									<input type="text" class="form-control" id="whatsapp_dias" value="1,2,3,4,5" placeholder="1,2,3,4,5">
+								</div>
+								<div class="col-12">
+									<label class="form-label" for="whatsapp_msg_fora">Mensagem fora do expediente</label>
+									<textarea class="form-control" id="whatsapp_msg_fora" rows="2" placeholder="Olá! Nosso atendimento funciona em horário comercial..."></textarea>
+								</div>
 							</div>
 							<button type="button" class="btn btn-primary btn-sm" id="btn-wa-salvar">
-								<i class="fas fa-save"></i> Salvar limites
+								<i class="fas fa-save"></i> Salvar limites e horário
 							</button>
 						</div>
 					</div>
@@ -340,10 +356,19 @@
 							</button>
 						</div>
 					</div>
+					<div class="col-12">
+						<div class="border rounded p-3">
+							<div class="d-flex justify-content-between align-items-center mb-2">
+								<strong>Checklist operação Evolution</strong>
+								<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-wa-checklist">Atualizar</button>
+							</div>
+							<ul class="small mb-0" id="wa-checklist"></ul>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-email.js?v=20260716h"></script>
+<script src="{{URL}}/resources/js/config-email.js?v=20260716i"></script>

@@ -108,7 +108,7 @@ class Evolution {
 				'status'        => $fromMe ? 'sent' : 'received',
 			]);
 
-			$conversa->tocarUltimaMensagem();
+			$conversa->tocarUltimaMensagem(!$fromMe);
 
 			if (!$fromMe) {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);

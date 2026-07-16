@@ -9,6 +9,7 @@ use App\Common\Communication\CampanhaWorker;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Model\Entity\Campanhas as EntityCampanhas;
 use App\Model\Entity\CampanhaFila;
+use App\Common\Communication\EvolutionApiService;
 
 class Campanhas extends Page {
 
@@ -54,9 +55,21 @@ class Campanhas extends Page {
 				return self::detalhes($postVars);
 			case 'processar':
 				return self::processarFila($postVars);
+			case 'listar_grupos_wa':
+				return self::listarGruposWa();
 			default:
 				return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 		}
+	}
+
+	private static function listarGruposWa(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::listarGruposEListas($idAdmin);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+			'itens' => $res['itens'] ?? [],
+		], JSON_UNESCAPED_UNICODE);
 	}
 
 	private static function listar(array $postVars): string {
@@ -125,10 +138,22 @@ class Campanhas extends Page {
 			return json_encode(['success' => false, 'message' => 'Segmento inválido.']);
 		}
 
+		if ($tipoSegmento === 'whatsapp_grupos' && $canal !== 'whatsapp') {
+			return json_encode(['success' => false, 'message' => 'Grupos/listas só podem ser usados no canal WhatsApp.']);
+		}
+
 		$segmento = [
 			'tipo'        => $tipoSegmento,
 			'status_lead' => $statusLead,
 		];
+
+		if ($tipoSegmento === 'whatsapp_grupos') {
+			$destinos = self::parseDestinosGrupos($postVars);
+			if (empty($destinos)) {
+				return json_encode(['success' => false, 'message' => 'Selecione ao menos um grupo ou lista de transmissão.']);
+			}
+			$segmento['destinos'] = $destinos;
+		}
 
 		if ($id > 0) {
 			$ob = EntityCampanhas::getById($id, $idAdmin);
@@ -351,10 +376,44 @@ class Campanhas extends Page {
 	}
 
 	private static function montarSegmento(array $postVars): array {
-		return [
+		$seg = [
 			'tipo'        => $postVars['segmento_tipo'] ?? 'alunos_matriculados',
 			'status_lead' => $postVars['status_lead'] ?? '',
 		];
+		if (($seg['tipo'] ?? '') === 'whatsapp_grupos') {
+			$seg['destinos'] = self::parseDestinosGrupos($postVars);
+		}
+		return $seg;
+	}
+
+	private static function parseDestinosGrupos(array $postVars): array {
+		$raw = $postVars['destinos_json'] ?? '[]';
+		if (is_array($raw)) {
+			$data = $raw;
+		} else {
+			$data = json_decode((string)$raw, true);
+		}
+		if (!is_array($data)) {
+			return [];
+		}
+		$out = [];
+		foreach ($data as $d) {
+			if (!is_array($d)) {
+				continue;
+			}
+			$jid = EvolutionApiService::normalizarDestino((string)($d['jid'] ?? ''));
+			if (!EvolutionApiService::isJidGrupoOuLista($jid)) {
+				continue;
+			}
+			$out[] = [
+				'jid'  => $jid,
+				'nome' => trim((string)($d['nome'] ?? '')) ?: $jid,
+				'kind' => (strpos(strtolower($jid), '@broadcast') !== false || ($d['kind'] ?? '') === 'lista')
+					? 'lista'
+					: 'grupo',
+			];
+		}
+		return $out;
 	}
 
 	private static function normalizarCanal($canal): string {

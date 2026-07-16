@@ -71,6 +71,47 @@ class EvolutionApiService {
 		return $digitos;
 	}
 
+	/**
+	 * Destino para sendText: telefone, grupo (@g.us) ou lista (@broadcast).
+	 */
+	public static function normalizarDestino(string $destino): string {
+		$destino = trim($destino);
+		if ($destino === '') {
+			return '';
+		}
+		$lower = strtolower($destino);
+		if (strpos($lower, '@g.us') !== false || strpos($lower, '@broadcast') !== false) {
+			return $destino;
+		}
+		if (strpos($lower, '@s.whatsapp.net') !== false) {
+			return self::normalizarTelefone(explode('@', $destino)[0]);
+		}
+		return self::normalizarTelefone($destino);
+	}
+
+	public static function isJidGrupoOuLista(string $destino): bool {
+		$lower = strtolower(trim($destino));
+		return strpos($lower, '@g.us') !== false || strpos($lower, '@broadcast') !== false;
+	}
+
+	/** Lista grupos da instância. */
+	public function fetchAllGroups(string $instance, bool $getParticipants = false): ?array {
+		$q = $getParticipants ? 'true' : 'false';
+		return $this->request(
+			'GET',
+			'/group/fetchAllGroups/'.rawurlencode($instance).'?getParticipants='.$q
+		);
+	}
+
+	/** Lista chats (pode incluir listas de transmissão). */
+	public function findChats(string $instance): ?array {
+		$res = $this->request('POST', '/chat/findChats/'.rawurlencode($instance), []);
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+		return $this->request('GET', '/chat/findChats/'.rawurlencode($instance));
+	}
+
 	public function fetchInstances(): ?array {
 		return $this->request('GET', '/instance/fetchInstances');
 	}
@@ -160,7 +201,7 @@ class EvolutionApiService {
 	}
 
 	public function sendText(string $instance, string $number, string $text): ?array {
-		$number = self::normalizarTelefone($number);
+		$number = self::normalizarDestino($number);
 		if ($number === '' || trim($text) === '') {
 			$this->lastError = 'Número ou mensagem inválidos.';
 			return null;

@@ -206,6 +206,16 @@ function preencherWhatsapp(w, opts){
 	$('#evolution_ativo').prop('checked', parseInt(w.ativo, 10) === 1);
 	$('#whatsapp_delay_segundos').val(w.delay || 5);
 	$('#whatsapp_max_hora').val(w.max_hora || 40);
+	if(w.horario_inicio !== undefined){
+		$('#whatsapp_horario_inicio').val(String(w.horario_inicio || '').substring(0, 5));
+		$('#whatsapp_horario_fim').val(String(w.horario_fim || '').substring(0, 5));
+		$('#whatsapp_dias').val(w.dias || '1,2,3,4,5');
+		$('#whatsapp_msg_fora').val(w.msg_fora || '');
+	}
+	if(!w.horario_ok){
+		msgs.push('Para horário de expediente, execute o SQL das colunas whatsapp_horario_* (veja checklist).');
+		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join('<br>'));
+	}
 
 	// Só altera o QR se a resposta trouxe um código novo (status sempre manda null)
 	if(w.qrcode){
@@ -213,6 +223,28 @@ function preencherWhatsapp(w, opts){
 	} else if(!waPareando && opts.limparQr){
 		mostrarQr(null, false);
 	}
+}
+
+function renderChecklistWa(checklist){
+	const $ul = $('#wa-checklist').empty();
+	const itens = (checklist && checklist.itens) || [];
+	if(!itens.length){
+		$ul.append('<li class="text-muted">Clique em Atualizar para carregar o checklist.</li>');
+		return;
+	}
+	itens.forEach(function(it){
+		const icon = it.ok ? '✅' : '⚠️';
+		let html = '<li class="mb-1">'+icon+' '+escHtmlWa(it.label || '');
+		if(it.detalhe){
+			html += '<br><span class="text-muted">'+escHtmlWa(it.detalhe)+'</span>';
+		}
+		html += '</li>';
+		$ul.append(html);
+	});
+}
+
+function escHtmlWa(s){
+	return $('<div>').text(s == null ? '' : String(s)).html();
 }
 
 function aplicarRespostaWhatsapp(res){
@@ -234,6 +266,7 @@ function whatsappStatus(){
 			return;
 		}
 		preencherWhatsapp(res.whatsapp || {}, { limparQr: !waPareando, iniciarPoll: false });
+		if(res.checklist) renderChecklistWa(res.checklist);
 	}, 'json');
 }
 
@@ -282,13 +315,18 @@ function whatsappSalvar(){
 		acao: 'whatsapp_salvar',
 		evolution_ativo: $('#evolution_ativo').is(':checked') ? 1 : 0,
 		whatsapp_delay_segundos: $('#whatsapp_delay_segundos').val(),
-		whatsapp_max_hora: $('#whatsapp_max_hora').val()
+		whatsapp_max_hora: $('#whatsapp_max_hora').val(),
+		whatsapp_horario_inicio: $('#whatsapp_horario_inicio').val(),
+		whatsapp_horario_fim: $('#whatsapp_horario_fim').val(),
+		whatsapp_dias: $('#whatsapp_dias').val(),
+		whatsapp_msg_fora: $('#whatsapp_msg_fora').val()
 	}, function(res){
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao salvar.', 'error');
 			return;
 		}
 		Swal.fire('Salvo', res.message, 'success');
+		whatsappStatus();
 	}, 'json');
 }
 
@@ -732,6 +770,7 @@ $(function(){
 	$('#btn-preview-aniversario').on('click', previewAniversario);
 	$('#btn-executar-aniversario').on('click', executarAniversario);
 	$('#btn-wa-status').on('click', whatsappStatus);
+	$('#btn-wa-checklist').on('click', whatsappStatus);
 	$('#btn-wa-conectar').on('click', whatsappConectar);
 	$('#btn-wa-recriar').on('click', whatsappRecriar);
 	$('#btn-wa-qr').on('click', whatsappQr);

@@ -24,6 +24,82 @@ function atualizarUiCanal(){
 		? 'Texto para WhatsApp. Variáveis: {nome}, {whatsapp}, {curso}, {escola}.'
 		: 'No e-mail pode usar HTML simples. Variáveis: {nome}, {email}, {curso}, {escola}.');
 	$('#campanha_assunto').prop('required', !wa);
+	atualizarUiSegmento();
+}
+
+function atualizarUiSegmento(){
+	const tipo = $('#segmento_tipo').val();
+	const grupos = tipo === 'whatsapp_grupos';
+	$('#wrap-status-lead').toggle(tipo === 'leads');
+	$('#wrap-grupos-wa').toggleClass('d-none', !grupos);
+	if(grupos){
+		$('#campanha_canal').val('whatsapp');
+		atualizarUiCanalSemSegmento();
+	}
+}
+
+function atualizarUiCanalSemSegmento(){
+	const wa = $('#campanha_canal').val() === 'whatsapp';
+	$('#wrap-assunto').toggle(!wa);
+	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp *' : 'Mensagem (HTML simples) *');
+	$('#campanha_assunto').prop('required', !wa);
+}
+
+function coletarDestinosGrupos(){
+	const destinos = [];
+	$('#lista-grupos-wa input.chk-destino-wa:checked').each(function(){
+		destinos.push({
+			jid: $(this).val(),
+			nome: $(this).data('nome') || $(this).val(),
+			kind: $(this).data('kind') || 'grupo'
+		});
+	});
+	return destinos;
+}
+
+function renderGruposWa(itens, selecionados){
+	selecionados = selecionados || {};
+	const $box = $('#lista-grupos-wa').empty();
+	if(!itens || !itens.length){
+		$box.append('<div class="text-muted small">Nenhum grupo/lista encontrado.</div>');
+		return;
+	}
+	itens.forEach(function(it){
+		const id = 'wa-dest-'+String(it.jid).replace(/[^a-zA-Z0-9]/g,'_').substring(0, 60);
+		const badge = it.kind === 'lista' ? 'Lista' : 'Grupo';
+		const $chk = $('<input class="form-check-input chk-destino-wa" type="checkbox">')
+			.attr({ id: id, 'data-nome': it.nome, 'data-kind': it.kind })
+			.val(it.jid)
+			.prop('checked', !!selecionados[it.jid]);
+		const $label = $('<label class="form-check-label"></label>').attr('for', id);
+		$label.append(
+			$('<span class="badge me-1"></span>').addClass(it.kind === 'lista' ? 'bg-info' : 'bg-success').text(badge)
+		);
+		$label.append(document.createTextNode(' ' + (it.nome || it.jid)));
+		$label.append('<br>');
+		$label.append($('<code class="small"></code>').text(it.jid));
+		$box.append($('<div class="form-check"></div>').append($chk).append($label));
+	});
+}
+
+function syncGruposWa(){
+	$('#btn-sync-grupos-wa').prop('disabled', true);
+	$.post(url_base + CAMPANHAS_URL, { acao: 'listar_grupos_wa' }, function(res){
+		$('#btn-sync-grupos-wa').prop('disabled', false);
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Não foi possível listar grupos.', 'error');
+			return;
+		}
+		const sel = {};
+		coletarDestinosGrupos().forEach(function(d){ sel[d.jid] = true; });
+		renderGruposWa(res.itens || [], sel);
+		if(res.message){
+			$('#lista-grupos-wa').prepend('<div class="alert alert-light border small py-1 mb-2">'+escHtml(res.message)+'</div>');
+		}
+	}, 'json').fail(function(){
+		$('#btn-sync-grupos-wa').prop('disabled', false);
+		Swal.fire('Erro', 'Falha ao sincronizar.', 'error');
+	});
 }
 
 function renderizarLista(campanhas){
@@ -85,7 +161,8 @@ function coletarFormulario(){
 		assunto: $('#campanha_assunto').val(),
 		mensagem: $('#campanha_mensagem').val(),
 		segmento_tipo: $('#segmento_tipo').val(),
-		status_lead: $('#status_lead').val()
+		status_lead: $('#status_lead').val(),
+		destinos_json: JSON.stringify(coletarDestinosGrupos())
 	};
 }
 
@@ -100,6 +177,7 @@ function limparFormulario(){
 	$('#preview-resultado').text('');
 	$('#titulo-modal-campanha').text('Nova campanha');
 	$('#wrap-status-lead').hide();
+	$('#lista-grupos-wa').html('<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>');
 	atualizarUiCanal();
 }
 
@@ -219,9 +297,13 @@ function editarCampanha(id){
 		$('#campanha_mensagem').val(res.mensagem || c.mensagem || '');
 		$('#segmento_tipo').val(seg.tipo || 'alunos_matriculados');
 		$('#status_lead').val(seg.status_lead || '');
-		$('#wrap-status-lead').toggle(seg.tipo === 'leads');
 		$('#titulo-modal-campanha').text('Editar campanha');
 		atualizarUiCanal();
+		if(seg.tipo === 'whatsapp_grupos'){
+			const sel = {};
+			(seg.destinos || []).forEach(function(d){ if(d.jid) sel[d.jid] = true; });
+			renderGruposWa(seg.destinos || [], sel);
+		}
 		$('#modalCampanha').modal('show');
 	}, 'json');
 }
@@ -247,10 +329,8 @@ $(function(){
 
 	$('#campanha_canal').on('change', atualizarUiCanal);
 	$('#filtro-canal').on('change', carregarCampanhas);
-
-	$('#segmento_tipo').on('change', function(){
-		$('#wrap-status-lead').toggle($(this).val() === 'leads');
-	});
+	$('#segmento_tipo').on('change', atualizarUiSegmento);
+	$('#btn-sync-grupos-wa').on('click', syncGruposWa);
 
 	$('#btn-salvar-campanha').on('click', salvarCampanha);
 	$('#btn-preview-campanha').on('click', previewPublico);

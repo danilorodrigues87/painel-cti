@@ -80,6 +80,10 @@ class ConfigComunicacao extends Page {
 			return self::whatsappStatus();
 		}
 
+		if ($acao === 'whatsapp_checklist') {
+			return self::whatsappChecklist();
+		}
+
 		if ($acao === 'whatsapp_conectar') {
 			return self::whatsappConectar();
 		}
@@ -448,7 +452,19 @@ class ConfigComunicacao extends Page {
 
 	private static function whatsappStatus(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		return json_encode(['success' => true, 'whatsapp' => WhatsappEscolaService::status($idAdmin)]);
+		return json_encode([
+			'success' => true,
+			'whatsapp' => WhatsappEscolaService::status($idAdmin),
+			'checklist' => WhatsappEscolaService::checklist($idAdmin),
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function whatsappChecklist(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		return json_encode([
+			'success' => true,
+			'checklist' => WhatsappEscolaService::checklist($idAdmin),
+		], JSON_UNESCAPED_UNICODE);
 	}
 
 	private static function whatsappConectar(): string {

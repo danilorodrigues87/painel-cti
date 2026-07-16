@@ -111,6 +111,15 @@ function carregarConversas(){
 			$('#tab-config-li').addClass('d-none');
 		}
 
+		const ind = res.indicadores || {};
+		$('#wa-ind-nao-lidas').text((ind.nao_lidas || 0)+' não lidas');
+		$('#wa-ind-fila').text((ind.fila || 0)+' na fila');
+		$('#wa-ind-abertas').text((ind.abertas || 0)+' abertas');
+		const setoresTxt = (ind.por_setor || []).slice(0, 4).map(function(s){
+			return esc(s.setor)+': '+s.qtd;
+		}).join(' · ');
+		$('#wa-ind-setores').text(setoresTxt ? ('Por setor — '+setoresTxt) : '');
+
 		const lista = res.conversas || [];
 		const $box = $('#wa-lista-conversas').empty();
 		if(!lista.length){
@@ -123,11 +132,12 @@ function carregarConversas(){
 			const setor = c.setor_nome ? ' · '+c.setor_nome : '';
 			const atend = c.atendente_nome ? ' · '+c.atendente_nome : '';
 			const st = c.chatbot_estado || c.status || '';
+			const unread = parseInt(c.nao_lida, 10) === 1 ? ' <span class="badge bg-danger">nova</span>' : '';
 			$box.append(
 				'<a href="#" class="list-group-item list-group-item-action'+ativo+'" data-id="'+c.id+'">'
 				+'<div class="d-flex justify-content-between"><strong class="text-truncate">'+esc(nome)+'</strong>'
 				+'<span class="badge bg-secondary">'+esc(st)+'</span></div>'
-				+'<div class="small text-muted">'+esc(c.telefone)+esc(setor)+esc(atend)+'</div>'
+				+'<div class="small text-muted">'+esc(c.telefone)+esc(setor)+esc(atend)+unread+'</div>'
 				+'</a>'
 			);
 		});

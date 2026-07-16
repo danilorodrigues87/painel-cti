@@ -125,11 +125,114 @@ class WhatsappConversa {
 		return $ob;
 	}
 
-	public function tocarUltimaMensagem(): void {
-		(new Database('whatsapp_conversas'))->update(
-			'id = '.(int)$this->id,
-			['ultima_mensagem_em' => date('Y-m-d H:i:s')]
-		);
+	public function tocarUltimaMensagem(bool $marcarNaoLida = false): void {
+		$dados = ['ultima_mensagem_em' => date('Y-m-d H:i:s')];
+		if ($marcarNaoLida && self::temColunaNaoLida()) {
+			$dados['nao_lida'] = 1;
+		}
+		(new Database('whatsapp_conversas'))->update('id = '.(int)$this->id, $dados);
+	}
+
+	public static function temColunaNaoLida(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM whatsapp_conversas LIKE 'nao_lida'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public function marcarLida(): void {
+		if (!self::temColunaNaoLida()) {
+			return;
+		}
+		$this->atualizar(['nao_lida' => 0]);
+	}
+
+	/**
+	 * Indicadores do inbox.
+	 * @return array{nao_lidas:int,fila:int,abertas:int,por_setor:array}
+	 */
+	public static function indicadores(int $idAdmin, int $usuarioId, string $nivel, array $setorIds): array {
+		$base = self::listarInbox($idAdmin, $usuarioId, $nivel, $setorIds, 200, 'todas', '');
+		$naoLidas = 0;
+		$fila = 0;
+		$abertas = 0;
+		$porSetor = [];
+
+		foreach ($base as $c) {
+			$status = (string)($c['status'] ?? '');
+			$estado = (string)($c['chatbot_estado'] ?? '');
+			if ($status === 'fechada' || $estado === 'encerrado') {
+				continue;
+			}
+			$abertas++;
+
+			if (self::temColunaNaoLida() && (int)($c['nao_lida'] ?? 0) === 1) {
+				$naoLidas++;
+			}
+
+			$semAtendente = empty($c['id_atendente']);
+			if ($semAtendente && in_array($estado, ['fila', 'aguardando_setor', 'novo'], true)) {
+				$fila++;
+			}
+
+			$setorNome = trim((string)($c['setor_nome'] ?? '')) !== '' ? (string)$c['setor_nome'] : 'Sem setor';
+			if (!isset($porSetor[$setorNome])) {
+				$porSetor[$setorNome] = 0;
+			}
+			$porSetor[$setorNome]++;
+		}
+
+		if (!self::temColunaNaoLida() && WhatsappMensagem::tabelaExiste()) {
+			$naoLidas = self::contarNaoLidasHeuristica($idAdmin, array_column($base, 'id'));
+		}
+
+		arsort($porSetor);
+		$listaSetor = [];
+		foreach ($porSetor as $nome => $qtd) {
+			$listaSetor[] = ['setor' => $nome, 'qtd' => $qtd];
+		}
+
+		return [
+			'nao_lidas' => $naoLidas,
+			'fila' => $fila,
+			'abertas' => $abertas,
+			'por_setor' => $listaSetor,
+		];
+	}
+
+	private static function contarNaoLidasHeuristica(int $idAdmin, array $conversaIds): int {
+		$ids = array_filter(array_map('intval', $conversaIds));
+		if (!$ids) {
+			return 0;
+		}
+		$sql = '
+			SELECT COUNT(*) AS qtd FROM whatsapp_conversas c
+			WHERE c.id_admin = '.(int)$idAdmin.'
+			  AND c.id IN ('.implode(',', $ids).')
+			  AND c.status != "fechada"
+			  AND EXISTS (
+			    SELECT 1 FROM whatsapp_mensagens m
+			    WHERE m.conversa_id = c.id AND m.direction = "in"
+			      AND m.id = (
+			        SELECT MAX(m2.id) FROM whatsapp_mensagens m2 WHERE m2.conversa_id = c.id
+			      )
+			  )
+		';
+		$row = (new Database('whatsapp_conversas'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
+		return (int)($row['qtd'] ?? 0);
 	}
 
 	public function atualizar(array $dados): void {

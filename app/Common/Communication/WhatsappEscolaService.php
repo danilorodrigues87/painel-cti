@@ -43,6 +43,19 @@ class WhatsappEscolaService {
 			'conectado'       => false,
 			'qrcode'          => null,
 			'erro'            => null,
+			'horario_inicio'  => ($integracao instanceof EscolaIntegracoes)
+				? (string)($integracao->whatsapp_horario_inicio ?? '')
+				: '',
+			'horario_fim'     => ($integracao instanceof EscolaIntegracoes)
+				? (string)($integracao->whatsapp_horario_fim ?? '')
+				: '',
+			'dias'            => ($integracao instanceof EscolaIntegracoes)
+				? (string)($integracao->whatsapp_dias ?? '1,2,3,4,5')
+				: '1,2,3,4,5',
+			'msg_fora'        => ($integracao instanceof EscolaIntegracoes)
+				? (string)($integracao->whatsapp_msg_fora ?? '')
+				: '',
+			'horario_ok'      => EscolaIntegracoes::temColunasHorarioWhatsapp(),
 		];
 
 		if (!$api->isConfigured()) {
@@ -316,6 +329,10 @@ class WhatsappEscolaService {
 		$ob->evolution_ativo = !empty($dados['evolution_ativo']) ? 1 : 0;
 		$ob->whatsapp_delay_segundos = max(1, (int)($dados['whatsapp_delay_segundos'] ?? 5));
 		$ob->whatsapp_max_hora = max(1, (int)($dados['whatsapp_max_hora'] ?? 40));
+		$ob->whatsapp_horario_inicio = trim((string)($dados['whatsapp_horario_inicio'] ?? '')) ?: null;
+		$ob->whatsapp_horario_fim = trim((string)($dados['whatsapp_horario_fim'] ?? '')) ?: null;
+		$ob->whatsapp_dias = trim((string)($dados['whatsapp_dias'] ?? '1,2,3,4,5')) ?: '1,2,3,4,5';
+		$ob->whatsapp_msg_fora = trim((string)($dados['whatsapp_msg_fora'] ?? ''));
 
 		if (!$ob->salvar()) {
 			return ['ok' => false, 'message' => EscolaIntegracoes::getUltimoErro() ?: 'Falha ao salvar.'];
@@ -327,6 +344,191 @@ class WhatsappEscolaService {
 	public static function testarEnvio(int $idAdmin, string $telefone, string $mensagem = ''): array {
 		$texto = trim($mensagem) !== '' ? trim($mensagem) : 'Teste de WhatsApp — Painel CTI.';
 		return self::enviarTexto($idAdmin, $telefone, $texto);
+	}
+
+	/**
+	 * Grupos (@g.us) e listas de transmissão (@broadcast) da Evolution.
+	 * @return array{ok:bool,message?:string,itens:array<int,array{jid:string,nome:string,kind:string}>}
+	 */
+	public static function listarGruposEListas(int $idAdmin): array {
+		$status = self::status($idAdmin);
+		if (empty($status['conectado'])) {
+			return ['ok' => false, 'message' => 'WhatsApp não está conectado.', 'itens' => []];
+		}
+
+		$api = EvolutionApiService::fromEnv();
+		$instance = (string)$status['instance'];
+		$itens = [];
+		$vistos = [];
+
+		$grupos = $api->fetchAllGroups($instance, false);
+		if (is_array($grupos)) {
+			$rows = isset($grupos[0]) || $grupos === [] ? $grupos : ($grupos['groups'] ?? $grupos['data'] ?? [$grupos]);
+			foreach ($rows as $g) {
+				if (!is_array($g)) {
+					continue;
+				}
+				$jid = (string)($g['id'] ?? $g['jid'] ?? $g['groupId'] ?? '');
+				if ($jid !== '' && strpos($jid, '@') === false) {
+					$jid .= '@g.us';
+				}
+				$jid = EvolutionApiService::normalizarDestino($jid);
+				if (!EvolutionApiService::isJidGrupoOuLista($jid) || isset($vistos[$jid])) {
+					continue;
+				}
+				$vistos[$jid] = true;
+				$itens[] = [
+					'jid'  => $jid,
+					'nome' => (string)($g['subject'] ?? $g['name'] ?? $g['pushName'] ?? $jid),
+					'kind' => 'grupo',
+				];
+			}
+		}
+
+		$chats = $api->findChats($instance);
+		if (is_array($chats)) {
+			$rows = isset($chats[0]) || $chats === [] ? $chats : ($chats['chats'] ?? $chats['data'] ?? [$chats]);
+			foreach ($rows as $c) {
+				if (!is_array($c)) {
+					continue;
+				}
+				$jid = (string)($c['id'] ?? $c['remoteJid'] ?? $c['jid'] ?? '');
+				$jid = EvolutionApiService::normalizarDestino($jid);
+				if ($jid === '' || isset($vistos[$jid])) {
+					continue;
+				}
+				if (strpos(strtolower($jid), '@broadcast') === false && strpos(strtolower($jid), '@g.us') === false) {
+					continue;
+				}
+				$vistos[$jid] = true;
+				$kind = strpos(strtolower($jid), '@broadcast') !== false ? 'lista' : 'grupo';
+				$itens[] = [
+					'jid'  => $jid,
+					'nome' => (string)($c['name'] ?? $c['pushName'] ?? $c['subject'] ?? $jid),
+					'kind' => $kind,
+				];
+			}
+		}
+
+		usort($itens, static function ($a, $b) {
+			return strcasecmp($a['nome'], $b['nome']);
+		});
+
+		return [
+			'ok' => true,
+			'itens' => $itens,
+			'message' => count($itens)
+				? count($itens).' destino(s) encontrados.'
+				: 'Nenhum grupo/lista retornado. Confira se a Evolution tem permissão de grupos e se há listas no aparelho.',
+		];
+	}
+
+	/** Checklist operacional (UI Comunicação). */
+	public static function checklist(int $idAdmin): array {
+		$status = self::status($idAdmin);
+		$api = EvolutionApiService::fromEnv();
+		$itens = [];
+
+		$itens[] = [
+			'ok' => !empty($status['configurado_env']),
+			'label' => 'Credenciais EVOLUTION_URL / EVOLUTION_API_KEY no .env',
+		];
+		$itens[] = [
+			'ok' => !empty($status['colunas_ok']),
+			'label' => 'Colunas Evolution em escola_integracoes',
+		];
+		$itens[] = [
+			'ok' => !empty($status['tabelas_ok']),
+			'label' => 'Tabelas whatsapp_conversas / whatsapp_mensagens',
+		];
+		$itens[] = [
+			'ok' => !empty($status['conectado']),
+			'label' => 'Instância conectada (status open)',
+			'detalhe' => 'Status atual: '.($status['status'] ?? '—'),
+		];
+		$itens[] = [
+			'ok' => !empty($status['webhook_url']),
+			'label' => 'URL do webhook configurável',
+			'detalhe' => (string)($status['webhook_url'] ?? ''),
+		];
+		$itens[] = [
+			'ok' => !empty($status['numero']),
+			'label' => 'Número pareado preenchido',
+			'detalhe' => (string)($status['numero'] ?? 'ainda vazio'),
+		];
+
+		$fora = self::estaForaExpediente($idAdmin);
+		$itens[] = [
+			'ok' => true,
+			'label' => 'Horário de atendimento',
+			'detalhe' => $fora['configurado']
+				? ($fora['fora'] ? 'Fora do expediente agora' : 'Dentro do expediente agora')
+				: 'Não configurado (atende 24h)',
+		];
+
+		$itens[] = [
+			'ok' => true,
+			'label' => 'Se travar em Connecting',
+			'detalhe' => 'Use “Trocar número”, delete a instância no painel Evolution se preciso, escaneie o QR sem mexer no webhook.',
+		];
+		$itens[] = [
+			'ok' => true,
+			'label' => 'Cron / fila de campanhas',
+			'detalhe' => 'php worker/campanhas.php (e-mail + WhatsApp). Cobrança: php worker/cobranca.php',
+		];
+
+		return [
+			'conectado' => !empty($status['conectado']),
+			'status' => $status,
+			'itens' => $itens,
+			'api_ok' => $api->isConfigured(),
+		];
+	}
+
+	/**
+	 * @return array{fora:bool,configurado:bool,mensagem:string}
+	 */
+	public static function estaForaExpediente(int $idAdmin): array {
+		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$out = ['fora' => false, 'configurado' => false, 'mensagem' => ''];
+		if (!$cfg instanceof EscolaIntegracoes || !EscolaIntegracoes::temColunasHorarioWhatsapp()) {
+			return $out;
+		}
+
+		$inicio = trim((string)($cfg->whatsapp_horario_inicio ?? ''));
+		$fim = trim((string)($cfg->whatsapp_horario_fim ?? ''));
+		$dias = trim((string)($cfg->whatsapp_dias ?? ''));
+		if ($inicio === '' || $fim === '') {
+			return $out;
+		}
+
+		$out['configurado'] = true;
+		$out['mensagem'] = trim((string)($cfg->whatsapp_msg_fora ?? ''))
+			?: 'Olá! Nosso atendimento pelo WhatsApp funciona em horário comercial. Retornaremos assim que possível.';
+
+		$diaSemana = (int)date('N'); // 1=seg … 7=dom
+		$diasOk = [];
+		foreach (preg_split('/[^0-9]+/', $dias) ?: [] as $p) {
+			$n = (int)$p;
+			if ($n >= 1 && $n <= 7) {
+				$diasOk[] = $n;
+			}
+		}
+		if ($diasOk && !in_array($diaSemana, $diasOk, true)) {
+			$out['fora'] = true;
+			return $out;
+		}
+
+		$agora = date('H:i');
+		$ini = substr($inicio, 0, 5);
+		$fi = substr($fim, 0, 5);
+		if ($ini <= $fi) {
+			$out['fora'] = ($agora < $ini || $agora >= $fi);
+		} else {
+			// cruza meia-noite
+			$out['fora'] = ($agora < $ini && $agora >= $fi);
+		}
+		return $out;
 	}
 
 	/**

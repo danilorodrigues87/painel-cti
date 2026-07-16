@@ -44,6 +44,19 @@ class WhatsappChatbotService {
 		$texto = trim((string)$texto);
 		$idAdmin = (int)$conversa->id_admin;
 
+		// Fora do expediente: responde e não abre fila (exceto se já estava em fila)
+		if (in_array($estado, ['novo', '', 'aguardando_setor', 'encerrado'], true) || $status === 'fechada') {
+			$exp = WhatsappEscolaService::estaForaExpediente($idAdmin);
+			if (!empty($exp['fora'])) {
+				self::enviarTexto($conversa, $exp['mensagem']);
+				$conversa->atualizar([
+					'chatbot_estado' => 'novo',
+					'status'         => 'aberta',
+				]);
+				return;
+			}
+		}
+
 		WhatsappSetor::garantirPadroes($idAdmin);
 		$setores = WhatsappSetor::listarAtivos($idAdmin);
 

@@ -76,17 +76,20 @@ class WhatsappInbox extends Page {
 		$busca = trim((string)($post['busca'] ?? ''));
 
 		$lista = WhatsappConversa::listarInbox($idAdmin, $uid, $nivel, $setores, 80, $filtro, $busca);
+		$indicadores = WhatsappConversa::indicadores($idAdmin, $uid, $nivel, $setores);
 
 		return self::json([
 			'success' => true,
 			'conversas' => $lista,
 			'filtro' => $filtro,
 			'busca' => $busca,
+			'indicadores' => $indicadores,
 			'meta' => [
 				'is_diretor' => self::isDiretor(),
 				'chatbot_ok' => WhatsappConversa::temColunasChatbot(),
 				'setores_ok' => WhatsappSetor::tabelaExiste(),
 				'atendentes_ok' => WhatsappAtendente::tabelaExiste(),
+				'nao_lida_ok' => WhatsappConversa::temColunaNaoLida(),
 			],
 		]);
 	}
@@ -98,6 +101,8 @@ class WhatsappInbox extends Page {
 		if (!$conv || !self::podeVer($conv)) {
 			return self::json(['success' => false, 'message' => 'Conversa não encontrada.']);
 		}
+
+		$conv->marcarLida();
 
 		$rows = (new Database('whatsapp_mensagens'))
 			->select('conversa_id = '.$id.' AND id_admin = '.$idAdmin, 'id ASC', '200')

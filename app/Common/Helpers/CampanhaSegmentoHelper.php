@@ -15,6 +15,7 @@ class CampanhaSegmentoHelper {
 			'aniversariantes_dia' => 'Aniversariantes de hoje',
 			'leads'               => 'Leads do CRM',
 			'inadimplentes'       => 'Inadimplentes (mensalidades em atraso)',
+			'whatsapp_grupos'     => 'Grupos e listas de transmissão (WhatsApp)',
 		];
 	}
 
@@ -24,6 +25,11 @@ class CampanhaSegmentoHelper {
 	public static function resolverDestinatarios(int $idAdmin, array $segmento, string $canal = 'email'): array {
 		$canal = $canal === 'whatsapp' ? 'whatsapp' : 'email';
 		$tipo = $segmento['tipo'] ?? 'alunos_matriculados';
+
+		// Destinos manuais (JID de grupo/lista) — só WhatsApp
+		if ($tipo === 'whatsapp_grupos') {
+			return self::destinosGruposListas($segmento);
+		}
 
 		switch ($tipo) {
 			case 'ex_alunos':
@@ -53,6 +59,36 @@ class CampanhaSegmentoHelper {
 		return $canal === 'whatsapp'
 			? self::filtrarComWhatsapp($lista)
 			: self::filtrarComEmail($lista);
+	}
+
+	/** @param array{destinos?:array} $segmento */
+	private static function destinosGruposListas(array $segmento): array {
+		$lista = [];
+		$vistos = [];
+		foreach ($segmento['destinos'] ?? [] as $d) {
+			if (!is_array($d)) {
+				continue;
+			}
+			$jid = EvolutionApiService::normalizarDestino((string)($d['jid'] ?? ''));
+			if ($jid === '' || !EvolutionApiService::isJidGrupoOuLista($jid)) {
+				continue;
+			}
+			if (isset($vistos[$jid])) {
+				continue;
+			}
+			$vistos[$jid] = true;
+			$kind = (($d['kind'] ?? '') === 'lista' || strpos(strtolower($jid), '@broadcast') !== false)
+				? 'lista'
+				: 'grupo';
+			$lista[] = [
+				'destinatario_tipo' => $kind,
+				'destinatario_id'   => null,
+				'nome'              => trim((string)($d['nome'] ?? '')) ?: $jid,
+				'contato'           => $jid,
+				'curso'             => '',
+			];
+		}
+		return $lista;
 	}
 
 	public static function aplicarVariaveis(string $texto, array $vars): string {

@@ -84,6 +84,7 @@
 								<option value="aniversariantes_dia">Aniversariantes de hoje</option>
 								<option value="leads">Leads do CRM</option>
 								<option value="inadimplentes">Inadimplentes (mensalidades em atraso)</option>
+								<option value="whatsapp_grupos">Grupos e listas de transmissão (WhatsApp)</option>
 							</select>
 						</div>
 						<div class="col-md-6" id="wrap-status-lead" style="display:none;">
@@ -95,6 +96,18 @@
 								<option value="matriculado">Matriculado</option>
 								<option value="perdido">Perdido</option>
 							</select>
+						</div>
+						<div class="col-12 d-none" id="wrap-grupos-wa">
+							<div class="d-flex justify-content-between align-items-center mb-2">
+								<label class="form-label mb-0">Grupos e listas</label>
+								<button type="button" class="btn btn-outline-success btn-sm" id="btn-sync-grupos-wa">
+									<i class="fab fa-whatsapp"></i> Sincronizar da Evolution
+								</button>
+							</div>
+							<div class="border rounded p-2" style="max-height:220px;overflow:auto;" id="lista-grupos-wa">
+								<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>
+							</div>
+							<small class="text-muted">Listas de transmissão aparecem se a Evolution as retornar (@broadcast). Grupos usam @g.us.</small>
 						</div>
 						<div class="col-12">
 							<label class="form-label" for="campanha_mensagem" id="label-mensagem">Mensagem *</label>
@@ -133,4 +146,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260716a"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260716b"></script>
