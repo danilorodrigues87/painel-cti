@@ -237,71 +237,119 @@ class WhatsappChatbotService {
 			: WhatsappMediaStorage::urlPublica($relative);
 
 		$ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-		$fileName = basename($relative) ?: ('audio.'.$ext);
-		if (!preg_match('/\.(mp3|ogg|opus|wav|m4a|aac|mpeg)$/i', $fileName)) {
-			$fileName .= ($ext !== '' ? '.'.$ext : '.mp3');
-		}
-
 		$mimeMap = [
 			'wav'  => 'audio/wav',
 			'mp3'  => 'audio/mpeg',
 			'mpeg' => 'audio/mpeg',
-			'ogg'  => 'audio/ogg',
-			'opus' => 'audio/ogg',
+			'ogg'  => 'audio/ogg; codecs=opus',
+			'opus' => 'audio/ogg; codecs=opus',
 			'm4a'  => 'audio/mp4',
 			'aac'  => 'audio/aac',
 			'webm' => 'audio/webm',
 		];
-		$mime = $arquivo['mimetype'] ?? ($mimeMap[$ext] ?? 'audio/mpeg');
+		$mime = $arquivo['mimetype'] ?? ($mimeMap[$ext] ?? 'audio/ogg');
+
+		// Converte para OGG/Opus quando possível (formato nativo de nota de voz)
+		$tmpOgg = self::converterAudioParaOggOpus($path);
+		$enviarPath = $tmpOgg ?: $path;
+		$enviarMime = $tmpOgg ? 'audio/ogg; codecs=opus' : $mime;
 
 		$api = EvolutionApiService::fromEnv();
 		$phone = (string)$conversa->telefone;
 		$tentativas = [];
 
-		// A) Mesmo caminho do PDF (document + arquivo) — mais compatível
-		$res = $api->sendMedia($instance, $phone, $path, 'document', 'application/octet-stream', null, $fileName);
-		$tentativas[] = 'doc-file:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-		if ($res !== null && $api->getLastHttpCode() < 400) {
-			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		// Status "gravando áudio..." ~2s (se a Evolution aceitar; senão segue o envio)
+		$pres = $api->sendPresence($instance, $phone, 'recording');
+		if ($pres !== null && $api->getLastHttpCode() < 400) {
+			usleep(2000000);
 		}
 
-		// B) Document via URL pública (Evolution baixa do servidor)
-		$res = $api->sendMedia($instance, $phone, $publicUrl, 'document', 'application/octet-stream', null, $fileName);
-		$tentativas[] = 'doc-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-		if ($res !== null && $api->getLastHttpCode() < 400) {
-			return self::registrarAudioEnviado($conversa, $arquivo, $res);
-		}
-
-		// C) sendMedia mediatype=audio (arquivo)
-		$res = $api->sendMedia($instance, $phone, $path, 'audio', $mime, null, $fileName);
-		$tentativas[] = 'audio-file:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-		if ($res !== null && $api->getLastHttpCode() < 400) {
-			return self::registrarAudioEnviado($conversa, $arquivo, $res);
-		}
-
-		// D) sendMedia mediatype=audio (URL)
-		$res = $api->sendMedia($instance, $phone, $publicUrl, 'audio', $mime, null, $fileName);
-		$tentativas[] = 'audio-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-		if ($res !== null && $api->getLastHttpCode() < 400) {
-			return self::registrarAudioEnviado($conversa, $arquivo, $res);
-		}
-
-		// E) Nota de voz (PTT) por URL
-		$res = $api->sendAudio($instance, $phone, $publicUrl, $mime);
-		$tentativas[] = 'ptt-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-		if ($res !== null && $api->getLastHttpCode() < 400) {
-			return self::registrarAudioEnviado($conversa, $arquivo, $res);
-		}
-
-		// F) Nota de voz por arquivo
-		$res = $api->sendAudio($instance, $phone, $path, $mime);
+		// Só nota de voz (PTT) — nunca documento
+		$res = $api->sendAudio($instance, $phone, $enviarPath, $enviarMime);
 		$tentativas[] = 'ptt-file:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
 		if ($res !== null && $api->getLastHttpCode() < 400) {
+			$api->sendPresence($instance, $phone, 'paused');
+			if ($tmpOgg) {
+				@unlink($tmpOgg);
+			}
 			return self::registrarAudioEnviado($conversa, $arquivo, $res);
 		}
 
-		self::$lastError = 'Áudio rejeitado pela Evolution. Detalhes: '.implode(' · ', $tentativas);
+		if ($publicUrl !== '') {
+			$res = $api->sendAudio($instance, $phone, $publicUrl, $enviarMime);
+			$tentativas[] = 'ptt-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+			if ($res !== null && $api->getLastHttpCode() < 400) {
+				$api->sendPresence($instance, $phone, 'paused');
+				if ($tmpOgg) {
+					@unlink($tmpOgg);
+				}
+				return self::registrarAudioEnviado($conversa, $arquivo, $res);
+			}
+		}
+
+		if ($tmpOgg) {
+			@unlink($tmpOgg);
+		}
+
+		self::$lastError = 'Não foi possível enviar como nota de voz. Detalhes: '.implode(' · ', $tentativas);
 		return false;
+	}
+
+	/**
+	 * Converte áudio para OGG/Opus via ffmpeg (opcional). Retorna caminho temp ou null.
+	 */
+	private static function converterAudioParaOggOpus(string $path): ?string {
+		$ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		if (in_array($ext, ['ogg', 'opus'], true)) {
+			return null;
+		}
+
+		$ffmpeg = self::binarioFfmpeg();
+		if ($ffmpeg === null) {
+			return null;
+		}
+
+		$out = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+			.DIRECTORY_SEPARATOR.'wa-ptt-'.uniqid('', true).'.ogg';
+		$cmd = escapeshellarg($ffmpeg)
+			.' -y -i '.escapeshellarg($path)
+			.' -c:a libopus -b:a 32k -ar 48000 -ac 1 '
+			.escapeshellarg($out).' 2>&1';
+
+		$lines = [];
+		$code = 1;
+		@exec($cmd, $lines, $code);
+		if ($code === 0 && is_file($out) && filesize($out) > 64) {
+			return $out;
+		}
+		if (is_file($out)) {
+			@unlink($out);
+		}
+		return null;
+	}
+
+	private static function binarioFfmpeg(): ?string {
+		static $cached = false;
+		static $bin = null;
+		if ($cached) {
+			return $bin;
+		}
+		$cached = true;
+
+		$cmds = stripos(PHP_OS, 'WIN') === 0
+			? ['where ffmpeg']
+			: ['command -v ffmpeg', 'which ffmpeg'];
+		foreach ($cmds as $cmd) {
+			$out = [];
+			$code = 1;
+			@exec($cmd, $out, $code);
+			$cand = trim((string)($out[0] ?? ''));
+			if ($code === 0 && $cand !== '' && (is_file($cand) || stripos(PHP_OS, 'WIN') === 0)) {
+				$bin = $cand;
+				return $bin;
+			}
+		}
+		return null;
 	}
 
 	/** @param array{relative?:string} $arquivo */
