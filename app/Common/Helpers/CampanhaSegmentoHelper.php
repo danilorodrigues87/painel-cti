@@ -11,6 +11,7 @@ class CampanhaSegmentoHelper {
 			'alunos_matriculados' => 'Alunos matriculados (ativos)',
 			'ex_alunos'           => 'Ex-alunos (sem matrícula ativa)',
 			'aniversariantes_mes' => 'Aniversariantes do mês',
+			'aniversariantes_dia' => 'Aniversariantes de hoje',
 			'leads'               => 'Leads do CRM',
 			'inadimplentes'       => 'Inadimplentes (mensalidades em atraso)',
 		];
@@ -24,6 +25,10 @@ class CampanhaSegmentoHelper {
 				return self::exAlunos($idAdmin);
 			case 'aniversariantes_mes':
 				return self::aniversariantesMes($idAdmin);
+			case 'aniversariantes_dia':
+				return self::aniversariantesDia($idAdmin, false);
+			case 'aniversariantes_dia_matriculados':
+				return self::aniversariantesDia($idAdmin, true);
 			case 'leads':
 				return self::leads($idAdmin, $segmento);
 			case 'inadimplentes':
@@ -140,6 +145,49 @@ class CampanhaSegmentoHelper {
 
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes]);
+
+		return self::filtrarComEmail(self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno'));
+	}
+
+	private static function aniversariantesDia(int $idAdmin, bool $apenasMatriculados): array {
+		$mes = (int)date('m');
+		$dia = (int)date('d');
+		$hoje = date('Y-m-d');
+
+		if ($apenasMatriculados) {
+			$sql = '
+				SELECT DISTINCT u.id, u.nome, u.email, "" AS curso
+				FROM usuarios u
+				INNER JOIN matriculas m ON m.id_aluno = u.id AND m.id_admin = u.id_admin
+				WHERE u.id_admin = :id_admin
+				  AND u.nivel = "Cliente"
+				  AND u.nascimento IS NOT NULL
+				  AND u.nascimento != "0000-00-00"
+				  AND MONTH(u.nascimento) = :mes
+				  AND DAY(u.nascimento) = :dia
+				  AND m.status = 0
+				  AND m.fim >= :hoje
+				  AND u.email IS NOT NULL
+				  AND u.email != ""
+			';
+			$stmt = self::pdo()->prepare($sql);
+			$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes, 'dia' => $dia, 'hoje' => $hoje]);
+		} else {
+			$sql = '
+				SELECT DISTINCT u.id, u.nome, u.email, "" AS curso
+				FROM usuarios u
+				WHERE u.id_admin = :id_admin
+				  AND u.nivel = "Cliente"
+				  AND u.nascimento IS NOT NULL
+				  AND u.nascimento != "0000-00-00"
+				  AND MONTH(u.nascimento) = :mes
+				  AND DAY(u.nascimento) = :dia
+				  AND u.email IS NOT NULL
+				  AND u.email != ""
+			';
+			$stmt = self::pdo()->prepare($sql);
+			$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes, 'dia' => $dia]);
+		}
 
 		return self::filtrarComEmail(self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno'));
 	}

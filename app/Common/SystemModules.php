@@ -12,7 +12,6 @@ class SystemModules {
 		'responsaveis'    => 'Responsáveis',
 		'leads'           => 'Leads',
 		'tarefas'         => 'Tarefas',
-		'mensagens'       => 'Mensagens',
 		'comunicacao'     => 'Comunicação',
 		'campanhas'       => 'Campanhas',
 		'vouchers'        => 'Vouchers',
@@ -170,10 +169,6 @@ class SystemModules {
 					[
 						'label' => 'Tarefas',
 						'link' => URL.'/painel/crm/tarefas'
-					],
-					[
-						'label' => 'Mensagens',
-						'link' => URL.'/painel/whatsappatm'
 					]
 				]
 			]

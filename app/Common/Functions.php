@@ -5,6 +5,7 @@ use \App\Model\Entity\EstadoCidades;
 use \App\Session\User\Login as SessionUser;
 use \App\Model\Entity\User as EntityUser;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\EmailValidator;
 
 class Functions{
 
@@ -174,7 +175,7 @@ class Functions{
 
 // Sanitização dos campos utilizando funções nativas do PHP
     $nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_STRING);
-    $email = filter_var($postVars['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $email = EmailValidator::normalizar($postVars['email'] ?? '');
     $whatsapp = filter_var($postVars['whatsapp'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
     $rg = filter_var($postVars['rg'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
     $cpf = filter_var($postVars['cpf'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
@@ -184,9 +185,14 @@ class Functions{
     $estado = filter_var($postVars['estado'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
     $cidade = filter_var($postVars['cidade'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
 
+	$erroEmail = EmailValidator::mensagemErro($email, true);
+	if ($erroEmail !== null) {
+		$resposta['erro'] = $erroEmail;
+		return json_encode($resposta);
+	}
 
 	// VERIFICAÇÃO SE EXISTE UM EMAIL ANTIGO 
-	$email_antigo = filter_var($postVars['email_antigo'] ?? '', FILTER_SANITIZE_EMAIL);
+	$email_antigo = EmailValidator::normalizar($postVars['email_antigo'] ?? '');
 
 	if($email_antigo != '' AND $email_antigo != $email){
 

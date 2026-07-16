@@ -35,6 +35,18 @@ class EscolaIntegracoes {
 	public $cobranca_msg_antes;
 	public $cobranca_msg_vencimento;
 	public $cobranca_msg_atraso;
+	public $aniversario_ativo = 0;
+	public $aniversario_apenas_matriculados = 1;
+	public $aniversario_assunto;
+	public $aniversario_mensagem;
+	public $evolution_instance;
+	public $evolution_status = 'disconnected';
+	public $evolution_ativo = 0;
+	public $evolution_numero;
+	public $whatsapp_delay_segundos = 5;
+	public $whatsapp_max_hora = 40;
+	/** Quando true, o salvar() também grava campos Evolution/WhatsApp. */
+	public $touchEvolution = false;
 	public $updated_at;
 
 	public static function temColunasCobranca(): bool {
@@ -50,6 +62,46 @@ class EscolaIntegracoes {
 				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
 			);
 			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'cobranca_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public static function temColunasAniversario(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'aniversario_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public static function temColunasEvolution(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'evolution_instance'");
 			$cache = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$cache = false;
@@ -127,6 +179,22 @@ class EscolaIntegracoes {
 			$dados['cobranca_msg_antes'] = $this->cobranca_msg_antes;
 			$dados['cobranca_msg_vencimento'] = $this->cobranca_msg_vencimento;
 			$dados['cobranca_msg_atraso'] = $this->cobranca_msg_atraso;
+		}
+
+		if (self::temColunasAniversario()) {
+			$dados['aniversario_ativo'] = (int)$this->aniversario_ativo;
+			$dados['aniversario_apenas_matriculados'] = (int)$this->aniversario_apenas_matriculados;
+			$dados['aniversario_assunto'] = $this->aniversario_assunto;
+			$dados['aniversario_mensagem'] = $this->aniversario_mensagem;
+		}
+
+		if (self::temColunasEvolution() && $this->touchEvolution) {
+			$dados['evolution_instance'] = $this->evolution_instance;
+			$dados['evolution_status'] = $this->evolution_status ?: 'disconnected';
+			$dados['evolution_ativo'] = (int)$this->evolution_ativo;
+			$dados['evolution_numero'] = $this->evolution_numero;
+			$dados['whatsapp_delay_segundos'] = (int)($this->whatsapp_delay_segundos ?? 5);
+			$dados['whatsapp_max_hora'] = (int)($this->whatsapp_max_hora ?? 40);
 		}
 
 		$existente = self::getByIdAdmin((int)$this->id_admin);

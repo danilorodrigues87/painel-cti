@@ -93,6 +93,10 @@ painel-cti/
 ## Workers (cron)
 
 ```bash
+# Diagnóstico (não envia e-mail)
+php worker/status-email.php
+php worker/status-email.php 1
+
 # Campanhas de e-mail em fila (a cada 1 min em produção)
 php worker/campanhas.php
 
@@ -100,7 +104,9 @@ php worker/campanhas.php
 php worker/cobranca.php
 ```
 
-No XAMPP, também há botões **Processar fila agora** / **Enviar agora** nas telas do painel.
+Checklist completo de produção (cron Windows/Linux, testes seguros, critérios de pronto): **[`docs/OPERACAO_EMAIL.md`](docs/OPERACAO_EMAIL.md)**
+
+No XAMPP, também há botões **Processar fila agora** / **Enviar agora** / **Simular hoje** nas telas do painel.
 
 ---
 

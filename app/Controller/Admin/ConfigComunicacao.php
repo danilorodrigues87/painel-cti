@@ -7,9 +7,12 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Communication\Email;
 use App\Common\Communication\CobrancaEmailService;
+use App\Common\Communication\AniversarioEmailService;
+use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Helpers\EmailAuditoriaHelper;
 use App\Common\Helpers\EmailValidator;
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\EmailAniversarioLog;
 
 class ConfigComunicacao extends Page {
 
@@ -63,6 +66,38 @@ class ConfigComunicacao extends Page {
 
 		if ($acao === 'auditar_emails') {
 			return self::auditarEmails();
+		}
+
+		if ($acao === 'preview_aniversario') {
+			return self::previewAniversario($postVars);
+		}
+
+		if ($acao === 'executar_aniversario') {
+			return self::executarAniversario();
+		}
+
+		if ($acao === 'whatsapp_status') {
+			return self::whatsappStatus();
+		}
+
+		if ($acao === 'whatsapp_conectar') {
+			return self::whatsappConectar();
+		}
+
+		if ($acao === 'whatsapp_qr') {
+			return self::whatsappQr();
+		}
+
+		if ($acao === 'whatsapp_salvar') {
+			return self::whatsappSalvar($postVars);
+		}
+
+		if ($acao === 'whatsapp_testar') {
+			return self::whatsappTestar($postVars);
+		}
+
+		if ($acao === 'whatsapp_desconectar') {
+			return self::whatsappDesconectar();
 		}
 
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
@@ -130,15 +165,22 @@ class ConfigComunicacao extends Page {
 		}
 
 		$modoEnvio = 'sistema';
+		$avisoSmtp = null;
 		if ($integracao instanceof EscolaIntegracoes && $integracao->temSmtpConfigurado()) {
 			$modoEnvio = 'escola';
+		} elseif ($integracao instanceof EscolaIntegracoes && (int)$integracao->smtp_ativo === 1) {
+			$avisoSmtp = 'O SMTP da escola está marcado como ativo, mas a senha não está legível (ex.: APP_KEY mudou) ou está incompleto. Os envios estão usando o e-mail do .env. Desative o switch ou regrave a senha.';
 		}
 
 		return json_encode([
 			'success' => true,
 			'config'  => $dados,
 			'cobranca'=> self::formatCobrancaConfig($integracao),
+			'aniversario' => self::formatAniversarioConfig($integracao),
+			'whatsapp' => WhatsappEscolaService::status($idAdmin),
 			'templates_padrao' => CobrancaEmailService::getTemplatesPadrao(),
+			'templates_aniversario' => AniversarioEmailService::getTemplatePadrao(),
+			'aviso_smtp' => $avisoSmtp,
 			'sistema' => [
 				'from_email' => $sistema['email'],
 				'from_name'  => $sistema['nome'],
@@ -206,6 +248,7 @@ class ConfigComunicacao extends Page {
 		}
 
 		self::aplicarCobrancaNoObjeto($ob, $postVars);
+		self::aplicarAniversarioNoObjeto($ob, $postVars);
 
 		if (!$ob->salvar()) {
 			$msg = EscolaIntegracoes::getUltimoErro() ?: 'Não foi possível salvar as configurações.';
@@ -339,5 +382,109 @@ class ConfigComunicacao extends Page {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$relatorio = EmailAuditoriaHelper::auditarEscola($idAdmin, 150);
 		return json_encode(['success' => true, 'auditoria' => $relatorio]);
+	}
+
+	private static function formatAniversarioConfig($integracao): array {
+		$tpl = AniversarioEmailService::getTemplatePadrao();
+		$padrao = [
+			'aniversario_ativo' => 0,
+			'aniversario_apenas_matriculados' => 1,
+			'aniversario_assunto' => '',
+			'aniversario_mensagem' => '',
+			'colunas_ok' => EscolaIntegracoes::temColunasAniversario(),
+			'log_ok' => EmailAniversarioLog::tabelaExiste(),
+			'templates' => $tpl,
+		];
+
+		if ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunasAniversario()) {
+			$padrao['aniversario_ativo'] = (int)($integracao->aniversario_ativo ?? 0);
+			$padrao['aniversario_apenas_matriculados'] = (int)($integracao->aniversario_apenas_matriculados ?? 1);
+			$padrao['aniversario_assunto'] = $integracao->aniversario_assunto ?? '';
+			$padrao['aniversario_mensagem'] = $integracao->aniversario_mensagem ?? '';
+		}
+
+		return $padrao;
+	}
+
+	private static function aplicarAniversarioNoObjeto(EscolaIntegracoes $ob, array $postVars): void {
+		if (!EscolaIntegracoes::temColunasAniversario()) {
+			return;
+		}
+		$ob->aniversario_ativo = !empty($postVars['aniversario_ativo']) ? 1 : 0;
+		$ob->aniversario_apenas_matriculados = !empty($postVars['aniversario_apenas_matriculados']) ? 1 : 0;
+		$ob->aniversario_assunto = trim($postVars['aniversario_assunto'] ?? '');
+		$ob->aniversario_mensagem = trim($postVars['aniversario_mensagem'] ?? '');
+	}
+
+	private static function previewAniversario(array $postVars = []): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$preview = AniversarioEmailService::preview($idAdmin, $postVars);
+		return json_encode(['success' => true, 'preview' => $preview]);
+	}
+
+	private static function executarAniversario(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$resumo = AniversarioEmailService::processar($idAdmin, false);
+		return json_encode([
+			'success' => empty($resumo['erro']),
+			'message' => isset($resumo['erro'])
+				? $resumo['erro']
+				: 'Enviados: '.($resumo['enviados'] ?? 0).'. Erros: '.($resumo['erros'] ?? 0).'.',
+			'resumo' => $resumo,
+		]);
+	}
+
+	private static function whatsappStatus(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		return json_encode(['success' => true, 'whatsapp' => WhatsappEscolaService::status($idAdmin)]);
+	}
+
+	private static function whatsappConectar(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::criarOuConectar($idAdmin);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+			'whatsapp'=> $res,
+		]);
+	}
+
+	private static function whatsappQr(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::obterQr($idAdmin);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+			'whatsapp'=> $res,
+		]);
+	}
+
+	private static function whatsappSalvar(array $postVars): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::salvarLimites($idAdmin, $postVars);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+		]);
+	}
+
+	private static function whatsappTestar(array $postVars): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$tel = trim($postVars['whatsapp_teste'] ?? '');
+		$msg = trim($postVars['whatsapp_msg_teste'] ?? '');
+		$res = WhatsappEscolaService::testarEnvio($idAdmin, $tel, $msg);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+		]);
+	}
+
+	private static function whatsappDesconectar(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::desconectar($idAdmin);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+		]);
 	}
 }

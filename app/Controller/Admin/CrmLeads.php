@@ -10,6 +10,7 @@ use \App\Model\Entity\User as EntityUser;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\PlanilhaHelper;
+use \App\Common\Helpers\EmailValidator;
 use \App\Model\Db\Pagination;
 
 class CrmLeads extends Page{
@@ -716,7 +717,7 @@ class CrmLeads extends Page{
 	private static function extrairDadosCadastrais($postVars){
 
 		$origem = trim($postVars['origem'] ?? '');
-		$email  = trim($postVars['email'] ?? '');
+		$email  = EmailValidator::normalizar($postVars['email'] ?? '');
 		$bairro = trim($postVars['bairro'] ?? '');
 		$cidade = trim($postVars['cidade'] ?? '');
 		$idade  = trim($postVars['idade'] ?? '');
@@ -726,8 +727,9 @@ class CrmLeads extends Page{
 			return ['erro' => 'Origem do lead inválida.'];
 		}
 
-		if($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)){
-			return ['erro' => 'Informe um e-mail válido.'];
+		$erroEmail = EmailValidator::mensagemErro($email, false);
+		if($erroEmail !== null){
+			return ['erro' => $erroEmail];
 		}
 
 		$idadeInt = null;
@@ -1011,8 +1013,8 @@ class CrmLeads extends Page{
 			$email = '';
 		}
 
-		if($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)){
-			return ['erro' => 'E-mail inválido.'];
+		if($email !== '' && !EmailValidator::isValido($email)){
+			return ['erro' => EmailValidator::mensagemErro($email, false) ?: 'E-mail inválido.'];
 		}
 
 		return [

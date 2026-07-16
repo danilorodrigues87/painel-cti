@@ -1,6 +1,6 @@
-<h1 class="mt-4">Comunicação — E-mail</h1>
+<h1 class="mt-4">Comunicação</h1>
 <ol class="breadcrumb mb-4">
-	<li class="breadcrumb-item active">Configuração SMTP da escola</li>
+	<li class="breadcrumb-item active">E-mail SMTP, automações e WhatsApp (Evolution)</li>
 </ol>
 
 <div class="alert alert-info" id="alert-modo-envio">
@@ -212,4 +212,126 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-email.js?v=20260715e"></script>
+<div class="row g-4 mt-1">
+	<div class="col-12">
+		<div class="card shadow-sm">
+			<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+				<strong><i class="fas fa-birthday-cake"></i> Aniversariantes (e-mail automático)</strong>
+				<div class="d-flex gap-2">
+					<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-preview-aniversario">
+						<i class="fas fa-search"></i> Simular hoje
+					</button>
+					<button type="button" class="btn btn-outline-primary btn-sm" id="btn-executar-aniversario">
+						<i class="fas fa-paper-plane"></i> Enviar agora
+					</button>
+				</div>
+			</div>
+			<div class="card-body">
+				<div class="alert alert-warning small d-none" id="alert-aniversario-sql"></div>
+				<p class="small text-muted">
+					Envia felicitações no dia do aniversário (campo nascimento do aluno). Cada aluno recebe no máximo <strong>1 e-mail por ano</strong>.
+					Cron: <code>php worker/aniversario.php</code>
+				</p>
+
+				<div class="form-check form-switch mb-3">
+					<input class="form-check-input" type="checkbox" id="aniversario_ativo" value="1">
+					<label class="form-check-label" for="aniversario_ativo">Ativar e-mail automático de aniversário</label>
+				</div>
+
+				<div class="form-check mb-3">
+					<input class="form-check-input" type="checkbox" id="aniversario_apenas_matriculados" value="1" checked>
+					<label class="form-check-label" for="aniversario_apenas_matriculados">Somente alunos com matrícula ativa</label>
+				</div>
+
+				<label class="form-label" for="aniversario_assunto">Assunto</label>
+				<input type="text" class="form-control mb-2" id="aniversario_assunto">
+
+				<label class="form-label" for="aniversario_mensagem">Mensagem</label>
+				<textarea class="form-control" id="aniversario_mensagem" rows="5"></textarea>
+				<small class="text-muted">Variáveis: <code>{nome}</code> <code>{escola}</code> <code>{email}</code></small>
+
+				<div class="small text-muted mt-3" id="preview-aniversario-resultado"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="row g-4 mt-1">
+	<div class="col-12">
+		<div class="card shadow-sm">
+			<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+				<strong><i class="fab fa-whatsapp text-success"></i> WhatsApp — Evolution API</strong>
+				<div class="d-flex gap-2 flex-wrap">
+					<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-wa-status">
+						<i class="fas fa-sync"></i> Atualizar status
+					</button>
+					<button type="button" class="btn btn-success btn-sm" id="btn-wa-conectar">
+						<i class="fas fa-qrcode"></i> Conectar / QR
+					</button>
+					<button type="button" class="btn btn-outline-danger btn-sm" id="btn-wa-desconectar">
+						<i class="fas fa-unlink"></i> Desconectar
+					</button>
+				</div>
+			</div>
+			<div class="card-body">
+				<div class="alert alert-warning small d-none" id="alert-whatsapp-sql"></div>
+				<p class="small text-muted mb-3">
+					Cada escola usa uma instância própria na Evolution (<code>escola_{id_admin}</code>).
+					Credenciais do servidor ficam no <code>.env</code>. Webhook público necessário para inbox (em produção use HTTPS).
+				</p>
+
+				<div class="row g-4">
+					<div class="col-lg-5">
+						<div class="border rounded p-3 h-100">
+							<div class="mb-2"><strong>Status:</strong> <span id="wa-status-label" class="badge bg-secondary">—</span></div>
+							<div class="small text-muted mb-1">Instância: <code id="wa-instance">—</code></div>
+							<div class="small text-muted mb-1">Número: <span id="wa-numero">—</span></div>
+							<div class="small text-muted mb-3 text-break">Webhook: <code id="wa-webhook" class="small">—</code></div>
+
+							<div class="form-check form-switch mb-3">
+								<input class="form-check-input" type="checkbox" id="evolution_ativo" value="1">
+								<label class="form-check-label" for="evolution_ativo">Marcar WhatsApp ativo nesta escola</label>
+							</div>
+							<div class="row g-2 mb-3">
+								<div class="col-6">
+									<label class="form-label" for="whatsapp_delay_segundos">Intervalo (seg)</label>
+									<input type="number" class="form-control" id="whatsapp_delay_segundos" value="5" min="1" max="120">
+								</div>
+								<div class="col-6">
+									<label class="form-label" for="whatsapp_max_hora">Máx./hora</label>
+									<input type="number" class="form-control" id="whatsapp_max_hora" value="40" min="1" max="200">
+								</div>
+							</div>
+							<button type="button" class="btn btn-primary btn-sm" id="btn-wa-salvar">
+								<i class="fas fa-save"></i> Salvar limites
+							</button>
+						</div>
+					</div>
+					<div class="col-lg-4 text-center">
+						<div class="border rounded p-3 h-100">
+							<p class="small text-muted mb-2">QR Code (escaneie no WhatsApp do celular)</p>
+							<img id="wa-qrcode" class="img-fluid d-none" alt="QR WhatsApp" style="max-width:260px;">
+							<div id="wa-qr-placeholder" class="text-muted small py-5">Nenhum QR carregado.</div>
+							<button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="btn-wa-qr">
+								Atualizar QR
+							</button>
+						</div>
+					</div>
+					<div class="col-lg-3">
+						<div class="border rounded p-3 h-100">
+							<label class="form-label" for="whatsapp_teste">Telefone teste</label>
+							<input type="text" class="form-control mb-2" id="whatsapp_teste" placeholder="11999999999">
+							<label class="form-label" for="whatsapp_msg_teste">Mensagem</label>
+							<textarea class="form-control mb-2" id="whatsapp_msg_teste" rows="3" placeholder="Teste Painel CTI"></textarea>
+							<button type="button" class="btn btn-outline-success w-100" id="btn-wa-testar">
+								<i class="fas fa-paper-plane"></i> Enviar teste
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/config-email.js?v=20260716b"></script>

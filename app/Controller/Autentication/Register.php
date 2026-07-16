@@ -6,6 +6,7 @@ use \App\Utils\View;
 use \App\Model\Entity\User;
 use \App\Controller\Admin\Alert;
 use \App\Session\User\Login as SessionUserLogin;
+use \App\Common\Helpers\EmailValidator;
 
 class Register{
 
@@ -35,9 +36,14 @@ class Register{
 		$postVars = $request->getPostVars();
 
 		$nome = $postVars['nome'] ?? '';
-		$email = $postVars['email'] ?? '';
+		$email = EmailValidator::normalizar($postVars['email'] ?? '');
 		$senha1 = $postVars['senha1'] ?? '';
 		$senha2 = $postVars['senha2'] ?? '';
+
+		$erroEmail = EmailValidator::mensagemErro($email, true);
+		if ($erroEmail !== null) {
+			return self::getRegister($request, $erroEmail);
+		}
 
 		//BUSCA O USUÁRIO PELO EMAIL
 		$obUser = User::getUserByEmail($email);

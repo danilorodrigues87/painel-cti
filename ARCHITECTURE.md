@@ -155,11 +155,19 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 - Aplicado em campanhas, cobrança, teste SMTP
 - Botão **Auditar e-mails** → `EmailAuditoriaHelper` (alunos, responsáveis, leads)
 
-### 5.6 WhatsApp (legado — quebrado)
-- `Mensagens.php` + Meta Cloud API com token hardcoded → **descontinuar**
-- `WhatsAppService` referenciado e **inexistente**
-- Views `whatsappatm` incompletas
-- Roadmap: Evolution API (Fases 3–4)
+### 5.6 WhatsApp / Evolution API (Fase 3 — base)
+- Removido legado Meta/Gemini; integração nova via **Evolution API**
+- Credenciais globais: `EVOLUTION_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_SECRET` no `.env`
+- Instância por escola: `escola_{id_admin}` em `escola_integracoes`
+- Tela: `/painel/config/comunicacao` (bloco WhatsApp) — QR, status, teste, limites
+- Webhook: `POST /webhook/evolution/{id_admin}/{token}` → grava `whatsapp_conversas` / `whatsapp_mensagens`
+- Inbox multi-atendente e campanhas WA: próximos passos (Fases 3b / 4)
+- Ops: `docs/OPERACAO_WHATSAPP.md`
+
+### 5.7 Validação de e-mail nos cadastros
+- `EmailValidator` aplicado em: Alunos, Responsáveis, Funcionários, Perfil, Leads (form + planilha), Register
+- Funcionários/perfil/register: e-mail **obrigatório** e válido
+- Alunos/responsáveis/leads: e-mail **opcional**; se preenchido, não pode ser fake (`sem@email.com`, etc.)
 
 ---
 
@@ -174,6 +182,7 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 | E-mail | `Common/Communication/Email.php`, `EscolaIntegracoes.php`, `CryptoHelper.php` |
 | Campanhas | `Controller/Admin/Campanhas.php`, `CampanhaWorker.php`, `CampanhaSegmentoHelper.php` |
 | Cobrança | `CobrancaEmailService.php`, `EmailCobrancaLog.php`, `worker/cobranca.php` |
+| WhatsApp | `EvolutionApiService.php`, `WhatsappEscolaService.php`, `Controller/Webhook/Evolution.php` |
 | Validador | `EmailValidator.php`, `EmailAuditoriaHelper.php` |
 | Agenda | `AgendaHelper.php`, controllers `Agenda*` |
 | CRM | `CrmLeads.php`, `resources/js/crm.js` |
@@ -276,6 +285,50 @@ CREATE TABLE IF NOT EXISTS email_cobranca_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
+### WhatsApp / Evolution (colar se ainda não existir)
+
+```sql
+-- Colunas Evolution em escola_integracoes (ignore erro se a coluna já existir)
+ALTER TABLE escola_integracoes ADD COLUMN evolution_instance VARCHAR(100) NULL;
+ALTER TABLE escola_integracoes ADD COLUMN evolution_status VARCHAR(40) NOT NULL DEFAULT 'disconnected';
+ALTER TABLE escola_integracoes ADD COLUMN evolution_ativo TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE escola_integracoes ADD COLUMN evolution_numero VARCHAR(30) NULL;
+ALTER TABLE escola_integracoes ADD COLUMN whatsapp_delay_segundos INT UNSIGNED NOT NULL DEFAULT 5;
+ALTER TABLE escola_integracoes ADD COLUMN whatsapp_max_hora INT UNSIGNED NOT NULL DEFAULT 40;
+
+CREATE TABLE IF NOT EXISTS whatsapp_conversas (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id_admin INT UNSIGNED NOT NULL,
+  telefone VARCHAR(30) NOT NULL,
+  nome_contato VARCHAR(150) DEFAULT NULL,
+  status ENUM('aberta','em_atendimento','fechada') NOT NULL DEFAULT 'aberta',
+  id_atendente INT UNSIGNED DEFAULT NULL,
+  ultima_mensagem_em DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_wa_admin_tel (id_admin, telefone),
+  KEY idx_wa_admin_status (id_admin, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_mensagens (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id_admin INT UNSIGNED NOT NULL,
+  conversa_id INT UNSIGNED NOT NULL,
+  direction ENUM('in','out') NOT NULL,
+  tipo VARCHAR(30) NOT NULL DEFAULT 'text',
+  corpo TEXT DEFAULT NULL,
+  media_url TEXT DEFAULT NULL,
+  wa_message_id VARCHAR(120) DEFAULT NULL,
+  status VARCHAR(30) DEFAULT NULL,
+  id_usuario INT UNSIGNED DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_wa_msg_conversa (conversa_id),
+  KEY idx_wa_msg_admin (id_admin),
+  KEY idx_wa_msg_waid (wa_message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
 > Agenda v2, CRM, etc. têm SQLs próprios já aplicados em ambientes de desenvolvimento — conferir banco antes de recriar.
 
 ---
@@ -294,14 +347,17 @@ CREATE TABLE IF NOT EXISTS email_cobranca_log (
 | Fase 2 campanhas e-mail + worker | Feito |
 | Cobrança automática mensalidade (antes/dia/atraso) | Feito |
 | Validador + auditoria de e-mails | Feito |
+| Remoção legado WhatsApp Meta + Gemini | Feito |
+| Validação de e-mail nos cadastros | Feito |
+| Operação e-mail (composer limpo, status-email, checklist) | Feito |
+| Automação aniversariantes por e-mail | Feito |
+| Evolution API: .env + QR/status/teste + webhook + tabelas | Feito (base Fase 3) |
 
 ### Próximo (ordem recomendada)
 | Fase | Escopo | Notas |
 |------|--------|-------|
-| **Melhoria e-mail** | Bloquear e-mail fake no **cadastro** (aluno/lead/responsável) ao salvar | Validador já existe |
-| **Automação aniversário** | Cron diário: campanha automática aniversariantes | Reutilizar fila |
-| **Fase 3** | WhatsApp **atendimento** via Evolution API (inbox multi-atendente, webhook) | Substituir `Mensagens` legado |
-| **Fase 4** | WhatsApp **em massa** na mesma fila `campanhas` (`canal=whatsapp`) | Só após fila madura |
+| **Fase 3b** | Inbox multi-atendente (UI conversas) | Usa `whatsapp_conversas` / `whatsapp_mensagens` |
+| **Fase 4** | WhatsApp **em massa** na mesma fila `campanhas` (`canal=whatsapp`) | Após inbox estável |
 | **Fase 5** | Automações CRM (mensagem ao mudar status do lead) | |
 | **Painel Mestre** | Cadastrar escolas, planos de assinatura, liberar slugs em `modulos_liberados` | Base Fase 0 pronta |
 | **Dashboard** | Remover top vendedores fictícios; cards CRM/inadimplência reais | |
@@ -310,7 +366,7 @@ CREATE TABLE IF NOT EXISTS email_cobranca_log (
 ### Decisões de produto já alinhadas
 - Cada escola configura **SMTP próprio** (Gmail/corporativo); sistema tem fallback `no-reply@...` no `.env`
 - Envio em massa **nunca** síncrono na request web sem fila/limites
-- Evolution: preferência por instância por escola (a confirmar na implementação)
+- Evolution: **instância por escola** (`escola_{id_admin}`); API key global no `.env`
 - Worker: cron Linux em produção; botões manuais no painel para testes XAMPP
 
 ---
@@ -348,8 +404,10 @@ php worker/cobranca.php [id_admin]
 ```
 
 Painel (Diretor):
-- `/painel/config/comunicacao` — SMTP, cobrança, simular, auditar e-mails
+- `/painel/config/comunicacao` — SMTP, cobrança, aniversário, WhatsApp (Evolution)
 - `/painel/campanhas` — campanhas manuais + processar fila
+
+Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 ---
 

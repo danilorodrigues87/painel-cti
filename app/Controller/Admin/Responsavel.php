@@ -6,6 +6,7 @@ use \App\Model\Entity\Responsaveis as EntityRes;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\EmailValidator;
 
 class Responsavel extends Page{
 
@@ -249,11 +250,16 @@ $resposta = [
 
 // Sanitização dos campos utilizando funções nativas do PHP
     $nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_STRING);
-    $email = filter_var($postVars['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $email = EmailValidator::normalizar($postVars['email'] ?? '');
     $whatsapp = filter_var($postVars['whatsapp'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
     $rg = filter_var($postVars['rg'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
     $cpf = filter_var($postVars['cpf'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
 
+	$erroEmail = EmailValidator::mensagemErro($email, false);
+	if ($erroEmail !== null) {
+		$resposta['erro'] = $erroEmail;
+		return json_encode($resposta);
+	}
 
 		if($postVars['id'] != ''){
 

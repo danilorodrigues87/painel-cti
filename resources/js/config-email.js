@@ -76,6 +76,181 @@ function preencherFormulario(data){
 
 	atualizarAlertaModo(data);
 	preencherCobranca(data);
+	preencherAniversario(data);
+	preencherWhatsapp(data.whatsapp || {});
+
+	if(data.aviso_smtp){
+		Swal.fire('SMTP da escola', data.aviso_smtp, 'warning');
+	}
+}
+
+function badgeStatusWa(status, conectado){
+	if(conectado) return '<span class="badge bg-success">conectado</span>';
+	const s = (status || 'unknown').toLowerCase();
+	if(s === 'connecting' || s === 'qr') return '<span class="badge bg-warning text-dark">'+s+'</span>';
+	if(s === 'not_created') return '<span class="badge bg-secondary">não criada</span>';
+	return '<span class="badge bg-secondary">'+s+'</span>';
+}
+
+function mostrarQr(qr){
+	if(qr){
+		$('#wa-qrcode').attr('src', qr).removeClass('d-none');
+		$('#wa-qr-placeholder').addClass('d-none');
+	} else {
+		$('#wa-qrcode').addClass('d-none').attr('src', '');
+		$('#wa-qr-placeholder').removeClass('d-none');
+	}
+}
+
+function preencherWhatsapp(w){
+	if(!w.colunas_ok || !w.tabelas_ok || !w.configurado_env){
+		let msgs = [];
+		if(!w.configurado_env) msgs.push('Configure EVOLUTION_URL e EVOLUTION_API_KEY no .env.');
+		if(!w.colunas_ok || !w.tabelas_ok) msgs.push('Execute o SQL de WhatsApp/Evolution no phpMyAdmin.');
+		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join(' '));
+	} else {
+		$('#alert-whatsapp-sql').addClass('d-none');
+	}
+
+	$('#wa-status-label').replaceWith('<span id="wa-status-label">'+badgeStatusWa(w.status, w.conectado)+'</span>');
+	$('#wa-instance').text(w.instance || '—');
+	$('#wa-numero').text(w.numero || '—');
+	$('#wa-webhook').text(w.webhook_url || '—');
+	$('#evolution_ativo').prop('checked', parseInt(w.ativo, 10) === 1);
+	$('#whatsapp_delay_segundos').val(w.delay || 5);
+	$('#whatsapp_max_hora').val(w.max_hora || 40);
+	mostrarQr(w.qrcode || null);
+
+	if(w.erro){
+		$('#alert-whatsapp-sql').removeClass('d-none').append('<br>'+w.erro);
+	}
+}
+
+function aplicarRespostaWhatsapp(res){
+	const w = res.whatsapp || res;
+	if(w.instance || w.status || w.qrcode !== undefined){
+		preencherWhatsapp(Object.assign({}, {
+			colunas_ok: true,
+			tabelas_ok: true,
+			configurado_env: true
+		}, w));
+	}
+	mostrarQr(w.qrcode || null);
+	if(w.status !== undefined){
+		$('#wa-status-label').replaceWith('<span id="wa-status-label">'+badgeStatusWa(w.status, w.conectado)+'</span>');
+	}
+}
+
+function whatsappStatus(){
+	$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_status' }, function(res){
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao consultar status.', 'error');
+			return;
+		}
+		preencherWhatsapp(res.whatsapp || {});
+	}, 'json');
+}
+
+function whatsappConectar(){
+	$('#btn-wa-conectar').prop('disabled', true);
+	Swal.fire({ title: 'Conectando...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
+	$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_conectar' }, function(res){
+		$('#btn-wa-conectar').prop('disabled', false);
+		Swal.close();
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao conectar.', 'error');
+			return;
+		}
+		aplicarRespostaWhatsapp(res);
+		Swal.fire('WhatsApp', res.message || 'OK', res.whatsapp && res.whatsapp.qrcode ? 'info' : 'success');
+	}, 'json').fail(function(){
+		$('#btn-wa-conectar').prop('disabled', false);
+		Swal.close();
+		Swal.fire('Erro', 'Falha na requisição.', 'error');
+	});
+}
+
+function whatsappQr(){
+	$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_qr' }, function(res){
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao obter QR.', 'error');
+			return;
+		}
+		aplicarRespostaWhatsapp(res);
+	}, 'json');
+}
+
+function whatsappSalvar(){
+	$.post(url_base + CONFIG_EMAIL_URL, {
+		acao: 'whatsapp_salvar',
+		evolution_ativo: $('#evolution_ativo').is(':checked') ? 1 : 0,
+		whatsapp_delay_segundos: $('#whatsapp_delay_segundos').val(),
+		whatsapp_max_hora: $('#whatsapp_max_hora').val()
+	}, function(res){
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao salvar.', 'error');
+			return;
+		}
+		Swal.fire('Salvo', res.message, 'success');
+	}, 'json');
+}
+
+function whatsappTestar(){
+	$('#btn-wa-testar').prop('disabled', true);
+	$.post(url_base + CONFIG_EMAIL_URL, {
+		acao: 'whatsapp_testar',
+		whatsapp_teste: $('#whatsapp_teste').val(),
+		whatsapp_msg_teste: $('#whatsapp_msg_teste').val()
+	}, function(res){
+		$('#btn-wa-testar').prop('disabled', false);
+		if(!res || !res.success){
+			Swal.fire('Falha', (res && res.message) ? res.message : 'Não enviou.', 'error');
+			return;
+		}
+		Swal.fire('Enviado', res.message, 'success');
+	}, 'json').fail(function(){
+		$('#btn-wa-testar').prop('disabled', false);
+		Swal.fire('Erro', 'Falha ao testar.', 'error');
+	});
+}
+
+function whatsappDesconectar(){
+	Swal.fire({
+		title: 'Desconectar WhatsApp?',
+		text: 'Será necessário escanear um novo QR para reconectar.',
+		icon: 'warning',
+		showCancelButton: true,
+		confirmButtonText: 'Desconectar'
+	}).then(function(r){
+		if(!r.isConfirmed) return;
+		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_desconectar' }, function(res){
+			if(!res || !res.success){
+				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha.', 'error');
+				return;
+			}
+			mostrarQr(null);
+			whatsappStatus();
+			Swal.fire('OK', res.message, 'success');
+		}, 'json');
+	});
+}
+
+function preencherAniversario(data){
+	const a = data.aniversario || {};
+	const tpl = data.templates_aniversario || a.templates || {};
+
+	if(!a.colunas_ok || !a.log_ok){
+		$('#alert-aniversario-sql').removeClass('d-none').html(
+			'Execute o SQL de aniversário no phpMyAdmin para habilitar esta função.'
+		);
+	} else {
+		$('#alert-aniversario-sql').addClass('d-none');
+	}
+
+	$('#aniversario_ativo').prop('checked', parseInt(a.aniversario_ativo, 10) === 1);
+	$('#aniversario_apenas_matriculados').prop('checked', parseInt(a.aniversario_apenas_matriculados, 10) === 1);
+	$('#aniversario_assunto').val(a.aniversario_assunto || tpl.assunto || '');
+	$('#aniversario_mensagem').val(a.aniversario_mensagem || tpl.mensagem || '');
 }
 
 function preencherCobranca(data){
@@ -127,7 +302,11 @@ function coletarDadosFormulario(){
 		cobranca_assunto_atraso: $('#cobranca_assunto_atraso').val(),
 		cobranca_msg_antes: $('#cobranca_msg_antes').val(),
 		cobranca_msg_vencimento: $('#cobranca_msg_vencimento').val(),
-		cobranca_msg_atraso: $('#cobranca_msg_atraso').val()
+		cobranca_msg_atraso: $('#cobranca_msg_atraso').val(),
+		aniversario_ativo: $('#aniversario_ativo').is(':checked') ? 1 : 0,
+		aniversario_apenas_matriculados: $('#aniversario_apenas_matriculados').is(':checked') ? 1 : 0,
+		aniversario_assunto: $('#aniversario_assunto').val(),
+		aniversario_mensagem: $('#aniversario_mensagem').val()
 	};
 }
 
@@ -324,6 +503,62 @@ function auditarEmails(){
 	});
 }
 
+function previewAniversario(){
+	const dados = coletarDadosFormulario();
+	dados.acao = 'preview_aniversario';
+
+	$('#btn-preview-aniversario').prop('disabled', true);
+	$.post(url_base + CONFIG_EMAIL_URL, dados, function(res){
+		$('#btn-preview-aniversario').prop('disabled', false);
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha na simulação.', 'error');
+			return;
+		}
+		const p = res.preview || {};
+		if(!p.ok){
+			Swal.fire('Atenção', p.message || 'SQL pendente.', 'warning');
+			return;
+		}
+		let html = '<strong>Aniversariantes hoje:</strong> '+(p.total || 0);
+		if(!p.ativo){
+			html += ' <span class="text-muted">(simulação — automação desativada)</span>';
+		}
+		if(p.itens && p.itens.length){
+			html += '<ul class="mb-0 mt-2 text-start">';
+			p.itens.slice(0, 10).forEach(function(i){
+				html += '<li>'+i.nome+' &lt;'+i.contato+'&gt;</li>';
+			});
+			html += '</ul>';
+		}
+		$('#preview-aniversario-resultado').html(html);
+		Swal.fire({ title: 'Aniversariantes de hoje', html: html, icon: 'info' });
+	}, 'json');
+}
+
+function executarAniversario(){
+	Swal.fire({
+		title: 'Enviar aniversários agora?',
+		text: 'Serão enviados os e-mails pendentes de hoje.',
+		icon: 'question',
+		showCancelButton: true,
+		confirmButtonText: 'Enviar'
+	}).then(function(r){
+		if(!r.isConfirmed) return;
+		$('#btn-executar-aniversario').prop('disabled', true);
+		Swal.fire({ title: 'Enviando...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
+		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'executar_aniversario' }, function(res){
+			$('#btn-executar-aniversario').prop('disabled', false);
+			Swal.close();
+			if(!res || !res.success){
+				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha no envio.', 'error');
+				return;
+			}
+			Swal.fire('Concluído', res.message, 'success');
+			previewAniversario();
+		}, 'json');
+	});
+}
+
 $(function(){
 	carregarConfiguracao();
 
@@ -335,4 +570,12 @@ $(function(){
 	$('#btn-preview-cobranca').on('click', previewCobranca);
 	$('#btn-executar-cobranca').on('click', executarCobranca);
 	$('#btn-auditar-emails').on('click', auditarEmails);
+	$('#btn-preview-aniversario').on('click', previewAniversario);
+	$('#btn-executar-aniversario').on('click', executarAniversario);
+	$('#btn-wa-status').on('click', whatsappStatus);
+	$('#btn-wa-conectar').on('click', whatsappConectar);
+	$('#btn-wa-qr').on('click', whatsappQr);
+	$('#btn-wa-salvar').on('click', whatsappSalvar);
+	$('#btn-wa-testar').on('click', whatsappTestar);
+	$('#btn-wa-desconectar').on('click', whatsappDesconectar);
 });

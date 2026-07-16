@@ -39,3 +39,5 @@ include __DIR__.'/admin/tarefas.php';
 include __DIR__.'/admin/comunicacao.php';
 
 include __DIR__.'/admin/campanhas.php';
+
+include __DIR__.'/admin/evolution.php';

@@ -7,8 +7,7 @@
         }
     },
     "require": {
-        "firebase/php-jwt": "^6.10",
-        "netflie/whatsapp-cloud-api": "^2.2",
+        "firebase/php-jwt": "^7.0",
         "phpmailer/phpmailer": "^6.9"
     }
 }

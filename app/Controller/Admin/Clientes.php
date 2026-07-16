@@ -8,6 +8,7 @@ use \App\Model\Entity\EstadoCidades;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\EmailValidator;
 
 class Clientes extends Page{
 
@@ -352,7 +353,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 
 // Sanitização dos campos utilizando funções nativas do PHP
     $nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_STRING);
-    $email = filter_var($postVars['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $email = EmailValidator::normalizar($postVars['email'] ?? '');
     $whatsapp = filter_var($postVars['whatsapp'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
     $rg = filter_var($postVars['rg'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
     $cpf = filter_var($postVars['cpf'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
@@ -363,11 +364,17 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
     $cidade = filter_var($postVars['cidade'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
     $ativo = filter_var($postVars['ativo'] ?? 'n', FILTER_SANITIZE_STRING);
 
+	$erroEmail = EmailValidator::mensagemErro($email, false);
+	if ($erroEmail !== null) {
+		$resposta['erro'] = $erroEmail;
+		return json_encode($resposta);
+	}
+
     // VERIFICAÇÃO SE EXISTE UM EMAIL ANTIGO 
 	
-	$email_antigo = filter_var($postVars['email_antigo'] ?? '', FILTER_SANITIZE_EMAIL);
+	$email_antigo = EmailValidator::normalizar($postVars['email_antigo'] ?? '');
 
-	if($email_antigo != '' AND $email_antigo != $email){
+	if($email !== '' && $email_antigo != '' AND $email_antigo != $email){
 
 	//BUSCA O USUÁRIO PELO EMAIL
 		$obUser = EntityUser::getUserByEmail($email);
@@ -412,16 +419,14 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			$obUsers->atualizar();
 
 		} else {
-        
-        if($email != 'sem@email.com'){
-			//BUSCA O USUÁRIO PELO EMAIL
-		$obUser = EntityUser::getUserByEmail($email);
 
-		if($obUser instanceof EntityUser){
-			$resposta ["erro"] = 'Esse email já está cadastrado.';
-			return json_encode($resposta);
-		}
-        }
+			if ($email !== '') {
+				$obUser = EntityUser::getUserByEmail($email);
+				if ($obUser instanceof EntityUser) {
+					$resposta['erro'] = 'Esse email já está cadastrado.';
+					return json_encode($resposta);
+				}
+			}
 
 		//NOVA INSTANCIA
 			$obUsers = new EntityUser;

@@ -64,6 +64,33 @@ class EmailValidator {
 		return self::getRejeicao($email) === null;
 	}
 
+	/** Vazio é aceito; se preenchido, deve passar em isValido() */
+	public static function isValidoOuVazio(?string $email): bool {
+		$email = self::normalizar($email);
+		if ($email === '') {
+			return true;
+		}
+		return self::isValido($email);
+	}
+
+	/** Retorna motivo só se o e-mail estiver preenchido e inválido */
+	public static function getRejeicaoSePreenchido(?string $email): ?string {
+		$email = self::normalizar($email);
+		if ($email === '') {
+			return null;
+		}
+		return self::getRejeicao($email);
+	}
+
+	public static function mensagemErro(?string $email, bool $obrigatorio = false): ?string {
+		$email = self::normalizar($email);
+		if ($email === '') {
+			return $obrigatorio ? 'Informe um e-mail válido.' : null;
+		}
+		$motivo = self::getRejeicao($email);
+		return $motivo !== null ? 'E-mail inválido: '.$motivo.'.' : null;
+	}
+
 	public static function getRejeicao(?string $email): ?string {
 		$email = self::normalizar($email);
 

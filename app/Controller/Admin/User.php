@@ -9,6 +9,7 @@ use \App\Session\User\Login as SessionUser;
 use \App\Common\SystemModules;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\ModuleGateHelper;
+use \App\Common\Helpers\EmailValidator;
 
 class User extends Page{
 
@@ -347,7 +348,7 @@ public static function setNewUser($request) {
 
     // Sanitização dos campos utilizando funções nativas do PHP
 	$nome = filter_var($postVars['nome'] ?? '', FILTER_SANITIZE_STRING);
-	$email = filter_var($postVars['email'] ?? '', FILTER_SANITIZE_EMAIL);
+	$email = EmailValidator::normalizar($postVars['email'] ?? '');
 	$nivel = filter_var($postVars['nivel'] ?? '', FILTER_SANITIZE_STRING);
 	$whatsapp = filter_var($postVars['whatsapp'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
 	$rg = filter_var($postVars['rg'] ?? '', FILTER_SANITIZE_NUMBER_INT); 
@@ -359,10 +360,15 @@ public static function setNewUser($request) {
 	$cidade = filter_var($postVars['cidade'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
 	$ativo = filter_var($postVars['ativo'] ?? 'n', FILTER_SANITIZE_STRING);
 
+	$erroEmail = EmailValidator::mensagemErro($email, true);
+	if ($erroEmail !== null) {
+		$resposta['erro'] = $erroEmail;
+		return json_encode($resposta);
+	}
 
 	// VERIFICAÇÃO SE EXISTE UM EMAIL ANTIGO 
 	
-	$email_antigo = filter_var($postVars['email_antigo'] ?? '', FILTER_SANITIZE_EMAIL);
+	$email_antigo = EmailValidator::normalizar($postVars['email_antigo'] ?? '');
 
 	if($email_antigo != '' AND $email_antigo != $email){
 
