@@ -6,6 +6,7 @@ use App\Utils\View;
 use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Communication\WhatsappChatbotService;
+use App\Common\Communication\WhatsappMediaStorage;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
 use App\Model\Entity\WhatsappSetor;
@@ -40,6 +41,7 @@ class WhatsappInbox extends Page {
 			'listar'           => 'listar',
 			'mensagens'        => 'mensagens',
 			'enviar'           => 'enviar',
+			'enviar_midia'     => 'enviarMidia',
 			'assumir'          => 'assumir',
 			'transferir'       => 'transferir',
 			'fechar'           => 'fechar',
@@ -52,11 +54,15 @@ class WhatsappInbox extends Page {
 		];
 
 		if (!isset($map[$acao])) {
-			return json_encode(['success' => false, 'message' => 'Ação inválida.']);
+			return self::json(['success' => false, 'message' => 'Ação inválida.']);
 		}
 
 		$method = $map[$acao];
 		return self::$method($post);
+	}
+
+	private static function json(array $data): string {
+		return json_encode($data, JSON_UNESCAPED_UNICODE);
 	}
 
 	private static function listar(array $post): string {
@@ -68,7 +74,7 @@ class WhatsappInbox extends Page {
 
 		$lista = WhatsappConversa::listarInbox($idAdmin, $uid, $nivel, $setores);
 
-		return json_encode([
+		return self::json([
 			'success' => true,
 			'conversas' => $lista,
 			'meta' => [
@@ -85,14 +91,26 @@ class WhatsappInbox extends Page {
 		$id = (int)($post['conversa_id'] ?? 0);
 		$conv = WhatsappConversa::getById($id, $idAdmin);
 		if (!$conv || !self::podeVer($conv)) {
-			return json_encode(['success' => false, 'message' => 'Conversa não encontrada.']);
+			return self::json(['success' => false, 'message' => 'Conversa não encontrada.']);
 		}
 
 		$rows = (new Database('whatsapp_mensagens'))
 			->select('conversa_id = '.$id.' AND id_admin = '.$idAdmin, 'id ASC', '200')
 			->fetchAll(\PDO::FETCH_ASSOC);
 
-		return json_encode([
+		foreach ($rows as &$row) {
+			if (!empty($row['media_url'])) {
+				$rel = (string)$row['media_url'];
+				if (strpos($rel, 'http://') !== 0 && strpos($rel, 'https://') !== 0) {
+					$row['media_url_full'] = WhatsappMediaStorage::urlPublica($rel);
+				} else {
+					$row['media_url_full'] = $rel;
+				}
+			}
+		}
+		unset($row);
+
+		return self::json([
 			'success' => true,
 			'conversa' => [
 				'id' => (int)$conv->id,
@@ -108,19 +126,87 @@ class WhatsappInbox extends Page {
 	}
 
 	private static function enviar(array $post): string {
+		$texto = trim((string)($post['texto'] ?? ''));
+		if ($texto === '') {
+			return self::json(['success' => false, 'message' => 'Digite uma mensagem.']);
+		}
+
+		$conv = self::obterConversaParaEnvio($post);
+		if (is_string($conv)) {
+			return $conv;
+		}
+
+		$ok = WhatsappChatbotService::enviarTexto($conv, $texto);
+		if (!$ok) {
+			return self::json(['success' => false, 'message' => 'Falha ao enviar pelo WhatsApp. Verifique a conexão.']);
+		}
+
+		return self::json(['success' => true, 'message' => 'Enviado.']);
+	}
+
+	private static function enviarMidia(array $post): string {
+		$tipo = (string)($post['tipo_midia'] ?? 'image');
+		if (!in_array($tipo, ['image', 'audio', 'document'], true)) {
+			return self::json(['success' => false, 'message' => 'Tipo de mídia inválido.']);
+		}
+
+		$conv = self::obterConversaParaEnvio($post);
+		if (is_string($conv)) {
+			return $conv;
+		}
+
+		$idAdmin = self::idAdmin();
+		$arquivo = null;
+		$fileName = null;
+
+		if (!empty($_FILES['arquivo']) && is_array($_FILES['arquivo'])) {
+			$fileName = basename((string)($_FILES['arquivo']['name'] ?? 'documento'));
+			$arquivo = WhatsappMediaStorage::salvarUpload($idAdmin, $_FILES['arquivo']);
+		} elseif (!empty($post['base64'])) {
+			$arquivo = WhatsappMediaStorage::salvarBase64(
+				$idAdmin,
+				(string)$post['base64'],
+				$tipo,
+				$post['mimetype'] ?? null
+			);
+			$fileName = trim((string)($post['file_name'] ?? '')) ?: null;
+		}
+
+		if (!$arquivo) {
+			return self::json(['success' => false, 'message' => 'Não foi possível processar o arquivo (máx. 15 MB).']);
+		}
+
+		$caption = trim((string)($post['caption'] ?? ''));
+		if ($tipo === 'audio') {
+			$ok = WhatsappChatbotService::enviarAudio($conv, $arquivo);
+		} elseif ($tipo === 'document') {
+			$ok = WhatsappChatbotService::enviarDocumento(
+				$conv,
+				$arquivo,
+				$caption !== '' ? $caption : null,
+				$fileName
+			);
+		} else {
+			$ok = WhatsappChatbotService::enviarImagem($conv, $arquivo, $caption !== '' ? $caption : null);
+		}
+
+		if (!$ok) {
+			return self::json(['success' => false, 'message' => 'Falha ao enviar mídia pelo WhatsApp.']);
+		}
+
+		return self::json(['success' => true, 'message' => 'Mídia enviada.']);
+	}
+
+	/** @return WhatsappConversa|string */
+	private static function obterConversaParaEnvio(array $post) {
 		$idAdmin = self::idAdmin();
 		$user = self::user();
 		$uid = (int)($user['usuario']['id'] ?? 0);
 		$id = (int)($post['conversa_id'] ?? 0);
-		$texto = trim((string)($post['texto'] ?? ''));
-
-		if ($texto === '') {
-			return json_encode(['success' => false, 'message' => 'Digite uma mensagem.']);
-		}
 
 		$conv = WhatsappConversa::getById($id, $idAdmin);
 		if (!$conv || !self::podeVer($conv)) {
-			return json_encode(['success' => false, 'message' => 'Conversa não encontrada.']);
+			return self::json(['success' => false, 'message' => 'Conversa não encontrada.']);
 		}
 
 		if (!self::isDiretor() && (int)$conv->id_atendente !== $uid) {
@@ -132,7 +218,7 @@ class WhatsappInbox extends Page {
 					'assigned_at'    => date('Y-m-d H:i:s'),
 				]);
 			} else {
-				return json_encode(['success' => false, 'message' => 'Assuma a conversa antes de responder.']);
+				return self::json(['success' => false, 'message' => 'Assuma a conversa antes de responder.']);
 			}
 		} else {
 			$upd = ['chatbot_estado' => 'humano', 'status' => 'em_atendimento'];
@@ -143,12 +229,7 @@ class WhatsappInbox extends Page {
 			$conv->atualizar($upd);
 		}
 
-		$ok = WhatsappChatbotService::enviarTexto($conv, $texto);
-		if (!$ok) {
-			return json_encode(['success' => false, 'message' => 'Falha ao enviar pelo WhatsApp. Verifique a conexão.']);
-		}
-
-		return json_encode(['success' => true, 'message' => 'Enviado.']);
+		return $conv;
 	}
 
 	private static function assumir(array $post): string {
@@ -213,9 +294,12 @@ class WhatsappInbox extends Page {
 		$conv->atualizar([
 			'status'         => 'fechada',
 			'chatbot_estado' => 'encerrado',
+			'id_atendente'   => null,
+			'setor_id'       => null,
+			'assigned_at'    => null,
 		]);
 
-		return json_encode(['success' => true, 'message' => 'Conversa encerrada.']);
+		return json_encode(['success' => true, 'message' => 'Conversa encerrada. Na próxima mensagem do cliente o menu reinicia.']);
 	}
 
 	private static function setoresListar(array $post): string {

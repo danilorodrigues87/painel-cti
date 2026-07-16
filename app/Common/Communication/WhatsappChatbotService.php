@@ -25,10 +25,13 @@ class WhatsappChatbotService {
 		}
 
 		$estado = (string)($conversa->chatbot_estado ?: 'novo');
-		if (in_array($estado, ['humano', 'encerrado'], true)) {
+		$status = (string)($conversa->status ?: '');
+
+		// Atendimento humano ativo: não interferir
+		if ($estado === 'humano' && $status !== 'fechada') {
 			return;
 		}
-		if ($conversa->id_atendente) {
+		if ($conversa->id_atendente && $estado !== 'encerrado' && $status !== 'fechada') {
 			return;
 		}
 
@@ -38,8 +41,18 @@ class WhatsappChatbotService {
 		WhatsappSetor::garantirPadroes($idAdmin);
 		$setores = WhatsappSetor::listarAtivos($idAdmin);
 
+		// Após encerrar: qualquer nova mensagem do cliente reinicia o fluxo (menu)
+		if ($estado === 'encerrado' || $status === 'fechada') {
+			self::reiniciarAtendimento($conversa, $setores);
+			return;
+		}
+
 		if ($estado === 'novo' || $estado === '' || $estado === 'aguardando_setor') {
-			if ($estado === 'aguardando_setor' && $texto !== '') {
+			if ($estado === 'aguardando_setor') {
+				// Imagem/áudio sem texto: só aguarda o número do setor
+				if ($texto === '') {
+					return;
+				}
 				$escolha = self::interpretarEscolha($texto, $setores);
 				if ($escolha !== null) {
 					self::enviarParaSetor($conversa, $escolha);
@@ -69,6 +82,17 @@ class WhatsappChatbotService {
 			]);
 			self::enviarMenu($conversa, $setores);
 		}
+	}
+
+	private static function reiniciarAtendimento(WhatsappConversa $conversa, array $setores): void {
+		$conversa->atualizar([
+			'chatbot_estado' => 'novo',
+			'status'         => 'aberta',
+			'setor_id'       => null,
+			'id_atendente'   => null,
+			'assigned_at'    => null,
+		]);
+		self::enviarMenu($conversa, $setores);
 	}
 
 	private static function pedeMenu(string $texto): bool {
@@ -160,6 +184,131 @@ class WhatsappChatbotService {
 			'status'        => $ok ? 'sent' : 'error',
 		]);
 
+		$conversa->tocarUltimaMensagem();
+		return $ok;
+	}
+
+	/**
+	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
+	 */
+	public static function enviarImagem(WhatsappConversa $conversa, array $arquivo, ?string $caption = null): bool {
+		$instance = self::instanceDaConversa($conversa);
+		if ($instance === '') {
+			return false;
+		}
+
+		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
+		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
+		$path = $root.'/'.$relative;
+		$bin = is_file($path) ? file_get_contents($path) : false;
+		if ($bin === false) {
+			return false;
+		}
+
+		$mime = $arquivo['mimetype'] ?? 'image/jpeg';
+		$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
+
+		$api = EvolutionApiService::fromEnv();
+		$res = $api->sendMedia($instance, (string)$conversa->telefone, $dataUri, 'image', $mime, $caption);
+		$ok = $res !== null && $api->getLastHttpCode() < 400;
+
+		WhatsappMensagem::registrar([
+			'id_admin'      => (int)$conversa->id_admin,
+			'conversa_id'   => (int)$conversa->id,
+			'direction'     => 'out',
+			'tipo'          => 'image',
+			'corpo'         => $caption,
+			'media_url'     => $arquivo['relative'] ?? null,
+			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
+			'status'        => $ok ? 'sent' : 'error',
+		]);
+		$conversa->tocarUltimaMensagem();
+		return $ok;
+	}
+
+	/**
+	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
+	 */
+	public static function enviarDocumento(WhatsappConversa $conversa, array $arquivo, ?string $caption = null, ?string $fileName = null): bool {
+		$instance = self::instanceDaConversa($conversa);
+		if ($instance === '') {
+			return false;
+		}
+
+		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
+		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
+		$path = $root.'/'.$relative;
+		$bin = is_file($path) ? file_get_contents($path) : false;
+		if ($bin === false) {
+			return false;
+		}
+
+		$mime = $arquivo['mimetype'] ?? 'application/octet-stream';
+		if (!$fileName) {
+			$fileName = basename($relative) ?: 'documento';
+		}
+		$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
+
+		$api = EvolutionApiService::fromEnv();
+		$res = $api->sendMedia(
+			$instance,
+			(string)$conversa->telefone,
+			$dataUri,
+			'document',
+			$mime,
+			$caption,
+			$fileName
+		);
+		$ok = $res !== null && $api->getLastHttpCode() < 400;
+
+		WhatsappMensagem::registrar([
+			'id_admin'      => (int)$conversa->id_admin,
+			'conversa_id'   => (int)$conversa->id,
+			'direction'     => 'out',
+			'tipo'          => 'document',
+			'corpo'         => $caption ?: $fileName,
+			'media_url'     => $arquivo['relative'] ?? null,
+			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
+			'status'        => $ok ? 'sent' : 'error',
+		]);
+		$conversa->tocarUltimaMensagem();
+		return $ok;
+	}
+
+	/**
+	 * @param array{relative:string,url:string,mimetype?:?string} $arquivo
+	 */
+	public static function enviarAudio(WhatsappConversa $conversa, array $arquivo): bool {
+		$instance = self::instanceDaConversa($conversa);
+		if ($instance === '') {
+			return false;
+		}
+
+		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
+		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
+		$path = $root.'/'.$relative;
+		$bin = is_file($path) ? file_get_contents($path) : false;
+		if ($bin === false) {
+			return false;
+		}
+
+		$mime = $arquivo['mimetype'] ?? 'audio/ogg';
+		$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
+
+		$api = EvolutionApiService::fromEnv();
+		$res = $api->sendAudio($instance, (string)$conversa->telefone, $dataUri);
+		$ok = $res !== null && $api->getLastHttpCode() < 400;
+
+		WhatsappMensagem::registrar([
+			'id_admin'      => (int)$conversa->id_admin,
+			'conversa_id'   => (int)$conversa->id,
+			'direction'     => 'out',
+			'tipo'          => 'audio',
+			'corpo'         => null,
+			'media_url'     => $arquivo['relative'] ?? null,
+			'wa_message_id' => $res['key']['id'] ?? ($res['message']['key']['id'] ?? null),
+			'status'        => $ok ? 'sent' : 'error',
+		]);
 		$conversa->tocarUltimaMensagem();
 		return $ok;
 	}

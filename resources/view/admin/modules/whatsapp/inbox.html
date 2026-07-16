@@ -43,12 +43,36 @@
 					</div>
 					<div class="card-body overflow-auto flex-grow-1 bg-light" id="wa-mensagens" style="min-height:45vh;max-height:55vh;"></div>
 					<div class="card-footer">
-						<form id="form-wa-enviar" class="d-flex gap-2" onsubmit="return false;">
-							<input type="text" class="form-control" id="wa-texto" placeholder="Digite a mensagem..." disabled>
+						<div class="d-flex flex-wrap gap-1 mb-2" id="wa-emoji-bar">
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>😀</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>😂</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>😍</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>👍</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>🙏</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>❤️</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>🎉</button>
+							<button type="button" class="btn btn-sm btn-light wa-emoji" disabled>✅</button>
+						</div>
+						<form id="form-wa-enviar" class="d-flex gap-2 align-items-end" onsubmit="return false;">
+							<div class="btn-group">
+								<label class="btn btn-outline-secondary mb-0" id="lbl-wa-img" title="Enviar imagem">
+									<i class="fas fa-image"></i>
+									<input type="file" id="wa-input-img" accept="image/*" class="d-none" disabled>
+								</label>
+								<label class="btn btn-outline-secondary mb-0" title="Enviar documento">
+									<i class="fas fa-paperclip"></i>
+									<input type="file" id="wa-input-doc" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.csv,application/pdf" class="d-none" disabled>
+								</label>
+								<button type="button" class="btn btn-outline-secondary" id="btn-wa-audio" title="Gravar áudio" disabled>
+									<i class="fas fa-microphone"></i>
+								</button>
+							</div>
+							<textarea class="form-control" id="wa-texto" rows="2" placeholder="Digite a mensagem (emojis ok)..." disabled></textarea>
 							<button type="button" class="btn btn-success" id="btn-wa-enviar" disabled>
 								<i class="fas fa-paper-plane"></i>
 							</button>
 						</form>
+						<small class="text-muted" id="wa-audio-status"></small>
 					</div>
 				</div>
 			</div>
@@ -101,4 +125,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260716a"></script>
+<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260716d"></script>

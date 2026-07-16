@@ -91,39 +91,31 @@ class EvolutionApiService {
 		];
 
 		if ($webhookUrl) {
-			$body['webhook'] = [
-				'enabled' => true,
-				'url'     => $webhookUrl,
-				'byEvents'=> false,
-				'base64'  => false,
-				'events'  => [
-					'MESSAGES_UPSERT',
-					'CONNECTION_UPDATE',
-					'QRCODE_UPDATED',
-					'SEND_MESSAGE',
-				],
-			];
+			$body['webhook'] = self::payloadWebhook($webhookUrl);
 		}
 
 		return $this->request('POST', '/instance/create', $body);
 	}
 
 	public function setWebhook(string $instance, string $webhookUrl): ?array {
-		$body = [
-			'webhook' => [
-				'enabled' => true,
-				'url'     => $webhookUrl,
-				'byEvents'=> false,
-				'base64'  => false,
-				'events'  => [
-					'MESSAGES_UPSERT',
-					'CONNECTION_UPDATE',
-					'QRCODE_UPDATED',
-					'SEND_MESSAGE',
-				],
+		return $this->request('POST', '/webhook/set/'.rawurlencode($instance), [
+			'webhook' => self::payloadWebhook($webhookUrl),
+		]);
+	}
+
+	private static function payloadWebhook(string $webhookUrl): array {
+		return [
+			'enabled'  => true,
+			'url'      => $webhookUrl,
+			'byEvents' => false,
+			'base64'   => true,
+			'events'   => [
+				'MESSAGES_UPSERT',
+				'CONNECTION_UPDATE',
+				'QRCODE_UPDATED',
+				'SEND_MESSAGE',
 			],
 		];
-		return $this->request('POST', '/webhook/set/'.rawurlencode($instance), $body);
 	}
 
 	public function sendText(string $instance, string $number, string $text): ?array {
@@ -136,6 +128,68 @@ class EvolutionApiService {
 		return $this->request('POST', '/message/sendText/'.rawurlencode($instance), [
 			'number' => $number,
 			'text'   => $text,
+		]);
+	}
+
+	/**
+	 * Envia imagem/documento/vídeo.
+	 * $media = URL pública ou data URI / base64.
+	 */
+	public function sendMedia(
+		string $instance,
+		string $number,
+		string $media,
+		string $mediatype = 'image',
+		?string $mimetype = null,
+		?string $caption = null,
+		?string $fileName = null
+	): ?array {
+		$number = self::normalizarTelefone($number);
+		if ($number === '' || $media === '') {
+			$this->lastError = 'Número ou mídia inválidos.';
+			return null;
+		}
+
+		$body = [
+			'number'    => $number,
+			'mediatype' => $mediatype,
+			'media'     => $media,
+		];
+		if ($mimetype) {
+			$body['mimetype'] = $mimetype;
+		}
+		if ($caption !== null && $caption !== '') {
+			$body['caption'] = $caption;
+		}
+		if ($fileName) {
+			$body['fileName'] = $fileName;
+		}
+
+		return $this->request('POST', '/message/sendMedia/'.rawurlencode($instance), $body);
+	}
+
+	/** Envia áudio como nota de voz (PTT). */
+	public function sendAudio(string $instance, string $number, string $audio): ?array {
+		$number = self::normalizarTelefone($number);
+		if ($number === '' || $audio === '') {
+			$this->lastError = 'Número ou áudio inválidos.';
+			return null;
+		}
+
+		return $this->request('POST', '/message/sendWhatsAppAudio/'.rawurlencode($instance), [
+			'number'   => $number,
+			'audio'    => $audio,
+			'encoding' => true,
+		]);
+	}
+
+	/**
+	 * Baixa mídia de uma mensagem (fallback se webhook não trouxer base64).
+	 */
+	public function getBase64FromMediaMessage(string $instance, array $messagePayload): ?array {
+		return $this->request('POST', '/chat/getBase64FromMediaMessage/'.rawurlencode($instance), [
+			'message' => $messagePayload,
+			'convertToMp4' => false,
 		]);
 	}
 

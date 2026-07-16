@@ -41,3 +41,11 @@ WHERE id = SEU_ID_ADMIN;
 ## Multi-número (futuro)
 
 Tabela `whatsapp_numeros` já existe; hoje sincroniza 1 registro *Principal* ao conectar.
+
+## Mídia (emoji, imagem, áudio)
+
+- Emoji: digite no campo ou use a barra rápida do inbox (UTF-8 / utf8mb4).
+- Imagem: ícone de imagem no inbox (envia com legenda opcional do texto).
+- Áudio: microfone (grava e envia) ou escolha de arquivo se o navegador bloquear o mic.
+- Recebimento: webhook com `base64=true`; arquivos em `uploads/whatsapp/{id_admin}/...`.
+- Após atualizar o código, clique **Conectar / QR** uma vez em Comunicação para reaplicar o webhook com base64.
