@@ -104,18 +104,18 @@ class CampanhaWorker {
 
 			if ($canal === 'whatsapp') {
 				$texto = CampanhaSegmentoHelper::textoParaWhatsapp(
-					CampanhaSegmentoHelper::aplicarVariaveis($campanha->mensagem, $vars)
+					CampanhaSegmentoHelper::aplicarVariaveis((string)($campanha->mensagem ?? ''), $vars)
 				);
-				if ($texto === '') {
-					$item->marcarErro('Mensagem vazia após converter para texto.');
-					$resumo['erros']++;
-					$stats['erros']++;
-					$campanha->recalcularTotais();
-					continue;
-				}
-				$res = $api->sendText($instance, (string)$item->contato, $texto);
-				$ok = $res !== null && $api->getLastHttpCode() < 400;
-				$erroMsg = $api->getLastError() ?: 'Falha no envio WhatsApp.';
+				$segmento = json_decode($campanha->segmento ?? '{}', true) ?: [];
+				$midia = is_array($segmento['midia'] ?? null) ? $segmento['midia'] : null;
+				$envio = WhatsappEscolaService::enviarCampanha(
+					$escolaId,
+					(string)$item->contato,
+					$texto,
+					$midia
+				);
+				$ok = !empty($envio['ok']);
+				$erroMsg = $envio['message'] ?? 'Falha no envio WhatsApp.';
 			} else {
 				$assunto = CampanhaSegmentoHelper::aplicarVariaveis($campanha->assunto ?? $campanha->titulo, $vars);
 				$corpo = CampanhaSegmentoHelper::aplicarVariaveis($campanha->mensagem, $vars);

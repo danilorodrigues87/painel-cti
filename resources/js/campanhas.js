@@ -19,11 +19,16 @@ function badgeCanal(canal){
 function atualizarUiCanal(){
 	const wa = $('#campanha_canal').val() === 'whatsapp';
 	$('#wrap-assunto').toggle(!wa);
-	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp *' : 'Mensagem (HTML simples) *');
+	$('#wrap-emoji-campanha').toggleClass('d-none', !wa);
+	$('#wrap-midia-campanha').toggleClass('d-none', !wa);
+	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp' : 'Mensagem (HTML simples) *');
 	$('#hint-mensagem').text(wa
-		? 'Texto para WhatsApp. Variáveis: {nome}, {whatsapp}, {curso}, {escola}.'
+		? 'Texto e/ou mídia. Variáveis: {nome}, {whatsapp}, {curso}, {escola}. Em áudio, o texto vai como mensagem separada.'
 		: 'No e-mail pode usar HTML simples. Variáveis: {nome}, {email}, {curso}, {escola}.');
 	$('#campanha_assunto').prop('required', !wa);
+	if(!wa){
+		limparMidiaSelecionada(false);
+	}
 	atualizarUiSegmento();
 }
 
@@ -41,8 +46,80 @@ function atualizarUiSegmento(){
 function atualizarUiCanalSemSegmento(){
 	const wa = $('#campanha_canal').val() === 'whatsapp';
 	$('#wrap-assunto').toggle(!wa);
-	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp *' : 'Mensagem (HTML simples) *');
+	$('#wrap-emoji-campanha').toggleClass('d-none', !wa);
+	$('#wrap-midia-campanha').toggleClass('d-none', !wa);
+	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp' : 'Mensagem (HTML simples) *');
 	$('#campanha_assunto').prop('required', !wa);
+}
+
+function inserirEmojiCampanha(emoji){
+	const el = document.getElementById('campanha_mensagem');
+	if(!el) return;
+	const $t = $(el);
+	const val = $t.val() || '';
+	const start = el.selectionStart != null ? el.selectionStart : val.length;
+	const end = el.selectionEnd != null ? el.selectionEnd : val.length;
+	$t.val(val.substring(0, start) + emoji + val.substring(end));
+	el.focus();
+	const pos = start + emoji.length;
+	if(el.setSelectionRange) el.setSelectionRange(pos, pos);
+}
+
+function limparMidiaSelecionada(marcarRemocao){
+	$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').val('');
+	$('#campanha_midia_tipo').val('');
+	window._campanhaArquivo = null;
+	window._campanhaMidiaExistente = null;
+	if(marcarRemocao){
+		$('#campanha_remover_midia').val('1');
+	} else {
+		$('#campanha_remover_midia').val('0');
+	}
+	atualizarInfoMidia();
+}
+
+function atualizarInfoMidia(){
+	const $info = $('#campanha-midia-info');
+	const $btnRem = $('#btn-remover-midia-campanha');
+	const arquivo = window._campanhaArquivo;
+	const existente = window._campanhaMidiaExistente;
+	const remover = $('#campanha_remover_midia').val() === '1';
+
+	if(arquivo && arquivo.file){
+		const tipoLabel = { image: 'Imagem', document: 'Documento', audio: 'Áudio' }[arquivo.tipo] || 'Arquivo';
+		$info.html('<span class="text-success"><i class="fas fa-check-circle"></i> '+escHtml(tipoLabel)+': '+escHtml(arquivo.file.name)+'</span>');
+		$btnRem.removeClass('d-none');
+		return;
+	}
+	if(existente && !remover){
+		const tipoLabel = { image: 'Imagem', document: 'Documento', audio: 'Áudio' }[existente.tipo] || 'Mídia';
+		const nome = existente.nome || 'arquivo';
+		let extra = '';
+		if(existente.url && existente.tipo === 'image'){
+			extra = ' <a href="'+escHtml(existente.url)+'" target="_blank" rel="noopener">ver</a>';
+		}
+		$info.html('<span class="text-primary"><i class="fas fa-paperclip"></i> '+escHtml(tipoLabel)+' já salva: '+escHtml(nome)+'</span>'+extra);
+		$btnRem.removeClass('d-none');
+		return;
+	}
+	$info.text('Nenhuma mídia anexada. A mensagem vira legenda (imagem/documento) ou texto após o áudio.');
+	$btnRem.addClass('d-none');
+}
+
+function selecionarArquivoCampanha(tipo, input){
+	const file = input.files && input.files[0] ? input.files[0] : null;
+	$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').not(input).val('');
+	if(!file){
+		window._campanhaArquivo = null;
+		$('#campanha_midia_tipo').val('');
+		atualizarInfoMidia();
+		return;
+	}
+	window._campanhaArquivo = { tipo: tipo, file: file };
+	window._campanhaMidiaExistente = null;
+	$('#campanha_midia_tipo').val(tipo);
+	$('#campanha_remover_midia').val('0');
+	atualizarInfoMidia();
 }
 
 function coletarDestinosGrupos(){
@@ -162,8 +239,24 @@ function coletarFormulario(){
 		mensagem: $('#campanha_mensagem').val(),
 		segmento_tipo: $('#segmento_tipo').val(),
 		status_lead: $('#status_lead').val(),
-		destinos_json: JSON.stringify(coletarDestinosGrupos())
+		destinos_json: JSON.stringify(coletarDestinosGrupos()),
+		midia_tipo: $('#campanha_midia_tipo').val() || '',
+		remover_midia: $('#campanha_remover_midia').val() || '0'
 	};
+}
+
+function montarFormDataSalvar(){
+	const dados = coletarFormulario();
+	const fd = new FormData();
+	Object.keys(dados).forEach(function(k){
+		fd.append(k, dados[k] == null ? '' : dados[k]);
+	});
+	if(dados.canal === 'whatsapp' && window._campanhaArquivo && window._campanhaArquivo.file){
+		fd.append('arquivo', window._campanhaArquivo.file);
+		fd.set('midia_tipo', window._campanhaArquivo.tipo);
+		fd.set('remover_midia', '0');
+	}
+	return fd;
 }
 
 function limparFormulario(){
@@ -178,6 +271,7 @@ function limparFormulario(){
 	$('#titulo-modal-campanha').text('Nova campanha');
 	$('#wrap-status-lead').hide();
 	$('#lista-grupos-wa').html('<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>');
+	limparMidiaSelecionada(false);
 	atualizarUiCanal();
 }
 
@@ -197,8 +291,29 @@ function carregarCampanhas(){
 }
 
 function salvarCampanha(){
-	const dados = coletarFormulario();
-	$.post(url_base + CAMPANHAS_URL, dados, function(res){
+	const canal = $('#campanha_canal').val();
+	const mensagem = ($('#campanha_mensagem').val() || '').trim();
+	const temArquivo = !!(window._campanhaArquivo && window._campanhaArquivo.file);
+	const temMidiaExistente = !!(window._campanhaMidiaExistente && $('#campanha_remover_midia').val() !== '1');
+	if(canal === 'whatsapp' && !mensagem && !temArquivo && !temMidiaExistente){
+		Swal.fire('Atenção', 'Informe uma mensagem e/ou anexe imagem, documento ou áudio.', 'warning');
+		return;
+	}
+	if(canal === 'email' && (!($('#campanha_assunto').val() || '').trim() || !mensagem)){
+		Swal.fire('Atenção', 'Preencha assunto e mensagem do e-mail.', 'warning');
+		return;
+	}
+
+	$('#btn-salvar-campanha').prop('disabled', true);
+	$.ajax({
+		url: url_base + CAMPANHAS_URL,
+		method: 'POST',
+		data: montarFormDataSalvar(),
+		processData: false,
+		contentType: false,
+		dataType: 'json'
+	}).done(function(res){
+		$('#btn-salvar-campanha').prop('disabled', false);
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Não foi possível salvar.', 'error');
 			return;
@@ -206,7 +321,10 @@ function salvarCampanha(){
 		Swal.fire('Salvo', res.message, 'success');
 		$('#modalCampanha').modal('hide');
 		carregarCampanhas();
-	}, 'json');
+	}).fail(function(){
+		$('#btn-salvar-campanha').prop('disabled', false);
+		Swal.fire('Erro', 'Falha ao salvar campanha.', 'error');
+	});
 }
 
 function previewPublico(){
@@ -270,11 +388,23 @@ function abrirDetalhes(id){
 			errosHtml += '</ul>';
 		}
 
+		let midiaHtml = '';
+		const midia = c.midia || null;
+		if(midia && midia.tipo){
+			const tipoLabel = { image: 'Imagem', document: 'Documento', audio: 'Áudio' }[midia.tipo] || midia.tipo;
+			const link = midia.url ? ' — <a href="'+escHtml(midia.url)+'" target="_blank" rel="noopener">abrir</a>' : '';
+			midiaHtml = '<p><strong>Mídia:</strong> '+escHtml(tipoLabel)+' ('+escHtml(midia.nome || 'arquivo')+')'+link+'</p>';
+			if(midia.tipo === 'image' && midia.url){
+				midiaHtml += '<div class="mb-2"><img src="'+escHtml(midia.url)+'" alt="" class="img-fluid rounded border" style="max-height:180px;"></div>';
+			}
+		}
+
 		$('#body-detalhes-campanha').html(`
 			<p><strong>Canal:</strong> ${escHtml(c.canal_label || c.canal)}</p>
 			<p><strong>Assunto:</strong> ${escHtml(res.assunto || '—')}</p>
 			<p><strong>Status:</strong> ${escHtml(c.status_label)}</p>
 			<p><strong>Progresso:</strong> ${c.enviados} enviados, ${c.erros} erros, ${c.pendentes} pendentes de ${c.total}</p>
+			${midiaHtml}
 			<div class="border rounded p-3 bg-light small" style="white-space:pre-wrap;">${escHtml(res.mensagem)}</div>
 			${errosHtml}
 		`);
@@ -298,7 +428,13 @@ function editarCampanha(id){
 		$('#segmento_tipo').val(seg.tipo || 'alunos_matriculados');
 		$('#status_lead').val(seg.status_lead || '');
 		$('#titulo-modal-campanha').text('Editar campanha');
+		window._campanhaArquivo = null;
+		window._campanhaMidiaExistente = c.midia || seg.midia || null;
+		$('#campanha_remover_midia').val('0');
+		$('#campanha_midia_tipo').val(window._campanhaMidiaExistente ? (window._campanhaMidiaExistente.tipo || '') : '');
+		$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').val('');
 		atualizarUiCanal();
+		atualizarInfoMidia();
 		if(seg.tipo === 'whatsapp_grupos'){
 			const sel = {};
 			(seg.destinos || []).forEach(function(d){ if(d.jid) sel[d.jid] = true; });
@@ -324,6 +460,9 @@ function processarFila(){
 }
 
 $(function(){
+	window._campanhaArquivo = null;
+	window._campanhaMidiaExistente = null;
+
 	carregarCampanhas();
 	atualizarUiCanal();
 
@@ -337,6 +476,22 @@ $(function(){
 	$('#btn-processar-fila').on('click', processarFila);
 
 	$('#modalCampanha').on('hidden.bs.modal', limparFormulario);
+
+	$(document).on('click', '.camp-emoji', function(){
+		inserirEmojiCampanha($(this).text());
+	});
+	$('#campanha_arquivo_img').on('change', function(){
+		selecionarArquivoCampanha('image', this);
+	});
+	$('#campanha_arquivo_doc').on('change', function(){
+		selecionarArquivoCampanha('document', this);
+	});
+	$('#campanha_arquivo_audio').on('change', function(){
+		selecionarArquivoCampanha('audio', this);
+	});
+	$('#btn-remover-midia-campanha').on('click', function(){
+		limparMidiaSelecionada(true);
+	});
 
 	$(document).on('click', '.btn-iniciar', function(){
 		acaoCampanha('iniciar', $(this).data('id'), true);

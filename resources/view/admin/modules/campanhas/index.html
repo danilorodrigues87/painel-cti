@@ -111,8 +111,41 @@
 						</div>
 						<div class="col-12">
 							<label class="form-label" for="campanha_mensagem" id="label-mensagem">Mensagem *</label>
-							<textarea class="form-control" id="campanha_mensagem" rows="8" required placeholder="Olá {nome}, ..."></textarea>
+							<div id="wrap-emoji-campanha" class="d-none mb-2">
+								<button type="button" class="btn btn-sm btn-light camp-emoji">😀</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">😂</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">😍</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">👍</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">🙏</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">❤️</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">🎉</button>
+								<button type="button" class="btn btn-sm btn-light camp-emoji">✅</button>
+							</div>
+							<textarea class="form-control" id="campanha_mensagem" rows="8" placeholder="Olá {nome}, ..."></textarea>
 							<div class="form-text" id="hint-mensagem">No e-mail pode usar HTML simples. No WhatsApp o HTML vira texto.</div>
+						</div>
+						<div class="col-12 d-none" id="wrap-midia-campanha">
+							<label class="form-label">Mídia WhatsApp (opcional)</label>
+							<div class="d-flex flex-wrap gap-2 mb-2">
+								<label class="btn btn-outline-secondary btn-sm mb-0">
+									<i class="fas fa-image"></i> Imagem
+									<input type="file" id="campanha_arquivo_img" accept="image/*" class="d-none">
+								</label>
+								<label class="btn btn-outline-secondary btn-sm mb-0">
+									<i class="fas fa-paperclip"></i> Documento
+									<input type="file" id="campanha_arquivo_doc" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.csv,application/pdf" class="d-none">
+								</label>
+								<label class="btn btn-outline-secondary btn-sm mb-0">
+									<i class="fas fa-file-audio"></i> Áudio
+									<input type="file" id="campanha_arquivo_audio" accept="audio/*,.ogg,.opus,.mp3,.wav,.m4a,.webm" class="d-none">
+								</label>
+								<button type="button" class="btn btn-outline-danger btn-sm d-none" id="btn-remover-midia-campanha">
+									Remover mídia
+								</button>
+							</div>
+							<div class="small text-muted" id="campanha-midia-info">Nenhuma mídia anexada. A mensagem vira legenda (imagem/documento) ou texto após o áudio.</div>
+							<input type="hidden" id="campanha_midia_tipo" value="">
+							<input type="hidden" id="campanha_remover_midia" value="0">
 						</div>
 						<div class="col-12">
 							<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-preview-campanha">
@@ -146,4 +179,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260716b"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260716c"></script>

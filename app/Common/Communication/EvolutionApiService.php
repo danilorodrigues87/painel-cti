@@ -226,7 +226,7 @@ class EvolutionApiService {
 		?string $caption = null,
 		?string $fileName = null
 	): ?array {
-		$number = self::normalizarTelefone($number);
+		$number = self::normalizarDestino($number);
 		if ($number === '' || $media === '') {
 			$this->lastError = 'Número ou mídia inválidos.';
 			return null;
@@ -319,7 +319,7 @@ class EvolutionApiService {
 	 * Status "gravando áudio..." no WhatsApp do destinatário (best-effort).
 	 */
 	public function sendPresence(string $instance, string $number, string $presence = 'recording'): ?array {
-		$number = self::normalizarTelefone($number);
+		$number = self::normalizarDestino($number);
 		if ($number === '') {
 			return null;
 		}
@@ -335,7 +335,7 @@ class EvolutionApiService {
 	 * Nunca usa documento. encoding=true pede conversão Opus na Evolution.
 	 */
 	public function sendAudio(string $instance, string $number, string $audio, ?string $mimetype = null): ?array {
-		$number = self::normalizarTelefone($number);
+		$number = self::normalizarDestino($number);
 		if ($number === '' || $audio === '') {
 			$this->lastError = 'Número ou áudio inválidos.';
 			return null;

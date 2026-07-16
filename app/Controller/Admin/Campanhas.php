@@ -7,6 +7,7 @@ use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Common\Communication\CampanhaWorker;
 use App\Common\Communication\WhatsappEscolaService;
+use App\Common\Communication\WhatsappMediaStorage;
 use App\Model\Entity\Campanhas as EntityCampanhas;
 use App\Model\Entity\CampanhaFila;
 use App\Common\Communication\EvolutionApiService;
@@ -109,6 +110,7 @@ class Campanhas extends Page {
 			'criada_em'   => $c->criada_em ? date('d/m/Y H:i', strtotime($c->criada_em)) : '',
 			'segmento'    => json_decode($c->segmento ?? '{}', true) ?: [],
 			'mensagem'    => $c->mensagem,
+			'midia'       => self::extrairMidiaSegmento($c->segmento ?? null),
 		];
 	}
 
@@ -123,12 +125,13 @@ class Campanhas extends Page {
 		$tipoSegmento = $postVars['segmento_tipo'] ?? 'alunos_matriculados';
 		$statusLead = $postVars['status_lead'] ?? '';
 		$id = (int)($postVars['id'] ?? 0);
+		$removerMidia = !empty($postVars['remover_midia']);
 
-		if ($titulo === '' || $mensagem === '') {
-			return json_encode(['success' => false, 'message' => 'Preencha título e mensagem.']);
+		if ($titulo === '') {
+			return json_encode(['success' => false, 'message' => 'Preencha o título.']);
 		}
-		if ($canal === 'email' && $assunto === '') {
-			return json_encode(['success' => false, 'message' => 'Preencha o assunto do e-mail.']);
+		if ($canal === 'email' && ($assunto === '' || $mensagem === '')) {
+			return json_encode(['success' => false, 'message' => 'Preencha assunto e mensagem do e-mail.']);
 		}
 		if ($canal === 'whatsapp' && $assunto === '') {
 			$assunto = $titulo;
@@ -163,12 +166,45 @@ class Campanhas extends Page {
 			if (!in_array($ob->status, ['rascunho', 'pausada'], true)) {
 				return json_encode(['success' => false, 'message' => 'Esta campanha não pode ser editada.']);
 			}
+			$segAntigo = json_decode($ob->segmento ?? '{}', true) ?: [];
+			if (!$removerMidia && empty($_FILES['arquivo']['tmp_name']) && !empty($segAntigo['midia'])) {
+				$segmento['midia'] = $segAntigo['midia'];
+			}
 		} else {
 			$ob = new EntityCampanhas;
 			$ob->id_admin = $idAdmin;
 			$ob->criada_por = $usuarioId;
 			$ob->tipo = 'manual';
 			$ob->status = 'rascunho';
+		}
+
+		if ($canal === 'whatsapp' && !$removerMidia && !empty($_FILES['arquivo']) && is_array($_FILES['arquivo'])) {
+			$midiaTipo = strtolower(trim((string)($postVars['midia_tipo'] ?? '')));
+			if (!in_array($midiaTipo, ['image', 'document', 'audio'], true)) {
+				$ft = (string)($_FILES['arquivo']['type'] ?? '');
+				if (strpos($ft, 'image/') === 0) {
+					$midiaTipo = 'image';
+				} elseif (strpos($ft, 'audio/') === 0) {
+					$midiaTipo = 'audio';
+				} else {
+					$midiaTipo = 'document';
+				}
+			}
+			$saved = WhatsappMediaStorage::salvarUpload($idAdmin, $_FILES['arquivo']);
+			if (!$saved) {
+				return json_encode(['success' => false, 'message' => 'Falha ao salvar mídia (máx. 15 MB).']);
+			}
+			$segmento['midia'] = [
+				'tipo' => $midiaTipo,
+				'path' => $saved['relative'],
+				'nome' => basename((string)($_FILES['arquivo']['name'] ?? $saved['relative'])),
+				'mime' => $saved['mimetype'] ?? null,
+				'url'  => $saved['url'] ?? WhatsappMediaStorage::urlPublica($saved['relative']),
+			];
+		}
+
+		if ($canal === 'whatsapp' && $mensagem === '' && empty($segmento['midia'])) {
+			return json_encode(['success' => false, 'message' => 'Informe uma mensagem e/ou anexe imagem, documento ou áudio.']);
 		}
 
 		$ob->canal = $canal;
@@ -422,5 +458,21 @@ class Campanhas extends Page {
 			return $canal;
 		}
 		return '';
+	}
+
+	private static function extrairMidiaSegmento($segmentoRaw): ?array {
+		$seg = is_array($segmentoRaw) ? $segmentoRaw : (json_decode((string)$segmentoRaw, true) ?: []);
+		$m = $seg['midia'] ?? null;
+		if (!is_array($m) || empty($m['path'])) {
+			return null;
+		}
+		$path = (string)$m['path'];
+		return [
+			'tipo' => (string)($m['tipo'] ?? 'document'),
+			'path' => $path,
+			'nome' => (string)($m['nome'] ?? basename($path)),
+			'mime' => $m['mime'] ?? null,
+			'url'  => $m['url'] ?? WhatsappMediaStorage::urlPublica($path),
+		];
 	}
 }

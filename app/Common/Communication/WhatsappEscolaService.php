@@ -557,6 +557,84 @@ class WhatsappEscolaService {
 	}
 
 	/**
+	 * Envio de campanha WhatsApp (texto e/ou mídia) para telefone, grupo ou lista.
+	 * @param array{tipo?:string,path?:string,nome?:string,mime?:string}|null $midia
+	 * @return array{ok:bool,message:string}
+	 */
+	public static function enviarCampanha(int $idAdmin, string $destino, string $texto, ?array $midia = null): array {
+		$status = self::status($idAdmin);
+		if (empty($status['conectado'])) {
+			return ['ok' => false, 'message' => 'WhatsApp não está conectado.'];
+		}
+
+		$instance = (string)$status['instance'];
+		$api = EvolutionApiService::fromEnv();
+		$destino = EvolutionApiService::normalizarDestino($destino);
+		if ($destino === '') {
+			return ['ok' => false, 'message' => 'Destino inválido.'];
+		}
+
+		$texto = trim($texto);
+		$tipoMidia = strtolower((string)($midia['tipo'] ?? ''));
+		$pathRel = ltrim(str_replace('\\', '/', (string)($midia['path'] ?? '')), '/');
+		$pathAbs = $pathRel !== '' ? self::caminhoUploadAbsoluto($pathRel) : null;
+		$mime = $midia['mime'] ?? null;
+		$nome = $midia['nome'] ?? ($pathAbs ? basename($pathAbs) : null);
+
+		if (in_array($tipoMidia, ['image', 'document', 'audio'], true)) {
+			if ($pathAbs === null || !is_file($pathAbs)) {
+				return ['ok' => false, 'message' => 'Arquivo de mídia da campanha não encontrado no servidor.'];
+			}
+
+			if ($tipoMidia === 'audio') {
+				$res = $api->sendAudio($instance, $destino, $pathAbs, is_string($mime) ? $mime : null);
+				if ($res === null || $api->getLastHttpCode() >= 400) {
+					return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar áudio.'];
+				}
+				if ($texto !== '') {
+					$api->sendText($instance, $destino, $texto);
+				}
+				return ['ok' => true, 'message' => 'Áudio enviado.'];
+			}
+
+			$mediatype = $tipoMidia === 'document' ? 'document' : 'image';
+			$res = $api->sendMedia(
+				$instance,
+				$destino,
+				$pathAbs,
+				$mediatype,
+				is_string($mime) ? $mime : null,
+				$texto !== '' ? $texto : null,
+				is_string($nome) ? $nome : null
+			);
+			if ($res === null || $api->getLastHttpCode() >= 400) {
+				return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar mídia.'];
+			}
+			return ['ok' => true, 'message' => 'Mídia enviada.'];
+		}
+
+		if ($texto === '') {
+			return ['ok' => false, 'message' => 'Mensagem vazia.'];
+		}
+
+		$res = $api->sendText($instance, $destino, $texto);
+		if ($res === null || $api->getLastHttpCode() >= 400) {
+			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar mensagem.'];
+		}
+		return ['ok' => true, 'message' => 'Mensagem enviada.'];
+	}
+
+	private static function caminhoUploadAbsoluto(string $relative): ?string {
+		$relative = ltrim(str_replace(['..', '\\'], ['', '/'], $relative), '/');
+		if ($relative === '' || strpos($relative, 'uploads/') !== 0) {
+			return null;
+		}
+		$root = rtrim(str_replace('\\', '/', realpath(__DIR__.'/../../../') ?: (__DIR__.'/../../..')), '/');
+		$abs = $root.'/'.$relative;
+		return is_file($abs) ? $abs : null;
+	}
+
+	/**
 	 * @param bool $apagarInstancia true = remove na Evolution (necessário para trocar número com certeza)
 	 */
 	public static function desconectar(int $idAdmin, bool $apagarInstancia = false): array {
