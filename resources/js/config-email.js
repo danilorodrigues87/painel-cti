@@ -393,9 +393,15 @@ function preencherAniversario(data){
 	}
 
 	$('#aniversario_ativo').prop('checked', parseInt(a.aniversario_ativo, 10) === 1);
+	$('#aniversario_whatsapp_ativo').prop('checked', parseInt(a.aniversario_whatsapp_ativo, 10) === 1);
 	$('#aniversario_apenas_matriculados').prop('checked', parseInt(a.aniversario_apenas_matriculados, 10) === 1);
 	$('#aniversario_assunto').val(a.aniversario_assunto || tpl.assunto || '');
 	$('#aniversario_mensagem').val(a.aniversario_mensagem || tpl.mensagem || '');
+	if(!a.wa_automacao_ok){
+		$('#alert-aniversario-sql').removeClass('d-none').append(
+			'<br>Para WhatsApp automático, execute: <code>ALTER TABLE escola_integracoes ADD COLUMN aniversario_whatsapp_ativo TINYINT(1) NOT NULL DEFAULT 0;</code>'
+		);
+	}
 }
 
 function preencherCobranca(data){
@@ -415,6 +421,12 @@ function preencherCobranca(data){
 	$('#cobranca_aviso_vencimento').prop('checked', parseInt(c.cobranca_aviso_vencimento, 10) === 1);
 	$('#cobranca_dias_depois').val(c.cobranca_dias_depois || '1,3,7');
 	$('#cobranca_enviar_responsavel').prop('checked', parseInt(c.cobranca_enviar_responsavel, 10) === 1);
+	$('#cobranca_whatsapp_ativo').prop('checked', parseInt(c.cobranca_whatsapp_ativo, 10) === 1);
+	if(!c.wa_automacao_ok){
+		$('#alert-cobranca-sql').removeClass('d-none').append(
+			'<br>Para WhatsApp automático, execute: <code>ALTER TABLE escola_integracoes ADD COLUMN cobranca_whatsapp_ativo TINYINT(1) NOT NULL DEFAULT 0;</code>'
+		);
+	}
 
 	$('#cobranca_assunto_antes').val(c.cobranca_assunto_antes || tpl.assunto_antes || '');
 	$('#cobranca_assunto_vencimento').val(c.cobranca_assunto_vencimento || tpl.assunto_vencimento || '');
@@ -442,6 +454,7 @@ function coletarDadosFormulario(){
 		cobranca_aviso_vencimento: $('#cobranca_aviso_vencimento').is(':checked') ? 1 : 0,
 		cobranca_dias_depois: $('#cobranca_dias_depois').val(),
 		cobranca_enviar_responsavel: $('#cobranca_enviar_responsavel').is(':checked') ? 1 : 0,
+		cobranca_whatsapp_ativo: $('#cobranca_whatsapp_ativo').is(':checked') ? 1 : 0,
 		cobranca_assunto_antes: $('#cobranca_assunto_antes').val(),
 		cobranca_assunto_vencimento: $('#cobranca_assunto_vencimento').val(),
 		cobranca_assunto_atraso: $('#cobranca_assunto_atraso').val(),
@@ -449,6 +462,7 @@ function coletarDadosFormulario(){
 		cobranca_msg_vencimento: $('#cobranca_msg_vencimento').val(),
 		cobranca_msg_atraso: $('#cobranca_msg_atraso').val(),
 		aniversario_ativo: $('#aniversario_ativo').is(':checked') ? 1 : 0,
+		aniversario_whatsapp_ativo: $('#aniversario_whatsapp_ativo').is(':checked') ? 1 : 0,
 		aniversario_apenas_matriculados: $('#aniversario_apenas_matriculados').is(':checked') ? 1 : 0,
 		aniversario_assunto: $('#aniversario_assunto').val(),
 		aniversario_mensagem: $('#aniversario_mensagem').val()

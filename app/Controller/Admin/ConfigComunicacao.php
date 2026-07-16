@@ -321,6 +321,7 @@ class ConfigComunicacao extends Page {
 			'cobranca_aviso_vencimento'  => 1,
 			'cobranca_dias_depois'       => '1,3,7',
 			'cobranca_enviar_responsavel'=> 1,
+			'cobranca_whatsapp_ativo'    => 0,
 			'cobranca_assunto_antes'     => '',
 			'cobranca_assunto_vencimento'=> '',
 			'cobranca_assunto_atraso'    => '',
@@ -329,6 +330,7 @@ class ConfigComunicacao extends Page {
 			'cobranca_msg_atraso'        => '',
 			'colunas_ok'                 => EscolaIntegracoes::temColunasCobranca(),
 			'log_ok'                     => \App\Model\Entity\EmailCobrancaLog::tabelaExiste(),
+			'wa_automacao_ok'            => EscolaIntegracoes::temColunasWhatsappAutomacao(),
 		];
 
 		if ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunasCobranca()) {
@@ -337,6 +339,7 @@ class ConfigComunicacao extends Page {
 			$padrao['cobranca_aviso_vencimento'] = (int)($integracao->cobranca_aviso_vencimento ?? 1);
 			$padrao['cobranca_dias_depois'] = $integracao->cobranca_dias_depois ?? '1,3,7';
 			$padrao['cobranca_enviar_responsavel'] = (int)($integracao->cobranca_enviar_responsavel ?? 1);
+			$padrao['cobranca_whatsapp_ativo'] = (int)($integracao->cobranca_whatsapp_ativo ?? 0);
 			$padrao['cobranca_assunto_antes'] = $integracao->cobranca_assunto_antes ?? '';
 			$padrao['cobranca_assunto_vencimento'] = $integracao->cobranca_assunto_vencimento ?? '';
 			$padrao['cobranca_assunto_atraso'] = $integracao->cobranca_assunto_atraso ?? '';
@@ -358,6 +361,7 @@ class ConfigComunicacao extends Page {
 		$ob->cobranca_aviso_vencimento = !empty($postVars['cobranca_aviso_vencimento']) ? 1 : 0;
 		$ob->cobranca_dias_depois = trim($postVars['cobranca_dias_depois'] ?? '1,3,7');
 		$ob->cobranca_enviar_responsavel = !empty($postVars['cobranca_enviar_responsavel']) ? 1 : 0;
+		$ob->cobranca_whatsapp_ativo = !empty($postVars['cobranca_whatsapp_ativo']) ? 1 : 0;
 		$ob->cobranca_assunto_antes = trim($postVars['cobranca_assunto_antes'] ?? '');
 		$ob->cobranca_assunto_vencimento = trim($postVars['cobranca_assunto_vencimento'] ?? '');
 		$ob->cobranca_assunto_atraso = trim($postVars['cobranca_assunto_atraso'] ?? '');
@@ -393,16 +397,19 @@ class ConfigComunicacao extends Page {
 		$padrao = [
 			'aniversario_ativo' => 0,
 			'aniversario_apenas_matriculados' => 1,
+			'aniversario_whatsapp_ativo' => 0,
 			'aniversario_assunto' => '',
 			'aniversario_mensagem' => '',
 			'colunas_ok' => EscolaIntegracoes::temColunasAniversario(),
 			'log_ok' => EmailAniversarioLog::tabelaExiste(),
+			'wa_automacao_ok' => EscolaIntegracoes::temColunasWhatsappAutomacao(),
 			'templates' => $tpl,
 		];
 
 		if ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunasAniversario()) {
 			$padrao['aniversario_ativo'] = (int)($integracao->aniversario_ativo ?? 0);
 			$padrao['aniversario_apenas_matriculados'] = (int)($integracao->aniversario_apenas_matriculados ?? 1);
+			$padrao['aniversario_whatsapp_ativo'] = (int)($integracao->aniversario_whatsapp_ativo ?? 0);
 			$padrao['aniversario_assunto'] = $integracao->aniversario_assunto ?? '';
 			$padrao['aniversario_mensagem'] = $integracao->aniversario_mensagem ?? '';
 		}
@@ -416,6 +423,7 @@ class ConfigComunicacao extends Page {
 		}
 		$ob->aniversario_ativo = !empty($postVars['aniversario_ativo']) ? 1 : 0;
 		$ob->aniversario_apenas_matriculados = !empty($postVars['aniversario_apenas_matriculados']) ? 1 : 0;
+		$ob->aniversario_whatsapp_ativo = !empty($postVars['aniversario_whatsapp_ativo']) ? 1 : 0;
 		$ob->aniversario_assunto = trim($postVars['aniversario_assunto'] ?? '');
 		$ob->aniversario_mensagem = trim($postVars['aniversario_mensagem'] ?? '');
 	}

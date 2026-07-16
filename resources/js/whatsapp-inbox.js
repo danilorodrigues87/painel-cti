@@ -8,6 +8,8 @@ let waMediaRecorder = null;
 let waAudioChunks = [];
 let waGravando = false;
 let waAudioStream = null;
+let waFiltro = 'todas';
+let waBuscaTimer = null;
 
 function waPost(data, cb, silentFail){
 	$.post(url_base + WA_URL, data, cb, 'json').fail(function(){
@@ -87,7 +89,11 @@ function setChatEnabled(on){
 }
 
 function carregarConversas(){
-	waPost({ acao: 'listar' }, function(res){
+	waPost({
+		acao: 'listar',
+		filtro: waFiltro,
+		busca: ($('#wa-busca').val() || '').trim()
+	}, function(res){
 		if(!res || !res.success){
 			$('#alert-wa-sql').removeClass('d-none').text((res && res.message) ? res.message : 'Não foi possível listar.');
 			return;
@@ -108,19 +114,20 @@ function carregarConversas(){
 		const lista = res.conversas || [];
 		const $box = $('#wa-lista-conversas').empty();
 		if(!lista.length){
-			$box.append('<div class="p-3 text-muted small">Nenhuma conversa ainda.</div>');
+			$box.append('<div class="p-3 text-muted small">Nenhuma conversa neste filtro.</div>');
 			return;
 		}
 		lista.forEach(function(c){
 			const ativo = waConversaId === parseInt(c.id, 10) ? ' active' : '';
 			const nome = c.nome_contato || c.telefone;
 			const setor = c.setor_nome ? ' · '+c.setor_nome : '';
+			const atend = c.atendente_nome ? ' · '+c.atendente_nome : '';
 			const st = c.chatbot_estado || c.status || '';
 			$box.append(
 				'<a href="#" class="list-group-item list-group-item-action'+ativo+'" data-id="'+c.id+'">'
 				+'<div class="d-flex justify-content-between"><strong class="text-truncate">'+esc(nome)+'</strong>'
 				+'<span class="badge bg-secondary">'+esc(st)+'</span></div>'
-				+'<div class="small text-muted">'+esc(c.telefone)+esc(setor)+'</div>'
+				+'<div class="small text-muted">'+esc(c.telefone)+esc(setor)+esc(atend)+'</div>'
 				+'</a>'
 			);
 		});
@@ -482,18 +489,52 @@ $(function(){
 				opts[s.id] = s.nome;
 			});
 			Swal.fire({
-				title: 'Transferir para setor',
+				title: '1/2 — Escolha o setor',
 				input: 'select',
 				inputOptions: opts,
-				showCancelButton: true
+				showCancelButton: true,
+				confirmButtonText: 'Continuar'
 			}).then(function(r){
 				if(!r.isConfirmed) return;
-				waPost({ acao: 'transferir', conversa_id: waConversaId, setor_id: r.value }, function(res2){
-					Swal.fire(res2 && res2.success ? 'OK' : 'Erro', (res2 && res2.message) || '', res2 && res2.success ? 'success' : 'error');
-					abrirConversa(waConversaId);
+				const setorId = r.value;
+				waPost({ acao: 'atendentes_setor', setor_id: setorId }, function(resAt){
+					const optsAt = { '0': 'Fila do setor (sem atendente)' };
+					(resAt.atendentes || []).forEach(function(a){
+						optsAt[String(a.usuario_id)] = a.usuario_nome;
+					});
+					Swal.fire({
+						title: '2/2 — Atendente (opcional)',
+						input: 'select',
+						inputOptions: optsAt,
+						inputValue: '0',
+						showCancelButton: true,
+						confirmButtonText: 'Transferir'
+					}).then(function(r2){
+						if(!r2.isConfirmed) return;
+						waPost({
+							acao: 'transferir',
+							conversa_id: waConversaId,
+							setor_id: setorId,
+							atendente_id: r2.value
+						}, function(res2){
+							Swal.fire(res2 && res2.success ? 'OK' : 'Erro', (res2 && res2.message) || '', res2 && res2.success ? 'success' : 'error');
+							abrirConversa(waConversaId);
+						});
+					});
 				});
 			});
 		});
+	});
+
+	$('#wa-filtros').on('click', 'button[data-filtro]', function(){
+		$('#wa-filtros button').removeClass('active');
+		$(this).addClass('active');
+		waFiltro = $(this).data('filtro') || 'todas';
+		carregarConversas();
+	});
+	$('#wa-busca').on('input', function(){
+		clearTimeout(waBuscaTimer);
+		waBuscaTimer = setTimeout(carregarConversas, 350);
 	});
 
 	$('button[data-bs-target="#tab-config"]').on('shown.bs.tab', carregarSetoresConfig);

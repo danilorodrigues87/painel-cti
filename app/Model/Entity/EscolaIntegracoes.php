@@ -29,6 +29,7 @@ class EscolaIntegracoes {
 	public $cobranca_aviso_vencimento = 1;
 	public $cobranca_dias_depois = '1,3,7';
 	public $cobranca_enviar_responsavel = 1;
+	public $cobranca_whatsapp_ativo = 0;
 	public $cobranca_assunto_antes;
 	public $cobranca_assunto_vencimento;
 	public $cobranca_assunto_atraso;
@@ -37,6 +38,7 @@ class EscolaIntegracoes {
 	public $cobranca_msg_atraso;
 	public $aniversario_ativo = 0;
 	public $aniversario_apenas_matriculados = 1;
+	public $aniversario_whatsapp_ativo = 0;
 	public $aniversario_assunto;
 	public $aniversario_mensagem;
 	public $evolution_instance;
@@ -82,6 +84,26 @@ class EscolaIntegracoes {
 				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
 			);
 			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'aniversario_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public static function temColunasWhatsappAutomacao(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'cobranca_whatsapp_ativo'");
 			$cache = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$cache = false;
@@ -179,6 +201,9 @@ class EscolaIntegracoes {
 			$dados['cobranca_msg_antes'] = $this->cobranca_msg_antes;
 			$dados['cobranca_msg_vencimento'] = $this->cobranca_msg_vencimento;
 			$dados['cobranca_msg_atraso'] = $this->cobranca_msg_atraso;
+			if (self::temColunasWhatsappAutomacao()) {
+				$dados['cobranca_whatsapp_ativo'] = (int)$this->cobranca_whatsapp_ativo;
+			}
 		}
 
 		if (self::temColunasAniversario()) {
@@ -186,6 +211,9 @@ class EscolaIntegracoes {
 			$dados['aniversario_apenas_matriculados'] = (int)$this->aniversario_apenas_matriculados;
 			$dados['aniversario_assunto'] = $this->aniversario_assunto;
 			$dados['aniversario_mensagem'] = $this->aniversario_mensagem;
+			if (self::temColunasWhatsappAutomacao()) {
+				$dados['aniversario_whatsapp_ativo'] = (int)$this->aniversario_whatsapp_ativo;
+			}
 		}
 
 		if (self::temColunasEvolution() && $this->touchEvolution) {

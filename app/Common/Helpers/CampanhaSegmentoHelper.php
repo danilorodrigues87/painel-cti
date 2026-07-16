@@ -2,6 +2,7 @@
 
 namespace App\Common\Helpers;
 
+use App\Common\Communication\EvolutionApiService;
 use App\Model\Entity\CrmLeads;
 
 class CampanhaSegmentoHelper {
@@ -17,37 +18,64 @@ class CampanhaSegmentoHelper {
 		];
 	}
 
-	public static function resolverDestinatarios(int $idAdmin, array $segmento): array {
+	/**
+	 * @param string $canal email|whatsapp
+	 */
+	public static function resolverDestinatarios(int $idAdmin, array $segmento, string $canal = 'email'): array {
+		$canal = $canal === 'whatsapp' ? 'whatsapp' : 'email';
 		$tipo = $segmento['tipo'] ?? 'alunos_matriculados';
 
 		switch ($tipo) {
 			case 'ex_alunos':
-				return self::exAlunos($idAdmin);
+				$lista = self::exAlunos($idAdmin, $canal);
+				break;
 			case 'aniversariantes_mes':
-				return self::aniversariantesMes($idAdmin);
+				$lista = self::aniversariantesMes($idAdmin, $canal);
+				break;
 			case 'aniversariantes_dia':
-				return self::aniversariantesDia($idAdmin, false);
+				$lista = self::aniversariantesDia($idAdmin, false, $canal);
+				break;
 			case 'aniversariantes_dia_matriculados':
-				return self::aniversariantesDia($idAdmin, true);
+				$lista = self::aniversariantesDia($idAdmin, true, $canal);
+				break;
 			case 'leads':
-				return self::leads($idAdmin, $segmento);
+				$lista = self::leads($idAdmin, $segmento, $canal);
+				break;
 			case 'inadimplentes':
-				return self::inadimplentes($idAdmin, $segmento);
+				$lista = self::inadimplentes($idAdmin, $segmento, $canal);
+				break;
 			case 'alunos_matriculados':
 			default:
-				return self::alunosMatriculados($idAdmin);
+				$lista = self::alunosMatriculados($idAdmin, $canal);
+				break;
 		}
+
+		return $canal === 'whatsapp'
+			? self::filtrarComWhatsapp($lista)
+			: self::filtrarComEmail($lista);
 	}
 
 	public static function aplicarVariaveis(string $texto, array $vars): string {
 		$mapa = [
-			'{nome}'  => $vars['nome'] ?? '',
-			'{email}' => $vars['contato'] ?? '',
-			'{curso}' => $vars['curso'] ?? '',
-			'{escola}' => $vars['escola'] ?? '',
+			'{nome}'     => $vars['nome'] ?? '',
+			'{email}'    => $vars['contato'] ?? '',
+			'{whatsapp}' => $vars['contato'] ?? '',
+			'{telefone}' => $vars['contato'] ?? '',
+			'{curso}'    => $vars['curso'] ?? '',
+			'{escola}'   => $vars['escola'] ?? '',
 		];
 
 		return str_replace(array_keys($mapa), array_values($mapa), $texto);
+	}
+
+	/** Converte HTML de campanha/e-mail em texto para WhatsApp. */
+	public static function textoParaWhatsapp(string $html): string {
+		$t = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		$t = preg_replace('#<(br|/?p|/?div|/?li|/?tr)[^>]*>#i', "\n", $t) ?? $t;
+		$t = strip_tags($t);
+		$t = preg_replace("/[ \t]+/", ' ', $t) ?? $t;
+		$t = preg_replace("/\n{3,}/", "\n\n", $t) ?? $t;
+		return trim($t);
 	}
 
 	private static function pdo(): \PDO {
@@ -84,10 +112,31 @@ class CampanhaSegmentoHelper {
 		return $unicos;
 	}
 
-	private static function alunosMatriculados(int $idAdmin): array {
+	private static function filtrarComWhatsapp(array $destinatarios): array {
+		$unicos = [];
+		$vistos = [];
+
+		foreach ($destinatarios as $item) {
+			$tel = EvolutionApiService::normalizarTelefone((string)($item['contato'] ?? ''));
+			if ($tel === '' || strlen($tel) < 12) {
+				continue;
+			}
+			if (isset($vistos[$tel])) {
+				continue;
+			}
+			$vistos[$tel] = true;
+			$item['contato'] = $tel;
+			$unicos[] = $item;
+		}
+
+		return $unicos;
+	}
+
+	private static function alunosMatriculados(int $idAdmin, string $canal): array {
 		$hoje = date('Y-m-d');
+		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 		$sql = '
-			SELECT DISTINCT u.id, u.nome, u.email, t.nome AS curso
+			SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, t.nome AS curso
 			FROM usuarios u
 			INNER JOIN matriculas m ON m.id_aluno = u.id AND m.id_admin = u.id_admin
 			LEFT JOIN trilhas t ON t.id = m.id_trilha
@@ -95,25 +144,26 @@ class CampanhaSegmentoHelper {
 			  AND u.nivel = "Cliente"
 			  AND m.status = 0
 			  AND m.fim >= :hoje
-			  AND u.email IS NOT NULL
-			  AND u.email != ""
+			  AND '.$campo.' IS NOT NULL
+			  AND '.$campo.' != ""
 		';
 
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute(['id_admin' => $idAdmin, 'hoje' => $hoje]);
 
-		return self::filtrarComEmail(self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno'));
+		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
 	}
 
-	private static function exAlunos(int $idAdmin): array {
+	private static function exAlunos(int $idAdmin, string $canal): array {
 		$hoje = date('Y-m-d');
+		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 		$sql = '
-			SELECT DISTINCT u.id, u.nome, u.email, "" AS curso
+			SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
 			FROM usuarios u
 			WHERE u.id_admin = :id_admin
 			  AND u.nivel = "Cliente"
-			  AND u.email IS NOT NULL
-			  AND u.email != ""
+			  AND '.$campo.' IS NOT NULL
+			  AND '.$campo.' != ""
 			  AND u.id NOT IN (
 			    SELECT m.id_aluno
 			    FROM matriculas m
@@ -126,37 +176,39 @@ class CampanhaSegmentoHelper {
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute(['id_admin' => $idAdmin, 'id_admin2' => $idAdmin, 'hoje' => $hoje]);
 
-		return self::filtrarComEmail(self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno'));
+		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
 	}
 
-	private static function aniversariantesMes(int $idAdmin): array {
+	private static function aniversariantesMes(int $idAdmin, string $canal): array {
 		$mes = (int)date('m');
+		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 		$sql = '
-			SELECT DISTINCT u.id, u.nome, u.email, "" AS curso
+			SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
 			FROM usuarios u
 			WHERE u.id_admin = :id_admin
 			  AND u.nivel = "Cliente"
 			  AND u.nascimento IS NOT NULL
 			  AND u.nascimento != "0000-00-00"
 			  AND MONTH(u.nascimento) = :mes
-			  AND u.email IS NOT NULL
-			  AND u.email != ""
+			  AND '.$campo.' IS NOT NULL
+			  AND '.$campo.' != ""
 		';
 
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes]);
 
-		return self::filtrarComEmail(self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno'));
+		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
 	}
 
-	private static function aniversariantesDia(int $idAdmin, bool $apenasMatriculados): array {
+	private static function aniversariantesDia(int $idAdmin, bool $apenasMatriculados, string $canal = 'email'): array {
 		$mes = (int)date('m');
 		$dia = (int)date('d');
 		$hoje = date('Y-m-d');
+		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 
 		if ($apenasMatriculados) {
 			$sql = '
-				SELECT DISTINCT u.id, u.nome, u.email, "" AS curso
+				SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
 				FROM usuarios u
 				INNER JOIN matriculas m ON m.id_aluno = u.id AND m.id_admin = u.id_admin
 				WHERE u.id_admin = :id_admin
@@ -167,14 +219,14 @@ class CampanhaSegmentoHelper {
 				  AND DAY(u.nascimento) = :dia
 				  AND m.status = 0
 				  AND m.fim >= :hoje
-				  AND u.email IS NOT NULL
-				  AND u.email != ""
+				  AND '.$campo.' IS NOT NULL
+				  AND '.$campo.' != ""
 			';
 			$stmt = self::pdo()->prepare($sql);
 			$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes, 'dia' => $dia, 'hoje' => $hoje]);
 		} else {
 			$sql = '
-				SELECT DISTINCT u.id, u.nome, u.email, "" AS curso
+				SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
 				FROM usuarios u
 				WHERE u.id_admin = :id_admin
 				  AND u.nivel = "Cliente"
@@ -182,17 +234,17 @@ class CampanhaSegmentoHelper {
 				  AND u.nascimento != "0000-00-00"
 				  AND MONTH(u.nascimento) = :mes
 				  AND DAY(u.nascimento) = :dia
-				  AND u.email IS NOT NULL
-				  AND u.email != ""
+				  AND '.$campo.' IS NOT NULL
+				  AND '.$campo.' != ""
 			';
 			$stmt = self::pdo()->prepare($sql);
 			$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes, 'dia' => $dia]);
 		}
 
-		return self::filtrarComEmail(self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno'));
+		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
 	}
 
-	private static function leads(int $idAdmin, array $segmento): array {
+	private static function leads(int $idAdmin, array $segmento, string $canal): array {
 		$where = 'id_admin = '.(int)$idAdmin;
 		$status = $segmento['status_lead'] ?? '';
 
@@ -200,7 +252,11 @@ class CampanhaSegmentoHelper {
 			$where .= ' AND status = "'.addslashes($status).'"';
 		}
 
-		$where .= ' AND email IS NOT NULL AND email != ""';
+		if ($canal === 'whatsapp') {
+			$where .= ' AND whatsapp IS NOT NULL AND whatsapp != ""';
+		} else {
+			$where .= ' AND email IS NOT NULL AND email != ""';
+		}
 
 		$results = CrmLeads::getLeads($where, 'nome ASC');
 		$lista = [];
@@ -210,24 +266,24 @@ class CampanhaSegmentoHelper {
 				'destinatario_tipo' => 'lead',
 				'destinatario_id'   => (int)$lead->id,
 				'nome'              => $lead->nome,
-				'contato'           => trim($lead->email),
+				'contato'           => trim($canal === 'whatsapp' ? (string)$lead->whatsapp : (string)$lead->email),
 				'curso'             => $lead->curso_interesse ?? '',
 			];
 		}
 
-		return self::filtrarComEmail($lista);
+		return $lista;
 	}
 
-	private static function inadimplentes(int $idAdmin, array $segmento): array {
+	private static function inadimplentes(int $idAdmin, array $segmento, string $canal): array {
 		$diasMin = max(1, (int)($segmento['dias_atraso_min'] ?? 1));
-		$hoje = date('Y-m-d');
 		$dataLimite = date('Y-m-d', strtotime('-'.$diasMin.' days'));
+		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 
 		$sql = '
 			SELECT DISTINCT
 				u.id,
 				u.nome,
-				u.email,
+				'.$campo.' AS contato,
 				c.descricao AS curso,
 				c.valor,
 				c.vencimento
@@ -239,8 +295,8 @@ class CampanhaSegmentoHelper {
 			  AND (c.status = 0 OR c.status = "0" OR c.status = "Em aberto")
 			  AND c.vencimento <= :data_limite
 			  AND m.status = 0
-			  AND u.email IS NOT NULL
-			  AND u.email != ""
+			  AND '.$campo.' IS NOT NULL
+			  AND '.$campo.' != ""
 			ORDER BY c.vencimento ASC
 		';
 
@@ -254,12 +310,12 @@ class CampanhaSegmentoHelper {
 				'destinatario_tipo' => 'aluno',
 				'destinatario_id'   => (int)$row['id'],
 				'nome'              => $row['nome'],
-				'contato'           => trim($row['email']),
+				'contato'           => trim((string)($row['contato'] ?? '')),
 				'curso'             => ($row['curso'] ?? '').' (venc. '.date('d/m/Y', strtotime($row['vencimento'])).')',
 			];
 		}
 
-		return self::filtrarComEmail($lista);
+		return $lista;
 	}
 
 	private static function mapearLinhas(array $linhas, string $tipo): array {
@@ -270,7 +326,7 @@ class CampanhaSegmentoHelper {
 				'destinatario_tipo' => $tipo,
 				'destinatario_id'   => (int)($row['id'] ?? 0),
 				'nome'              => $row['nome'] ?? '',
-				'contato'           => trim($row['email'] ?? ''),
+				'contato'           => trim((string)($row['contato'] ?? $row['email'] ?? $row['whatsapp'] ?? '')),
 				'curso'             => $row['curso'] ?? '',
 			];
 		}

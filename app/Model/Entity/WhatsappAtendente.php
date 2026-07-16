@@ -45,6 +45,40 @@ class WhatsappAtendente {
 		return (new Database('whatsapp_atendentes'))->execute($sql)->fetchAll(\PDO::FETCH_ASSOC) ?: [];
 	}
 
+	/** Atendentes ativos de um setor (únicos por usuário). */
+	public static function listarPorSetor(int $idAdmin, int $setorId): array {
+		if (!self::tabelaExiste()) {
+			return [];
+		}
+		$sql = 'SELECT a.usuario_id, u.nome AS usuario_nome
+			FROM whatsapp_atendentes a
+			INNER JOIN usuarios u ON u.id = a.usuario_id
+			WHERE a.id_admin = '.(int)$idAdmin.'
+			  AND a.setor_id = '.(int)$setorId.'
+			  AND a.ativo = 1
+			GROUP BY a.usuario_id, u.nome
+			ORDER BY u.nome ASC';
+		return (new Database('whatsapp_atendentes'))->execute($sql)->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+	}
+
+	public static function usuarioNoSetor(int $idAdmin, int $usuarioId, int $setorId): bool {
+		if (!self::tabelaExiste()) {
+			return false;
+		}
+		$row = (new Database('whatsapp_atendentes'))
+			->select(
+				'id_admin = '.(int)$idAdmin
+				.' AND usuario_id = '.(int)$usuarioId
+				.' AND setor_id = '.(int)$setorId
+				.' AND ativo = 1',
+				null,
+				1,
+				'id'
+			)
+			->fetch(\PDO::FETCH_ASSOC);
+		return !empty($row['id']);
+	}
+
 	/** IDs de setor em que o usuário atende. */
 	public static function setoresDoUsuario(int $idAdmin, int $usuarioId): array {
 		if (!self::tabelaExiste()) {

@@ -325,20 +325,33 @@ class WhatsappEscolaService {
 	}
 
 	public static function testarEnvio(int $idAdmin, string $telefone, string $mensagem = ''): array {
+		$texto = trim($mensagem) !== '' ? trim($mensagem) : 'Teste de WhatsApp — Painel CTI.';
+		return self::enviarTexto($idAdmin, $telefone, $texto);
+	}
+
+	/**
+	 * Envio de texto sem conversa de inbox (campanhas, cobrança, aniversário, teste).
+	 * @return array{ok:bool,message:string}
+	 */
+	public static function enviarTexto(int $idAdmin, string $telefone, string $mensagem): array {
 		$status = self::status($idAdmin);
 		if (!$status['conectado']) {
-			return ['ok' => false, 'message' => 'WhatsApp não está conectado. Gere o QR e escaneie antes.'];
+			return ['ok' => false, 'message' => 'WhatsApp não está conectado.'];
+		}
+
+		$texto = trim($mensagem);
+		if ($texto === '') {
+			return ['ok' => false, 'message' => 'Mensagem vazia.'];
 		}
 
 		$api = EvolutionApiService::fromEnv();
-		$texto = trim($mensagem) !== '' ? trim($mensagem) : 'Teste de WhatsApp — Painel CTI.';
 		$res = $api->sendText($status['instance'], $telefone, $texto);
 
 		if ($res === null || $api->getLastHttpCode() >= 400) {
 			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar mensagem.'];
 		}
 
-		return ['ok' => true, 'message' => 'Mensagem de teste enviada.'];
+		return ['ok' => true, 'message' => 'Mensagem enviada.'];
 	}
 
 	/**

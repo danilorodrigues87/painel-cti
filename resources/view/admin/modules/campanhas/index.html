@@ -1,20 +1,28 @@
-<h1 class="mt-4">Campanhas de E-mail</h1>
+<h1 class="mt-4">Campanhas</h1>
 <ol class="breadcrumb mb-4">
-	<li class="breadcrumb-item active">Envio em massa com fila</li>
+	<li class="breadcrumb-item active">E-mail e WhatsApp em massa com fila</li>
 </ol>
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-	<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCampanha">
-		<i class="fas fa-plus"></i> Nova campanha
-	</button>
+	<div class="d-flex gap-2 align-items-center">
+		<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCampanha">
+			<i class="fas fa-plus"></i> Nova campanha
+		</button>
+		<select class="form-select form-select-sm" id="filtro-canal" style="width:auto;">
+			<option value="">Todos os canais</option>
+			<option value="email">E-mail</option>
+			<option value="whatsapp">WhatsApp</option>
+		</select>
+	</div>
 	<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-processar-fila">
 		<i class="fas fa-play"></i> Processar fila agora
 	</button>
 </div>
 
 <div class="alert alert-info small">
-	<strong>Variáveis na mensagem:</strong> <code>{nome}</code>, <code>{email}</code>, <code>{curso}</code>, <code>{escola}</code>.
-	Os envios respeitam o limite e o intervalo definidos em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.
+	<strong>Variáveis:</strong> <code>{nome}</code>, <code>{email}</code>/<code>{whatsapp}</code>, <code>{curso}</code>, <code>{escola}</code>.
+	WhatsApp usa o número cadastrado em <code>usuarios.whatsapp</code> / leads.
+	Limites em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.
 </div>
 
 <div class="card shadow-sm">
@@ -24,6 +32,7 @@
 				<thead class="table-light">
 					<tr>
 						<th>Título</th>
+						<th>Canal</th>
 						<th>Status</th>
 						<th>Progresso</th>
 						<th>Criada em</th>
@@ -31,7 +40,7 @@
 					</tr>
 				</thead>
 				<tbody id="lista-campanhas">
-					<tr><td colspan="5" class="text-center text-muted py-4">Carregando...</td></tr>
+					<tr><td colspan="6" class="text-center text-muted py-4">Carregando...</td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -52,12 +61,19 @@
 
 					<div class="row g-3">
 						<div class="col-md-6">
+							<label class="form-label" for="campanha_canal">Canal *</label>
+							<select class="form-control" id="campanha_canal">
+								<option value="email">E-mail</option>
+								<option value="whatsapp">WhatsApp</option>
+							</select>
+						</div>
+						<div class="col-md-6">
 							<label class="form-label" for="campanha_titulo">Título interno *</label>
 							<input type="text" class="form-control" id="campanha_titulo" required>
 						</div>
-						<div class="col-md-6">
+						<div class="col-md-6" id="wrap-assunto">
 							<label class="form-label" for="campanha_assunto">Assunto do e-mail *</label>
-							<input type="text" class="form-control" id="campanha_assunto" required>
+							<input type="text" class="form-control" id="campanha_assunto">
 						</div>
 						<div class="col-md-6">
 							<label class="form-label" for="segmento_tipo">Público</label>
@@ -81,8 +97,9 @@
 							</select>
 						</div>
 						<div class="col-12">
-							<label class="form-label" for="campanha_mensagem">Mensagem (HTML simples) *</label>
+							<label class="form-label" for="campanha_mensagem" id="label-mensagem">Mensagem *</label>
 							<textarea class="form-control" id="campanha_mensagem" rows="8" required placeholder="Olá {nome}, ..."></textarea>
+							<div class="form-text" id="hint-mensagem">No e-mail pode usar HTML simples. No WhatsApp o HTML vira texto.</div>
 						</div>
 						<div class="col-12">
 							<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-preview-campanha">
@@ -116,4 +133,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260715a"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260716a"></script>

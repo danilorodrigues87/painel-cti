@@ -144,16 +144,26 @@ class WhatsappConversa {
 
 	/**
 	 * Lista conversas visíveis ao usuário.
-	 * Diretor: todas. Atendente: próprias + fila dos seus setores + abertas sem setor.
+	 * @param string $filtro todas|minhas|fila
 	 */
-	public static function listarInbox(int $idAdmin, int $usuarioId, string $nivel, array $setorIds, int $limite = 80): array {
+	public static function listarInbox(
+		int $idAdmin,
+		int $usuarioId,
+		string $nivel,
+		array $setorIds,
+		int $limite = 80,
+		string $filtro = 'todas',
+		string $busca = ''
+	): array {
 		if (!self::tabelaExiste()) {
 			return [];
 		}
 
 		$limite = max(1, min(200, $limite));
+		$filtro = in_array($filtro, ['minhas', 'fila', 'todas'], true) ? $filtro : 'todas';
 		$where = 'c.id_admin = '.(int)$idAdmin;
 
+		// Visibilidade base
 		if ($nivel !== 'Diretor') {
 			$parts = ['c.id_atendente = '.(int)$usuarioId];
 			if ($setorIds) {
@@ -162,6 +172,32 @@ class WhatsappConversa {
 			}
 			$parts[] = "(c.chatbot_estado IN ('novo','aguardando_setor') OR (c.setor_id IS NULL AND c.id_atendente IS NULL))";
 			$where .= ' AND ('.implode(' OR ', $parts).')';
+		}
+
+		if ($filtro === 'minhas') {
+			$where .= ' AND c.id_atendente = '.(int)$usuarioId;
+		} elseif ($filtro === 'fila') {
+			$where .= ' AND (c.id_atendente IS NULL OR c.id_atendente = 0)';
+			$where .= " AND c.status != 'fechada' AND IFNULL(c.chatbot_estado,'') != 'encerrado'";
+		} else {
+			// todas: oculta encerradas antigas da lista principal (ainda aparecem na busca)
+			if ($busca === '') {
+				$where .= " AND (c.status IS NULL OR c.status != 'fechada' OR c.ultima_mensagem_em >= DATE_SUB(NOW(), INTERVAL 2 DAY))";
+			}
+		}
+
+		$busca = trim($busca);
+		if ($busca !== '') {
+			$like = addslashes(str_replace(['%', '_'], ['\\%', '\\_'], $busca));
+			$digitos = preg_replace('/\D+/', '', $busca) ?? '';
+			$or = [
+				'c.nome_contato LIKE "%'.$like.'%"',
+				'c.telefone LIKE "%'.$like.'%"',
+			];
+			if ($digitos !== '') {
+				$or[] = 'c.telefone LIKE "%'.addslashes($digitos).'%"';
+			}
+			$where .= ' AND ('.implode(' OR ', $or).')';
 		}
 
 		$joinSetor = WhatsappSetor::tabelaExiste()

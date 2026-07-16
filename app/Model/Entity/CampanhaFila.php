@@ -70,6 +70,24 @@ class CampanhaFila {
 		return self::get($where, 'id ASC', (int)$limite);
 	}
 
+	/** Pendentes de campanhas em envio no canal informado (evita misturar e-mail e WhatsApp). */
+	public static function getPendentesPorCanal(int $idAdmin, string $canal, int $limite = 10) {
+		$canal = $canal === 'whatsapp' ? 'whatsapp' : 'email';
+		$limite = max(1, (int)$limite);
+		$sql = '
+			SELECT f.*
+			FROM campanha_fila f
+			INNER JOIN campanhas c ON c.id = f.campanha_id AND c.id_admin = f.id_admin
+			WHERE f.id_admin = '.(int)$idAdmin.'
+			  AND f.status = "pendente"
+			  AND c.status = "enviando"
+			  AND c.canal = "'.addslashes($canal).'"
+			ORDER BY f.id ASC
+			LIMIT '.$limite.'
+		';
+		return (new Database('campanha_fila'))->execute($sql);
+	}
+
 	public function marcarEnviado(): void {
 		(new Database('campanha_fila'))->update('id = '.(int)$this->id, [
 			'status'     => 'enviado',

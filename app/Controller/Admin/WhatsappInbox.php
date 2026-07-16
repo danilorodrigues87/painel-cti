@@ -44,6 +44,7 @@ class WhatsappInbox extends Page {
 			'enviar_midia'     => 'enviarMidia',
 			'assumir'          => 'assumir',
 			'transferir'       => 'transferir',
+			'atendentes_setor' => 'atendentesSetor',
 			'fechar'           => 'fechar',
 			'setores_listar'   => 'setoresListar',
 			'setor_salvar'     => 'setorSalvar',
@@ -71,12 +72,16 @@ class WhatsappInbox extends Page {
 		$uid = (int)($user['usuario']['id'] ?? 0);
 		$nivel = (string)($user['usuario']['nivel'] ?? '');
 		$setores = WhatsappAtendente::setoresDoUsuario($idAdmin, $uid);
+		$filtro = (string)($post['filtro'] ?? 'todas');
+		$busca = trim((string)($post['busca'] ?? ''));
 
-		$lista = WhatsappConversa::listarInbox($idAdmin, $uid, $nivel, $setores);
+		$lista = WhatsappConversa::listarInbox($idAdmin, $uid, $nivel, $setores, 80, $filtro, $busca);
 
 		return self::json([
 			'success' => true,
 			'conversas' => $lista,
+			'filtro' => $filtro,
+			'busca' => $busca,
 			'meta' => [
 				'is_diretor' => self::isDiretor(),
 				'chatbot_ok' => WhatsappConversa::temColunasChatbot(),
@@ -266,6 +271,7 @@ class WhatsappInbox extends Page {
 		$idAdmin = self::idAdmin();
 		$id = (int)($post['conversa_id'] ?? 0);
 		$setorId = (int)($post['setor_id'] ?? 0);
+		$atendenteId = (int)($post['atendente_id'] ?? 0);
 		$conv = WhatsappConversa::getById($id, $idAdmin);
 		if (!$conv || !self::podeVer($conv)) {
 			return json_encode(['success' => false, 'message' => 'Conversa não encontrada.']);
@@ -274,6 +280,23 @@ class WhatsappInbox extends Page {
 		$setor = WhatsappSetor::getById($setorId, $idAdmin);
 		if (!$setor) {
 			return json_encode(['success' => false, 'message' => 'Setor inválido.']);
+		}
+
+		// Com atendente: atribui direto; sem: volta para a fila do setor
+		if ($atendenteId > 0) {
+			if (!self::isDiretor() && !WhatsappAtendente::usuarioNoSetor($idAdmin, $atendenteId, $setorId)) {
+				return json_encode(['success' => false, 'message' => 'Atendente não vinculado a este setor.']);
+			}
+			$conv->atualizar([
+				'setor_id'       => $setorId,
+				'id_atendente'   => $atendenteId,
+				'status'         => 'em_atendimento',
+				'chatbot_estado' => 'humano',
+				'assigned_at'    => date('Y-m-d H:i:s'),
+			]);
+			$msg = 'Você foi transferido para *'.$setor->nome.'*. Em breve um atendente dará continuidade.';
+			WhatsappChatbotService::enviarTexto($conv, $msg);
+			return json_encode(['success' => true, 'message' => 'Transferido para atendente do setor '.$setor->nome.'.']);
 		}
 
 		$conv->atualizar([
@@ -287,7 +310,19 @@ class WhatsappInbox extends Page {
 		$msg = $setor->mensagem_fila ?: ('Você foi transferido para *'.$setor->nome.'*. Aguarde um atendente.');
 		WhatsappChatbotService::enviarTexto($conv, $msg);
 
-		return json_encode(['success' => true, 'message' => 'Transferido para '.$setor->nome.'.']);
+		return json_encode(['success' => true, 'message' => 'Transferido para a fila de '.$setor->nome.'.']);
+	}
+
+	private static function atendentesSetor(array $post): string {
+		$idAdmin = self::idAdmin();
+		$setorId = (int)($post['setor_id'] ?? 0);
+		if ($setorId <= 0 || !WhatsappAtendente::tabelaExiste()) {
+			return self::json(['success' => true, 'atendentes' => []]);
+		}
+		return self::json([
+			'success' => true,
+			'atendentes' => WhatsappAtendente::listarPorSetor($idAdmin, $setorId),
+		]);
 	}
 
 	private static function fechar(array $post): string {

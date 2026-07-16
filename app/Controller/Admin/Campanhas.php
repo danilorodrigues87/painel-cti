@@ -6,6 +6,7 @@ use App\Utils\View;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Common\Communication\CampanhaWorker;
+use App\Common\Communication\WhatsappEscolaService;
 use App\Model\Entity\Campanhas as EntityCampanhas;
 use App\Model\Entity\CampanhaFila;
 
@@ -38,7 +39,7 @@ class Campanhas extends Page {
 
 		switch ($acao) {
 			case 'listar':
-				return self::listar();
+				return self::listar($postVars);
 			case 'salvar':
 				return self::salvar($postVars);
 			case 'preview':
@@ -58,13 +59,15 @@ class Campanhas extends Page {
 		}
 	}
 
-	private static function listar(): string {
+	private static function listar(array $postVars): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$results = EntityCampanhas::get(
-			'id_admin = '.(int)$idAdmin.' AND canal = "email"',
-			'id DESC',
-			'50'
-		);
+		$canal = self::normalizarCanal($postVars['canal'] ?? '');
+		$where = 'id_admin = '.(int)$idAdmin;
+		if ($canal !== '') {
+			$where .= ' AND canal = "'.addslashes($canal).'"';
+		}
+
+		$results = EntityCampanhas::get($where, 'id DESC', '50');
 
 		$lista = [];
 		while ($row = $results->fetchObject(EntityCampanhas::class)) {
@@ -76,11 +79,14 @@ class Campanhas extends Page {
 
 	private static function formatarCampanha(EntityCampanhas $c): array {
 		$pendentes = CampanhaFila::contarPorCampanha((int)$c->id, (int)$c->id_admin, 'pendente');
+		$canal = ($c->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
 
 		return [
 			'id'          => (int)$c->id,
 			'titulo'      => $c->titulo,
 			'assunto'     => $c->assunto,
+			'canal'       => $canal,
+			'canal_label' => $canal === 'whatsapp' ? 'WhatsApp' : 'E-mail',
 			'status'      => $c->status,
 			'status_label'=> self::$statusLabels[$c->status] ?? $c->status,
 			'total'       => (int)$c->total,
@@ -89,6 +95,7 @@ class Campanhas extends Page {
 			'pendentes'   => $pendentes,
 			'criada_em'   => $c->criada_em ? date('d/m/Y H:i', strtotime($c->criada_em)) : '',
 			'segmento'    => json_decode($c->segmento ?? '{}', true) ?: [],
+			'mensagem'    => $c->mensagem,
 		];
 	}
 
@@ -99,12 +106,19 @@ class Campanhas extends Page {
 		$titulo = trim($postVars['titulo'] ?? '');
 		$assunto = trim($postVars['assunto'] ?? '');
 		$mensagem = trim($postVars['mensagem'] ?? '');
+		$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
 		$tipoSegmento = $postVars['segmento_tipo'] ?? 'alunos_matriculados';
 		$statusLead = $postVars['status_lead'] ?? '';
 		$id = (int)($postVars['id'] ?? 0);
 
-		if ($titulo === '' || $assunto === '' || $mensagem === '') {
-			return json_encode(['success' => false, 'message' => 'Preencha título, assunto e mensagem.']);
+		if ($titulo === '' || $mensagem === '') {
+			return json_encode(['success' => false, 'message' => 'Preencha título e mensagem.']);
+		}
+		if ($canal === 'email' && $assunto === '') {
+			return json_encode(['success' => false, 'message' => 'Preencha o assunto do e-mail.']);
+		}
+		if ($canal === 'whatsapp' && $assunto === '') {
+			$assunto = $titulo;
 		}
 
 		if (!array_key_exists($tipoSegmento, CampanhaSegmentoHelper::getTipos())) {
@@ -128,11 +142,11 @@ class Campanhas extends Page {
 			$ob = new EntityCampanhas;
 			$ob->id_admin = $idAdmin;
 			$ob->criada_por = $usuarioId;
-			$ob->canal = 'email';
 			$ob->tipo = 'manual';
 			$ob->status = 'rascunho';
 		}
 
+		$ob->canal = $canal;
 		$ob->titulo = $titulo;
 		$ob->assunto = $assunto;
 		$ob->mensagem = $mensagem;
@@ -157,14 +171,16 @@ class Campanhas extends Page {
 
 	private static function preview(array $postVars): string {
 		$idAdmin = TenantHelper::getIdAdmin();
+		$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
 		$segmento = self::montarSegmento($postVars);
-		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento);
+		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, $canal);
 		$amostra = array_slice($destinatarios, 0, 5);
 
 		return json_encode([
 			'success' => true,
 			'total'   => count($destinatarios),
 			'amostra' => $amostra,
+			'canal'   => $canal,
 		]);
 	}
 
@@ -179,6 +195,18 @@ class Campanhas extends Page {
 
 		if (!in_array($ob->status, ['rascunho', 'pausada'], true)) {
 			return json_encode(['success' => false, 'message' => 'Campanha não pode ser iniciada neste status.']);
+		}
+
+		$canal = ($ob->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
+
+		if ($canal === 'whatsapp') {
+			$statusWa = WhatsappEscolaService::status($idAdmin);
+			if (empty($statusWa['conectado'])) {
+				return json_encode([
+					'success' => false,
+					'message' => 'WhatsApp não está conectado. Pareie o número em Configurações → Comunicação antes de iniciar.',
+				]);
+			}
 		}
 
 		if ($ob->status === 'pausada') {
@@ -196,10 +224,13 @@ class Campanhas extends Page {
 		}
 
 		$segmento = json_decode($ob->segmento ?? '{}', true) ?: [];
-		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento);
+		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, $canal);
 
 		if (empty($destinatarios)) {
-			return json_encode(['success' => false, 'message' => 'Nenhum destinatário com e-mail válido para este segmento.']);
+			$msg = $canal === 'whatsapp'
+				? 'Nenhum destinatário com WhatsApp válido neste segmento.'
+				: 'Nenhum destinatário com e-mail válido para este segmento.';
+			return json_encode(['success' => false, 'message' => $msg]);
 		}
 
 		CampanhaFila::limparCampanha($id, $idAdmin);
@@ -324,5 +355,13 @@ class Campanhas extends Page {
 			'tipo'        => $postVars['segmento_tipo'] ?? 'alunos_matriculados',
 			'status_lead' => $postVars['status_lead'] ?? '',
 		];
+	}
+
+	private static function normalizarCanal($canal): string {
+		$canal = strtolower(trim((string)$canal));
+		if ($canal === 'whatsapp' || $canal === 'email') {
+			return $canal;
+		}
+		return '';
 	}
 }

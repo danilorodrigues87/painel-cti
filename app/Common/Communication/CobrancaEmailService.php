@@ -5,6 +5,7 @@ namespace App\Common\Communication;
 use App\Common\Helpers\NumeroHelper;
 use App\Common\Helpers\DateTimeHelper;
 use App\Common\Helpers\EmailValidator;
+use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Model\Entity\EmailCobrancaLog;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\EscolasAssinantes;
@@ -114,7 +115,14 @@ class CobrancaEmailService {
 			$pendentes = self::coletarPendentesEnvio($escolaId, $config, false);
 			$nomeEscola = self::nomeEscola($escolaId);
 			$email = Email::escola($escolaId);
-			$delay = max(1, (int)$config->email_delay_segundos);
+			$delayEmail = max(1, (int)$config->email_delay_segundos);
+			$delayWa = max(1, (int)($config->whatsapp_delay_segundos ?? 5));
+			$maxWaHora = max(1, (int)($config->whatsapp_max_hora ?? 40));
+			$waAtivo = EscolaIntegracoes::temColunasWhatsappAutomacao()
+				&& (int)($config->cobranca_whatsapp_ativo ?? 0) === 1;
+			$waStatus = $waAtivo ? WhatsappEscolaService::status($escolaId) : null;
+			$waConectado = !empty($waStatus['conectado']);
+			$enviadosWaHora = 0;
 
 			foreach ($pendentes as $item) {
 				if ($dryRun) {
@@ -125,33 +133,53 @@ class CobrancaEmailService {
 				$vars = self::montarVariaveis($item, $nomeEscola);
 				$assunto = self::aplicarTemplate(self::assuntoPorTipo($config, $item['tipo']), $vars);
 				$corpo = self::aplicarTemplate(self::mensagemPorTipo($config, $item['tipo']), $vars);
+				$textoWa = CampanhaSegmentoHelper::textoParaWhatsapp($corpo);
 
-				$ok = false;
+				$okEmail = false;
+				$okWa = false;
 				$ultimoErro = '';
+				$destinoLog = '';
 
 				foreach ($item['emails'] as $destino) {
 					if ($email->sendEmail($destino, $assunto, $corpo)) {
-						$ok = true;
+						$okEmail = true;
+						$destinoLog = $destino;
+						sleep($delayEmail);
 						break;
 					}
-					$ultimoErro = $email->getError() ?: 'Falha no envio';
+					$ultimoErro = $email->getError() ?: 'Falha no e-mail';
 				}
 
-				if ($ok) {
+				if ($waAtivo && $waConectado && $textoWa !== '' && $enviadosWaHora < $maxWaHora) {
+					foreach ($item['telefones'] as $tel) {
+						$r = WhatsappEscolaService::enviarTexto($escolaId, $tel, $textoWa);
+						if (!empty($r['ok'])) {
+							$okWa = true;
+							if ($destinoLog === '') {
+								$destinoLog = 'wa:'.$tel;
+							}
+							$enviadosWaHora++;
+							sleep($delayWa);
+							break;
+						}
+						$ultimoErro = $r['message'] ?? 'Falha no WhatsApp';
+					}
+				}
+
+				if ($okEmail || $okWa) {
 					EmailCobrancaLog::registrar(
 						$escolaId,
 						(int)$item['caixa_id'],
 						$item['tipo'],
 						(int)$item['dias'],
-						$item['emails'][0]
+						$destinoLog !== '' ? $destinoLog : ($item['emails'][0] ?? ($item['telefones'][0] ?? ''))
 					);
 					$resumo['enviados']++;
-					sleep($delay);
 				} else {
 					$resumo['erros']++;
 					$resumo['detalhes'][] = [
 						'caixa_id' => $item['caixa_id'],
-						'erro'     => $ultimoErro,
+						'erro'     => $ultimoErro ?: 'Sem e-mail/WhatsApp válido ou WhatsApp desconectado',
 					];
 				}
 			}
@@ -193,7 +221,8 @@ class CobrancaEmailService {
 				}
 
 				$emails = self::resolverEmails($titulo, $config);
-				if (empty($emails)) {
+				$telefones = self::resolverTelefones($titulo, $config);
+				if (empty($emails) && empty($telefones)) {
 					continue;
 				}
 
@@ -207,6 +236,7 @@ class CobrancaEmailService {
 					'vencimento'  => $titulo['vencimento'],
 					'matricula_id'=> (int)$titulo['matricula_id'],
 					'emails'      => $emails,
+					'telefones'   => $telefones,
 					'label'       => $regra['label'],
 				];
 			}
@@ -279,6 +309,7 @@ class CobrancaEmailService {
 				c.id_ref AS matricula_id,
 				u.nome AS aluno_nome,
 				u.email AS aluno_email,
+				u.whatsapp AS aluno_whatsapp,
 				u.id_responsavel,
 				m.id_responsavel AS matricula_responsavel
 			FROM caixa c
@@ -334,6 +365,38 @@ class CobrancaEmailService {
 		}
 
 		return $emails;
+	}
+
+	private static function resolverTelefones(array $titulo, EscolaIntegracoes $config): array {
+		$tels = [];
+		$aluno = EvolutionApiService::normalizarTelefone((string)($titulo['aluno_whatsapp'] ?? ''));
+		if ($aluno !== '' && strlen($aluno) >= 12) {
+			$tels[] = $aluno;
+		}
+
+		if ((int)($config->cobranca_enviar_responsavel ?? 1) !== 1) {
+			return $tels;
+		}
+
+		$idResp = (int)($titulo['matricula_responsavel'] ?? 0);
+		if ($idResp <= 0) {
+			$idResp = (int)($titulo['id_responsavel'] ?? 0);
+		}
+		if ($idResp <= 0) {
+			return $tels;
+		}
+
+		$resp = Responsaveis::getResById($idResp);
+		if (!$resp instanceof Responsaveis) {
+			return $tels;
+		}
+
+		$respTel = EvolutionApiService::normalizarTelefone((string)($resp->whatsapp ?? ''));
+		if ($respTel !== '' && strlen($respTel) >= 12 && !in_array($respTel, $tels, true)) {
+			$tels[] = $respTel;
+		}
+
+		return $tels;
 	}
 
 	private static function montarVariaveis(array $item, string $nomeEscola): array {
