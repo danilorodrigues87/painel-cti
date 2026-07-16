@@ -7,6 +7,11 @@ let waCarregandoMsg = false;
 let waMediaRecorder = null;
 let waAudioChunks = [];
 let waGravando = false;
+let waAudioCtx = null;
+let waAudioStream = null;
+let waAudioProcessor = null;
+let waPcmChunks = [];
+let waAudioSampleRate = 44100;
 
 function waPost(data, cb, silentFail){
 	$.post(url_base + WA_URL, data, cb, 'json').fail(function(){
@@ -82,7 +87,7 @@ function renderMensagens(mensagens, forcarScroll){
 }
 
 function setChatEnabled(on){
-	$('#wa-texto, #btn-wa-enviar, #wa-input-img, #wa-input-doc, #btn-wa-audio, .wa-emoji').prop('disabled', !on);
+	$('#wa-texto, #btn-wa-enviar, #wa-input-img, #wa-input-doc, #btn-wa-audio, #btn-wa-audio-file, .wa-emoji').prop('disabled', !on);
 }
 
 function carregarConversas(){
@@ -226,53 +231,144 @@ function inserirEmoji(emoji){
 	el.setSelectionRange(pos, pos);
 }
 
+function mergePcmChunks(chunks){
+	let len = 0;
+	chunks.forEach(function(c){ len += c.length; });
+	const out = new Float32Array(len);
+	let off = 0;
+	chunks.forEach(function(c){
+		out.set(c, off);
+		off += c.length;
+	});
+	return out;
+}
+
+function encodeWavFromPcm(samples, sampleRate){
+	const buffer = new ArrayBuffer(44 + samples.length * 2);
+	const view = new DataView(buffer);
+
+	function writeString(offset, str){
+		for(let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+	}
+
+	writeString(0, 'RIFF');
+	view.setUint32(4, 36 + samples.length * 2, true);
+	writeString(8, 'WAVE');
+	writeString(12, 'fmt ');
+	view.setUint32(16, 16, true);
+	view.setUint16(20, 1, true);
+	view.setUint16(22, 1, true);
+	view.setUint32(24, sampleRate, true);
+	view.setUint32(28, sampleRate * 2, true);
+	view.setUint16(32, 2, true);
+	view.setUint16(34, 16, true);
+	writeString(36, 'data');
+	view.setUint32(40, samples.length * 2, true);
+
+	let offset = 44;
+	for(let i = 0; i < samples.length; i++, offset += 2){
+		let s = Math.max(-1, Math.min(1, samples[i]));
+		view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+	}
+	return new Blob([view], { type: 'audio/wav' });
+}
+
+function pararGravacaoWav(){
+	try {
+		if(waAudioProcessor){
+			waAudioProcessor.disconnect();
+			waAudioProcessor.onaudioprocess = null;
+		}
+		if(waAudioCtx && waAudioCtx.state !== 'closed'){
+			waAudioCtx.close();
+		}
+	} catch(e) {}
+	if(waAudioStream){
+		waAudioStream.getTracks().forEach(function(t){ t.stop(); });
+	}
+	waAudioProcessor = null;
+	waAudioCtx = null;
+	waAudioStream = null;
+	waGravando = false;
+	$('#btn-wa-audio').removeClass('btn-danger').addClass('btn-outline-secondary');
+}
+
 async function toggleGravacaoAudio(){
 	if(!waConversaId) return;
 
-	if(waGravando && waMediaRecorder){
-		waMediaRecorder.stop();
-		waGravando = false;
-		$('#btn-wa-audio').removeClass('btn-danger').addClass('btn-outline-secondary');
+	if(waGravando){
+		const samples = mergePcmChunks(waPcmChunks);
+		const rate = waAudioSampleRate || 44100;
+		pararGravacaoWav();
+		if(!samples.length){
+			$('#wa-audio-status').text('');
+			Swal.fire('Áudio', 'Nada foi gravado. Tente novamente.', 'warning');
+			return;
+		}
 		$('#wa-audio-status').text('Processando áudio...');
+		const blob = encodeWavFromPcm(samples, rate);
+		const file = new File([blob], 'audio-'+Date.now()+'.wav', { type: 'audio/wav' });
+		enviarMidia(file, 'audio');
 		return;
 	}
 
 	if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-		Swal.fire('Áudio', 'Seu navegador não permite gravação. Envie um arquivo de áudio.', 'info');
-		const input = document.createElement('input');
-		input.type = 'file';
-		input.accept = 'audio/*';
-		input.onchange = function(){
-			if(input.files && input.files[0]) enviarMidia(input.files[0], 'audio');
-		};
-		input.click();
+		escolherArquivoAudio();
 		return;
 	}
 
 	try {
-		const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-		waAudioChunks = [];
-		const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-			? 'audio/webm;codecs=opus'
-			: (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus') ? 'audio/ogg;codecs=opus' : '');
-		waMediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-		waMediaRecorder.ondataavailable = function(e){
-			if(e.data && e.data.size) waAudioChunks.push(e.data);
+		waAudioStream = await navigator.mediaDevices.getUserMedia({
+			audio: {
+				echoCancellation: true,
+				noiseSuppression: true,
+				channelCount: 1
+			}
+		});
+		waAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		waAudioSampleRate = waAudioCtx.sampleRate || 44100;
+		waPcmChunks = [];
+
+		const source = waAudioCtx.createMediaStreamSource(waAudioStream);
+		const processor = waAudioCtx.createScriptProcessor(4096, 1, 1);
+		const mute = waAudioCtx.createGain();
+		mute.gain.value = 0;
+
+		processor.onaudioprocess = function(e){
+			const input = e.inputBuffer.getChannelData(0);
+			waPcmChunks.push(new Float32Array(input));
 		};
-		waMediaRecorder.onstop = function(){
-			stream.getTracks().forEach(function(t){ t.stop(); });
-			const blob = new Blob(waAudioChunks, { type: waMediaRecorder.mimeType || 'audio/webm' });
-			const ext = (blob.type || '').indexOf('ogg') >= 0 ? 'ogg' : 'webm';
-			const file = new File([blob], 'audio-'+Date.now()+'.'+ext, { type: blob.type });
-			enviarMidia(file, 'audio');
-		};
-		waMediaRecorder.start();
+
+		source.connect(processor);
+		processor.connect(mute);
+		mute.connect(waAudioCtx.destination);
+
+		waAudioProcessor = processor;
 		waGravando = true;
 		$('#btn-wa-audio').removeClass('btn-outline-secondary').addClass('btn-danger');
 		$('#wa-audio-status').text('Gravando... clique de novo para enviar.');
 	} catch (e) {
-		Swal.fire('Áudio', 'Não foi possível acessar o microfone.', 'error');
+		pararGravacaoWav();
+		Swal.fire({
+			title: 'Áudio',
+			text: 'Não foi possível acessar o microfone. Deseja enviar um arquivo MP3/OGG/WAV?',
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonText: 'Escolher arquivo'
+		}).then(function(r){
+			if(r.isConfirmed) escolherArquivoAudio();
+		});
 	}
+}
+
+function escolherArquivoAudio(){
+	const input = document.createElement('input');
+	input.type = 'file';
+	input.accept = 'audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/mp4,audio/aac,.mp3,.ogg,.wav,.m4a';
+	input.onchange = function(){
+		if(input.files && input.files[0]) enviarMidia(input.files[0], 'audio');
+	};
+	input.click();
 }
 
 function carregarSetoresConfig(){
@@ -378,6 +474,9 @@ $(function(){
 	});
 	$('#btn-wa-audio').on('click', function(){
 		toggleGravacaoAudio();
+	});
+	$('#btn-wa-audio-file').on('click', function(){
+		escolherArquivoAudio();
 	});
 	$('#btn-wa-assumir').on('click', function(){
 		if(!waConversaId) return;

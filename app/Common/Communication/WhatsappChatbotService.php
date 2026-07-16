@@ -232,7 +232,8 @@ class WhatsappChatbotService {
 		}
 
 		$api = EvolutionApiService::fromEnv();
-		$res = $api->sendAudio($instance, (string)$conversa->telefone, $path);
+		$mime = $arquivo['mimetype'] ?? null;
+		$res = $api->sendAudio($instance, (string)$conversa->telefone, $path, $mime);
 		$ok = $res !== null && $api->getLastHttpCode() < 400;
 		if (!$ok) {
 			self::$lastError = $api->getLastError() ?: 'Falha ao enviar áudio.';

@@ -233,16 +233,46 @@ class EvolutionApiService {
 		return $res;
 	}
 
-	/** Envia áudio como nota de voz (PTT). */
-	public function sendAudio(string $instance, string $number, string $audio): ?array {
+	/**
+	 * Envia áudio. Prioriza o mesmo fluxo multipart de imagem/documento (sendMedia),
+	 * depois tenta nota de voz (sendWhatsAppAudio).
+	 */
+	public function sendAudio(string $instance, string $number, string $audio, ?string $mimetype = null): ?array {
 		$number = self::normalizarTelefone($number);
 		if ($number === '' || $audio === '') {
 			$this->lastError = 'Número ou áudio inválidos.';
 			return null;
 		}
 
+		$mime = $mimetype;
+		$fileName = is_file($audio) ? basename($audio) : 'audio.ogg';
 		if (is_file($audio)) {
-			$res = $this->requestMultipart(
+			if (!$mime) {
+				$detected = @mime_content_type($audio);
+				$mime = is_string($detected) && $detected !== '' ? $detected : null;
+			}
+			if (!$mime) {
+				$ext = strtolower(pathinfo($audio, PATHINFO_EXTENSION));
+				$map = [
+					'wav'  => 'audio/wav',
+					'mp3'  => 'audio/mpeg',
+					'ogg'  => 'audio/ogg',
+					'opus' => 'audio/ogg',
+					'm4a'  => 'audio/mp4',
+					'aac'  => 'audio/aac',
+					'webm' => 'audio/webm',
+				];
+				$mime = $map[$ext] ?? 'audio/ogg';
+			}
+
+			// 1) Caminho que já funciona com imagem/documento
+			$resMedia = $this->sendMedia($instance, $number, $audio, 'audio', $mime, null, $fileName);
+			if ($resMedia !== null && $this->lastHttpCode < 400) {
+				return $resMedia;
+			}
+
+			// 2) Nota de voz (PTT)
+			$resPtt = $this->requestMultipart(
 				'/message/sendWhatsAppAudio/'.rawurlencode($instance),
 				[
 					'number'   => $number,
@@ -250,32 +280,48 @@ class EvolutionApiService {
 				],
 				'audio',
 				$audio,
-				null,
-				basename($audio)
+				$mime,
+				$fileName
 			);
-			if ($res !== null && $this->lastHttpCode < 400) {
-				return $res;
+			if ($resPtt !== null && $this->lastHttpCode < 400) {
+				return $resPtt;
 			}
-			// fallback: enviar como media audio
-			$resMedia = $this->sendMedia($instance, $number, $audio, 'audio', null, null, basename($audio));
-			if ($resMedia !== null && $this->lastHttpCode < 400) {
-				return $resMedia;
-			}
-		}
 
-		$payload = $audio;
-		if (is_file($audio)) {
 			$bin = file_get_contents($audio);
-			if ($bin === false) {
-				$this->lastError = 'Não foi possível ler o áudio.';
-				return null;
+			if ($bin !== false) {
+				$dataUri = 'data:'.$mime.';base64,'.base64_encode($bin);
+				$resJson = $this->request('POST', '/message/sendWhatsAppAudio/'.rawurlencode($instance), [
+					'number'   => $number,
+					'audio'    => $dataUri,
+					'encoding' => true,
+				]);
+				if ($resJson !== null && $this->lastHttpCode < 400) {
+					return $resJson;
+				}
+
+				// base64 puro
+				$resJson2 = $this->request('POST', '/message/sendWhatsAppAudio/'.rawurlencode($instance), [
+					'number'   => $number,
+					'audio'    => base64_encode($bin),
+					'encoding' => true,
+				]);
+				if ($resJson2 !== null && $this->lastHttpCode < 400) {
+					return $resJson2;
+				}
 			}
-			$payload = 'data:audio/ogg;base64,'.base64_encode($bin);
+
+			// 3) Último recurso: documento (entrega o arquivo)
+			$resDoc = $this->sendMedia($instance, $number, $audio, 'document', $mime, null, $fileName);
+			if ($resDoc !== null && $this->lastHttpCode < 400) {
+				return $resDoc;
+			}
+
+			return $resDoc ?? $resPtt ?? $resMedia;
 		}
 
 		return $this->request('POST', '/message/sendWhatsAppAudio/'.rawurlencode($instance), [
 			'number'   => $number,
-			'audio'    => $payload,
+			'audio'    => $audio,
 			'encoding' => true,
 		]);
 	}

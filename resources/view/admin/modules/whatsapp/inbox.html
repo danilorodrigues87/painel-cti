@@ -63,8 +63,11 @@
 									<i class="fas fa-paperclip"></i>
 									<input type="file" id="wa-input-doc" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.csv,application/pdf" class="d-none" disabled>
 								</label>
-								<button type="button" class="btn btn-outline-secondary" id="btn-wa-audio" title="Gravar áudio" disabled>
+								<button type="button" class="btn btn-outline-secondary" id="btn-wa-audio" title="Gravar áudio (WAV)" disabled>
 									<i class="fas fa-microphone"></i>
+								</button>
+								<button type="button" class="btn btn-outline-secondary" id="btn-wa-audio-file" title="Enviar arquivo de áudio" disabled>
+									<i class="fas fa-file-audio"></i>
 								</button>
 							</div>
 							<textarea class="form-control" id="wa-texto" rows="2" placeholder="Digite a mensagem (emojis ok)..." disabled></textarea>
@@ -125,4 +128,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260716d"></script>
+<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260716e"></script>
