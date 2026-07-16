@@ -14,6 +14,7 @@ class SystemModules {
 		'tarefas'         => 'Tarefas',
 		'comunicacao'     => 'Comunicação',
 		'campanhas'       => 'Campanhas',
+		'whatsapp'        => 'WhatsApp',
 		'vouchers'        => 'Vouchers',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
@@ -172,6 +173,11 @@ class SystemModules {
 					]
 				]
 			]
+		],
+		'whatsapp' => [
+			'label' => 'WhatsApp',
+			'link' => URL.'/painel/whatsapp',
+			'icon' => 'fab fa-whatsapp'
 		],
 		'Financeiro' => [
 			'label' => 'Financeiro',

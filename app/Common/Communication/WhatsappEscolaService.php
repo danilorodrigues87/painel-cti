@@ -3,6 +3,7 @@
 namespace App\Common\Communication;
 
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\WhatsappNumero;
 
 /**
  * Orquestra instância Evolution por escola (criar, QR, status, teste).
@@ -256,5 +257,7 @@ class WhatsappEscolaService {
 			$ob->whatsapp_max_hora = 40;
 		}
 		$ob->salvar();
+
+		WhatsappNumero::syncFromIntegracao($idAdmin, $instance, $estado, $numero);
 	}
 }

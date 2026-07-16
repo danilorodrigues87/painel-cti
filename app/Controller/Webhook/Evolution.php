@@ -4,8 +4,10 @@ namespace App\Controller\Webhook;
 
 use App\Common\Communication\EvolutionApiService;
 use App\Common\Communication\WhatsappEscolaService;
+use App\Common\Communication\WhatsappChatbotService;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
+use App\Model\Entity\WhatsappNumero;
 
 class Evolution {
 
@@ -52,6 +54,12 @@ class Evolution {
 			return;
 		}
 
+		$numeroId = null;
+		$default = WhatsappNumero::getDefault($idAdmin);
+		if ($default) {
+			$numeroId = (int)$default->id;
+		}
+
 		$itens = isset($data[0]) ? $data : [$data];
 		foreach ($itens as $msg) {
 			if (!is_array($msg)) {
@@ -75,7 +83,7 @@ class Evolution {
 			$tipo = self::extrairTipo($msg);
 			$waId = $key['id'] ?? ($msg['id'] ?? null);
 
-			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome);
+			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId);
 			if (!$conversa) {
 				continue;
 			}
@@ -91,6 +99,10 @@ class Evolution {
 			]);
 
 			$conversa->tocarUltimaMensagem();
+
+			if (!$fromMe) {
+				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
+			}
 		}
 	}
 

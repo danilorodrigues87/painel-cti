@@ -155,6 +155,7 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 		if (($userLogedData['usuario']['nivel'] ?? '') === 'Diretor') {
 			$allPermittedModules[] = 'Comunicação';
 			$allPermittedModules[] = 'Campanhas';
+			$allPermittedModules[] = 'WhatsApp';
 		}
 
 		$temAcesso = in_array($currentModule, $allPermittedModules);

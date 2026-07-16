@@ -155,13 +155,14 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 - Aplicado em campanhas, cobrança, teste SMTP
 - Botão **Auditar e-mails** → `EmailAuditoriaHelper` (alunos, responsáveis, leads)
 
-### 5.6 WhatsApp / Evolution API (Fase 3 — base)
-- Removido legado Meta/Gemini; integração nova via **Evolution API**
-- Credenciais globais: `EVOLUTION_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_SECRET` no `.env`
-- Instância por escola: `escola_{id_admin}` em `escola_integracoes`
-- Tela: `/painel/config/comunicacao` (bloco WhatsApp) — QR, status, teste, limites
-- Webhook: `POST /webhook/evolution/{id_admin}/{token}` → grava `whatsapp_conversas` / `whatsapp_mensagens`
-- Inbox multi-atendente e campanhas WA: próximos passos (Fases 3b / 4)
+### 5.6 WhatsApp / Evolution API (Fase 3)
+- Credenciais: `EVOLUTION_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_SECRET` no `.env`
+- 1 número por escola hoje (`escola_{id_admin}`); tabela `whatsapp_numeros` preparada para multi
+- Módulo/plano: slug `whatsapp` → label `WhatsApp` (Diretor liberado automático)
+- Inbox: `/painel/whatsapp` — conversas, assumir, transferir setor, responder
+- Setores + atendentes (Diretor na aba do inbox)
+- Chatbot: menu numérico de setores → fila → humano (`WhatsappChatbotService`)
+- Webhook grava msgs e dispara chatbot
 - Ops: `docs/OPERACAO_WHATSAPP.md`
 
 ### 5.7 Validação de e-mail nos cadastros
@@ -329,6 +330,56 @@ CREATE TABLE IF NOT EXISTS whatsapp_mensagens (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
+### WhatsApp inbox + setores + chatbot (Fase 3b)
+
+```sql
+-- Números (multi-ready; hoje 1 default por escola)
+CREATE TABLE IF NOT EXISTS whatsapp_numeros (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id_admin INT UNSIGNED NOT NULL,
+  evolution_instance VARCHAR(100) NOT NULL,
+  numero VARCHAR(30) DEFAULT NULL,
+  apelido VARCHAR(80) DEFAULT NULL,
+  status VARCHAR(40) NOT NULL DEFAULT 'disconnected',
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_wa_instance (evolution_instance),
+  KEY idx_wa_num_admin (id_admin)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_setores (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id_admin INT UNSIGNED NOT NULL,
+  nome VARCHAR(80) NOT NULL,
+  slug VARCHAR(40) NOT NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  ordem INT NOT NULL DEFAULT 0,
+  mensagem_fila TEXT DEFAULT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_wa_setor (id_admin, slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_atendentes (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id_admin INT UNSIGNED NOT NULL,
+  usuario_id INT UNSIGNED NOT NULL,
+  setor_id INT UNSIGNED NOT NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_wa_user_setor (usuario_id, setor_id),
+  KEY idx_wa_at_setor (setor_id),
+  KEY idx_wa_at_admin (id_admin)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Extensões nas conversas (ignore se já existir)
+ALTER TABLE whatsapp_conversas ADD COLUMN numero_id INT UNSIGNED NULL;
+ALTER TABLE whatsapp_conversas ADD COLUMN setor_id INT UNSIGNED NULL;
+ALTER TABLE whatsapp_conversas ADD COLUMN chatbot_estado VARCHAR(40) NOT NULL DEFAULT 'novo';
+ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
+```
+
 > Agenda v2, CRM, etc. têm SQLs próprios já aplicados em ambientes de desenvolvimento — conferir banco antes de recriar.
 
 ---
@@ -352,11 +403,12 @@ CREATE TABLE IF NOT EXISTS whatsapp_mensagens (
 | Operação e-mail (composer limpo, status-email, checklist) | Feito |
 | Automação aniversariantes por e-mail | Feito |
 | Evolution API: .env + QR/status/teste + webhook + tabelas | Feito (base Fase 3) |
+| Inbox + setores + chatbot menu | Feito (Fase 3b) |
 
 ### Próximo (ordem recomendada)
 | Fase | Escopo | Notas |
 |------|--------|-------|
-| **Fase 3b** | Inbox multi-atendente (UI conversas) | Usa `whatsapp_conversas` / `whatsapp_mensagens` |
+| **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 4** | WhatsApp **em massa** na mesma fila `campanhas` (`canal=whatsapp`) | Após inbox estável |
 | **Fase 5** | Automações CRM (mensagem ao mudar status do lead) | |
 | **Painel Mestre** | Cadastrar escolas, planos de assinatura, liberar slugs em `modulos_liberados` | Base Fase 0 pronta |

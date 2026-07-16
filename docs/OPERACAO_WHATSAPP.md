@@ -1,6 +1,6 @@
 # WhatsApp / Evolution API — operação
 
-## Variáveis no `.env` (servidor)
+## Variáveis no `.env`
 
 ```env
 EVOLUTION_URL=https://sua-evolution.exemplo.com
@@ -8,29 +8,36 @@ EVOLUTION_API_KEY=sua_chave
 EVOLUTION_WEBHOOK_SECRET=gere_um_segredo_longo
 ```
 
-Não commitar o `.env`. Em produção, use as mesmas chaves do servidor Evolution.
+## SQL
 
-## SQL (phpMyAdmin)
+1. Bloco **WhatsApp / Evolution** em `ARCHITECTURE.md` (se ainda não rodou)
+2. Bloco **WhatsApp inbox + setores + chatbot (Fase 3b)**
 
-Execute o bloco **WhatsApp / Evolution** em `ARCHITECTURE.md` (colunas em `escola_integracoes` + tabelas `whatsapp_conversas` / `whatsapp_mensagens`).
+## Plano / módulo
 
-## Uso no painel
+- Slug: `whatsapp` · Label: `WhatsApp`
+- Diretor: acesso automático
+- Funcionários: marcar **WhatsApp** nas permissões + liberar slug na escola se `modulos_liberados` for lista explícita
 
-1. Diretor → **Comunicação**
-2. Bloco **WhatsApp — Evolution API**
-3. **Conectar / QR** → escanear no celular
-4. **Enviar teste** com DDD + número
-5. **Salvar limites** (intervalo / máx. por hora — usados na Fase 4 de campanhas)
+Exemplo (escola com lista explícita):
 
-## Webhook
+```sql
+-- Ajuste o JSON conforme os módulos já liberados
+UPDATE escolas_assinantes
+SET modulos_liberados = JSON_ARRAY_APPEND(COALESCE(modulos_liberados, JSON_ARRAY()), '$', 'whatsapp')
+WHERE id = SEU_ID_ADMIN;
+```
 
-URL gerada automaticamente:
+(Se `modulos_liberados` for `NULL`, todos os módulos já estão liberados.)
 
-`{URL}/webhook/evolution/{id_admin}/{token}`
+## Fluxo
 
-- Em **localhost**, a Evolution na nuvem **não alcança** o XAMPP. Status/QR/envio de teste funcionam; inbox via webhook exige túnel (ngrok) ou servidor público.
-- Em produção com HTTPS, o webhook grava conversas/mensagens nas tabelas.
+1. **Comunicação** → conectar QR do número da escola  
+2. **WhatsApp** → aba *Setores e atendentes* → vincular usuários  
+3. Cliente manda mensagem → bot envia menu (1 Comercial, 2 Financeiro…)  
+4. Cliente escolhe → conversa vai para a **fila do setor**  
+5. Atendente **Assumir** → responde no inbox  
 
-## Instância
+## Multi-número (futuro)
 
-Nome padrão: `escola_{id_admin}` (uma por escola).
+Tabela `whatsapp_numeros` já existe; hoje sincroniza 1 registro *Principal* ao conectar.
