@@ -26,6 +26,8 @@ include __DIR__.'/admin/autentication.php';
 
 include __DIR__.'/admin/users.php';
 
+include __DIR__.'/admin/perfil.php';
+
 include __DIR__.'/admin/functions.php';
 
 include __DIR__.'/admin/agenda.php';

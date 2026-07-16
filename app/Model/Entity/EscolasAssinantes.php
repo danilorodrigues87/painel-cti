@@ -24,20 +24,62 @@ class EscolasAssinantes {
 	public $cidade;
 	public $cep;
 	public $modulos_liberados;
+	public $plan_id;
+
+	public static function temColunaPlanId(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('escolas_assinantes'))->execute(
+				"SHOW COLUMNS FROM escolas_assinantes LIKE 'plan_id'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
 
 	public static function getEscolaById($id) {
-		return self::getEscolas('id = '.(int)$id)->fetchObject(self::class);
+		$id = (int)$id;
+		if ($id <= 0) {
+			return false;
+		}
+		// Aceita busca por PK ou id_admin (legado empresas)
+		$ob = self::getEscolas('id = '.$id)->fetchObject(self::class);
+		if ($ob instanceof self) {
+			return $ob;
+		}
+		return self::getEscolas('id_admin = '.$id)->fetchObject(self::class);
 	}
 
 	public static function getEscolas($where = null, $order = null, $limit = null, $fields = '*') {
 		return (new Database('escolas_assinantes'))->select($where, $order, $limit, $fields);
 	}
 
+	/** Aceita 1, "1", "s", "S", true como ativo (legado misturado). */
+	public static function isAtivaValor($ativo): bool {
+		if ($ativo === true || $ativo === 1 || $ativo === '1') {
+			return true;
+		}
+		if (is_string($ativo)) {
+			$v = strtolower(trim($ativo));
+			return $v === 's' || $v === 'sim' || $v === 'ativo' || $v === 'true';
+		}
+		return false;
+	}
+
+	public function isAtiva(): bool {
+		return self::isAtivaValor($this->ativo ?? null);
+	}
+
 	public function cadastrar() {
 		$obDatabase = new Database('escolas_assinantes');
-		$this->id = $obDatabase->insert([
+		$dados = [
 			'nome'               => $this->nome,
-			'id_admin'           => $this->id_admin,
+			'id_admin'           => (int)($this->id_admin ?: 0),
 			'ativo'              => $this->ativo,
 			'cpf_cnpj'           => $this->cpf_cnpj,
 			'email'              => $this->email,
@@ -52,14 +94,30 @@ class EscolasAssinantes {
 			'estado'             => $this->estado,
 			'cidade'             => $this->cidade,
 			'cep'                => $this->cep,
-			'modulos_liberados'  => $this->modulos_liberados
-		]);
+			'modulos_liberados'  => $this->modulos_liberados,
+		];
+		if (self::temColunaPlanId()) {
+			$dados['plan_id'] = $this->plan_id !== null && $this->plan_id !== ''
+				? (int)$this->plan_id
+				: null;
+		}
+		$this->id = (int)$obDatabase->insert($dados);
+
+		// Tenant = PK da escola
+		if ($this->id > 0 && (int)$this->id_admin !== $this->id) {
+			$this->id_admin = $this->id;
+			(new Database('escolas_assinantes'))->update('id = '.$this->id, [
+				'id_admin' => $this->id,
+			]);
+		}
+
 		return true;
 	}
 
 	public function atualizar() {
-		return (new Database('escolas_assinantes'))->update('id = '.(int)$this->id, [
+		$dados = [
 			'nome'               => $this->nome,
+			'id_admin'           => (int)($this->id_admin ?: $this->id),
 			'ativo'              => $this->ativo,
 			'cpf_cnpj'           => $this->cpf_cnpj,
 			'email'              => $this->email,
@@ -74,8 +132,14 @@ class EscolasAssinantes {
 			'estado'             => $this->estado,
 			'cidade'             => $this->cidade,
 			'cep'                => $this->cep,
-			'modulos_liberados'  => $this->modulos_liberados
-		]);
+			'modulos_liberados'  => $this->modulos_liberados,
+		];
+		if (self::temColunaPlanId()) {
+			$dados['plan_id'] = $this->plan_id !== null && $this->plan_id !== ''
+				? (int)$this->plan_id
+				: null;
+		}
+		return (new Database('escolas_assinantes'))->update('id = '.(int)$this->id, $dados);
 	}
 
 	public function excluir() {

@@ -305,6 +305,7 @@ class Campanhas extends Page {
 				'destinatario_id'   => $dest['destinatario_id'] ?? null,
 				'nome'              => $dest['nome'] ?? '',
 				'contato'           => $dest['contato'],
+				'curso'             => $dest['curso'] ?? '',
 			];
 		}
 

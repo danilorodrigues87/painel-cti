@@ -86,11 +86,25 @@ class Evolution {
 				continue;
 			}
 
+			if (self::ignorarMensagemSistema($msg)) {
+				continue;
+			}
+
 			$nome = $msg['pushName'] ?? null;
-			$corpo = self::extrairTexto($msg);
 			$tipo = self::extrairTipo($msg);
+			$corpo = self::extrairTexto($msg);
 			$waId = $key['id'] ?? ($msg['id'] ?? null);
 			$mediaUrl = self::salvarMidiaRecebida($idAdmin, $instanceName, $msg, $tipo);
+
+			// Reação sem emoji = remoção; ainda registramos com texto amigável
+			if ($tipo === 'reaction' && ($corpo === null || $corpo === '')) {
+				$corpo = '';
+			}
+
+			// Evita bolha vazia de eventos sem conteúdo útil
+			if ($tipo === 'text' && ($corpo === null || trim((string)$corpo) === '') && $mediaUrl === null) {
+				continue;
+			}
 
 			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId);
 			if (!$conversa) {
@@ -110,10 +124,37 @@ class Evolution {
 
 			$conversa->tocarUltimaMensagem(!$fromMe);
 
-			if (!$fromMe) {
+			// Reações não disparam o chatbot de menu
+			if (!$fromMe && $tipo !== 'reaction') {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
 			}
 		}
+	}
+
+	/** Eventos internos do WhatsApp que não devem virar mensagem no inbox. */
+	private static function ignorarMensagemSistema(array $msg): bool {
+		$message = $msg['message'] ?? [];
+		if (!is_array($message)) {
+			return false;
+		}
+		$chavesIgnorar = [
+			'protocolMessage',
+			'senderKeyDistributionMessage',
+			'messageContextInfo',
+			'assocChildMessage',
+			'deviceSentMessage',
+		];
+		foreach ($chavesIgnorar as $k) {
+			if (isset($message[$k])) {
+				return true;
+			}
+		}
+		// Só contexto sem conteúdo
+		$keys = array_keys($message);
+		$keys = array_filter($keys, static function ($k) {
+			return $k !== 'messageContextInfo';
+		});
+		return count($keys) === 0;
 	}
 
 	private static function salvarMidiaRecebida(int $idAdmin, string $instance, array $msg, string $tipo): ?string {
@@ -182,6 +223,14 @@ class Evolution {
 		if (!is_array($message)) {
 			return null;
 		}
+		if (isset($message['reactionMessage'])) {
+			$react = $message['reactionMessage'];
+			if (is_array($react)) {
+				$text = $react['text'] ?? $react['reaction'] ?? '';
+				return is_string($text) ? $text : '';
+			}
+			return '';
+		}
 		if (!empty($message['conversation'])) {
 			return (string)$message['conversation'];
 		}
@@ -210,6 +259,9 @@ class Evolution {
 		$message = $msg['message'] ?? [];
 		if (!is_array($message)) {
 			return 'text';
+		}
+		if (isset($message['reactionMessage'])) {
+			return 'reaction';
 		}
 		if (isset($message['imageMessage'])) {
 			return 'image';

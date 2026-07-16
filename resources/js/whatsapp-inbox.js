@@ -23,6 +23,17 @@ function esc(s){
 	return $('<div>').text(s == null ? '' : String(s)).html();
 }
 
+/** Busca da lista — ignora autofill de e-mail do navegador. */
+function valorBuscaWa(){
+	const $el = $('#wa-busca');
+	let v = String($el.val() || '').trim();
+	if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){
+		$el.val('');
+		return '';
+	}
+	return v;
+}
+
 function htmlCorpoMensagem(m){
 	const tipo = m.tipo || 'text';
 	const media = m.media_url_full || '';
@@ -49,8 +60,18 @@ function htmlCorpoMensagem(m){
 			+'<i class="fas fa-file-alt"></i> '+esc(nome)+'</a>';
 		return html;
 	}
+	if(tipo === 'reaction'){
+		const emoji = (m.corpo || '').trim();
+		if(emoji){
+			return '<span class="small text-muted">Reagiu com </span><span style="font-size:1.35rem;line-height:1;">'+esc(emoji)+'</span>';
+		}
+		return '<em class="small text-muted">Removeu a reação</em>';
+	}
 	if(tipo !== 'text' && !m.corpo){
 		return '<em class="small">['+esc(tipo)+']</em>';
+	}
+	if(!(m.corpo || '').trim()){
+		return '<em class="small text-muted">[mensagem sem texto]</em>';
 	}
 	return esc(m.corpo || '');
 }
@@ -92,7 +113,7 @@ function carregarConversas(){
 	waPost({
 		acao: 'listar',
 		filtro: waFiltro,
-		busca: ($('#wa-busca').val() || '').trim()
+		busca: valorBuscaWa()
 	}, function(res){
 		if(!res || !res.success){
 			$('#alert-wa-sql').removeClass('d-none').text((res && res.message) ? res.message : 'Não foi possível listar.');
@@ -439,6 +460,17 @@ function promptSetor(s){
 }
 
 $(function(){
+	// Evita autofill do navegador (e-mail/login) no campo de busca
+	const $busca = $('#wa-busca');
+	$busca.val('').attr('readonly', true);
+	$busca.on('focus', function(){ $(this).removeAttr('readonly'); });
+	$busca.on('blur', function(){
+		if(!String($(this).val() || '').trim()){
+			$(this).attr('readonly', true);
+		}
+	});
+	setTimeout(function(){ $busca.val(''); }, 100);
+
 	carregarConversas();
 	// Atualiza lista + chat aberto a cada 5s (sem recarregar a página)
 	waPoll = setInterval(atualizarInbox, 5000);

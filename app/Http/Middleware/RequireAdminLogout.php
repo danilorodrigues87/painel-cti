@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use \App\Session\User\Login as SessionAdminLogin;
+use \App\Common\Helpers\MasterGateHelper;
 
 class RequireAdminLogout{
 
@@ -10,6 +11,9 @@ class RequireAdminLogout{
 
 		//VERIFICA SE O USUÁRIO ESTÁ LOGADO
 		if(SessionAdminLogin::isUserLogged()){
+			if (SessionAdminLogin::syncSessionFromDatabase() && MasterGateHelper::isMasterSession()) {
+				$request->getRouter()->redirect('/master');
+			}
 			$request->getRouter()->redirect('/painel');
 		}
 

@@ -13,6 +13,7 @@ class CampanhaFila {
 	public $destinatario_id;
 	public $nome;
 	public $contato;
+	public $curso;
 	public $status = 'pendente';
 	public $tentativas = 0;
 	public $erro_msg;
@@ -42,12 +43,29 @@ class CampanhaFila {
 		);
 	}
 
+	public static function temColunaCurso(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('campanha_fila'))->execute(
+				"SHOW COLUMNS FROM campanha_fila LIKE 'curso'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
 	public static function inserirLote(array $itens): int {
 		$inseridos = 0;
 		$db = new Database('campanha_fila');
+		$comCurso = self::temColunaCurso();
 
 		foreach ($itens as $item) {
-			$db->insert([
+			$row = [
 				'campanha_id'        => (int)$item['campanha_id'],
 				'id_admin'           => (int)$item['id_admin'],
 				'destinatario_tipo'  => $item['destinatario_tipo'],
@@ -55,7 +73,13 @@ class CampanhaFila {
 				'nome'               => $item['nome'] ?? null,
 				'contato'            => $item['contato'],
 				'status'             => 'pendente',
-			]);
+			];
+			if ($comCurso) {
+				$row['curso'] = isset($item['curso']) && $item['curso'] !== ''
+					? mb_substr((string)$item['curso'], 0, 255)
+					: null;
+			}
+			$db->insert($row);
 			$inseridos++;
 		}
 

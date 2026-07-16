@@ -11,6 +11,9 @@ $obRouter = new Router(URL);
 //INCLUI AS ROTAS DO PAINEL
 include __DIR__.'/routes/admin.php';
 
+//INCLUI AS ROTAS DO PAINEL MASTER
+include __DIR__.'/routes/master.php';
+
 //INCLUI AS ROTAS DE APIS
 include __DIR__.'/routes/api.php';
 

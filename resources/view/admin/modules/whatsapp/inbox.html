@@ -37,7 +37,17 @@
 							<button type="button" class="btn btn-outline-secondary" data-filtro="minhas">Minhas</button>
 							<button type="button" class="btn btn-outline-secondary" data-filtro="fila">Fila</button>
 						</div>
-						<input type="search" class="form-control form-control-sm" id="wa-busca" placeholder="Buscar nome ou telefone...">
+						<input type="text" class="form-control form-control-sm" id="wa-busca"
+							name="wa_filtro_conversas"
+							placeholder="Buscar nome ou telefone..."
+							autocomplete="off"
+							autocapitalize="off"
+							autocorrect="off"
+							spellcheck="false"
+							data-lpignore="true"
+							data-1p-ignore="true"
+							data-form-type="other"
+							readonly>
 					</div>
 					<div class="list-group list-group-flush overflow-auto" id="wa-lista-conversas" style="max-height:65vh;"></div>
 				</div>
@@ -142,4 +152,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260716i"></script>
+<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260716j"></script>

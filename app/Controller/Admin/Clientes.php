@@ -9,6 +9,7 @@ use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\EmailValidator;
+use \App\Common\Helpers\UserFotoHelper;
 
 class Clientes extends Page{
 
@@ -209,11 +210,11 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 } 
 
 		// COMEÇA O FORM
-		$form = '<form id="form" method="post">
+		$form = '<form id="form" method="post" enctype="multipart/form-data">
 
 		<!-- HEADER -->
 		<div class="modal-header">
-		<h1 class="modal-title fs-5" id="exampleModalLabel">Usuários</h1>
+		<h1 class="modal-title fs-5" id="exampleModalLabel">Alunos</h1>
 		<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 		</div>
 
@@ -223,6 +224,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 
 		<!-- INICIA A ROW PRINCIPAL -->
 		<div class="row">
+		'.UserFotoHelper::htmlCampoFormulario(@$dados['foto'] ?? null, 'input-foto-aluno').'
 
 		<div class="form-group col-md-4">
 		<label>Nome</label>
@@ -340,6 +342,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 		$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 
 		$postVars = $request->getPostVars();
+		$fileVars = $request->getFileVars();
 	
 
 		$permission = array();
@@ -386,6 +389,15 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 	}
     
 
+		$fotoAtual = $postVars['foto_atual'] ?? null;
+		if (!empty($postVars['id'])) {
+			$atual = EntityUser::getUserById((int)$postVars['id']);
+			if ($atual instanceof EntityUser && !empty($atual->foto)) {
+				$fotoAtual = $atual->foto;
+			}
+		}
+		$foto = UserFotoHelper::processarUpload($fileVars['foto'] ?? null, $fotoAtual);
+
 		if($postVars['id'] != ''){
 
 			$id = (int)$postVars['id'];
@@ -416,6 +428,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			$obUsers->cidade = $cidade;
 			$obUsers->ativo = $ativo;
 			$obUsers->acesso = $acesso;
+			$obUsers->foto = $foto;
 			$obUsers->atualizar();
 
 		} else {
@@ -446,6 +459,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			$obUsers->cidade = $cidade;
 			$obUsers->ativo = $ativo;
 			$obUsers->acesso = $acesso;
+			$obUsers->foto = $foto;
 			$obUsers->id_admin = $id_admin;
 			$obUsers->cadastrar();
 		}

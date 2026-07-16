@@ -107,4 +107,12 @@ class ModuleGateHelper {
 		return $raw === null || $raw === '';
 	}
 
+	public static function limparCache(?int $idAdmin = null): void {
+		if ($idAdmin === null) {
+			self::$cacheEscola = [];
+			return;
+		}
+		unset(self::$cacheEscola[$idAdmin]);
+	}
+
 }

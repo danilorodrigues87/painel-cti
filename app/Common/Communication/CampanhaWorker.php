@@ -5,6 +5,7 @@ namespace App\Common\Communication;
 use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Model\Entity\Campanhas;
 use App\Model\Entity\CampanhaFila;
+use App\Model\Entity\CrmLeads;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\EscolasAssinantes;
 
@@ -95,7 +96,7 @@ class CampanhaWorker {
 			$vars = [
 				'nome'    => $item->nome ?? '',
 				'contato' => $item->contato,
-				'curso'   => '',
+				'curso'   => self::resolverCursoItem($item),
 				'escola'  => $nomeEscola,
 			];
 
@@ -175,5 +176,54 @@ class CampanhaWorker {
 
 		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
 		return (int)($row['qtd'] ?? 0);
+	}
+
+	/** Resolve {curso}: valor da fila (se existir) ou busca no lead/aluno. */
+	private static function resolverCursoItem(CampanhaFila $item): string {
+		$salvo = trim((string)($item->curso ?? ''));
+		if ($salvo !== '') {
+			return $salvo;
+		}
+
+		$tipo = (string)($item->destinatario_tipo ?? '');
+		$id = (int)($item->destinatario_id ?? 0);
+		if ($id <= 0) {
+			return '';
+		}
+
+		if ($tipo === 'lead') {
+			$lead = CrmLeads::getLeadById($id);
+			if ($lead instanceof CrmLeads) {
+				return trim((string)($lead->curso_interesse ?? ''));
+			}
+			return '';
+		}
+
+		if ($tipo === 'aluno') {
+			return self::cursoAlunoAtivo((int)$item->id_admin, $id);
+		}
+
+		return '';
+	}
+
+	private static function cursoAlunoAtivo(int $idAdmin, int $idAluno): string {
+		$sql = '
+			SELECT t.nome AS curso
+			FROM matriculas m
+			LEFT JOIN trilhas t ON t.id = m.id_trilha
+			WHERE m.id_aluno = ?
+			  AND m.id_admin = ?
+			  AND m.status = 0
+			  AND m.fim >= ?
+			ORDER BY m.fim DESC
+			LIMIT 1
+		';
+		$row = (new \App\Model\Db\Database('matriculas'))->execute($sql, [
+			$idAluno,
+			$idAdmin,
+			date('Y-m-d'),
+		])->fetch(\PDO::FETCH_ASSOC);
+
+		return trim((string)($row['curso'] ?? ''));
 	}
 }

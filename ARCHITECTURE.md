@@ -13,12 +13,12 @@
 ## 1. Visão geral do produto
 
 Painel administrativo multi-tenant para **escolas** (assinantes). Cada escola é isolada por `id_admin`.  
-Há um **Painel Mestre** planejado (ainda não implementado) para cadastrar escolas, planos e liberar módulos.
+Há um **Painel Master** em `/master` (MVP): cadastrar escolas e liberar módulos. Planos/cobrança SaaS ficam para fase seguinte.
 
 ```
-[Futuro] Painel Mestre
-        ↓ libera módulos / planos
-escolas_assinantes (tenant = id)
+Painel Master (/master) — e-mails em MASTER_EMAILS (.env)
+        ↓ libera módulos (modulos_liberados)
+escolas_assinantes (tenant = id = id_admin)
         ↓
 usuarios (acesso JSON ∩ modulos_liberados da escola)
         ↓
@@ -411,7 +411,8 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 4** | WhatsApp **em massa** na mesma fila `campanhas` (`canal=whatsapp`) | Após inbox estável |
 | **Fase 5** | Automações CRM (mensagem ao mudar status do lead) | |
-| **Painel Mestre** | Cadastrar escolas, planos de assinatura, liberar slugs em `modulos_liberados` | Base Fase 0 pronta |
+| **Painel Master (MVP)** | `/master`: escolas + módulos + Diretor; `MASTER_EMAILS` no `.env` | Feito |
+| **Painel Master (fase 2)** | Planos comerciais, cobrança de assinatura, dashboard SaaS | Próximo |
 | **Dashboard** | Remover top vendedores fictícios; cards CRM/inadimplência reais | |
 | **LGPD** | Link de descadastro em e-mail marketing | |
 

@@ -10,6 +10,7 @@ use \App\Common\SystemModules;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\ModuleGateHelper;
 use \App\Common\Helpers\EmailValidator;
+use \App\Common\Helpers\UserFotoHelper;
 
 class User extends Page{
 
@@ -48,6 +49,12 @@ class User extends Page{
 			}
 		} else {
 			$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel NOT IN ("Cliente","Empresa")';
+		}
+
+		// Não listar operadores do Painel Master na escola
+		$emailsMaster = \App\Common\Helpers\MasterGateHelper::emailsPermitidos();
+		foreach ($emailsMaster as $em) {
+			$where .= ' AND email != "'.addslashes($em).'"';
 		}
 
 		$itens = '';
@@ -179,7 +186,7 @@ private static function getForm($request) {
 	$optEstadoSelect .= '</select>';
  
     // Formulário HTML
-	$form = '<form id="form" method="post">
+	$form = '<form id="form" method="post" enctype="multipart/form-data">
 
 	<!-- HEADER -->
 	<div class="modal-header">
@@ -193,6 +200,7 @@ private static function getForm($request) {
 
 	<!-- INICIA A ROW PRINCIPAL -->
 	<div class="row">
+	'.UserFotoHelper::htmlCampoFormulario($dados['foto'] ?? null, 'input-foto-funcionario').'
 
 	<div class="form-group col-md-3">
 	<label>Nome</label>
@@ -320,6 +328,7 @@ public static function setNewUser($request) {
     // DADOS DO ADMIN
 	$id_admin = parent::getIdAdminInt();
 	$postVars = $request->getPostVars();
+	$fileVars = $request->getFileVars();
 
 	$resposta = [
 		"filtro" => null
@@ -382,6 +391,15 @@ public static function setNewUser($request) {
 	}
 
 
+	$fotoAtual = $postVars['foto_atual'] ?? null;
+	if (!empty($postVars['id'])) {
+		$atual = EntityUser::getUserById((int)$postVars['id']);
+		if ($atual instanceof EntityUser && !empty($atual->foto)) {
+			$fotoAtual = $atual->foto;
+		}
+	}
+	$foto = UserFotoHelper::processarUpload($fileVars['foto'] ?? null, $fotoAtual);
+
     // Adicionar ou atualizar o usuário
 	if ($postVars['id'] != '') {
 
@@ -410,6 +428,7 @@ public static function setNewUser($request) {
 		$obUsers->cidade = $cidade;
 		$obUsers->ativo = $ativo;
 		$obUsers->acesso = $acesso;
+		$obUsers->foto = $foto;
 		$obUsers->atualizar();
 
 	} else {
@@ -440,6 +459,7 @@ public static function setNewUser($request) {
 		$obUsers->cidade = $cidade;
 		$obUsers->ativo = $ativo;
 		$obUsers->acesso = $acesso;
+		$obUsers->foto = $foto;
 		$obUsers->id_admin = $id_admin;
 		$obUsers->cadastrar();
 	}

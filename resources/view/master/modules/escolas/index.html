@@ -1,0 +1,151 @@
+<h1 class="mt-4">Escolas</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Cadastro, planos, suporte e módulos</li>
+</ol>
+
+<div id="alert-plan-id" class="alert alert-warning small d-none">
+	Execute o SQL da coluna <code>plan_id</code> para vincular escolas a planos (veja a tela Planos).
+</div>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+	<button type="button" class="btn btn-primary btn-sm" id="btn-nova-escola">
+		<i class="fas fa-plus"></i> Nova escola
+	</button>
+	<input type="text" class="form-control form-control-sm" id="filtro-escola" placeholder="Filtrar por nome..." style="max-width:260px;" autocomplete="off">
+</div>
+
+<div class="card shadow-sm">
+	<div class="card-body p-0">
+		<div class="table-responsive">
+			<table class="table table-hover mb-0">
+				<thead class="table-light">
+					<tr>
+						<th>ID</th>
+						<th>Nome</th>
+						<th>Plano</th>
+						<th>Contato</th>
+						<th>Status</th>
+						<th class="text-end">Ações</th>
+					</tr>
+				</thead>
+				<tbody id="lista-escolas-master">
+					<tr><td colspan="6" class="text-center text-muted py-4">Carregando...</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="modalEscolaMaster" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg modal-dialog-scrollable">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="titulo-modal-escola">Nova escola</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+			</div>
+			<div class="modal-body">
+				<form id="form-escola-master" autocomplete="off" onsubmit="return false;">
+					<input type="hidden" id="escola_id" value="">
+					<div class="row g-3">
+						<div class="col-md-8">
+							<label class="form-label" for="escola_nome">Nome da escola *</label>
+							<input type="text" class="form-control" id="escola_nome" required>
+						</div>
+						<div class="col-md-4">
+							<label class="form-label" for="escola_ativo">Status</label>
+							<select class="form-select" id="escola_ativo">
+								<option value="1">Ativa</option>
+								<option value="0">Inativa</option>
+							</select>
+						</div>
+						<div class="col-md-6" id="wrap-plan-id">
+							<label class="form-label" for="escola_plan_id">Plano</label>
+							<select class="form-select" id="escola_plan_id">
+								<option value="">Personalizado (módulos manuais)</option>
+							</select>
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="escola_email">E-mail da escola</label>
+							<input type="email" class="form-control" id="escola_email" autocomplete="off">
+						</div>
+						<div class="col-md-3">
+							<label class="form-label" for="escola_telefone">Telefone</label>
+							<input type="text" class="form-control" id="escola_telefone">
+						</div>
+						<div class="col-md-3">
+							<label class="form-label" for="escola_cpf_cnpj">CPF/CNPJ</label>
+							<input type="text" class="form-control" id="escola_cpf_cnpj">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="escola_site">Site</label>
+							<input type="text" class="form-control" id="escola_site">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="escola_cep">CEP</label>
+							<input type="text" class="form-control" id="escola_cep">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="escola_endereco">Endereço</label>
+							<input type="text" class="form-control" id="escola_endereco">
+						</div>
+						<div class="col-md-2">
+							<label class="form-label" for="escola_numero">Nº</label>
+							<input type="text" class="form-control" id="escola_numero">
+						</div>
+						<div class="col-md-4">
+							<label class="form-label" for="escola_bairro">Bairro</label>
+							<input type="text" class="form-control" id="escola_bairro">
+						</div>
+						<div class="col-md-6">
+							<label class="form-label" for="escola_cidade">Cidade</label>
+							<input type="text" class="form-control" id="escola_cidade">
+						</div>
+						<div class="col-md-2">
+							<label class="form-label" for="escola_estado">UF</label>
+							<input type="text" class="form-control" id="escola_estado" maxlength="2">
+						</div>
+
+						<div class="col-12" id="wrap-diretor-novo">
+							<hr>
+							<h6 class="mb-2">Diretor (primeiro acesso)</h6>
+							<div class="row g-2">
+								<div class="col-md-6">
+									<label class="form-label" for="diretor_nome">Nome *</label>
+									<input type="text" class="form-control" id="diretor_nome">
+								</div>
+								<div class="col-md-6">
+									<label class="form-label" for="diretor_email">E-mail *</label>
+									<input type="email" class="form-control" id="diretor_email" autocomplete="off">
+								</div>
+							</div>
+						</div>
+
+						<div class="col-12" id="wrap-modulos-manuais">
+							<hr>
+							<div class="d-flex justify-content-between align-items-center mb-2">
+								<h6 class="mb-0">Módulos liberados</h6>
+								<div class="form-check form-switch">
+									<input class="form-check-input" type="checkbox" id="todos_modulos" checked>
+									<label class="form-check-label" for="todos_modulos">Todos os módulos</label>
+								</div>
+							</div>
+							<div id="lista-modulos-master" class="row g-2 border rounded p-2" style="max-height:220px;overflow:auto;"></div>
+							<div class="form-text" id="hint-modulos-plano">Com um plano selecionado, os módulos vêm do plano.</div>
+						</div>
+					</div>
+				</form>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+				<button type="button" class="btn btn-primary" id="btn-salvar-escola">Salvar</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+window.MASTER_MODULOS = {{modulos_json}};
+window.MASTER_PLANOS = {{planos_json}};
+window.MASTER_TEM_PLAN_ID = {{tem_plan_id}};
+</script>
+<script src="{{URL}}/resources/js/master-escolas.js?v=20260716p"></script>

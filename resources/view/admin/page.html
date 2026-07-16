@@ -14,11 +14,12 @@
   
   <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="{{URL}}/resources/js/url-base.js?v=20260714c"></script>
+<script src="{{URL}}/resources/js/url-base.js?v=20260716m"></script>
 </head>
 
 
 <body class="sb-nav-fixed">
+  {{banner_impersonate}}
   <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
     <!-- Navbar Brand-->
 
@@ -32,9 +33,11 @@
     <!-- Navbar-->
     <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
       <li class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
+        <a class="nav-link dropdown-toggle d-flex align-items-center" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <img id="nav-user-foto" src="{{foto_url}}" alt="" width="28" height="28" class="rounded-circle me-1" style="object-fit:cover;border:1px solid rgba(255,255,255,.35);">
+        </a>
         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-          <li><a class="dropdown-item" onclick="perfil()" href="#"><i class="fa-regular fa-id-badge"></i> Perfil</a></li>
+          <li><a class="dropdown-item" href="{{URL}}/painel/perfil"><i class="fa-regular fa-id-badge"></i> Perfil</a></li>
           <li><a class="dropdown-item" data-bs-toggle="modal" data-bs-target="#modalResetSenha" href="#"><i class="fa-solid fa-lock"></i> Mudar senha</a></li>
           <li><hr class="dropdown-divider" /></li>
           <li><a class="dropdown-item" href="{{URL}}/logout"><i class="fa-solid fa-arrow-right-from-bracket"></i> Sair</a></li>
@@ -71,19 +74,7 @@
   <script>
     let estadoCidades = 'painel/get_cidades';
     let resetarSenha = 'reset_senha';
-    let perfilEdicao = 'painel/form-profile';
-    let saveProfile = 'painel/save-profile';
   </script>
-
-<!-- Modal Perfil -->
-<div class="modal fade" id="modalPerfil" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content ">
-      <div id="body_perfil"></div>
-    </div>
-  </div>
-</div>
-
 
 <!-- Modal Redefinir senha-->
 <div class="modal fade" id="modalResetSenha" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">

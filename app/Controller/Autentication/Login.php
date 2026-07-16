@@ -4,8 +4,10 @@ namespace App\Controller\Autentication;
 
 use \App\Utils\View;
 use \App\Model\Entity\User;
+use \App\Model\Entity\EscolasAssinantes;
 use \App\Controller\Admin\Alert;
 use \App\Session\User\Login as SessionUserLogin;
+use \App\Common\Helpers\MasterGateHelper;
 
 class Login{
 
@@ -69,11 +71,22 @@ class Login{
 			// Retorna um alerta de acesso negado
 		return self::getLogin($request,'Você não tem permissão para acessar essa área.');
 
-		} 
+		}
 
+		$isMaster = MasterGateHelper::isMasterEmail($obUser->email ?? '');
+		$escola = EscolasAssinantes::getEscolaById((int)$obUser->id_admin);
+		if ($escola instanceof EscolasAssinantes && !$escola->isAtiva() && !$isMaster) {
+			return self::getLogin($request, 'Esta escola está inativa. Contate o suporte.');
+		}
 
 		//CRIA A SESSÃO DE LOGIN
-		SessionUserLogin::login($obUser); 
+		SessionUserLogin::login($obUser);
+
+		if ($isMaster) {
+			$_SESSION['usuario-mvc-1']['is_master'] = true;
+			$request->getRouter()->redirect('/master');
+		}
+
 		//REDIRECIONA O USUÁRIO PARA A HOME DO ADMIN
 		$request->getRouter()->redirect('/painel');
 

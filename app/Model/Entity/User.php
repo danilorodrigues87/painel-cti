@@ -9,7 +9,24 @@ class User{
 	$nome,
 	$email,
 	$senha,
-	$id_responsavel=0;
+	$id_responsavel=0,
+	$foto;
+
+	public static function temColunaFoto(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('usuarios'))->execute(
+				"SHOW COLUMNS FROM usuarios LIKE 'foto'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
 
 	//RETORNA UM USUÁRIO COM BASE NO EMAIL
 	public static function getUserByEmail($email){
@@ -33,7 +50,7 @@ class User{
 		
 		//INSERIR OS DADOS PARA O BANCO DE DADOS
 		$obDatabase = new Database('usuarios');
-		$this->id = $obDatabase->insert([
+		$dados = [
 			'nome' => $this->nome,
 			'id_responsavel' => $this->id_responsavel,
 			'email' => $this->email,
@@ -51,7 +68,11 @@ class User{
 			'ativo' => $this->ativo,
 			'acesso' => $this->acesso,
 			'id_admin' => $this->id_admin
-		]);
+		];
+		if (self::temColunaFoto()) {
+			$dados['foto'] = $this->foto ?: null;
+		}
+		$this->id = $obDatabase->insert($dados);
 		
 		return true;
 	} 
@@ -66,7 +87,7 @@ class User{
 	public function atualizar(){
 
 		//ATUALIZA OS DADOS PARA O BANCO DE DADOS
-		return (new Database('usuarios'))->update('id = '.$this->id,[
+		$dados = [
 			'nome' => $this->nome,
 			'email' => $this->email,
 			'nivel' => $this->nivel,
@@ -82,7 +103,11 @@ class User{
 			'cidade' => $this->cidade,
 			'ativo' => $this->ativo,
 			'acesso' => $this->acesso
-		]);
+		];
+		if (self::temColunaFoto()) {
+			$dados['foto'] = $this->foto ?: null;
+		}
+		return (new Database('usuarios'))->update('id = '.$this->id, $dados);
 
 	}
 
@@ -91,7 +116,7 @@ class User{
 	public function atualizaPerfil(){
 
 		//ATUALIZA OS DADOS PARA O BANCO DE DADOS
-		return (new Database('usuarios'))->update('id = '.$this->id,[
+		$dados = [
 			'nome' => $this->nome,
 			'email' => $this->email,
 			'whatsapp' => $this->whatsapp,
@@ -103,7 +128,11 @@ class User{
 			'bairro' => $this->bairro,
 			'uf' => $this->uf,
 			'cidade' => $this->cidade
-		]);
+		];
+		if (self::temColunaFoto()) {
+			$dados['foto'] = $this->foto ?: null;
+		}
+		return (new Database('usuarios'))->update('id = '.$this->id, $dados);
 
 	}
 

@@ -8,6 +8,7 @@ use \App\Model\Entity\User;
 use \App\Common\SystemModules;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\ModuleGateHelper;
+use \App\Common\Helpers\UserFotoHelper;
 
 class Page {
 
@@ -19,6 +20,7 @@ class Page {
 
     if($termosAceito){
         $defaultModules[] = "Dashboard";
+        $defaultModules[] = "Perfil";
     }
 
     return $defaultModules;
@@ -38,12 +40,31 @@ class Page {
 	public static function getPage($title,$content){
 		$userLogedData = SessionUser::getUserLogedData();
 
+		$bannerImpersonate = '';
+		if (SessionUser::isImpersonating()) {
+			$info = SessionUser::getImpersonateInfo() ?: [];
+			$nomeEscola = htmlspecialchars((string)($info['escola_nome'] ?? 'escola'), ENT_QUOTES, 'UTF-8');
+			$bannerImpersonate = '<div class="alert alert-warning py-2 px-3 mb-0 rounded-0 text-center small">'
+				.'<i class="fas fa-user-secret me-1"></i> Você está no suporte da escola <strong>'.$nomeEscola.'</strong>. '
+				.'<a class="alert-link fw-bold" href="'.URL.'/master/voltar">Voltar ao Painel Master</a>'
+				.'</div>';
+		}
+
+		$uid = (int)($userLogedData['usuario']['id'] ?? 0);
+		$fotoUser = UserFotoHelper::urlPadrao();
+		if ($uid > 0 && User::temColunaFoto()) {
+			$obFoto = User::getUser('id = '.$uid, null, 1, 'foto')->fetchObject(User::class);
+			$fotoUser = UserFotoHelper::urlPublica($obFoto->foto ?? null);
+		}
+
 		return View::render('admin/page',[
 			'title' => $title,
 			'content' => $content,
 			'user' => $userLogedData['usuario']['nome'],
 			'company' => $userLogedData['escola']['nome'] ?? '',
-			'logo' => $userLogedData['escola']['logo'] ?? ''
+			'logo' => $userLogedData['escola']['logo'] ?? '',
+			'banner_impersonate' => $bannerImpersonate,
+			'foto_url' => $fotoUser,
 		]);
 	}
 
