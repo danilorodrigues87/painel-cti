@@ -92,13 +92,26 @@ function badgeStatusWa(status, conectado){
 	return '<span class="badge bg-secondary">'+s+'</span>';
 }
 
+function normalizarSrcQr(qr){
+	if(!qr) return null;
+	qr = String(qr).trim();
+	if(!qr) return null;
+	if(qr.indexOf('data:image') === 0 || qr.indexOf('http://') === 0 || qr.indexOf('https://') === 0){
+		return qr;
+	}
+	// Texto bruto do WhatsApp (ex.: 2@...) → gera imagem do QR
+	return 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&margin=10&data='
+		+ encodeURIComponent(qr);
+}
+
 function mostrarQr(qr){
-	if(qr){
-		$('#wa-qrcode').attr('src', qr).removeClass('d-none');
+	const src = normalizarSrcQr(qr);
+	if(src){
+		$('#wa-qrcode').attr('src', src).removeClass('d-none');
 		$('#wa-qr-placeholder').addClass('d-none');
 	} else {
 		$('#wa-qrcode').addClass('d-none').attr('src', '');
-		$('#wa-qr-placeholder').removeClass('d-none');
+		$('#wa-qr-placeholder').removeClass('d-none').text('Nenhum QR carregado.');
 	}
 }
 

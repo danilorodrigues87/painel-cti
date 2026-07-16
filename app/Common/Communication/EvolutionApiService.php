@@ -173,31 +173,138 @@ class EvolutionApiService {
 	}
 
 	/**
-	 * Extrai QR em base64 (data URI ou raw).
+	 * Extrai imagem do QR (data URI). Não usa o campo "code" (texto do WhatsApp).
 	 */
 	public static function extrairQrBase64(?array $payload): ?string {
 		if ($payload === null) {
 			return null;
 		}
 
-		$paths = [
-			$payload['base64'] ?? null,
-			$payload['qrcode']['base64'] ?? null,
-			$payload['qrcode']['code'] ?? null,
-			$payload['qr']['base64'] ?? null,
-		];
+		$candidatos = [];
 
-		foreach ($paths as $v) {
-			if (!is_string($v) || $v === '') {
-				continue;
+		foreach ([
+			$payload['base64'] ?? null,
+			is_string($payload['qrcode'] ?? null) ? $payload['qrcode'] : null,
+			$payload['qrcode']['base64'] ?? null,
+			$payload['qr']['base64'] ?? null,
+			$payload['data']['base64'] ?? null,
+			$payload['data']['qrcode']['base64'] ?? null,
+		] as $v) {
+			if (is_string($v) && $v !== '') {
+				$candidatos[] = $v;
 			}
-			if (strpos($v, 'data:image') === 0) {
-				return $v;
+		}
+
+		foreach ($candidatos as $v) {
+			$img = self::normalizarImagemQr($v);
+			if ($img !== null) {
+				return $img;
 			}
-			return 'data:image/png;base64,'.$v;
 		}
 
 		return null;
+	}
+
+	/**
+	 * Texto bruto do QR (campo code da Evolution) — precisa virar imagem.
+	 */
+	public static function extrairQrCodeString(?array $payload): ?string {
+		if ($payload === null) {
+			return null;
+		}
+
+		$candidatos = [
+			$payload['code'] ?? null,
+			$payload['qrcode']['code'] ?? null,
+			$payload['qr']['code'] ?? null,
+			$payload['data']['code'] ?? null,
+			$payload['data']['qrcode']['code'] ?? null,
+		];
+
+		foreach ($candidatos as $v) {
+			if (!is_string($v) || $v === '') {
+				continue;
+			}
+			// Evita confundir base64/data URI com o code do WhatsApp
+			if (self::pareceImagemBase64($v)) {
+				continue;
+			}
+			return $v;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Data URI da imagem, ou URL de QR gerado a partir do code.
+	 */
+	public static function montarQrParaExibicao(?array $payload): ?string {
+		$img = self::extrairQrBase64($payload);
+		if ($img !== null) {
+			return $img;
+		}
+
+		$code = self::extrairQrCodeString($payload);
+		if ($code === null || $code === '') {
+			return null;
+		}
+
+		return 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&ecc=M&margin=10&data='
+			.rawurlencode($code);
+	}
+
+	private static function normalizarImagemQr(string $v): ?string {
+		$v = trim($v);
+		if ($v === '') {
+			return null;
+		}
+		if (strpos($v, 'data:image') === 0) {
+			return $v;
+		}
+		if (!self::pareceImagemBase64($v)) {
+			return null;
+		}
+		return 'data:image/png;base64,'.$v;
+	}
+
+	private static function pareceImagemBase64(string $v): bool {
+		if (strpos($v, 'data:image') === 0) {
+			return true;
+		}
+		// PNG/JPEG em base64 costumam começar assim; o code do WA tem "@" e é bem diferente
+		if (strpos($v, '@') !== false) {
+			return false;
+		}
+		if (strlen($v) < 64) {
+			return false;
+		}
+		$sample = substr($v, 0, 32);
+		return (bool)preg_match('#^[A-Za-z0-9+/]#', $sample)
+			&& (strpos($sample, 'iVBOR') === 0 || strpos($sample, '/9j/') === 0 || strlen($v) > 200);
+	}
+
+	/**
+	 * Tenta obter QR com algumas tentativas (a Evolution às vezes demora 1–2s).
+	 */
+	public function obterQrComRetry(string $instance, int $tentativas = 4, int $sleepMs = 800): ?array {
+		$ultimo = null;
+		for ($i = 0; $i < $tentativas; $i++) {
+			if ($i > 0) {
+				usleep($sleepMs * 1000);
+			}
+			$ultimo = $this->connect($instance);
+			if ($ultimo === null) {
+				continue;
+			}
+			if (self::montarQrParaExibicao($ultimo) !== null) {
+				return $ultimo;
+			}
+			$estado = self::extrairEstado($ultimo);
+			if (in_array($estado, ['open', 'connected'], true)) {
+				return $ultimo;
+			}
+		}
+		return $ultimo;
 	}
 
 	private function request(string $method, string $path, ?array $body = null): ?array {
@@ -221,8 +328,9 @@ class EvolutionApiService {
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_CUSTOMREQUEST  => strtoupper($method),
 			CURLOPT_HTTPHEADER     => $headers,
-			CURLOPT_TIMEOUT        => 45,
-			CURLOPT_CONNECTTIMEOUT => 15,
+			CURLOPT_TIMEOUT        => 60,
+			CURLOPT_CONNECTTIMEOUT => 20,
+			CURLOPT_SSL_VERIFYPEER => true,
 		]);
 
 		if ($body !== null) {
@@ -247,11 +355,13 @@ class EvolutionApiService {
 		}
 
 		if ($this->lastHttpCode >= 400) {
-			$msg = $decoded['message'] ?? $decoded['error'] ?? null;
+			$msg = $decoded['message'] ?? $decoded['error'] ?? $decoded['response']['message'] ?? null;
 			if (is_array($msg)) {
 				$msg = json_encode($msg, JSON_UNESCAPED_UNICODE);
 			}
-			$this->lastError = $msg ?: ('Erro Evolution HTTP '.$this->lastHttpCode);
+			$this->lastError = is_string($msg) && $msg !== ''
+				? $msg
+				: ('Erro Evolution HTTP '.$this->lastHttpCode);
 			return $decoded;
 		}
 

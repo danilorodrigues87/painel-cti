@@ -88,34 +88,45 @@ class WhatsappEscolaService {
 		$created = null;
 
 		if (!$existe) {
-			$created = $api->createInstance($instance, $webhook);
+			// Cria sem webhook primeiro (mais estável para obter QR); webhook depois
+			$created = $api->createInstance($instance, null);
 			if ($created === null || $api->getLastHttpCode() >= 400) {
 				$msg = $api->getLastError() ?: 'Falha ao criar instância.';
-				if (stripos($msg, 'already') === false && stripos($msg, 'exist') === false) {
+				if (stripos((string)$msg, 'already') === false
+					&& stripos((string)$msg, 'exist') === false
+					&& stripos((string)$msg, 'já') === false) {
 					return ['ok' => false, 'message' => $msg];
 				}
 			}
 		}
 
+		$connect = $api->obterQrComRetry($instance);
+		$qr = EvolutionApiService::montarQrParaExibicao($connect)
+			?? EvolutionApiService::montarQrParaExibicao($created);
+
+		// Webhook depois do QR, para não atrapalhar o pareamento
 		$api->setWebhook($instance, $webhook);
 
-		$connect = $api->connect($instance);
-		$qr = EvolutionApiService::extrairQrBase64($connect)
-			?? EvolutionApiService::extrairQrBase64($created);
-
 		$estado = EvolutionApiService::extrairEstado($connect)
+			?: EvolutionApiService::extrairEstado($created)
 			?: EvolutionApiService::extrairEstado($state)
 			?: 'connecting';
 
 		self::persistirStatus($idAdmin, $instance, $estado, $integracao, 1);
 
+		$conectado = in_array($estado, ['open', 'connected'], true);
+
 		return [
 			'ok'       => true,
-			'message'  => $qr ? 'Escaneie o QR Code no WhatsApp do celular.' : 'Instância pronta. Atualize o status.',
+			'message'  => $conectado
+				? 'WhatsApp já está conectado.'
+				: ($qr
+					? 'Escaneie o QR Code no WhatsApp do celular (Aparelhos conectados).'
+					: 'Não foi possível obter o QR. Clique em “Atualizar QR” em alguns segundos.'),
 			'instance' => $instance,
 			'status'   => $estado,
 			'qrcode'   => $qr,
-			'conectado'=> in_array($estado, ['open', 'connected'], true),
+			'conectado'=> $conectado,
 			'webhook_url' => $webhook,
 		];
 	}
@@ -131,21 +142,25 @@ class WhatsappEscolaService {
 			? (string)$integracao->evolution_instance
 			: EvolutionApiService::nomeInstancia($idAdmin);
 
-		$connect = $api->connect($instance);
+		$connect = $api->obterQrComRetry($instance);
 		if ($connect === null && $api->getLastHttpCode() >= 400) {
 			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao obter QR.'];
 		}
 
-		$qr = EvolutionApiService::extrairQrBase64($connect);
+		$qr = EvolutionApiService::montarQrParaExibicao($connect);
 		$estado = EvolutionApiService::extrairEstado($connect);
 		self::persistirStatus($idAdmin, $instance, $estado ?: 'connecting', $integracao);
+
+		$conectado = in_array($estado, ['open', 'connected'], true);
 
 		return [
 			'ok'     => true,
 			'qrcode' => $qr,
 			'status' => $estado ?: 'connecting',
-			'conectado' => in_array($estado, ['open', 'connected'], true),
-			'message'=> $qr ? 'QR atualizado.' : 'Sem QR no momento (já conectado ou aguardando).',
+			'conectado' => $conectado,
+			'message'=> $conectado
+				? 'Já conectado — QR não é necessário.'
+				: ($qr ? 'QR atualizado.' : 'Sem QR no momento. Tente novamente em 2 segundos.'),
 		];
 	}
 
