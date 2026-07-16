@@ -104,14 +104,57 @@ function normalizarSrcQr(qr){
 		+ encodeURIComponent(qr);
 }
 
+let waPairingTimer = null;
+let waLastQrAt = 0;
+
+function pararPareamentoWa(){
+	if(waPairingTimer){
+		clearInterval(waPairingTimer);
+		waPairingTimer = null;
+	}
+}
+
+function iniciarPareamentoWa(){
+	pararPareamentoWa();
+	waLastQrAt = Date.now();
+	waPairingTimer = setInterval(function(){
+		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_status' }, function(res){
+			if(!res || !res.success) return;
+			const w = res.whatsapp || {};
+			preencherWhatsapp(w);
+			if(w.conectado){
+				pararPareamentoWa();
+				mostrarQr(null);
+				Swal.fire('Conectado!', 'WhatsApp pareado com sucesso.', 'success');
+				return;
+			}
+			// QR do WhatsApp expira ~40s — renova só então (não a cada poucos segundos)
+			const st = String(w.status || '').toLowerCase();
+			if((st === 'connecting' || st === 'close' || st === 'closed') && (Date.now() - waLastQrAt > 35000)){
+				waLastQrAt = Date.now();
+				$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_qr' }, function(r2){
+					if(r2 && r2.success){
+						aplicarRespostaWhatsapp(r2);
+						if(r2.whatsapp && r2.whatsapp.conectado){
+							pararPareamentoWa();
+							Swal.fire('Conectado!', 'WhatsApp pareado com sucesso.', 'success');
+						}
+					}
+				}, 'json');
+			}
+		}, 'json');
+	}, 5000);
+}
+
 function mostrarQr(qr){
 	const src = normalizarSrcQr(qr);
 	if(src){
 		$('#wa-qrcode').attr('src', src).removeClass('d-none');
 		$('#wa-qr-placeholder').addClass('d-none');
+		iniciarPareamentoWa();
 	} else {
 		$('#wa-qrcode').addClass('d-none').attr('src', '');
-		$('#wa-qr-placeholder').removeClass('d-none').text('Nenhum QR carregado.');
+		$('#wa-qr-placeholder').removeClass('d-none').text('Nenhum QR carregado. Use “Trocar número” se estiver travado em Connecting.');
 	}
 }
 
@@ -166,16 +209,27 @@ function whatsappStatus(){
 
 function whatsappConectar(){
 	$('#btn-wa-conectar').prop('disabled', true);
-	Swal.fire({ title: 'Conectando...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
+	Swal.fire({ title: 'Preparando QR...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
 	$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_conectar' }, function(res){
 		$('#btn-wa-conectar').prop('disabled', false);
 		Swal.close();
 		if(!res || !res.success){
+			pararPareamentoWa();
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao conectar.', 'error');
 			return;
 		}
 		aplicarRespostaWhatsapp(res);
-		Swal.fire('WhatsApp', res.message || 'OK', res.whatsapp && res.whatsapp.qrcode ? 'info' : 'success');
+		if(res.whatsapp && res.whatsapp.conectado){
+			pararPareamentoWa();
+			Swal.fire('WhatsApp', res.message || 'Já conectado.', 'success');
+		} else {
+			Swal.fire({
+				title: 'Escaneie o QR',
+				html: (res.message || 'Abra o WhatsApp → Aparelhos conectados → Conectar um aparelho.')
+					+ '<br><small class="text-muted">Escaneie em até ~40 segundos. A tela acompanha sozinha.</small>',
+				icon: 'info'
+			});
+		}
 	}, 'json').fail(function(){
 		$('#btn-wa-conectar').prop('disabled', false);
 		Swal.close();
@@ -265,6 +319,7 @@ function whatsappRecriar(){
 			$('#btn-wa-recriar, #btn-wa-conectar').prop('disabled', false);
 			Swal.close();
 			if(!res || !res.success){
+				pararPareamentoWa();
 				Swal.fire({
 					title: 'Erro',
 					html: '<div style="text-align:left;word-break:break-word;font-size:13px;">'
@@ -276,7 +331,17 @@ function whatsappRecriar(){
 				return;
 			}
 			aplicarRespostaWhatsapp(res);
-			Swal.fire('WhatsApp', res.message || 'Escaneie o QR', res.whatsapp && res.whatsapp.qrcode ? 'info' : 'success');
+			if(res.whatsapp && res.whatsapp.conectado){
+				pararPareamentoWa();
+				Swal.fire('WhatsApp', res.message || 'Já conectado.', 'success');
+			} else {
+				Swal.fire({
+					title: 'Escaneie o QR agora',
+					html: 'Instância recriada. No celular: <strong>WhatsApp → Aparelhos conectados → Conectar</strong>.<br>'
+						+ '<small class="text-muted">Faça o scan em até ~40s. Não use o painel da Evolution ao mesmo tempo.</small>',
+					icon: 'info'
+				});
+			}
 		}, 'json').fail(function(){
 			$('#btn-wa-recriar, #btn-wa-conectar').prop('disabled', false);
 			Swal.close();

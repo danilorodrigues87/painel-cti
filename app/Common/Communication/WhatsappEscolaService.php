@@ -61,6 +61,10 @@ class WhatsappEscolaService {
 			$out['status'] = $estado;
 			$out['conectado'] = in_array($estado, ['open', 'connected'], true);
 			self::persistirStatus($idAdmin, $instance, $estado, $integracao);
+			// Webhook só depois de pareado — durante o QR ele derruba a conexão
+			if ($out['conectado']) {
+				self::garantirWebhook($api, $instance, $idAdmin);
+			}
 		} elseif ($api->getLastHttpCode() === 404) {
 			$out['status'] = 'not_created';
 			$out['erro'] = 'Instância não existe na Evolution. Use “Conectar / QR” ou “Trocar número”.';
@@ -100,16 +104,38 @@ class WhatsappEscolaService {
 		$state = $api->connectionState($instance);
 		$httpState = $api->getLastHttpCode();
 		$existe = $state !== null && $httpState < 400;
-		$logs[] = 'state:HTTP '.$httpState;
+		$estadoAtual = $existe ? EvolutionApiService::extrairEstado($state) : '';
+		$logs[] = 'state:HTTP '.$httpState.($estadoAtual !== '' ? ' '.$estadoAtual : '');
 
-		if ($forcarRecriar || !$existe) {
+		// Já conectado: só configura webhook (nunca durante o QR)
+		if ($existe && !$forcarRecriar && in_array($estadoAtual, ['open', 'connected'], true)) {
+			self::persistirStatus($idAdmin, $instance, $estadoAtual, $integracao, 1);
+			self::garantirWebhook($api, $instance, $idAdmin);
+			return [
+				'ok' => true,
+				'message' => 'WhatsApp já está conectado. Para trocar de número, use “Trocar número”.',
+				'instance' => $instance,
+				'status' => $estadoAtual,
+				'qrcode' => null,
+				'conectado' => true,
+				'webhook_url' => $webhook,
+			];
+		}
+
+		// connecting/close travado = sessão Baileys suja → apaga e cria de novo
+		$precisaRecriar = $forcarRecriar
+			|| !$existe
+			|| in_array($estadoAtual, ['connecting', 'close', 'closed'], true);
+
+		$created = null;
+		if ($precisaRecriar) {
 			if ($existe || $forcarRecriar) {
 				$api->logout($instance);
 				$logs[] = 'logout:HTTP '.$api->getLastHttpCode();
 				$api->deleteInstance($instance);
 				$logs[] = 'delete:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-				// pequena pausa para a Evolution liberar o nome
-				usleep(700000);
+				// Evolution precisa liberar o nome/sessão antes do create
+				usleep(1500000);
 			}
 
 			$created = self::criarInstanciaComRetry($api, $instance, $logs);
@@ -121,51 +147,44 @@ class WhatsappEscolaService {
 						.($api->getLastError() ?: '').' ['.implode(' | ', $logs).']',
 				];
 			}
-		} else {
-			$created = null;
-			$estadoAtual = EvolutionApiService::extrairEstado($state);
-			// Se já está open, só informa; senão pede QR
-			if (in_array($estadoAtual, ['open', 'connected'], true) && !$forcarRecriar) {
-				self::persistirStatus($idAdmin, $instance, $estadoAtual, $integracao, 1);
-				$api->setWebhook($instance, $webhook);
-				return [
-					'ok' => true,
-					'message' => 'WhatsApp já está conectado. Para trocar de número, use “Trocar número”.',
-					'instance' => $instance,
-					'status' => $estadoAtual,
-					'qrcode' => null,
-					'conectado' => true,
-					'webhook_url' => $webhook,
-				];
+		}
+
+		// Preferir QR do create (já vem com qrcode:true). Evitar connect+webhook no meio do pareamento.
+		$qr = EvolutionApiService::montarQrParaExibicao($created);
+		$connect = null;
+		if ($qr === null) {
+			usleep(500000);
+			$connect = $api->obterQrComRetry($instance, 3, 600);
+			$logs[] = 'connect:HTTP '.$api->getLastHttpCode();
+
+			if (($connect === null || $api->getLastHttpCode() >= 400)
+				&& ($api->getLastHttpCode() === 404 || stripos((string)$api->getLastError(), 'not found') !== false)
+			) {
+				$created = self::criarInstanciaComRetry($api, $instance, $logs);
+				$qr = EvolutionApiService::montarQrParaExibicao($created);
+				if ($qr === null) {
+					$connect = $api->obterQrComRetry($instance, 3, 600);
+					$logs[] = 'connect2:HTTP '.$api->getLastHttpCode();
+				}
 			}
+			if ($qr === null) {
+				$qr = EvolutionApiService::montarQrParaExibicao($connect);
+			}
+		} else {
+			$logs[] = 'qr:from-create';
 		}
 
-		$connect = $api->obterQrComRetry($instance);
-		$logs[] = 'connect:HTTP '.$api->getLastHttpCode();
-
-		// Se connect falhou porque a instância sumiu, cria e tenta de novo
-		if (($connect === null || $api->getLastHttpCode() >= 400)
-			&& ($api->getLastHttpCode() === 404 || stripos((string)$api->getLastError(), 'not found') !== false)
-		) {
-			$created = self::criarInstanciaComRetry($api, $instance, $logs);
-			$connect = $api->obterQrComRetry($instance);
-			$logs[] = 'connect2:HTTP '.$api->getLastHttpCode();
-		}
-
-		$qr = EvolutionApiService::montarQrParaExibicao($connect)
-			?? EvolutionApiService::montarQrParaExibicao($created);
-
-		$api->setWebhook($instance, $webhook);
-		$logs[] = 'webhook:HTTP '.$api->getLastHttpCode();
-
+		// NÃO chamar setWebhook aqui — reinicia o socket Baileys e invalida o QR
 		$estado = EvolutionApiService::extrairEstado($connect)
 			?: EvolutionApiService::extrairEstado($created)
 			?: 'connecting';
 
-		// Limpa número antigo ao gerar novo QR (ainda não pareado)
-		self::persistirStatus($idAdmin, $instance, $estado, $integracao, 1, $forcarRecriar ? '' : null);
+		self::persistirStatus($idAdmin, $instance, $estado, $integracao, 1, '');
 
 		$conectado = in_array($estado, ['open', 'connected'], true);
+		if ($conectado) {
+			self::garantirWebhook($api, $instance, $idAdmin);
+		}
 
 		if (!$qr && !$conectado) {
 			return [
@@ -185,13 +204,18 @@ class WhatsappEscolaService {
 			'ok'       => true,
 			'message'  => $conectado
 				? 'WhatsApp já está conectado.'
-				: 'Escaneie o QR Code no WhatsApp do celular (Aparelhos conectados).',
+				: 'Escaneie o QR agora (válido por ~40s). Ele atualiza sozinho na tela. Não feche esta página.',
 			'instance' => $instance,
 			'status'   => $estado,
 			'qrcode'   => $qr,
 			'conectado'=> $conectado,
 			'webhook_url' => $webhook,
 		];
+	}
+
+	/** Configura webhook apenas com sessão já aberta (nunca no meio do QR). */
+	private static function garantirWebhook(EvolutionApiService $api, string $instance, int $idAdmin): void {
+		$api->setWebhook($instance, EvolutionApiService::webhookUrl($idAdmin));
 	}
 
 	private static function criarInstanciaComRetry(EvolutionApiService $api, string $instance, array &$logs): ?array {
@@ -212,7 +236,7 @@ class WhatsappEscolaService {
 			$api->logout($instance);
 			$api->deleteInstance($instance);
 			$logs[] = 'delete-retry:HTTP '.$api->getLastHttpCode();
-			usleep(900000);
+			usleep(1500000);
 			$created = $api->createInstance($instance, null);
 			$logs[] = 'create2:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
 			if ($created !== null && $api->getLastHttpCode() < 400) {
@@ -239,9 +263,9 @@ class WhatsappEscolaService {
 			return self::criarOuConectar($idAdmin);
 		}
 
-		$connect = $api->obterQrComRetry($instance);
+		// Só atualiza o QR — não apaga a instância (recriar fica em “Trocar número” / “Conectar”)
+		$connect = $api->obterQrComRetry($instance, 2, 400);
 		if ($connect === null && $api->getLastHttpCode() >= 400) {
-			// Instância sumiu no meio do caminho
 			if ($api->getLastHttpCode() === 404) {
 				return self::criarOuConectar($idAdmin);
 			}
@@ -253,6 +277,9 @@ class WhatsappEscolaService {
 		self::persistirStatus($idAdmin, $instance, $estado ?: 'connecting', $integracao);
 
 		$conectado = in_array($estado, ['open', 'connected'], true);
+		if ($conectado) {
+			self::garantirWebhook($api, $instance, $idAdmin);
+		}
 
 		return [
 			'ok'     => true,
@@ -336,7 +363,15 @@ class WhatsappEscolaService {
 		$instance = ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance))
 			? (string)$integracao->evolution_instance
 			: EvolutionApiService::nomeInstancia($idAdmin);
-		self::persistirStatus($idAdmin, $instance, $estado, $integracao, null, $numero);
+		$ativo = in_array($estado, ['open', 'connected'], true) ? 1 : null;
+		self::persistirStatus($idAdmin, $instance, $estado, $integracao, $ativo, $numero);
+
+		if (in_array($estado, ['open', 'connected'], true)) {
+			$api = EvolutionApiService::fromEnv();
+			if ($api->isConfigured()) {
+				self::garantirWebhook($api, $instance, $idAdmin);
+			}
+		}
 	}
 
 	private static function persistirStatus(
