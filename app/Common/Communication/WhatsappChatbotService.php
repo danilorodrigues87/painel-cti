@@ -231,15 +231,81 @@ class WhatsappChatbotService {
 			return false;
 		}
 
-		$api = EvolutionApiService::fromEnv();
-		$mime = $arquivo['mimetype'] ?? null;
-		$res = $api->sendAudio($instance, (string)$conversa->telefone, $path, $mime);
-		$ok = $res !== null && $api->getLastHttpCode() < 400;
-		if (!$ok) {
-			self::$lastError = $api->getLastError() ?: 'Falha ao enviar áudio.';
-			return false;
+		$relative = ltrim((string)($arquivo['relative'] ?? ''), '/');
+		$publicUrl = !empty($arquivo['url'])
+			? (string)$arquivo['url']
+			: WhatsappMediaStorage::urlPublica($relative);
+
+		$ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+		$fileName = basename($relative) ?: ('audio.'.$ext);
+		if (!preg_match('/\.(mp3|ogg|opus|wav|m4a|aac|mpeg)$/i', $fileName)) {
+			$fileName .= ($ext !== '' ? '.'.$ext : '.mp3');
 		}
 
+		$mimeMap = [
+			'wav'  => 'audio/wav',
+			'mp3'  => 'audio/mpeg',
+			'mpeg' => 'audio/mpeg',
+			'ogg'  => 'audio/ogg',
+			'opus' => 'audio/ogg',
+			'm4a'  => 'audio/mp4',
+			'aac'  => 'audio/aac',
+			'webm' => 'audio/webm',
+		];
+		$mime = $arquivo['mimetype'] ?? ($mimeMap[$ext] ?? 'audio/mpeg');
+
+		$api = EvolutionApiService::fromEnv();
+		$phone = (string)$conversa->telefone;
+		$tentativas = [];
+
+		// A) Mesmo caminho do PDF (document + arquivo) — mais compatível
+		$res = $api->sendMedia($instance, $phone, $path, 'document', 'application/octet-stream', null, $fileName);
+		$tentativas[] = 'doc-file:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+		if ($res !== null && $api->getLastHttpCode() < 400) {
+			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		}
+
+		// B) Document via URL pública (Evolution baixa do servidor)
+		$res = $api->sendMedia($instance, $phone, $publicUrl, 'document', 'application/octet-stream', null, $fileName);
+		$tentativas[] = 'doc-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+		if ($res !== null && $api->getLastHttpCode() < 400) {
+			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		}
+
+		// C) sendMedia mediatype=audio (arquivo)
+		$res = $api->sendMedia($instance, $phone, $path, 'audio', $mime, null, $fileName);
+		$tentativas[] = 'audio-file:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+		if ($res !== null && $api->getLastHttpCode() < 400) {
+			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		}
+
+		// D) sendMedia mediatype=audio (URL)
+		$res = $api->sendMedia($instance, $phone, $publicUrl, 'audio', $mime, null, $fileName);
+		$tentativas[] = 'audio-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+		if ($res !== null && $api->getLastHttpCode() < 400) {
+			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		}
+
+		// E) Nota de voz (PTT) por URL
+		$res = $api->sendAudio($instance, $phone, $publicUrl, $mime);
+		$tentativas[] = 'ptt-url:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+		if ($res !== null && $api->getLastHttpCode() < 400) {
+			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		}
+
+		// F) Nota de voz por arquivo
+		$res = $api->sendAudio($instance, $phone, $path, $mime);
+		$tentativas[] = 'ptt-file:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
+		if ($res !== null && $api->getLastHttpCode() < 400) {
+			return self::registrarAudioEnviado($conversa, $arquivo, $res);
+		}
+
+		self::$lastError = 'Áudio rejeitado pela Evolution. Detalhes: '.implode(' · ', $tentativas);
+		return false;
+	}
+
+	/** @param array{relative?:string} $arquivo */
+	private static function registrarAudioEnviado(WhatsappConversa $conversa, array $arquivo, array $res): bool {
 		WhatsappMensagem::registrar([
 			'id_admin'      => (int)$conversa->id_admin,
 			'conversa_id'   => (int)$conversa->id,

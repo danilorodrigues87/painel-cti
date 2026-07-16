@@ -197,6 +197,7 @@ class WhatsappInbox extends Page {
 				'message' => $detalhe
 					? ('Falha ao enviar mídia: '.$detalhe)
 					: 'Falha ao enviar mídia pelo WhatsApp.',
+				'debug_tipo' => $tipo,
 			]);
 		}
 

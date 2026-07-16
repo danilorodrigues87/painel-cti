@@ -268,6 +268,9 @@
 					<button type="button" class="btn btn-success btn-sm" id="btn-wa-conectar">
 						<i class="fas fa-qrcode"></i> Conectar / QR
 					</button>
+					<button type="button" class="btn btn-outline-warning btn-sm" id="btn-wa-recriar">
+						<i class="fas fa-redo"></i> Trocar número
+					</button>
 					<button type="button" class="btn btn-outline-danger btn-sm" id="btn-wa-desconectar">
 						<i class="fas fa-unlink"></i> Desconectar
 					</button>
@@ -277,7 +280,8 @@
 				<div class="alert alert-warning small d-none" id="alert-whatsapp-sql"></div>
 				<p class="small text-muted mb-3">
 					Cada escola usa uma instância própria na Evolution (<code>escola_{id_admin}</code>).
-					Credenciais do servidor ficam no <code>.env</code>. Webhook público necessário para inbox (em produção use HTTPS).
+					Para <strong>trocar de número</strong> ou se a instância foi apagada no painel da Evolution, use
+					<strong>Trocar número</strong> (recria a instância e gera um QR novo).
 				</p>
 
 				<div class="row g-4">
@@ -334,4 +338,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-email.js?v=20260716c"></script>
+<script src="{{URL}}/resources/js/config-email.js?v=20260716d"></script>

@@ -97,7 +97,11 @@ class ConfigComunicacao extends Page {
 		}
 
 		if ($acao === 'whatsapp_desconectar') {
-			return self::whatsappDesconectar();
+			return self::whatsappDesconectar($postVars);
+		}
+
+		if ($acao === 'whatsapp_recriar') {
+			return self::whatsappRecriar();
 		}
 
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
@@ -479,12 +483,23 @@ class ConfigComunicacao extends Page {
 		]);
 	}
 
-	private static function whatsappDesconectar(): string {
+	private static function whatsappDesconectar(array $postVars = []): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$res = WhatsappEscolaService::desconectar($idAdmin);
+		$apagar = !empty($postVars['apagar_instancia']);
+		$res = WhatsappEscolaService::desconectar($idAdmin, $apagar);
 		return json_encode([
 			'success' => !empty($res['ok']),
 			'message' => $res['message'] ?? '',
-		]);
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function whatsappRecriar(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::recriarInstancia($idAdmin);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+			'whatsapp'=> $res,
+		], JSON_UNESCAPED_UNICODE);
 	}
 }

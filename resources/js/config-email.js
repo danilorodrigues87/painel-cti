@@ -230,13 +230,14 @@ function whatsappTestar(){
 function whatsappDesconectar(){
 	Swal.fire({
 		title: 'Desconectar WhatsApp?',
-		text: 'Será necessário escanear um novo QR para reconectar.',
+		html: 'Desconecta a sessão do aparelho.<br><small class="text-muted">Para trocar de número com certeza, use o botão <strong>Trocar número</strong>.</small>',
 		icon: 'warning',
 		showCancelButton: true,
-		confirmButtonText: 'Desconectar'
+		confirmButtonText: 'Só desconectar',
+		cancelButtonText: 'Cancelar'
 	}).then(function(r){
 		if(!r.isConfirmed) return;
-		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_desconectar' }, function(res){
+		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_desconectar', apagar_instancia: 0 }, function(res){
 			if(!res || !res.success){
 				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha.', 'error');
 				return;
@@ -245,6 +246,42 @@ function whatsappDesconectar(){
 			whatsappStatus();
 			Swal.fire('OK', res.message, 'success');
 		}, 'json');
+	});
+}
+
+function whatsappRecriar(){
+	Swal.fire({
+		title: 'Trocar número / recriar?',
+		html: 'Isso <strong>apaga a instância</strong> na Evolution e gera um QR novo para parear outro WhatsApp.<br>Use também se você excluiu a instância pelo painel da Evolution.',
+		icon: 'warning',
+		showCancelButton: true,
+		confirmButtonText: 'Recriar e gerar QR',
+		cancelButtonText: 'Cancelar'
+	}).then(function(r){
+		if(!r.isConfirmed) return;
+		$('#btn-wa-recriar, #btn-wa-conectar').prop('disabled', true);
+		Swal.fire({ title: 'Recriando instância...', allowOutsideClick: false, didOpen: function(){ Swal.showLoading(); } });
+		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_recriar' }, function(res){
+			$('#btn-wa-recriar, #btn-wa-conectar').prop('disabled', false);
+			Swal.close();
+			if(!res || !res.success){
+				Swal.fire({
+					title: 'Erro',
+					html: '<div style="text-align:left;word-break:break-word;font-size:13px;">'
+						+ $('<div>').text((res && res.message) ? res.message : 'Falha ao recriar.').html()
+						+ '</div>',
+					icon: 'error',
+					width: 640
+				});
+				return;
+			}
+			aplicarRespostaWhatsapp(res);
+			Swal.fire('WhatsApp', res.message || 'Escaneie o QR', res.whatsapp && res.whatsapp.qrcode ? 'info' : 'success');
+		}, 'json').fail(function(){
+			$('#btn-wa-recriar, #btn-wa-conectar').prop('disabled', false);
+			Swal.close();
+			Swal.fire('Erro', 'Falha na requisição.', 'error');
+		});
 	});
 }
 
@@ -587,6 +624,7 @@ $(function(){
 	$('#btn-executar-aniversario').on('click', executarAniversario);
 	$('#btn-wa-status').on('click', whatsappStatus);
 	$('#btn-wa-conectar').on('click', whatsappConectar);
+	$('#btn-wa-recriar').on('click', whatsappRecriar);
 	$('#btn-wa-qr').on('click', whatsappQr);
 	$('#btn-wa-salvar').on('click', whatsappSalvar);
 	$('#btn-wa-testar').on('click', whatsappTestar);

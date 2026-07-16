@@ -208,13 +208,30 @@ function enviarMidia(file, tipo, caption){
 	}).done(function(res){
 		$('#wa-audio-status').text('');
 		if(!res || !res.success){
-			Swal.fire('Erro', (res && res.message) || 'Falha no envio.', 'error');
+			Swal.fire({
+				title: 'Erro',
+				html: '<div style="text-align:left;font-size:13px;word-break:break-word;">'
+					+ esc((res && res.message) || 'Falha no envio.')
+					+ '</div>',
+				icon: 'error',
+				width: 640
+			});
 			return;
 		}
 		abrirConversa(waConversaId);
-	}).fail(function(){
+	}).fail(function(xhr){
 		$('#wa-audio-status').text('');
-		Swal.fire('Erro', 'Falha ao enviar mídia.', 'error');
+		let extra = '';
+		if(xhr && xhr.responseText){
+			extra = '<div style="text-align:left;font-size:12px;margin-top:8px;word-break:break-word;">'
+				+ esc(String(xhr.responseText).substring(0, 500)) + '</div>';
+		}
+		Swal.fire({
+			title: 'Erro',
+			html: 'Falha ao enviar mídia.'+extra,
+			icon: 'error',
+			width: 640
+		});
 	});
 }
 
