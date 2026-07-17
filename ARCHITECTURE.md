@@ -404,17 +404,17 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | Automação aniversariantes por e-mail | Feito |
 | Evolution API: .env + QR/status/teste + webhook + tabelas | Feito (base Fase 3) |
 | Inbox + setores + chatbot menu | Feito (Fase 3b) |
+| Branding CTI UI + logo escola em impressos + rodapé | Feito (Fase A) |
+| WA a partir de aluno/resp/lead + observações aluno + campanhas grupo recorrentes | Feito (Fase B) |
+| Modelo de contrato por escola + frase certificado | Feito (Fase C) — SQL `database/escolas_modelo_contrato.sql` |
 
 ### Próximo (ordem recomendada)
 | Fase | Escopo | Notas |
 |------|--------|-------|
+| **Fase D–E** | Carnê multi-gateway + reforço segurança financeira | |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
-| **Fase 4** | WhatsApp **em massa** na mesma fila `campanhas` (`canal=whatsapp`) | Após inbox estável |
 | **Fase 5** | Automações CRM (mensagem ao mudar status do lead) | |
-| **Painel Master (MVP)** | `/master`: escolas + módulos + Diretor; `MASTER_EMAILS` no `.env` | Feito |
-| **Painel Master (fase 2)** | Planos comerciais, cobrança de assinatura, dashboard SaaS | Próximo |
-| **Dashboard** | Remover top vendedores fictícios; cards CRM/inadimplência reais | |
-| **LGPD** | Link de descadastro em e-mail marketing | |
+| **Painel Master (fase 2)** | Planos comerciais, cobrança de assinatura, dashboard SaaS | |
 
 ### Decisões de produto já alinhadas
 - Cada escola configura **SMTP próprio** (Gmail/corporativo); sistema tem fallback `no-reply@...` no `.env`
@@ -458,7 +458,10 @@ php worker/cobranca.php [id_admin]
 
 Painel (Diretor):
 - `/painel/config/comunicacao` — SMTP, cobrança, aniversário, WhatsApp (Evolution)
+- `/painel/config/contrato` — modelo HTML do contrato + frase do certificado (`NULL` = padrão CTI/escola 1)
 - `/painel/campanhas` — campanhas manuais + processar fila
+
+Helper: `ContratoTemplateHelper` — placeholders `{{contratada}}`, `{{contratante}}`, `{{curso}}`, `{{parte1}}`, `{{clausulaExtra}}`, `{{data_contrato}}`, `{{URL}}`
 
 Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 

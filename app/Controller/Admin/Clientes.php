@@ -149,7 +149,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			'pagination' => parent::getPagination($request,$obPagination)
 		];
 
-		return json_encode($conteudo);
+		return parent::jsonLista($conteudo);
 
 	}
 

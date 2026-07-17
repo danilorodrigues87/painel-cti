@@ -1,0 +1,46 @@
+<h1 class="mt-4">Modelo de contrato</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Texto do “Ver Contrato” da matrícula (por escola)</li>
+</ol>
+
+<div class="alert alert-info small">
+	<strong>Escola 1 / padrão CTI:</strong> se você não salvar um modelo próprio, o sistema usa o contrato atual
+	(cláusulas e foro Capão Bonito). Nada quebra nas matrículas já existentes.
+	Use as variáveis <code>{{contratada}}</code>, <code>{{contratante}}</code>, <code>{{curso}}</code>,
+	<code>{{parte1}}</code>, <code>{{clausulaExtra}}</code>, <code>{{data_contrato}}</code>, <code>{{URL}}</code>.
+</div>
+
+<div id="alert-sql-contrato" class="alert alert-warning small d-none"></div>
+
+<div class="card shadow-sm mb-4">
+	<div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+		<span>HTML do contrato <span id="badge-padrao-contrato" class="badge bg-secondary">Carregando…</span></span>
+		<div class="d-flex gap-2">
+			<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-restaurar-contrato">Restaurar padrão CTI</button>
+			<button type="button" class="btn btn-sm btn-primary" id="btn-salvar-contrato">Salvar modelo</button>
+		</div>
+	</div>
+	<div class="card-body">
+		<label class="form-label" for="modelo_contrato_html">Conteúdo</label>
+		<textarea class="form-control font-monospace" id="modelo_contrato_html" rows="22" spellcheck="false"></textarea>
+		<div class="mt-3">
+			<strong class="small">Variáveis:</strong>
+			<ul class="small mb-0" id="lista-vars-contrato"></ul>
+		</div>
+	</div>
+</div>
+
+<div class="card shadow-sm mb-4">
+	<div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+		<span>Certificado — frase de conclusão</span>
+		<button type="button" class="btn btn-sm btn-primary" id="btn-salvar-frase-cert">Salvar frase</button>
+	</div>
+	<div class="card-body">
+		<label class="form-label" for="certificado_frase_conclusao">Texto acima do nome do curso</label>
+		<input type="text" class="form-control" id="certificado_frase_conclusao" maxlength="255"
+			placeholder="Concluiu com louvor o curso de">
+		<div class="form-text">Padrão: <em>Concluiu com louvor o curso de</em>. Deixe igual ao padrão ou vazio e salve para restaurar.</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/config-contrato.js?v=20260717a"></script>

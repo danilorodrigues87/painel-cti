@@ -70,6 +70,20 @@ class CertificadoPdf extends Page {
         $modeloCertUrl = BrandingHelper::urlModeloCertificado($modeloArquivo);
         $modeloCertJs  = json_encode($modeloCertUrl, JSON_UNESCAPED_SLASHES);
 
+        $fraseConclusao = 'Concluiu com louvor o curso de';
+        if ($idAdminCert > 0 && EscolasAssinantes::temColunaCertificadoFrase()) {
+            $escolaFrase = isset($escola) && $escola instanceof EscolasAssinantes
+                ? $escola
+                : EscolasAssinantes::getEscolaById($idAdminCert);
+            if ($escolaFrase instanceof EscolasAssinantes) {
+                $f = trim((string)($escolaFrase->certificado_frase_conclusao ?? ''));
+                if ($f !== '') {
+                    $fraseConclusao = $f;
+                }
+            }
+        }
+        $fraseConclusaoJs = json_encode($fraseConclusao, JSON_UNESCAPED_UNICODE);
+
         // Escape seguro para strings no JS
         $nomeJs = json_encode((string)$nome, JSON_UNESCAPED_UNICODE);
         $cursoJs = json_encode((string)$curso, JSON_UNESCAPED_UNICODE);
@@ -153,7 +167,7 @@ $script = <<<SCRIPT
         ctx.fillText(name, 421, 280);
 
         ctx.font = "normal 16pt Arial";
-        ctx.fillText("Concluiu com louvor o curso de", 421, 325);
+        ctx.fillText({$fraseConclusaoJs}, 421, 325);
         
         ctx.font = "bold 18pt Arial";
         ctx.fillText(curso, 421, 355);

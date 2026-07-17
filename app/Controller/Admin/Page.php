@@ -35,6 +35,21 @@ class Page {
 		return TenantHelper::getIdAdmin();
 	}
 
+	/**
+	 * JSON seguro para listagens AJAX (itens + pagination).
+	 * Evita resposta vazia/quebrada por UTF-8 inválido.
+	 */
+	public static function jsonLista(array $conteudo): string {
+		$json = json_encode($conteudo, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+		if ($json === false) {
+			return json_encode([
+				'itens' => '<div class="alert alert-danger m-3">Erro ao montar a lista. Tente novamente.</div>',
+				'pagination' => '',
+			], JSON_UNESCAPED_UNICODE);
+		}
+		return $json;
+	}
+
 
 	// RETORNA O CONTEUDO (VIEW) ESTRUTURA GENERICA PAGINA PAINEL
 	public static function getPage($title,$content){
@@ -176,6 +191,7 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			$allPermittedModules[] = 'Comunicação';
 			$allPermittedModules[] = 'Campanhas';
 			$allPermittedModules[] = 'WhatsApp';
+			$allPermittedModules[] = 'Modelo de contrato';
 		}
 
 		$temAcesso = in_array($currentModule, $allPermittedModules);

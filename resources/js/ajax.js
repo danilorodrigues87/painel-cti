@@ -2,54 +2,76 @@
 // CHAMA A FUNÇÃO LISTAR AO CARREGAR A PAGINA
 $(document).ready(function(){
  listar(null,1);
+});
 
-})
+var _listarReq = null;
 
-
-
-// FUNÇÃO LITSAR CONTEUDOS DA PAGINA
-function listar(filtro=null,page=1) {
-
-
- $.ajax({
-    url: url_base+listagem,
-    method: "post",
-    data: {filtro,page},
-    dataType: "json", 
-    success: function(result){
-
-     $('#listar').html(result.itens);
-     $('#pagination').html(result.pagination);
-
-        // FILTROS QUE SÃO USADOS APENAS NA TELA DE USUÁRIOS
-     $('#fil-todos').removeClass('active')
-     $('#fil-diretor').removeClass('active')
-     $('#fil-secretario').removeClass('active')
-     $('#fil-financeiro').removeClass('active')
-     $('#fil-parceiro').removeClass('active')
-     $('#fil-cliente').removeClass('active')
-     $('#fil-inativo').removeClass('active')
-
-     if(filtro == null){
-      $('#fil-todos').addClass('active')
-  } else if(filtro == 'Diretor'){
-      $('#fil-diretor').addClass('active')
-  } else if(filtro == 'Secretario'){
-      $('#fil-secretario').addClass('active')
-  } else if(filtro == 'Financeiro'){
-      $('#fil-financeiro').addClass('active')
-  } else if(filtro == 'Comercial'){
-      $('#fil-comercial').addClass('active')
-  }else if(filtro == 'inativo'){
-      $('#fil-inativo').addClass('active')
-  } else {
-      $('#fil-todos').addClass('active')
+// FUNÇÃO LISTAR CONTEUDOS DA PAGINA
+function listar(filtro=null, page=1) {
+  if (typeof listagem === 'undefined' || !listagem) {
+    return;
   }
-        // FIM DOS FILTROS DE USUÁRIOS
 
-},
+  if (_listarReq && typeof _listarReq.abort === 'function') {
+    try { _listarReq.abort(); } catch (e) {}
+  }
 
-})
+  if ($('#listar').length && !$('#listar').html().trim()) {
+    $('#listar').html('<div class="p-4 text-center text-muted">Carregando...</div>');
+  }
+
+  _listarReq = $.ajax({
+    url: url_base + listagem,
+    method: 'post',
+    data: { filtro: filtro, page: page },
+    dataType: 'json',
+    timeout: 30000,
+    success: function(result) {
+      if (!result || typeof result.itens === 'undefined') {
+        $('#listar').html('<div class="alert alert-warning m-3">Não foi possível carregar a lista. Tente novamente.</div>');
+        return;
+      }
+      $('#listar').html(result.itens);
+      $('#pagination').html(result.pagination || '');
+
+      $('#fil-todos').removeClass('active');
+      $('#fil-diretor').removeClass('active');
+      $('#fil-secretario').removeClass('active');
+      $('#fil-financeiro').removeClass('active');
+      $('#fil-parceiro').removeClass('active');
+      $('#fil-cliente').removeClass('active');
+      $('#fil-inativo').removeClass('active');
+
+      if (filtro == null || filtro === '' || filtro === '0' || filtro === 0) {
+        $('#fil-todos').addClass('active');
+      } else if (filtro == 'Diretor') {
+        $('#fil-diretor').addClass('active');
+      } else if (filtro == 'Secretario') {
+        $('#fil-secretario').addClass('active');
+      } else if (filtro == 'Financeiro') {
+        $('#fil-financeiro').addClass('active');
+      } else if (filtro == 'Comercial') {
+        $('#fil-comercial').addClass('active');
+      } else if (filtro == 'inativo') {
+        $('#fil-inativo').addClass('active');
+      } else {
+        $('#fil-todos').addClass('active');
+      }
+    },
+    error: function(xhr, status) {
+      if (status === 'abort') {
+        return;
+      }
+      var msg = 'Falha ao carregar a lista.';
+      if (status === 'timeout') {
+        msg = 'A lista demorou demais. Tente de novo.';
+      } else if (xhr && xhr.responseText && xhr.responseText.indexOf('crashed') !== -1) {
+        msg = 'Tabela do banco corrompida. No phpMyAdmin rode REPAIR TABLE na tabela indicada no console.';
+      }
+      console.log('listar error:', status, xhr && xhr.status, xhr && xhr.responseText ? xhr.responseText.substring(0, 400) : '');
+      $('#listar').html('<div class="alert alert-danger m-3">' + msg + ' <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="listar(null,1)">Tentar novamente</button></div>');
+    }
+  });
 }
 
 
@@ -224,39 +246,67 @@ $(document).on("submit", "#form", function(event) {
 
 
 // FUNÇÃO QUE CARREGA A MODAL E OS DADOS
+function showFormModal() {
+	var el = document.getElementById('formModal');
+	if (!el) return;
+	try {
+		if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+			bootstrap.Modal.getOrCreateInstance(el).show();
+			return;
+		}
+	} catch (e) {}
+	if (typeof $ !== 'undefined' && $.fn && typeof $(el).modal === 'function') {
+		$(el).modal('show');
+		return;
+	}
+	$(el).addClass('show').css({display: 'block'});
+	$('body').addClass('modal-open');
+}
+
 function list_itens(id, funcao) {
 
    $.ajax({
     url: url_base+formulario,
     method: "post",
-    data: { id, funcao },
+    data: { id: id || '', funcao: funcao },
     dataType: "json",
     success: function(result) {
 
-            // Verifica se o result é um objeto
-      if (typeof result === 'object' && result !== null) {
-            // Se for um objeto, assume que possui as propriedades form e cidade
+      if (result && typeof result === 'object' && result.form) {
         $('#listar-dados').html(result.form);
-
         if (result.cidade) {
           selectEstado(result.cidade);
+        }
+      } else if (typeof result === 'string') {
+        $('#listar-dados').html(result);
+      } else if (result && result.erro) {
+        Swal.fire('Erro', result.erro, 'error');
+        return;
+      } else {
+        Swal.fire('Erro', 'Resposta inválida ao abrir o formulário.', 'error');
+        return;
       }
-  } else {
 
-    // Se não for um objeto, assume que é uma string
-   $('#listar-dados').html(result);
+      if (typeof formulario !== 'undefined' && formulario === 'painel/matriculas/form') {
+        if (typeof selectAluno === 'function') {
+          selectAluno();
+        }
+      }
 
-   if(formulario == 'painel/matriculas/form'){
-       selectAluno()
-       //check()
-   }
-}
-
-$('#formModal').modal('show');
-
-},
-
-});
+      showFormModal();
+    },
+    error: function(xhr) {
+      var msg = 'Falha ao abrir o formulário.';
+      if (xhr && xhr.responseText) {
+        console.log('list_itens error:', xhr.status, xhr.responseText.substring(0, 500));
+      }
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Erro', msg, 'error');
+      } else {
+        alert(msg);
+      }
+    }
+  });
 
 }
 

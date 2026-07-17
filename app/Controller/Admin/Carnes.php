@@ -42,7 +42,8 @@
 
       // SELECT PARA PESQUISA POR CLIENTE
       $selecteCliente =
-      '<div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
+      '<div class="row px-3 pt-3">
+      <div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
       <select onchange="listar(this.value,1)" class="form-control" id="aluno" name="aluno">
       <option value="0">Filtrar por aluno</option>';
 
@@ -53,21 +54,24 @@
         $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
 
         $selecteCliente .=
-        '<option '.$selected.' value="'.$obCliente->id.'">'.$obCliente->nome.'</option>';
+        '<option '.$selected.' value="'.$obCliente->id.'">'.htmlspecialchars((string)$obCliente->nome, ENT_QUOTES, 'UTF-8').'</option>';
 
       }
 
       $selecteCliente .=
       ' </select>
+      </div>
       </div>';
 
 
       //PAGINA ATUAL
       $paginaAtual = $postVars['page'] ?? 1;
-      $aluno = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? ' AND id_aluno = '.intval($postVars['filtro']) : '';
+      $aluno = (isset($postVars['filtro']) && $postVars['filtro'] !== '' && $postVars['filtro'] !== '0' && (int)$postVars['filtro'] > 0)
+        ? ' AND id_aluno = '.(int)$postVars['filtro']
+        : '';
 
       //QUANTIDADE TOTAL DE REGISTROS
-      $quantidadeTotal = EntityMatri::getMatriculas('id_admin = ' . (int)$id_admin.' '.$aluno,null,null,'COUNT(*) as qtd')->fetchObject()->qtd;
+      $quantidadeTotal = (int)(EntityMatri::getMatriculas('id_admin = ' . (int)$id_admin.' '.$aluno,null,null,'COUNT(*) as qtd')->fetchObject()->qtd ?? 0);
 
       //INSTANCIA DE PAGINAÇÃO
       $obPagination = new Pagination($quantidadeTotal,$paginaAtual,5);
@@ -77,11 +81,19 @@
 
 
       //REDERIZA O ITEM
-      $itens = $selecteCliente;
+      $itens = '';
 
       while ($dados = $results->fetchObject(EntityMatri::class)) {
         $dadosUser = (array) EntityUser::getUserById($dados->id_aluno);
-        $dadosTrilha = (array) EntityTrilhas::getTrilhaById($dados->id_trilha);
+        $nomeAluno = htmlspecialchars((string)($dadosUser['nome'] ?? 'Aluno #'.$dados->id_aluno), ENT_QUOTES, 'UTF-8');
+
+        $nomeTrilha = '—';
+        try {
+          $dadosTrilha = (array) EntityTrilhas::getTrilhaById($dados->id_trilha);
+          $nomeTrilha = htmlspecialchars((string)($dadosTrilha['nome'] ?? '—'), ENT_QUOTES, 'UTF-8');
+        } catch (\Throwable $e) {
+          $nomeTrilha = '<span class="text-danger">Trilha indisponível</span>';
+        }
 
         $disabled='';
 
@@ -99,8 +111,8 @@
         $itens .= 
         '<tr>
         <td>'.$dados->id.'</td>
-        <td>'.$dadosUser['nome'].'</td>
-        <td>'.$dadosTrilha['nome'].'</td>
+        <td>'.$nomeAluno.'</td>
+        <td>'.$nomeTrilha.'</td>
         <td><span>R$ '.NumeroHelper::moedaBr($total).'</span></td>
         <td>'.$status.'</td>
         <td>
@@ -125,7 +137,8 @@
       }
 
 
-      $table = '<div class="card-body">
+      $table = $selecteCliente.'
+      <div class="card-body">
       <div class="table-responsive">
       <table class="table table-striped" id="dataTable" width="100%" cellspacing="0">
       <thead>
@@ -156,7 +169,7 @@
       'pagination' => parent::getPagination($request,$obPagination)
     ];
 
-    return json_encode($conteudo);
+    return parent::jsonLista($conteudo);
 
   }
 

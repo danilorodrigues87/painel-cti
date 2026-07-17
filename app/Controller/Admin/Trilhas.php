@@ -118,7 +118,7 @@ while ($obDados = $results->fetchObject(EntityTrilhas::class)) {
 			'pagination' => parent::getPagination($request,$obPagination)
 		];
 
-		return json_encode($conteudo);
+		return parent::jsonLista($conteudo);
 
 
 	}

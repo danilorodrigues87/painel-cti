@@ -26,6 +26,8 @@ class EscolasAssinantes {
 	public $modulos_liberados;
 	public $plan_id;
 	public $modelo_certificado;
+	public $modelo_contrato_html;
+	public $certificado_frase_conclusao;
 
 	public static function temColunaPlanId(): bool {
 		return self::temColuna('plan_id');
@@ -33,6 +35,14 @@ class EscolasAssinantes {
 
 	public static function temColunaModeloCertificado(): bool {
 		return self::temColuna('modelo_certificado');
+	}
+
+	public static function temColunaModeloContrato(): bool {
+		return self::temColuna('modelo_contrato_html');
+	}
+
+	public static function temColunaCertificadoFrase(): bool {
+		return self::temColuna('certificado_frase_conclusao');
 	}
 
 	private static function temColuna(string $coluna): bool {
@@ -117,6 +127,16 @@ class EscolasAssinantes {
 		if (self::temColunaModeloCertificado()) {
 			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
 		}
+		if (self::temColunaModeloContrato()) {
+			$dados['modelo_contrato_html'] = $this->modelo_contrato_html !== null && trim((string)$this->modelo_contrato_html) !== ''
+				? (string)$this->modelo_contrato_html
+				: null;
+		}
+		if (self::temColunaCertificadoFrase()) {
+			$dados['certificado_frase_conclusao'] = $this->certificado_frase_conclusao !== null && trim((string)$this->certificado_frase_conclusao) !== ''
+				? mb_substr(trim((string)$this->certificado_frase_conclusao), 0, 255)
+				: null;
+		}
 		$this->id = (int)$obDatabase->insert($dados);
 
 		// Tenant = PK da escola
@@ -158,7 +178,39 @@ class EscolasAssinantes {
 		if (self::temColunaModeloCertificado()) {
 			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
 		}
+		if (self::temColunaModeloContrato()) {
+			$dados['modelo_contrato_html'] = $this->modelo_contrato_html !== null && trim((string)$this->modelo_contrato_html) !== ''
+				? (string)$this->modelo_contrato_html
+				: null;
+		}
+		if (self::temColunaCertificadoFrase()) {
+			$dados['certificado_frase_conclusao'] = $this->certificado_frase_conclusao !== null && trim((string)$this->certificado_frase_conclusao) !== ''
+				? mb_substr(trim((string)$this->certificado_frase_conclusao), 0, 255)
+				: null;
+		}
 		return (new Database('escolas_assinantes'))->update('id = '.(int)$this->id, $dados);
+	}
+
+	/** Atualiza só o HTML do contrato (ou NULL = padrão CTI). */
+	public static function salvarModeloContrato(int $idEscola, ?string $html): bool {
+		if (!self::temColunaModeloContrato()) {
+			return false;
+		}
+		$valor = ($html !== null && trim($html) !== '') ? $html : null;
+		return (bool)(new Database('escolas_assinantes'))->update('id = '.(int)$idEscola, [
+			'modelo_contrato_html' => $valor,
+		]);
+	}
+
+	/** Atualiza frase do certificado (NULL = padrão). */
+	public static function salvarFraseCertificado(int $idEscola, ?string $frase): bool {
+		if (!self::temColunaCertificadoFrase()) {
+			return false;
+		}
+		$valor = ($frase !== null && trim($frase) !== '') ? mb_substr(trim($frase), 0, 255) : null;
+		return (bool)(new Database('escolas_assinantes'))->update('id = '.(int)$idEscola, [
+			'certificado_frase_conclusao' => $valor,
+		]);
 	}
 
 	public function excluir() {

@@ -126,7 +126,7 @@ class User extends Page{
 			'pagination' => parent::getPagination($request,$obPagination)
 		];
 
-		return json_encode($conteudo);
+		return parent::jsonLista($conteudo);
 
 	}
 

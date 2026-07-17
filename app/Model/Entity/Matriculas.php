@@ -68,13 +68,13 @@ class Matriculas{
 		
 		if(!$this->id_responsavel){
 			$idPagador = $this->id_aluno;
+			$dadosPagador = (array)EntityUser::getUserById($idPagador);
 		} else {
 			$idPagador = $this->id_responsavel;
+			$dadosPagador = (array)EntityRes::getResById($idPagador);
 		}
-		
-		$dadosPagador = (array)EntityUser::getUserById($idPagador);
+
 		$dadosAluno = (array)EntityUser::getUserById($this->id_aluno);
-		$dadosPagador = (array)EntityRes::getResById($idPagador);
 		
 
 		if($this->desconto_pontualidade){
@@ -113,11 +113,15 @@ class Matriculas{
 			$vencimento = date("Y-m-d", strtotime($ano_vence.'/'.$mes_vence.'/'.$this->dia_vencimento));
 			$descricao = 'Cód '.$this->id.' '.$dadosAluno['nome'].' parc '.$count.'/'.$this->qtd_parcelas;
 
-			$cpfPagador = preg_replace('/\D/', '', $dadosPagador['cpf']);
+			$cpfPagador = preg_replace('/\D/', '', (string)($dadosPagador['cpf'] ?? ''));
 
 
 			if($this->tipo_parcelamento == 'Carnê com Pix'){
 
+				if ($cpfPagador === '' || empty($dadosPagador['nome'])) {
+					$pixCopiaECola = '';
+					$txtId = '';
+				} else {
 				$txtId = bin2hex(random_bytes(16));
 				$chavePix = 'ea01c8b0-dc2f-40b9-961a-98f08a330a42';
 
@@ -158,7 +162,7 @@ class Matriculas{
 
 
 				$pixCopiaECola = Pix::pixComVencimento($accessToken,$data, $txtId);
-
+				}
 			}
 
 			

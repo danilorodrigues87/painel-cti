@@ -125,7 +125,7 @@ public static function getInfo($request){
 		'pagination' => parent::getPagination($request,$obPagination)
 	];
 
-	return json_encode($conteudo);
+	return parent::jsonLista($conteudo);
 
 }
 

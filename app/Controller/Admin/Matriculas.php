@@ -14,6 +14,8 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\BrandingHelper;
+use \App\Common\Helpers\ContratoTemplateHelper;
+use \App\Model\Entity\EscolasAssinantes;
 
 
 class Matriculas extends Page{
@@ -90,9 +92,14 @@ class Matriculas extends Page{
 		//REDERIZA O ITEM
 		while ($dados = $results->fetchObject(EntityMatri::class)) {
 			$dadosUser = (array) EntityUser::getUserById($dados->id_aluno);
-			$dadosTrilha = (array) EntityTrilhas::getTrilhaById($dados->id_trilha);
-
-
+			$nomeAluno = htmlspecialchars((string)($dadosUser['nome'] ?? 'Aluno #'.$dados->id_aluno), ENT_QUOTES, 'UTF-8');
+			$nomeTrilha = '—';
+			try {
+				$dadosTrilha = (array) EntityTrilhas::getTrilhaById($dados->id_trilha);
+				$nomeTrilha = htmlspecialchars((string)($dadosTrilha['nome'] ?? '—'), ENT_QUOTES, 'UTF-8');
+			} catch (\Throwable $e) {
+				$nomeTrilha = '<span class="text-danger">Trilha indisponível</span>';
+			}
 
             $disabled='';
 
@@ -109,8 +116,8 @@ class Matriculas extends Page{
         $itens .= 
         '<tr>
         <td>'.$dados->id.'</td>
-        <td>'.$dadosUser['nome'].'</td>
-        <td>'.@$dadosTrilha['nome'].'</td>
+        <td>'.$nomeAluno.'</td>
+        <td>'.$nomeTrilha.'</td>
         <td><span>R$ '.NumeroHelper::moedaBr($total).'</span></td>
         <td>'.$status.'</td>
         <td>
@@ -170,7 +177,7 @@ class Matriculas extends Page{
       'pagination' => parent::getPagination($request,$obPagination)
    ];
 
-   return json_encode($conteudo);
+   return parent::jsonLista($conteudo);
 
 }
 
@@ -195,10 +202,15 @@ return json_encode($dadosRes);
 private static function getForm($request) {
 
 	$postVars = $request->getPostVars();
+	$dados = [];
 
- if ($postVars['funcao'] == 'editar') {
-  $dados = (array) EntityMatri::getMatriculaById($postVars['id']);
-}
+	if (($postVars['funcao'] ?? '') === 'editar') {
+		$id = (int)($postVars['id'] ?? 0);
+		$id_admin = (int)parent::getIdAdmin()['usuario']['id_admin'];
+		if ($id > 0 && TenantHelper::pertenceMatricula($id, $id_admin)) {
+			$dados = (array) EntityMatri::getMatriculaById($id);
+		}
+	}
 
     //DADOS DO ADMIN
 $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
@@ -213,7 +225,7 @@ $optSlqUsers = '<select class="form-control" onchange="selectAluno(this.value)" 
 while ($obAlunos = $resultsUser->fetchObject(EntityUser::class)) {
   $userSelected = (isset($dados['id_aluno']) && $dados['id_aluno'] == $obAlunos->id) ? 'selected' : '';
   $optSlqUsers .= '
-  <option ' . $userSelected . ' value="'.(int)$obAlunos->id.'">' . $obAlunos->nome . '</option>
+  <option ' . $userSelected . ' value="'.(int)$obAlunos->id.'">' . htmlspecialchars((string)$obAlunos->nome, ENT_QUOTES, 'UTF-8') . '</option>
   ';
 }
 $optSlqUsers .= '</select>';
@@ -227,7 +239,7 @@ $optSlqTrilhas = '';
 while ($obTrilhas = $resultsTrilhas->fetchObject(EntityTrilhas::class)) {
   $trilhaSelected = (isset($dados['id_trilha']) && $dados['id_trilha'] == $obTrilhas->id) ? 'selected' : '';
   $optSlqTrilhas .= '
-  <option ' . $trilhaSelected . ' value="' . $obTrilhas->id . '">' . htmlspecialchars($obTrilhas->nome, ENT_QUOTES, 'UTF-8') . '</option>
+  <option ' . $trilhaSelected . ' value="' . (int)$obTrilhas->id . '">' . htmlspecialchars((string)$obTrilhas->nome, ENT_QUOTES, 'UTF-8') . '</option>
   ';
 }
 
@@ -376,15 +388,23 @@ $form = '<form id="form" method="post">
 
 ';
 
-return $form;
+return [
+	'form' => $form,
+];
 }
 
 
 
 public static function getNovaMatricula($request){
 
-  $form = self::getForm($request);
-  return json_encode($form);
+  $payload = self::getForm($request);
+  $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+  if ($json === false) {
+    return json_encode([
+      'form' => '<div class="alert alert-danger m-3">Erro ao montar o formulário de matrícula.</div>',
+    ]);
+  }
+  return $json;
 }
 
 public static function setNovaMatricula($request) {
@@ -393,8 +413,8 @@ public static function setNovaMatricula($request) {
     //DADOS DO ADMIN
  $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 
- $inicio = $postVars['inicio'];
- $fim = $postVars['final'];
+ $inicio = $postVars['inicio'] ?? '';
+ $fim = $postVars['final'] ?? '';
  $pontualidade = $postVars['pontualidade'] ?? false;
 
 $resposta = [
@@ -402,23 +422,26 @@ $resposta = [
     ]; 
 
 
-    // Aplicar filtros simples
- $id_aluno = filter_var($postVars['aluno'], FILTER_SANITIZE_NUMBER_INT);
- $id_responsavel = filter_var($postVars['id_responsavel'], FILTER_SANITIZE_NUMBER_INT);
- $id_trilha = filter_var($postVars['trilha'], FILTER_SANITIZE_STRING);
- $carga_horaria = filter_var($postVars['carga_horaria'], FILTER_SANITIZE_NUMBER_INT);
- $modulos = filter_var($postVars['modulos'], FILTER_SANITIZE_STRING);
- $horarios = filter_var($postVars['horarios'], FILTER_SANITIZE_STRING);
- $dia_semana = filter_var($postVars['dia_semana'], FILTER_SANITIZE_STRING);
- $aulas_semanais = filter_var($postVars['aulas_semanais'], FILTER_SANITIZE_NUMBER_INT);
- $qtd_parcelas = filter_var($postVars['qtd_parcelas'], FILTER_SANITIZE_NUMBER_INT);
- $dia_vencimento = filter_var($postVars['dia_vencimento'], FILTER_SANITIZE_NUMBER_INT);
- $primeiro_mes = filter_var($postVars['primeiromes'], FILTER_SANITIZE_NUMBER_INT);
- $primeiro_ano = filter_var($postVars['primeiroano'], FILTER_SANITIZE_NUMBER_INT);
- $tipo_parcelamento = filter_var($postVars['tipo_parcelamento'], FILTER_SANITIZE_STRING);
+    // Sem FILTER_SANITIZE_STRING (removido no PHP 8.2+)
+ $id_aluno = filter_var($postVars['aluno'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $id_responsavel = filter_var($postVars['id_responsavel'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $id_trilha = (int)filter_var($postVars['trilha'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $carga_horaria = filter_var($postVars['carga_horaria'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $modulos = trim(strip_tags((string)($postVars['modulos'] ?? '')));
+ $horarios = trim(strip_tags((string)($postVars['horarios'] ?? '')));
+ $dia_semana = trim(strip_tags((string)($postVars['dia_semana'] ?? '')));
+ $aulas_semanais = filter_var($postVars['aulas_semanais'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $qtd_parcelas = filter_var($postVars['qtd_parcelas'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $dia_vencimento = filter_var($postVars['dia_vencimento'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $primeiro_mes = filter_var($postVars['primeiromes'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $primeiro_ano = filter_var($postVars['primeiroano'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
+ $tipo_parcelamento = trim(strip_tags((string)($postVars['tipo_parcelamento'] ?? 'Carnê Simples')));
+ if ($tipo_parcelamento !== 'Carnê com Pix') {
+   $tipo_parcelamento = 'Carnê Simples';
+ }
 
 // Substitui a vírgula por ponto no valor
-$valor = str_replace(',', '.', $postVars['valor']);
+$valor = str_replace(',', '.', (string)($postVars['valor'] ?? '0'));
 // Sanitiza o valor como um número float
 $valor = filter_var($valor, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
 // Converte para float
@@ -665,6 +688,7 @@ if($dados['desconto_pontualidade'] == 1){
 $curso .= $pontualidade;
 
 $clasulaExtra='';
+$tipo_curso = '';
 
 if($dadosTrilha['id_categoria'] == $categoria1){
 
@@ -707,22 +731,22 @@ $mes_contrato = DateTimeHelper::imprimeMes($mes_semZeroInicio);
 
 $data_contrato = '<p style="text-align: right;"><b>'.$cidade->nome.'/'.$estado->sigla.'</b> dia '.$dia_contrato. ' de '.$mes_contrato.' de '.$ano_contrato.'</p><br>';
 
+$escolaEnt = EscolasAssinantes::getEscolaById($id_admin);
+if (!$escolaEnt instanceof EscolasAssinantes) {
+	$escolaEnt = null;
+}
 
-
-        //CONTEÚDO DE FORMULÁRIO
-$content = View::render('admin/modules/matriculas/contrato',[
-   'title' => 'Contrato',
-   'contratada' => $empresa,
-   'contratante' => $contratante,
-   'curso' => $curso,
-   'parte1' => $tipo_curso,
-   'data_contrato' => $data_contrato,
-   'clausulaExtra' => $clasulaExtra
-
-]);
-
-        //RETORNA A PÁGINA COMPLETA
-return $content;
+// Template: NULL na escola = padrão CTI (contrato atual da escola 1)
+return ContratoTemplateHelper::render([
+	'URL'            => URL,
+	'title'          => 'Contrato',
+	'contratada'     => $empresa,
+	'contratante'    => $contratante,
+	'curso'          => $curso,
+	'parte1'         => $tipo_curso ?? '',
+	'data_contrato'  => $data_contrato,
+	'clausulaExtra'  => $clasulaExtra,
+], $escolaEnt);
 }
 
 

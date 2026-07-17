@@ -248,6 +248,10 @@ class SystemModules {
 						'link' => URL.'/painel/config/comunicacao'
 					],
 					[
+						'label' => 'Modelo de contrato',
+						'link' => URL.'/painel/config/contrato'
+					],
+					[
 						'label' => 'Campanhas',
 						'link' => URL.'/painel/campanhas'
 					]
