@@ -107,6 +107,7 @@ class Campanhas extends Page {
 			'enviados'    => (int)$c->enviados,
 			'erros'       => (int)$c->erros,
 			'pendentes'   => $pendentes,
+			'eh_grupos'   => $c->ehCampanhaGrupos() ? 1 : 0,
 			'criada_em'   => $c->criada_em ? date('d/m/Y H:i', strtotime($c->criada_em)) : '',
 			'segmento'    => json_decode($c->segmento ?? '{}', true) ?: [],
 			'mensagem'    => $c->mensagem,
@@ -121,61 +122,85 @@ class Campanhas extends Page {
 		$titulo = trim($postVars['titulo'] ?? '');
 		$assunto = trim($postVars['assunto'] ?? '');
 		$mensagem = trim($postVars['mensagem'] ?? '');
-		$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
-		$tipoSegmento = $postVars['segmento_tipo'] ?? 'alunos_matriculados';
-		$statusLead = $postVars['status_lead'] ?? '';
 		$id = (int)($postVars['id'] ?? 0);
 		$removerMidia = !empty($postVars['remover_midia']);
 
 		if ($titulo === '') {
 			return json_encode(['success' => false, 'message' => 'Preencha o título.']);
 		}
-		if ($canal === 'email' && ($assunto === '' || $mensagem === '')) {
-			return json_encode(['success' => false, 'message' => 'Preencha assunto e mensagem do e-mail.']);
-		}
-		if ($canal === 'whatsapp' && $assunto === '') {
-			$assunto = $titulo;
-		}
 
-		if (!array_key_exists($tipoSegmento, CampanhaSegmentoHelper::getTipos())) {
-			return json_encode(['success' => false, 'message' => 'Segmento inválido.']);
-		}
-
-		if ($tipoSegmento === 'whatsapp_grupos' && $canal !== 'whatsapp') {
-			return json_encode(['success' => false, 'message' => 'Grupos/listas só podem ser usados no canal WhatsApp.']);
-		}
-
-		$segmento = [
-			'tipo'        => $tipoSegmento,
-			'status_lead' => $statusLead,
-		];
-
-		if ($tipoSegmento === 'whatsapp_grupos') {
-			$destinos = self::parseDestinosGrupos($postVars);
-			if (empty($destinos)) {
-				return json_encode(['success' => false, 'message' => 'Selecione ao menos um grupo ou lista de transmissão.']);
-			}
-			$segmento['destinos'] = $destinos;
-		}
+		$ob = null;
+		$editavelCompleto = true;
+		$editavelConteudo = true;
 
 		if ($id > 0) {
 			$ob = EntityCampanhas::getById($id, $idAdmin);
 			if (!$ob instanceof EntityCampanhas) {
 				return json_encode(['success' => false, 'message' => 'Campanha não encontrada.']);
 			}
-			if (!in_array($ob->status, ['rascunho', 'pausada'], true)) {
-				return json_encode(['success' => false, 'message' => 'Esta campanha não pode ser editada.']);
+			$statusAtual = (string)$ob->status;
+			$editavelConteudo = in_array($statusAtual, ['rascunho', 'pausada', 'enviando'], true);
+			$editavelCompleto = ($statusAtual === 'rascunho');
+			if (!$editavelConteudo) {
+				return json_encode(['success' => false, 'message' => 'Esta campanha não pode ser editada neste status.']);
 			}
-			$segAntigo = json_decode($ob->segmento ?? '{}', true) ?: [];
-			if (!$removerMidia && empty($_FILES['arquivo']['tmp_name']) && !empty($segAntigo['midia'])) {
-				$segmento['midia'] = $segAntigo['midia'];
+		}
+
+		if ($id > 0 && !$editavelCompleto) {
+			// Em envio: só conteúdo (mensagem/mídia/título)
+			$canal = ($ob->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
+			$segmento = json_decode($ob->segmento ?? '{}', true) ?: [];
+			if ($canal === 'whatsapp' && $assunto === '') {
+				$assunto = $titulo;
+			}
+			if ($canal === 'email' && ($assunto === '' || $mensagem === '')) {
+				return json_encode(['success' => false, 'message' => 'Preencha assunto e mensagem do e-mail.']);
+			}
+			if ($removerMidia) {
+				unset($segmento['midia']);
 			}
 		} else {
-			$ob = new EntityCampanhas;
-			$ob->id_admin = $idAdmin;
-			$ob->criada_por = $usuarioId;
-			$ob->tipo = 'manual';
-			$ob->status = 'rascunho';
+			$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
+			$tipoSegmento = $postVars['segmento_tipo'] ?? 'alunos_matriculados';
+			$statusLead = $postVars['status_lead'] ?? '';
+
+			if ($canal === 'email' && ($assunto === '' || $mensagem === '')) {
+				return json_encode(['success' => false, 'message' => 'Preencha assunto e mensagem do e-mail.']);
+			}
+			if ($canal === 'whatsapp' && $assunto === '') {
+				$assunto = $titulo;
+			}
+			if (!array_key_exists($tipoSegmento, CampanhaSegmentoHelper::getTipos())) {
+				return json_encode(['success' => false, 'message' => 'Segmento inválido.']);
+			}
+			if ($tipoSegmento === 'whatsapp_grupos' && $canal !== 'whatsapp') {
+				return json_encode(['success' => false, 'message' => 'Grupos/listas só podem ser usados no canal WhatsApp.']);
+			}
+
+			$segmento = [
+				'tipo'        => $tipoSegmento,
+				'status_lead' => $statusLead,
+			];
+			if ($tipoSegmento === 'whatsapp_grupos') {
+				$destinos = self::parseDestinosGrupos($postVars);
+				if (empty($destinos)) {
+					return json_encode(['success' => false, 'message' => 'Selecione ao menos um grupo ou lista de transmissão.']);
+				}
+				$segmento['destinos'] = $destinos;
+			}
+
+			if ($id > 0) {
+				$segAntigo = json_decode($ob->segmento ?? '{}', true) ?: [];
+				if (!$removerMidia && empty($_FILES['arquivo']['tmp_name']) && !empty($segAntigo['midia'])) {
+					$segmento['midia'] = $segAntigo['midia'];
+				}
+			} else {
+				$ob = new EntityCampanhas;
+				$ob->id_admin = $idAdmin;
+				$ob->criada_por = $usuarioId;
+				$ob->tipo = 'manual';
+				$ob->status = 'rascunho';
+			}
 		}
 
 		if ($canal === 'whatsapp' && !$removerMidia && !empty($_FILES['arquivo']) && is_array($_FILES['arquivo'])) {
@@ -225,7 +250,7 @@ class Campanhas extends Page {
 
 		return json_encode([
 			'success'  => true,
-			'message'  => 'Campanha salva.',
+			'message'  => !$editavelCompleto ? 'Mensagem/mídia atualizadas. Valem para os próximos envios.' : 'Campanha salva.',
 			'campanha' => self::formatarCampanha($ob),
 		]);
 	}
@@ -273,18 +298,22 @@ class Campanhas extends Page {
 		if ($ob->status === 'pausada') {
 			$ob->status = 'enviando';
 			$ob->atualizar();
-			$resumo = CampanhaWorker::processar($idAdmin, 3, false);
+			$isGrupo = $ob->ehCampanhaGrupos();
+			// Envia o próximo (1 para grupo por causa do pacing); status permanece enviando
+			$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 3, false);
 			$ob = EntityCampanhas::getById($id, $idAdmin);
 			$ob->recalcularTotais();
+			$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
 			return json_encode([
 				'success'  => true,
-				'message'  => 'Campanha retomada. Pendentes: '.CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente'),
+				'message'  => 'Campanha retomada. Enviados nesta rodada: '.((int)($resumo['enviados'] ?? 0)).'. Pendentes: '.$pend,
 				'campanha' => self::formatarCampanha($ob),
 				'worker'   => $resumo,
 			]);
 		}
 
 		$segmento = json_decode($ob->segmento ?? '{}', true) ?: [];
+		$isGrupo = ($segmento['tipo'] ?? '') === 'whatsapp_grupos';
 		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, $canal);
 
 		if (empty($destinatarios)) {
@@ -317,14 +346,20 @@ class Campanhas extends Page {
 		$ob->erros = 0;
 		$ob->atualizar();
 
-		$resumo = CampanhaWorker::processar($idAdmin, 2, false);
+		// Grupos: envia a 1ª mensagem agora; demais seguem o intervalo (worker / processar fila)
+		$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 2, false);
 
 		$ob = EntityCampanhas::getById($id, $idAdmin);
 		$ob->recalcularTotais();
 
+		$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
+		$msg = $isGrupo
+			? 'Campanha iniciada. 1ª mensagem enviada (se conectado). Pendentes: '.$pend.'. Status permanece Enviando até você encerrar.'
+			: 'Campanha iniciada. '.$ob->enviados.' enviados, '.$ob->erros.' erros. Pendentes: '.$pend;
+
 		return json_encode([
 			'success'  => true,
-			'message'  => 'Campanha iniciada. '.$ob->enviados.' enviados, '.$ob->erros.' erros. Pendentes: '.CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente'),
+			'message'  => $msg,
 			'campanha' => self::formatarCampanha($ob),
 			'worker'   => $resumo,
 		]);
@@ -354,12 +389,21 @@ class Campanhas extends Page {
 			return json_encode(['success' => false, 'message' => 'Campanha não encontrada.']);
 		}
 
+		$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
 		CampanhaFila::cancelarPendentes($id, $idAdmin);
-		$ob->status = 'cancelada';
+
+		// Sem pendentes e já houve envio: encerra como concluída; senão cancela
+		if ($pend <= 0 && (int)$ob->enviados > 0) {
+			$ob->status = 'concluida';
+			$msg = 'Campanha encerrada.';
+		} else {
+			$ob->status = 'cancelada';
+			$msg = 'Campanha cancelada. Pendentes removidos da fila.';
+		}
 		$ob->atualizar();
 		$ob->recalcularTotais();
 
-		return json_encode(['success' => true, 'message' => 'Campanha cancelada.', 'campanha' => self::formatarCampanha($ob)]);
+		return json_encode(['success' => true, 'message' => $msg, 'campanha' => self::formatarCampanha($ob)]);
 	}
 
 	private static function detalhes(array $postVars): string {

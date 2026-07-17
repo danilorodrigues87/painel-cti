@@ -90,6 +90,11 @@ class Campanhas {
 		]);
 	}
 
+	public function ehCampanhaGrupos(): bool {
+		$seg = json_decode($this->segmento ?? '{}', true) ?: [];
+		return ($seg['tipo'] ?? '') === 'whatsapp_grupos';
+	}
+
 	public function recalcularTotais(): void {
 		$campanhaId = (int)$this->id;
 		$idAdmin = (int)$this->id_admin;
@@ -103,7 +108,13 @@ class Campanhas {
 		$this->enviados = $enviados;
 		$this->erros = $erros;
 
-		if ($this->status === 'enviando' && $pendentes === 0 && $total > 0) {
+		// Campanhas de grupo NÃO concluem sozinhas — ficam "enviando" até o usuário encerrar
+		if (
+			$this->status === 'enviando'
+			&& $pendentes === 0
+			&& $total > 0
+			&& !$this->ehCampanhaGrupos()
+		) {
 			$this->status = 'concluida';
 		}
 

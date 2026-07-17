@@ -202,23 +202,27 @@ function renderizarLista(campanhas){
 		}
 		if(c.status === 'pausada'){
 			itensMenu += '<li><button type="button" class="dropdown-item text-success btn-iniciar" data-id="'+c.id+'"><i class="fas fa-play me-1"></i> Retomar envio</button></li>';
-			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar</button></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar mensagem/mídia</button></li>';
 		}
 		if(c.status === 'enviando'){
 			itensMenu += '<li><button type="button" class="dropdown-item text-warning btn-pausar" data-id="'+c.id+'"><i class="fas fa-pause me-1"></i> Pausar envio</button></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar mensagem/mídia</button></li>';
 		}
 		if(c.status !== 'concluida' && c.status !== 'cancelada'){
 			itensMenu += '<li><hr class="dropdown-divider"></li>';
-			itensMenu += '<li><button type="button" class="dropdown-item text-danger btn-cancelar" data-id="'+c.id+'"><i class="fas fa-stop me-1"></i> Parar / cancelar</button></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item text-danger btn-cancelar" data-id="'+c.id+'"><i class="fas fa-stop me-1"></i> '+(c.eh_grupos ? 'Encerrar campanha' : 'Parar / cancelar')+'</button></li>';
 		}
 
 		const acoes = ''
 			+'<div class="btn-group">'
 			+(c.status === 'enviando'
 				? '<button type="button" class="btn btn-sm btn-warning btn-pausar" data-id="'+c.id+'" title="Pausar"><i class="fas fa-pause"></i> Pausar</button>'
+					+'<button type="button" class="btn btn-sm btn-outline-primary btn-editar" data-id="'+c.id+'" title="Editar mensagem/mídia"><i class="fas fa-edit"></i></button>'
+					+'<button type="button" class="btn btn-sm btn-outline-danger btn-cancelar" data-id="'+c.id+'" title="Encerrar"><i class="fas fa-stop"></i></button>'
 				: '')
 			+(c.status === 'rascunho' || c.status === 'pausada'
 				? '<button type="button" class="btn btn-sm btn-success btn-iniciar" data-id="'+c.id+'" title="'+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'</button>'
+					+(c.status === 'pausada' ? '<button type="button" class="btn btn-sm btn-outline-primary btn-editar" data-id="'+c.id+'"><i class="fas fa-edit"></i></button>' : '')
 				: '')
 			+'<button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">'
 			+'<span class="visually-hidden">Mais</span></button>'
@@ -288,6 +292,9 @@ function limparFormulario(){
 	$('#status_lead').val('');
 	$('#preview-resultado').text('');
 	$('#titulo-modal-campanha').text('Nova campanha');
+	$('#btn-salvar-campanha').html('<i class="fas fa-save"></i> Salvar rascunho');
+	$('#campanha_canal, #segmento_tipo, #status_lead').prop('disabled', false);
+	$('#wrap-grupos-wa').find('input,button').prop('disabled', false);
 	$('#wrap-status-lead').hide();
 	$('#lista-grupos-wa').html('<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>');
 	limparMidiaSelecionada(false);
@@ -381,8 +388,8 @@ function acaoCampanha(acao, id, confirmar){
 
 	if(confirmar){
 		const textos = {
-			iniciar: { title: 'Iniciar envio?', text: 'A campanha entrará na fila de envio.' },
-			cancelar: { title: 'Parar campanha?', text: 'Os pendentes serão cancelados e não poderão ser retomados.' }
+			iniciar: { title: 'Iniciar envio?', text: 'A campanha entrará em envio. Em grupos, a 1ª mensagem sai agora e as demais seguem o intervalo.' },
+			cancelar: { title: 'Encerrar campanha?', text: 'Remove pendentes da fila e encerra o envio. O progresso já enviado é mantido.' }
 		};
 		const t = textos[acao] || { title: 'Confirmar?', text: '' };
 		Swal.fire({
@@ -437,12 +444,14 @@ function abrirDetalhes(id){
 		let footer = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>';
 		if(c.status === 'enviando'){
 			footer += '<button type="button" class="btn btn-warning btn-pausar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-pause"></i> Pausar envio</button>';
+			footer += '<button type="button" class="btn btn-outline-primary btn-editar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-edit"></i> Editar mensagem/mídia</button>';
 		}
 		if(c.status === 'rascunho' || c.status === 'pausada'){
 			footer += '<button type="button" class="btn btn-success btn-iniciar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+' envio</button>';
+			footer += '<button type="button" class="btn btn-outline-primary btn-editar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-edit"></i> Editar</button>';
 		}
 		if(c.status !== 'concluida' && c.status !== 'cancelada'){
-			footer += '<button type="button" class="btn btn-outline-danger btn-cancelar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-stop"></i> Parar</button>';
+			footer += '<button type="button" class="btn btn-outline-danger btn-cancelar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-stop"></i> '+(c.eh_grupos ? 'Encerrar' : 'Parar')+'</button>';
 		}
 		$('#footer-detalhes-campanha').html(footer);
 
@@ -458,6 +467,7 @@ function editarCampanha(id){
 		}
 		const c = res.campanha;
 		const seg = c.segmento || {};
+		const emCurso = c.status === 'enviando' || c.status === 'pausada';
 		$('#campanha_id').val(c.id);
 		$('#campanha_canal').val(c.canal || 'email');
 		$('#campanha_titulo').val(c.titulo || '');
@@ -465,7 +475,13 @@ function editarCampanha(id){
 		$('#campanha_mensagem').val(res.mensagem || c.mensagem || '');
 		$('#segmento_tipo').val(seg.tipo || 'alunos_matriculados');
 		$('#status_lead').val(seg.status_lead || '');
-		$('#titulo-modal-campanha').text('Editar campanha');
+		$('#titulo-modal-campanha').text(emCurso
+			? 'Ajustar mensagem/mídia ('+(c.status === 'pausada' ? 'pausada' : 'em envio')+')'
+			: 'Editar campanha');
+		$('#btn-salvar-campanha').html(emCurso
+			? '<i class="fas fa-save"></i> Salvar mensagem/mídia'
+			: '<i class="fas fa-save"></i> Salvar rascunho');
+		$('#campanha_canal, #segmento_tipo, #status_lead').prop('disabled', emCurso);
 		window._campanhaArquivo = null;
 		window._campanhaMidiaExistente = c.midia || seg.midia || null;
 		$('#campanha_remover_midia').val('0');
@@ -478,6 +494,7 @@ function editarCampanha(id){
 			(seg.destinos || []).forEach(function(d){ if(d.jid) sel[d.jid] = true; });
 			renderGruposWa(seg.destinos || [], sel);
 		}
+		$('#wrap-grupos-wa').find('input,button').prop('disabled', emCurso);
 		$('#modalCampanha').modal('show');
 	}, 'json');
 }
