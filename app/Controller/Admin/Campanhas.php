@@ -88,7 +88,11 @@ class Campanhas extends Page {
 			$lista[] = self::formatarCampanha($row);
 		}
 
-		return json_encode(['success' => true, 'campanhas' => $lista]);
+		return json_encode([
+			'success'   => true,
+			'campanhas' => $lista,
+			'pacing'    => CampanhaWorker::infoPacingGrupo($idAdmin),
+		]);
 	}
 
 	private static function formatarCampanha(EntityCampanhas $c): array {
@@ -442,17 +446,30 @@ class Campanhas extends Page {
 	private static function processarFila(array $postVars): string {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$limite = min(10, max(1, (int)($postVars['limite'] ?? 5)));
-		$resumo = CampanhaWorker::processar($idAdmin, $limite, true);
+		$silencioso = !empty($postVars['silencioso']);
+		// Auto-poll: sem sleep longo na request web
+		$resumo = CampanhaWorker::processar($idAdmin, $limite, !$silencioso);
 
 		$results = EntityCampanhas::get('id_admin = '.(int)$idAdmin.' AND status = "enviando"');
 		while ($c = $results->fetchObject(EntityCampanhas::class)) {
 			$c->recalcularTotais();
 		}
 
+		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
+		$msg = 'Processados: '.$resumo['processados'].'. Enviados: '.$resumo['enviados'].'. Erros: '.$resumo['erros'].'.';
+		if ((int)$resumo['enviados'] === 0 && !empty($resumo['escolas'][$idAdmin]['whatsapp']['motivo'])) {
+			$motivo = $resumo['escolas'][$idAdmin]['whatsapp']['motivo'];
+			if ($motivo === 'pacing_grupo' && $pacing['proximo_em_segundos'] > 0) {
+				$min = (int)ceil($pacing['proximo_em_segundos'] / 60);
+				$msg .= ' Aguardando intervalo de grupos (~'.$min.' min).';
+			}
+		}
+
 		return json_encode([
 			'success' => true,
-			'message' => 'Processados: '.$resumo['processados'].'. Enviados: '.$resumo['enviados'].'. Erros: '.$resumo['erros'].'.',
+			'message' => $msg,
 			'resumo'  => $resumo,
+			'pacing'  => $pacing,
 		]);
 	}
 

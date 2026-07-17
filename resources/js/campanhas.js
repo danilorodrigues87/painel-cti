@@ -1,4 +1,9 @@
 const CAMPANHAS_URL = 'painel/campanhas';
+let campanhaPollFila = null;
+let campanhaPollTick = null;
+let campanhaPacing = null;
+let campanhaTemPendentes = false;
+let campanhaProcessandoFila = false;
 
 function badgeStatus(status){
 	const mapa = {
@@ -301,18 +306,121 @@ function limparFormulario(){
 	atualizarUiCanal();
 }
 
-function carregarCampanhas(){
+function formatarEspera(seg){
+	seg = Math.max(0, parseInt(seg, 10) || 0);
+	if(seg <= 0) return 'agora';
+	const m = Math.floor(seg / 60);
+	const s = seg % 60;
+	if(m <= 0) return s+'s';
+	return m+'min'+(s > 0 ? ' '+s+'s' : '');
+}
+
+function atualizarTextoPacing(pacing){
+	campanhaPacing = pacing || campanhaPacing;
+	const p = campanhaPacing;
+	if(!p){
+		$('#pacing-grupos-texto').text('Intervalo de grupos indisponível.');
+		return;
+	}
+	let txt = 'Intervalo entre grupos: <strong>'+escHtml(String(p.delay_minutos || 60))+' min</strong>.';
+	if(p.coluna_ok === false){
+		txt += ' <span class="text-danger">Execute o SQL whatsapp_grupo_delay_segundos para gravar o intervalo.</span>';
+	}
+	if(campanhaTemPendentes){
+		if(p.pode_enviar){
+			txt += ' Próximo envio de grupo: <strong class="text-success">liberado</strong> (processando automaticamente).';
+		} else {
+			txt += ' Próximo envio de grupo em: <strong class="text-warning" id="pacing-countdown">'+escHtml(formatarEspera(p.proximo_em_segundos))+'</strong>.';
+		}
+	} else {
+		txt += ' Nenhuma campanha com pendentes no momento.';
+	}
+	$('#pacing-grupos-texto').html(txt);
+}
+
+function tickPacingCountdown(){
+	if(!campanhaPacing || !campanhaTemPendentes) return;
+	if(campanhaPacing.proximo_em_segundos > 0){
+		campanhaPacing.proximo_em_segundos = Math.max(0, campanhaPacing.proximo_em_segundos - 1);
+		if(campanhaPacing.proximo_em_segundos <= 0){
+			campanhaPacing.pode_enviar = true;
+			atualizarTextoPacing(campanhaPacing);
+			processarFilaSilencioso();
+			return;
+		}
+		atualizarTextoPacing(campanhaPacing);
+	}
+}
+
+function processarFilaSilencioso(){
+	if(!campanhaTemPendentes || campanhaProcessandoFila) return;
+	campanhaProcessandoFila = true;
+	$.post(url_base + CAMPANHAS_URL, { acao: 'processar', limite: 3, silencioso: 1 }, function(res){
+		campanhaProcessandoFila = false;
+		if(!res || !res.success) return;
+		if(res.pacing) atualizarTextoPacing(res.pacing);
+		const enviados = res.resumo && res.resumo.enviados ? res.resumo.enviados : 0;
+		carregarCampanhas({ silencioso: true });
+		if(enviados > 0){
+			document.title = '('+enviados+' enviados) Campanhas';
+			setTimeout(function(){ document.title = 'Campanhas'; }, 4000);
+		}
+	}, 'json').fail(function(){
+		campanhaProcessandoFila = false;
+	});
+}
+
+function iniciarAutoFila(){
+	if(!campanhaPollFila){
+		campanhaPollFila = setInterval(processarFilaSilencioso, 30000);
+	}
+	if(!campanhaPollTick){
+		campanhaPollTick = setInterval(tickPacingCountdown, 1000);
+	}
+}
+
+function pararAutoFila(){
+	if(campanhaPollFila){
+		clearInterval(campanhaPollFila);
+		campanhaPollFila = null;
+	}
+	if(campanhaPollTick){
+		clearInterval(campanhaPollTick);
+		campanhaPollTick = null;
+	}
+}
+
+function carregarCampanhas(opts){
+	opts = opts || {};
 	$.post(url_base + CAMPANHAS_URL, {
 		acao: 'listar',
 		canal: $('#filtro-canal').val() || ''
 	}, function(res){
 		if(!res || !res.success){
-			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao listar.', 'error');
+			if(!opts.silencioso){
+				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao listar.', 'error');
+			}
 			return;
 		}
 		renderizarLista(res.campanhas);
+		campanhaTemPendentes = (res.campanhas || []).some(function(c){
+			return c.status === 'enviando' && (c.pendentes || 0) > 0;
+		});
+		if(res.pacing) atualizarTextoPacing(res.pacing);
+		else atualizarTextoPacing(campanhaPacing);
+		if(campanhaTemPendentes){
+			iniciarAutoFila();
+			// Só dispara na carga manual (não após o próprio processar, evita loop)
+			if(!opts.silencioso && res.pacing && res.pacing.pode_enviar){
+				processarFilaSilencioso();
+			}
+		} else {
+			pararAutoFila();
+		}
 	}, 'json').fail(function(){
-		Swal.fire('Erro', 'Falha ao carregar campanhas.', 'error');
+		if(!opts.silencioso){
+			Swal.fire('Erro', 'Falha ao carregar campanhas.', 'error');
+		}
 	});
 }
 
@@ -509,6 +617,7 @@ function processarFila(){
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao processar.', 'error');
 			return;
 		}
+		if(res.pacing) atualizarTextoPacing(res.pacing);
 		Swal.fire('Fila', res.message, 'info');
 		carregarCampanhas();
 	}, 'json');

@@ -19,17 +19,14 @@
 	</button>
 </div>
 
-<div class="alert alert-info small">
+<div class="alert alert-info small mb-3">
 	<strong>Variáveis:</strong> <code>{nome}</code>, <code>{email}</code>/<code>{whatsapp}</code>, <code>{curso}</code>, <code>{escola}</code>.
-	WhatsApp usa o número cadastrado em <code>usuarios.whatsapp</code> / leads.
 	Limites em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.
-	<br>
-	<strong>Controles:</strong>
-	<span class="badge bg-success">Iniciar</span> começa o envio ·
-	<span class="badge bg-warning text-dark">Pausar</span> (status <em>Enviando</em>) ·
-	<span class="badge bg-primary">Editar</span> mensagem/mídia mesmo após iniciar ·
-	<span class="badge bg-danger">Parar</span> cancela de vez.
-	Em campanhas de <strong>grupo</strong>: ao Iniciar envia a 1ª mensagem; o status fica <em>Enviando</em> contando os envios até você clicar em <strong>Encerrar</strong>. Use Pausar/Retomar e o intervalo em Comunicação.
+	<span class="badge bg-success">Iniciar</span> · <span class="badge bg-warning text-dark">Pausar</span> · <span class="badge bg-primary">Editar</span> · <span class="badge bg-danger">Encerrar</span>
+</div>
+<div class="alert alert-secondary small mb-3" id="alert-pacing-grupos">
+	<strong>Fila automática:</strong> com campanha em <em>Enviando</em>, esta tela processa a fila a cada ~30s (respeita o intervalo de grupos).
+	<span id="pacing-grupos-texto" class="d-block mt-1">Carregando intervalo...</span>
 </div>
 
 <div class="card shadow-sm">
@@ -187,4 +184,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260717f"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260717h"></script>

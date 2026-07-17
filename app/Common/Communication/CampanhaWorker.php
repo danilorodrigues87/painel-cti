@@ -199,6 +199,50 @@ class CampanhaWorker {
 		return (int)($row['qtd'] ?? 0);
 	}
 
+	/**
+	 * Info de pacing de grupos para a UI (intervalo e tempo até o próximo envio).
+	 * @return array{delay_segundos:int,delay_minutos:int,ultimo_envio:?string,proximo_em_segundos:int,pode_enviar:bool,coluna_ok:bool}
+	 */
+	public static function infoPacingGrupo(int $idAdmin): array {
+		$colunaOk = EscolaIntegracoes::temColunaWhatsappGrupoDelay();
+		$config = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$delay = 3600;
+		if ($colunaOk && $config instanceof EscolaIntegracoes) {
+			$delay = max(60, (int)($config->whatsapp_grupo_delay_segundos ?? 3600));
+		}
+
+		$sql = '
+			SELECT MAX(f.enviado_em) AS ultimo
+			FROM campanha_fila f
+			INNER JOIN campanhas c ON c.id = f.campanha_id
+			WHERE f.id_admin = '.(int)$idAdmin.'
+			  AND f.status = "enviado"
+			  AND c.canal = "whatsapp"
+			  AND (
+			    f.destinatario_tipo IN ("grupo","lista","whatsapp_grupos")
+			    OR f.contato LIKE "%@g.us%"
+			    OR f.contato LIKE "%@broadcast%"
+			  )
+		';
+		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
+		$ultimo = !empty($row['ultimo']) ? (string)$row['ultimo'] : null;
+
+		$espera = 0;
+		if ($ultimo) {
+			$elapsed = time() - strtotime($ultimo);
+			$espera = max(0, $delay - $elapsed);
+		}
+
+		return [
+			'delay_segundos'       => $delay,
+			'delay_minutos'        => (int)max(1, (int)round($delay / 60)),
+			'ultimo_envio'         => $ultimo,
+			'proximo_em_segundos'  => $espera,
+			'pode_enviar'          => $espera <= 0,
+			'coluna_ok'            => $colunaOk,
+		];
+	}
+
 	private static function escolasComCampanhasAtivas(int $idAdminFiltro = 0): array {
 		$where = 'status = "enviando" AND canal IN ("email","whatsapp")';
 		if ($idAdminFiltro > 0) {
