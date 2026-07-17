@@ -25,7 +25,8 @@
 	<span class="badge bg-success">Iniciar</span> · <span class="badge bg-warning text-dark">Pausar</span> · <span class="badge bg-primary">Editar</span> · <span class="badge bg-danger">Encerrar</span>
 </div>
 <div class="alert alert-secondary small mb-3" id="alert-pacing-grupos">
-	<strong>Fila automática:</strong> com campanha em <em>Enviando</em>, esta tela processa a fila a cada ~30s (respeita o intervalo de grupos).
+	<strong>Fila automática:</strong> com o painel aberto (qualquer tela), a fila roda sozinha respeitando o intervalo de grupos.
+	Em produção o ideal é o cron: <code>php worker/campanhas.php</code> a cada minuto.
 	<span id="pacing-grupos-texto" class="d-block mt-1">Carregando intervalo...</span>
 </div>
 
@@ -184,4 +185,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260717h"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260717i"></script>

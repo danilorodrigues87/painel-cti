@@ -81,6 +81,9 @@ class Campanhas extends Page {
 			$where .= ' AND canal = "'.addslashes($canal).'"';
 		}
 
+		// Avança a fila se o intervalo de grupos já liberou (não depende só do botão/cron)
+		self::tickFilaLeve($idAdmin);
+
 		$results = EntityCampanhas::get($where, 'id DESC', '50');
 
 		$lista = [];
@@ -93,6 +96,35 @@ class Campanhas extends Page {
 			'campanhas' => $lista,
 			'pacing'    => CampanhaWorker::infoPacingGrupo($idAdmin),
 		]);
+	}
+
+	/** Processa 1 item se houver campanha enviando (respeita pacing de grupos). */
+	private static function tickFilaLeve(int $idAdmin): void {
+		$results = EntityCampanhas::get(
+			'id_admin = '.(int)$idAdmin.' AND status = "enviando"'
+		);
+		$temAtiva = false;
+		$soGrupos = true;
+		while ($c = $results->fetchObject(EntityCampanhas::class)) {
+			$temAtiva = true;
+			if (!$c->ehCampanhaGrupos()) {
+				$soGrupos = false;
+			}
+		}
+		if (!$temAtiva) {
+			return;
+		}
+
+		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
+		if ($soGrupos && empty($pacing['pode_enviar'])) {
+			return;
+		}
+
+		CampanhaWorker::processar($idAdmin, 1, false);
+		$ativos = EntityCampanhas::get('id_admin = '.(int)$idAdmin.' AND status = "enviando"');
+		while ($c = $ativos->fetchObject(EntityCampanhas::class)) {
+			$c->recalcularTotais();
+		}
 	}
 
 	private static function formatarCampanha(EntityCampanhas $c): array {

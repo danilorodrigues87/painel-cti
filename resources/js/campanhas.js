@@ -1,6 +1,7 @@
 const CAMPANHAS_URL = 'painel/campanhas';
 let campanhaPollFila = null;
 let campanhaPollTick = null;
+let campanhaPacingTimer = null;
 let campanhaPacing = null;
 let campanhaTemPendentes = false;
 let campanhaProcessandoFila = false;
@@ -338,6 +339,24 @@ function atualizarTextoPacing(pacing){
 	$('#pacing-grupos-texto').html(txt);
 }
 
+function limparPacingTimer(){
+	if(campanhaPacingTimer){
+		clearTimeout(campanhaPacingTimer);
+		campanhaPacingTimer = null;
+	}
+}
+
+function agendarProximoEnvioGrupo(){
+	limparPacingTimer();
+	if(!campanhaTemPendentes || !campanhaPacing) return;
+	const espera = Math.max(0, parseInt(campanhaPacing.proximo_em_segundos, 10) || 0);
+	// Dispara no fim do intervalo (+2s de folga) — não depende só do poll de 30s
+	campanhaPacingTimer = setTimeout(function(){
+		campanhaPacingTimer = null;
+		processarFilaSilencioso();
+	}, (espera + 2) * 1000);
+}
+
 function tickPacingCountdown(){
 	if(!campanhaPacing || !campanhaTemPendentes) return;
 	if(campanhaPacing.proximo_em_segundos > 0){
@@ -358,7 +377,10 @@ function processarFilaSilencioso(){
 	$.post(url_base + CAMPANHAS_URL, { acao: 'processar', limite: 3, silencioso: 1 }, function(res){
 		campanhaProcessandoFila = false;
 		if(!res || !res.success) return;
-		if(res.pacing) atualizarTextoPacing(res.pacing);
+		if(res.pacing){
+			atualizarTextoPacing(res.pacing);
+			agendarProximoEnvioGrupo();
+		}
 		const enviados = res.resumo && res.resumo.enviados ? res.resumo.enviados : 0;
 		carregarCampanhas({ silencioso: true });
 		if(enviados > 0){
@@ -372,11 +394,12 @@ function processarFilaSilencioso(){
 
 function iniciarAutoFila(){
 	if(!campanhaPollFila){
-		campanhaPollFila = setInterval(processarFilaSilencioso, 30000);
+		campanhaPollFila = setInterval(processarFilaSilencioso, 20000);
 	}
 	if(!campanhaPollTick){
 		campanhaPollTick = setInterval(tickPacingCountdown, 1000);
 	}
+	agendarProximoEnvioGrupo();
 }
 
 function pararAutoFila(){
@@ -388,6 +411,7 @@ function pararAutoFila(){
 		clearInterval(campanhaPollTick);
 		campanhaPollTick = null;
 	}
+	limparPacingTimer();
 }
 
 function carregarCampanhas(opts){
@@ -410,6 +434,7 @@ function carregarCampanhas(opts){
 		else atualizarTextoPacing(campanhaPacing);
 		if(campanhaTemPendentes){
 			iniciarAutoFila();
+			if(res.pacing) agendarProximoEnvioGrupo();
 			// Só dispara na carga manual (não após o próprio processar, evita loop)
 			if(!opts.silencioso && res.pacing && res.pacing.pode_enviar){
 				processarFilaSilencioso();
