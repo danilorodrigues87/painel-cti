@@ -23,6 +23,11 @@
 	<strong>Variáveis:</strong> <code>{nome}</code>, <code>{email}</code>/<code>{whatsapp}</code>, <code>{curso}</code>, <code>{escola}</code>.
 	WhatsApp usa o número cadastrado em <code>usuarios.whatsapp</code> / leads.
 	Limites em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.
+	<br>
+	<strong>Controles:</strong>
+	<span class="badge bg-success">Iniciar</span> começa o envio ·
+	<span class="badge bg-warning text-dark">Pausar</span> aparece só com status <em>Enviando</em> (pode retomar depois) ·
+	<span class="badge bg-danger">Parar</span> cancela de vez.
 </div>
 
 <div class="card shadow-sm">
@@ -175,8 +180,9 @@
 				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 			</div>
 			<div class="modal-body" id="body-detalhes-campanha"></div>
+			<div class="modal-footer flex-wrap gap-2" id="footer-detalhes-campanha"></div>
 		</div>
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260717c"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260717d"></script>

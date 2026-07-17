@@ -193,18 +193,37 @@ function renderizarLista(campanhas){
 			? Math.round(((c.enviados + c.erros) / c.total) * 100)
 			: 0;
 
-		let acoes = '<button class="btn btn-sm btn-outline-secondary me-1 btn-detalhes" data-id="'+c.id+'"><i class="fas fa-eye"></i></button>';
+		let itensMenu = '';
+		itensMenu += '<li><button type="button" class="dropdown-item btn-detalhes" data-id="'+c.id+'"><i class="fas fa-eye me-1"></i> Detalhes</button></li>';
 
-		if(c.status === 'rascunho' || c.status === 'pausada'){
-			acoes += '<button class="btn btn-sm btn-success me-1 btn-iniciar" data-id="'+c.id+'"><i class="fas fa-paper-plane"></i></button>';
-			acoes += '<button class="btn btn-sm btn-outline-primary btn-editar" data-id="'+c.id+'"><i class="fas fa-edit"></i></button>';
+		if(c.status === 'rascunho'){
+			itensMenu += '<li><button type="button" class="dropdown-item text-success btn-iniciar" data-id="'+c.id+'"><i class="fas fa-paper-plane me-1"></i> Iniciar envio</button></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar</button></li>';
+		}
+		if(c.status === 'pausada'){
+			itensMenu += '<li><button type="button" class="dropdown-item text-success btn-iniciar" data-id="'+c.id+'"><i class="fas fa-play me-1"></i> Retomar envio</button></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar</button></li>';
 		}
 		if(c.status === 'enviando'){
-			acoes += '<button class="btn btn-sm btn-warning me-1 btn-pausar" data-id="'+c.id+'" title="Pausar envio (pode retomar depois)"><i class="fas fa-pause"></i> Pausar</button>';
+			itensMenu += '<li><button type="button" class="dropdown-item text-warning btn-pausar" data-id="'+c.id+'"><i class="fas fa-pause me-1"></i> Pausar envio</button></li>';
 		}
 		if(c.status !== 'concluida' && c.status !== 'cancelada'){
-			acoes += '<button class="btn btn-sm btn-outline-danger btn-cancelar" data-id="'+c.id+'" title="Parar definitivamente e cancelar pendentes"><i class="fas fa-stop"></i> Parar</button>';
+			itensMenu += '<li><hr class="dropdown-divider"></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item text-danger btn-cancelar" data-id="'+c.id+'"><i class="fas fa-stop me-1"></i> Parar / cancelar</button></li>';
 		}
+
+		const acoes = ''
+			+'<div class="btn-group">'
+			+(c.status === 'enviando'
+				? '<button type="button" class="btn btn-sm btn-warning btn-pausar" data-id="'+c.id+'" title="Pausar"><i class="fas fa-pause"></i> Pausar</button>'
+				: '')
+			+(c.status === 'rascunho' || c.status === 'pausada'
+				? '<button type="button" class="btn btn-sm btn-success btn-iniciar" data-id="'+c.id+'" title="'+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'</button>'
+				: '')
+			+'<button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">'
+			+'<span class="visually-hidden">Mais</span></button>'
+			+'<ul class="dropdown-menu dropdown-menu-end">'+itensMenu+'</ul>'
+			+'</div>';
 
 		const sub = c.canal === 'whatsapp' ? (c.titulo || '') : (c.assunto || '');
 		$tbody.append(`
@@ -219,7 +238,7 @@ function renderizarLista(campanhas){
 					</div>
 				</td>
 				<td>${escHtml(c.criada_em)}</td>
-				<td class="text-end">${acoes}</td>
+				<td class="text-end text-nowrap">${acoes}</td>
 			</tr>
 		`);
 	});
@@ -408,12 +427,25 @@ function abrirDetalhes(id){
 		$('#body-detalhes-campanha').html(`
 			<p><strong>Canal:</strong> ${escHtml(c.canal_label || c.canal)}</p>
 			<p><strong>Assunto:</strong> ${escHtml(res.assunto || '—')}</p>
-			<p><strong>Status:</strong> ${escHtml(c.status_label)}</p>
+			<p><strong>Status:</strong> <span class="badge bg-${badgeStatus(c.status)}">${escHtml(c.status_label)}</span></p>
 			<p><strong>Progresso:</strong> ${c.enviados} enviados, ${c.erros} erros, ${c.pendentes} pendentes de ${c.total}</p>
 			${midiaHtml}
 			<div class="border rounded p-3 bg-light small" style="white-space:pre-wrap;">${escHtml(res.mensagem)}</div>
 			${errosHtml}
 		`);
+
+		let footer = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>';
+		if(c.status === 'enviando'){
+			footer += '<button type="button" class="btn btn-warning btn-pausar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-pause"></i> Pausar envio</button>';
+		}
+		if(c.status === 'rascunho' || c.status === 'pausada'){
+			footer += '<button type="button" class="btn btn-success btn-iniciar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+' envio</button>';
+		}
+		if(c.status !== 'concluida' && c.status !== 'cancelada'){
+			footer += '<button type="button" class="btn btn-outline-danger btn-cancelar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-stop"></i> Parar</button>';
+		}
+		$('#footer-detalhes-campanha').html(footer);
+
 		$('#modalDetalhesCampanha').modal('show');
 	}, 'json');
 }
