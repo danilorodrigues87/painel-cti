@@ -107,7 +107,9 @@ class Campanhas extends Page {
 		$soGrupos = true;
 		while ($c = $results->fetchObject(EntityCampanhas::class)) {
 			$temAtiva = true;
-			if (!$c->ehCampanhaGrupos()) {
+			if ($c->ehCampanhaGrupos()) {
+				CampanhaWorker::reabastecerFilaGrupos($c);
+			} else {
 				$soGrupos = false;
 			}
 		}
@@ -333,18 +335,28 @@ class Campanhas extends Page {
 
 		if ($ob->status === 'pausada') {
 			$ob->status = 'enviando';
+			$ob->agendada_para = null;
 			$ob->atualizar();
 			$isGrupo = $ob->ehCampanhaGrupos();
-			// Envia o próximo (1 para grupo por causa do pacing); status permanece enviando
+			if ($isGrupo) {
+				CampanhaWorker::reabastecerFilaGrupos($ob);
+			}
 			$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 3, false);
 			$ob = EntityCampanhas::getById($id, $idAdmin);
 			$ob->recalcularTotais();
 			$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
+			if ($isGrupo) {
+				CampanhaWorker::agendarContinuacaoGrupos($idAdmin, $id);
+			}
+			$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
 			return json_encode([
 				'success'  => true,
-				'message'  => 'Campanha retomada. Enviados nesta rodada: '.((int)($resumo['enviados'] ?? 0)).'. Pendentes: '.$pend,
+				'message'  => $isGrupo
+					? 'Campanha retomada. Reenvio recorrente ativo (~'.$pacing['delay_minutos'].' min). Enviados nesta rodada: '.((int)($resumo['enviados'] ?? 0)).'.'
+					: 'Campanha retomada. Enviados nesta rodada: '.((int)($resumo['enviados'] ?? 0)).'. Pendentes: '.$pend,
 				'campanha' => self::formatarCampanha($ob),
 				'worker'   => $resumo,
+				'pacing'   => $pacing,
 			]);
 		}
 
@@ -380,17 +392,23 @@ class Campanhas extends Page {
 		$ob->total = count($itens);
 		$ob->enviados = 0;
 		$ob->erros = 0;
+		$ob->agendada_para = null;
 		$ob->atualizar();
 
-		// Grupos: envia a 1ª mensagem agora; demais seguem o intervalo (worker / processar fila)
+		// Grupos: 1ª mensagem agora; depois reenvia nos mesmos grupos no intervalo até Encerrar
 		$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 2, false);
 
 		$ob = EntityCampanhas::getById($id, $idAdmin);
 		$ob->recalcularTotais();
 
+		if ($isGrupo) {
+			CampanhaWorker::agendarContinuacaoGrupos($idAdmin, $id);
+		}
+
+		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
 		$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
 		$msg = $isGrupo
-			? 'Campanha iniciada. 1ª mensagem enviada (se conectado). Pendentes: '.$pend.'. Status permanece Enviando até você encerrar.'
+			? 'Campanha iniciada (recorrente). 1ª mensagem enviada. A mesma mensagem será reenviada aos grupos selecionados a cada ~'.$pacing['delay_minutos'].' min até você Encerrar.'
 			: 'Campanha iniciada. '.$ob->enviados.' enviados, '.$ob->erros.' erros. Pendentes: '.$pend;
 
 		return json_encode([
@@ -398,6 +416,7 @@ class Campanhas extends Page {
 			'message'  => $msg,
 			'campanha' => self::formatarCampanha($ob),
 			'worker'   => $resumo,
+			'pacing'   => $pacing,
 		]);
 	}
 

@@ -37,6 +37,150 @@ class CampanhaWorker {
 		return $resumo;
 	}
 
+	/** Segundos de intervalo entre envios de grupo (config da escola). */
+	public static function delayGrupoSegundos(int $idAdmin): int {
+		$colunaOk = EscolaIntegracoes::temColunaWhatsappGrupoDelay();
+		$config = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if ($colunaOk && $config instanceof EscolaIntegracoes) {
+			return max(60, (int)($config->whatsapp_grupo_delay_segundos ?? 3600));
+		}
+		return 3600;
+	}
+
+	/**
+	 * Após enviar a 1ª msg de grupo, continua as demais em background
+	 * (não depende de cron nem da aba aberta). Requer PHP-FPM (fastcgi_finish_request).
+	 */
+	public static function agendarContinuacaoGrupos(int $idAdmin, int $campanhaId): void {
+		register_shutdown_function(static function () use ($idAdmin, $campanhaId) {
+			try {
+				// Libera o browser imediatamente; o PHP segue no servidor
+				while (ob_get_level() > 0) {
+					@ob_end_flush();
+				}
+				@flush();
+				if (function_exists('fastcgi_finish_request')) {
+					@fastcgi_finish_request();
+				}
+				ignore_user_abort(true);
+				@set_time_limit(0);
+				self::continuarFilaGrupos($idAdmin, $campanhaId);
+			} catch (\Throwable $e) {
+				// silencioso — não quebrar a resposta já enviada
+			}
+		});
+	}
+
+	/** Loop: reenvia a mesma mensagem nos grupos no intervalo até pausar/encerrar. */
+	public static function continuarFilaGrupos(int $idAdmin, int $campanhaId): void {
+		$lockName = 'cti_camp_g_'.(int)$idAdmin.'_'.(int)$campanhaId;
+		$db = new \App\Model\Db\Database('campanha_fila');
+		$row = $db->execute("SELECT GET_LOCK('".addslashes($lockName)."', 0) AS l")->fetch(\PDO::FETCH_ASSOC);
+		if ((int)($row['l'] ?? 0) !== 1) {
+			return;
+		}
+
+		try {
+			while (true) {
+				$campanha = Campanhas::getById($campanhaId, $idAdmin);
+				if (!$campanha instanceof Campanhas || $campanha->status !== 'enviando') {
+					break;
+				}
+				if (!$campanha->ehCampanhaGrupos()) {
+					break;
+				}
+
+				// Recorrente: quando a rodada acaba, recoloca os mesmos grupos na fila
+				self::reabastecerFilaGrupos($campanha);
+				if (CampanhaFila::contarPorCampanha($campanhaId, $idAdmin, 'pendente') <= 0) {
+					break;
+				}
+
+				$delay = self::delayGrupoSegundos($idAdmin);
+				$espera = 0;
+				if (!empty($campanha->agendada_para)) {
+					$espera = max(0, strtotime($campanha->agendada_para) - time());
+				}
+				if ($espera <= 0) {
+					$espera = self::esperaPacingCampanha($campanhaId, $idAdmin, $delay);
+				}
+
+				while ($espera > 0) {
+					$chunk = min(15, $espera);
+					sleep($chunk);
+					$espera -= $chunk;
+					$campanha = Campanhas::getById($campanhaId, $idAdmin);
+					if (!$campanha instanceof Campanhas || $campanha->status !== 'enviando') {
+						return;
+					}
+				}
+
+				self::processar($idAdmin, 1, false);
+				$campanha = Campanhas::getById($campanhaId, $idAdmin);
+				if ($campanha instanceof Campanhas) {
+					$campanha->recalcularTotais();
+				}
+			}
+		} finally {
+			$db->execute("SELECT RELEASE_LOCK('".addslashes($lockName)."')");
+		}
+	}
+
+	/**
+	 * Campanha de grupos é recorrente: esvaziar a fila não encerra —
+	 * recoloca os mesmos destinos do segmento como pendentes.
+	 */
+	public static function reabastecerFilaGrupos(Campanhas $campanha): int {
+		if (!$campanha->ehCampanhaGrupos() || $campanha->status !== 'enviando') {
+			return 0;
+		}
+		$id = (int)$campanha->id;
+		$idAdmin = (int)$campanha->id_admin;
+		if (CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente') > 0) {
+			return 0;
+		}
+
+		$segmento = json_decode($campanha->segmento ?? '{}', true) ?: [];
+		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, 'whatsapp');
+		if (empty($destinatarios)) {
+			return 0;
+		}
+
+		$itens = [];
+		foreach ($destinatarios as $dest) {
+			$itens[] = [
+				'campanha_id'       => $id,
+				'id_admin'          => $idAdmin,
+				'destinatario_tipo' => $dest['destinatario_tipo'],
+				'destinatario_id'   => $dest['destinatario_id'] ?? null,
+				'nome'              => $dest['nome'] ?? '',
+				'contato'           => $dest['contato'],
+				'curso'             => $dest['curso'] ?? '',
+			];
+		}
+
+		$n = CampanhaFila::inserirLote($itens);
+		// total acumulado = histórico de linhas na fila (envios + novas rodadas)
+		$campanha->recalcularTotais();
+		return $n;
+	}
+
+	private static function esperaPacingCampanha(int $campanhaId, int $idAdmin, int $delay): int {
+		$sql = '
+			SELECT MAX(enviado_em) AS ultimo
+			FROM campanha_fila
+			WHERE campanha_id = '.(int)$campanhaId.'
+			  AND id_admin = '.(int)$idAdmin.'
+			  AND status = "enviado"
+		';
+		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
+		if (empty($row['ultimo'])) {
+			return 0;
+		}
+		$elapsed = time() - strtotime($row['ultimo']);
+		return max(0, $delay - $elapsed);
+	}
+
 	private static function processarCanal(
 		int $escolaId,
 		string $canal,
@@ -80,14 +224,25 @@ class CampanhaWorker {
 		}
 
 		$email = $canal === 'email' ? Email::escola($escolaId) : null;
+
+		// Grupos recorrentes: se a rodada acabou e a campanha segue "enviando", recoloca destinos
+		if ($canal === 'whatsapp') {
+			$ativas = Campanhas::get(
+				'id_admin = '.(int)$escolaId.' AND status = "enviando" AND canal = "whatsapp"'
+			);
+			while ($cAtiva = $ativas->fetchObject(Campanhas::class)) {
+				if ($cAtiva->ehCampanhaGrupos()) {
+					self::reabastecerFilaGrupos($cAtiva);
+				}
+			}
+		}
+
 		$fila = CampanhaFila::getPendentesPorCanal($escolaId, $canal, $limite);
 
 		$enviadosGrupoDesde = 0;
 		$delayGrupoSeg = 3600;
 		if ($canal === 'whatsapp') {
-			$delayGrupoSeg = ($config instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaWhatsappGrupoDelay())
-				? max(60, (int)($config->whatsapp_grupo_delay_segundos ?? 3600))
-				: 3600;
+			$delayGrupoSeg = self::delayGrupoSegundos($escolaId);
 			$enviadosGrupoDesde = self::contarEnviadosGrupoDesde($escolaId, $delayGrupoSeg);
 		}
 		$podeEnviarGrupo = $enviadosGrupoDesde < 1;
@@ -106,11 +261,41 @@ class CampanhaWorker {
 
 			$isGrupo = $canal === 'whatsapp' && self::itemEhGrupoOuLista($item);
 			if ($isGrupo) {
-				// Pacing conservador: ~1 mensagem de grupo/lista por hora (sem sleep longo)
-				if (!$podeEnviarGrupo || $grupoEnviadoNestaRun) {
+				// 1 grupo por intervalo: respeita agendada_para da campanha (prioritário)
+				if ($grupoEnviadoNestaRun) {
 					$stats['motivo'] = $stats['motivo'] ?: 'pacing_grupo';
+					break;
+				}
+				// Trava curta evita 2 processos enviarem o mesmo intervalo
+				$lockEnvio = 'cti_grp_send_'.(int)$escolaId;
+				$lockRow = (new \App\Model\Db\Database('campanha_fila'))
+					->execute("SELECT GET_LOCK('".addslashes($lockEnvio)."', 5) AS l")
+					->fetch(\PDO::FETCH_ASSOC);
+				if ((int)($lockRow['l'] ?? 0) !== 1) {
+					$stats['motivo'] = $stats['motivo'] ?: 'pacing_grupo';
+					break;
+				}
+				// Releia campanha após o lock
+				$campanha = Campanhas::getById((int)$item->campanha_id, $escolaId);
+				if (!$campanha instanceof Campanhas || $campanha->status !== 'enviando') {
+					(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
+					$item->marcarErro('Campanha não está em envio.');
+					$resumo['erros']++;
+					$stats['erros']++;
 					continue;
 				}
+				if (!empty($campanha->agendada_para) && strtotime($campanha->agendada_para) > time()) {
+					(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
+					$stats['motivo'] = $stats['motivo'] ?: 'pacing_grupo';
+					break;
+				}
+				if (!$podeEnviarGrupo) {
+					(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
+					$stats['motivo'] = $stats['motivo'] ?: 'pacing_grupo';
+					break;
+				}
+			} else {
+				$lockEnvio = null;
 			}
 
 			$vars = [
@@ -151,6 +336,9 @@ class CampanhaWorker {
 				if ($isGrupo) {
 					$grupoEnviadoNestaRun = true;
 					$podeEnviarGrupo = false;
+					// Próximo envio de grupo só após o intervalo configurado
+					$campanha->agendada_para = date('Y-m-d H:i:s', time() + $delayGrupoSeg);
+					$campanha->atualizar();
 				}
 			} else {
 				$item->marcarErro($erroMsg);
@@ -158,9 +346,13 @@ class CampanhaWorker {
 				$stats['erros']++;
 			}
 
+			if ($isGrupo && !empty($lockEnvio)) {
+				(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
+			}
+
 			$campanha->recalcularTotais();
 
-			// Delay só para 1:1 / e-mail — grupos usam pacing de 1/hora via skip
+			// Delay só para 1:1 / e-mail — grupos usam pacing via agendada_para
 			if ($aplicarDelay && $delay > 0 && !$isGrupo) {
 				sleep($delay);
 			}
@@ -205,11 +397,20 @@ class CampanhaWorker {
 	 */
 	public static function infoPacingGrupo(int $idAdmin): array {
 		$colunaOk = EscolaIntegracoes::temColunaWhatsappGrupoDelay();
-		$config = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		$delay = 3600;
-		if ($colunaOk && $config instanceof EscolaIntegracoes) {
-			$delay = max(60, (int)($config->whatsapp_grupo_delay_segundos ?? 3600));
-		}
+		$delay = self::delayGrupoSegundos($idAdmin);
+
+		// Prioriza agendada_para da campanha de grupos em envio
+		$sqlProx = '
+			SELECT MIN(agendada_para) AS prox
+			FROM campanhas
+			WHERE id_admin = '.(int)$idAdmin.'
+			  AND status = "enviando"
+			  AND canal = "whatsapp"
+			  AND agendada_para IS NOT NULL
+			  AND segmento LIKE "%whatsapp_grupos%"
+		';
+		$rowProx = (new \App\Model\Db\Database('campanhas'))->execute($sqlProx)->fetch(\PDO::FETCH_ASSOC);
+		$prox = !empty($rowProx['prox']) ? (string)$rowProx['prox'] : null;
 
 		$sql = '
 			SELECT MAX(f.enviado_em) AS ultimo
@@ -228,7 +429,9 @@ class CampanhaWorker {
 		$ultimo = !empty($row['ultimo']) ? (string)$row['ultimo'] : null;
 
 		$espera = 0;
-		if ($ultimo) {
+		if ($prox) {
+			$espera = max(0, strtotime($prox) - time());
+		} elseif ($ultimo) {
 			$elapsed = time() - strtotime($ultimo);
 			$espera = max(0, $delay - $elapsed);
 		}

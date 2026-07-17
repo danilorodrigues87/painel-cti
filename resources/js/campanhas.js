@@ -195,9 +195,10 @@ function renderizarLista(campanhas){
 	}
 
 	campanhas.forEach(function(c){
-		const progresso = c.total > 0
-			? Math.round(((c.enviados + c.erros) / c.total) * 100)
-			: 0;
+		const progresso = c.eh_grupos
+			? (c.status === 'enviando' ? 100 : (c.enviados > 0 ? 100 : 0))
+			: (c.total > 0 ? Math.round(((c.enviados + c.erros) / c.total) * 100) : 0);
+		const barraExtra = (c.eh_grupos && c.status === 'enviando') ? ' progress-bar-striped progress-bar-animated' : '';
 
 		let itensMenu = '';
 		itensMenu += '<li><button type="button" class="dropdown-item btn-detalhes" data-id="'+c.id+'"><i class="fas fa-eye me-1"></i> Detalhes</button></li>';
@@ -242,9 +243,11 @@ function renderizarLista(campanhas){
 				<td><span class="badge bg-${badgeCanal(c.canal)}">${escHtml(c.canal_label || c.canal)}</span></td>
 				<td><span class="badge bg-${badgeStatus(c.status)}">${escHtml(c.status_label)}</span></td>
 				<td>
-					<div class="small">${c.enviados} enviados · ${c.erros} erros · ${c.pendentes} pendentes</div>
+					<div class="small">${c.eh_grupos
+						? (c.enviados+' envios · recorrente até Encerrar')
+						: (c.enviados+' enviados · '+c.erros+' erros · '+c.pendentes+' pendentes')}</div>
 					<div class="progress" style="height:6px;">
-						<div class="progress-bar" style="width:${progresso}%"></div>
+						<div class="progress-bar${barraExtra}" style="width:${progresso}%"></div>
 					</div>
 				</td>
 				<td>${escHtml(c.criada_em)}</td>
@@ -329,12 +332,12 @@ function atualizarTextoPacing(pacing){
 	}
 	if(campanhaTemPendentes){
 		if(p.pode_enviar){
-			txt += ' Próximo envio de grupo: <strong class="text-success">liberado</strong> (processando automaticamente).';
+			txt += ' Próximo reenvio: <strong class="text-success">liberado</strong>.';
 		} else {
-			txt += ' Próximo envio de grupo em: <strong class="text-warning" id="pacing-countdown">'+escHtml(formatarEspera(p.proximo_em_segundos))+'</strong>.';
+			txt += ' Próximo reenvio em: <strong class="text-warning" id="pacing-countdown">'+escHtml(formatarEspera(p.proximo_em_segundos))+'</strong>.';
 		}
 	} else {
-		txt += ' Nenhuma campanha com pendentes no momento.';
+		txt += ' Nenhuma campanha de grupos em envio no momento.';
 	}
 	$('#pacing-grupos-texto').html(txt);
 }
@@ -428,6 +431,8 @@ function carregarCampanhas(opts){
 		}
 		renderizarLista(res.campanhas);
 		campanhaTemPendentes = (res.campanhas || []).some(function(c){
+			// Grupos: recorrente enquanto "enviando" (mesmo com fila da rodada vazia)
+			if(c.status === 'enviando' && c.eh_grupos) return true;
 			return c.status === 'enviando' && (c.pendentes || 0) > 0;
 		});
 		if(res.pacing) atualizarTextoPacing(res.pacing);
@@ -521,8 +526,8 @@ function acaoCampanha(acao, id, confirmar){
 
 	if(confirmar){
 		const textos = {
-			iniciar: { title: 'Iniciar envio?', text: 'A campanha entrará em envio. Em grupos, a 1ª mensagem sai agora e as demais seguem o intervalo.' },
-			cancelar: { title: 'Encerrar campanha?', text: 'Remove pendentes da fila e encerra o envio. O progresso já enviado é mantido.' }
+			iniciar: { title: 'Iniciar envio?', text: 'Em grupos, a mensagem será reenviada periodicamente nos mesmos grupos até você Encerrar.' },
+			cancelar: { title: 'Encerrar campanha?', text: 'Para o reenvio recorrente. O histórico de envios já feitos é mantido.' }
 		};
 		const t = textos[acao] || { title: 'Confirmar?', text: '' };
 		Swal.fire({
@@ -568,7 +573,9 @@ function abrirDetalhes(id){
 			<p><strong>Canal:</strong> ${escHtml(c.canal_label || c.canal)}</p>
 			<p><strong>Assunto:</strong> ${escHtml(res.assunto || '—')}</p>
 			<p><strong>Status:</strong> <span class="badge bg-${badgeStatus(c.status)}">${escHtml(c.status_label)}</span></p>
-			<p><strong>Progresso:</strong> ${c.enviados} enviados, ${c.erros} erros, ${c.pendentes} pendentes de ${c.total}</p>
+			<p><strong>Progresso:</strong> ${c.eh_grupos
+				? (c.enviados+' reenvios realizados (recorrente até Encerrar)')
+				: (c.enviados+' enviados, '+c.erros+' erros, '+c.pendentes+' pendentes de '+c.total)}</p>
 			${midiaHtml}
 			<div class="border rounded p-3 bg-light small" style="white-space:pre-wrap;">${escHtml(res.mensagem)}</div>
 			${errosHtml}
