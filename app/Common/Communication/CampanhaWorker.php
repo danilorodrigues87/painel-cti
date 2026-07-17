@@ -82,8 +82,15 @@ class CampanhaWorker {
 		$email = $canal === 'email' ? Email::escola($escolaId) : null;
 		$fila = CampanhaFila::getPendentesPorCanal($escolaId, $canal, $limite);
 
-		$enviadosGrupoHora = ($canal === 'whatsapp') ? self::contarEnviadosGrupoUltimaHora($escolaId) : 0;
-		$podeEnviarGrupo = $enviadosGrupoHora < 1;
+		$enviadosGrupoDesde = 0;
+		$delayGrupoSeg = 3600;
+		if ($canal === 'whatsapp') {
+			$delayGrupoSeg = ($config instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaWhatsappGrupoDelay())
+				? max(60, (int)($config->whatsapp_grupo_delay_segundos ?? 3600))
+				: 3600;
+			$enviadosGrupoDesde = self::contarEnviadosGrupoDesde($escolaId, $delayGrupoSeg);
+		}
+		$podeEnviarGrupo = $enviadosGrupoDesde < 1;
 		$grupoEnviadoNestaRun = false;
 
 		while ($item = $fila->fetchObject(CampanhaFila::class)) {
@@ -170,9 +177,10 @@ class CampanhaWorker {
 		return EvolutionApiService::isJidGrupoOuLista((string)($item->contato ?? ''));
 	}
 
-	/** Envios de grupo/lista nas últimas 1h (para pacing ~1/hora). */
-	private static function contarEnviadosGrupoUltimaHora(int $idAdmin): int {
-		$desde = date('Y-m-d H:i:s', strtotime('-1 hour'));
+	/** Envios de grupo/lista no intervalo configurado (pacing). */
+	private static function contarEnviadosGrupoDesde(int $idAdmin, int $segundos): int {
+		$segundos = max(60, $segundos);
+		$desde = date('Y-m-d H:i:s', time() - $segundos);
 		$sql = '
 			SELECT COUNT(*) AS qtd
 			FROM campanha_fila f

@@ -276,29 +276,50 @@ class WhatsappInbox extends Page {
 
 	/**
 	 * Abre (ou cria) conversa a partir de aluno, responsável ou lead e assume o atendimento.
+	 * Sem módulo/conexão: devolve fallback para WhatsApp Web (wa.me).
 	 */
 	private static function iniciarAtendimento(array $post): string {
-		if (!WhatsappConversa::tabelaExiste()) {
-			return self::json(['success' => false, 'message' => 'Módulo WhatsApp não configurado.']);
-		}
-
-		$idAdmin = self::idAdmin();
-		$uid = (int)(self::user()['usuario']['id'] ?? 0);
-		$telefone = EvolutionApiService::normalizarTelefone((string)($post['telefone'] ?? ''));
+		$telefoneRaw = (string)($post['telefone'] ?? '');
+		$telefone = EvolutionApiService::normalizarTelefone($telefoneRaw);
 		$nome = trim((string)($post['nome'] ?? ''));
+		$fallbackWa = $telefone !== '' ? 'https://wa.me/'.$telefone : '';
+
+		$responderWeb = function (string $message) use ($fallbackWa) {
+			return self::json([
+				'success'     => false,
+				'usar_web'    => true,
+				'fallback_wa' => $fallbackWa,
+				'message'     => $message,
+			]);
+		};
 
 		if ($telefone === '' || strlen($telefone) < 12) {
 			return self::json(['success' => false, 'message' => 'WhatsApp inválido ou incompleto.']);
 		}
 
-		$statusWa = \App\Common\Communication\WhatsappEscolaService::status($idAdmin);
-		if (empty($statusWa['conectado'])) {
-			return self::json(['success' => false, 'message' => 'WhatsApp da escola não está conectado.']);
+		$user = self::user();
+		$idAdmin = self::idAdmin();
+		$acesso = $user['usuario']['acesso'] ?? [];
+		if (!is_array($acesso)) {
+			$acesso = [];
+		}
+		if (!\App\Common\Helpers\ModuleGateHelper::podeAcessar('WhatsApp', $idAdmin, $acesso)) {
+			return $responderWeb('Módulo WhatsApp não liberado para esta escola.');
 		}
 
+		if (!WhatsappConversa::tabelaExiste()) {
+			return $responderWeb('Inbox WhatsApp não configurado.');
+		}
+
+		$statusWa = \App\Common\Communication\WhatsappEscolaService::status($idAdmin);
+		if (empty($statusWa['conectado'])) {
+			return $responderWeb('WhatsApp da escola não está conectado.');
+		}
+
+		$uid = (int)($user['usuario']['id'] ?? 0);
 		$conv = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome !== '' ? $nome : null);
 		if (!$conv instanceof WhatsappConversa) {
-			return self::json(['success' => false, 'message' => 'Não foi possível abrir a conversa.']);
+			return $responderWeb('Não foi possível abrir a conversa no painel.');
 		}
 
 		$upd = [

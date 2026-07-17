@@ -39,6 +39,10 @@ class WhatsappEscolaService {
 			'max_hora'        => ($integracao instanceof EscolaIntegracoes)
 				? (int)($integracao->whatsapp_max_hora ?? 40)
 				: 40,
+			'grupo_delay'     => ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaWhatsappGrupoDelay())
+				? (int)($integracao->whatsapp_grupo_delay_segundos ?? 3600)
+				: 3600,
+			'grupo_delay_ok'  => EscolaIntegracoes::temColunaWhatsappGrupoDelay(),
 			'webhook_url'     => EvolutionApiService::webhookUrl($idAdmin),
 			'conectado'       => false,
 			'qrcode'          => null,
@@ -329,6 +333,17 @@ class WhatsappEscolaService {
 		$ob->evolution_ativo = !empty($dados['evolution_ativo']) ? 1 : 0;
 		$ob->whatsapp_delay_segundos = max(1, (int)($dados['whatsapp_delay_segundos'] ?? 5));
 		$ob->whatsapp_max_hora = max(1, (int)($dados['whatsapp_max_hora'] ?? 40));
+		// UI envia minutos; persistimos segundos (mín. 1 min)
+		if (EscolaIntegracoes::temColunaWhatsappGrupoDelay()) {
+			$minutosGrupo = (int)($dados['whatsapp_grupo_delay_minutos'] ?? 0);
+			if ($minutosGrupo <= 0 && isset($dados['whatsapp_grupo_delay_segundos'])) {
+				$minutosGrupo = (int)ceil(((int)$dados['whatsapp_grupo_delay_segundos']) / 60);
+			}
+			if ($minutosGrupo <= 0) {
+				$minutosGrupo = 60;
+			}
+			$ob->whatsapp_grupo_delay_segundos = max(60, $minutosGrupo * 60);
+		}
 		$ob->whatsapp_horario_inicio = trim((string)($dados['whatsapp_horario_inicio'] ?? '')) ?: null;
 		$ob->whatsapp_horario_fim = trim((string)($dados['whatsapp_horario_fim'] ?? '')) ?: null;
 		$ob->whatsapp_dias = trim((string)($dados['whatsapp_dias'] ?? '1,2,3,4,5')) ?: '1,2,3,4,5';

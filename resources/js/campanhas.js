@@ -200,10 +200,10 @@ function renderizarLista(campanhas){
 			acoes += '<button class="btn btn-sm btn-outline-primary btn-editar" data-id="'+c.id+'"><i class="fas fa-edit"></i></button>';
 		}
 		if(c.status === 'enviando'){
-			acoes += '<button class="btn btn-sm btn-warning me-1 btn-pausar" data-id="'+c.id+'"><i class="fas fa-pause"></i></button>';
+			acoes += '<button class="btn btn-sm btn-warning me-1 btn-pausar" data-id="'+c.id+'" title="Pausar envio (pode retomar depois)"><i class="fas fa-pause"></i> Pausar</button>';
 		}
 		if(c.status !== 'concluida' && c.status !== 'cancelada'){
-			acoes += '<button class="btn btn-sm btn-outline-danger btn-cancelar" data-id="'+c.id+'"><i class="fas fa-times"></i></button>';
+			acoes += '<button class="btn btn-sm btn-outline-danger btn-cancelar" data-id="'+c.id+'" title="Parar definitivamente e cancelar pendentes"><i class="fas fa-stop"></i> Parar</button>';
 		}
 
 		const sub = c.canal === 'whatsapp' ? (c.titulo || '') : (c.assunto || '');
@@ -361,9 +361,15 @@ function acaoCampanha(acao, id, confirmar){
 	};
 
 	if(confirmar){
+		const textos = {
+			iniciar: { title: 'Iniciar envio?', text: 'A campanha entrará na fila de envio.' },
+			cancelar: { title: 'Parar campanha?', text: 'Os pendentes serão cancelados e não poderão ser retomados.' }
+		};
+		const t = textos[acao] || { title: 'Confirmar?', text: '' };
 		Swal.fire({
-			title: 'Confirmar?',
-			icon: 'question',
+			title: t.title,
+			text: t.text,
+			icon: acao === 'cancelar' ? 'warning' : 'question',
 			showCancelButton: true,
 			confirmButtonText: 'Sim'
 		}).then(function(r){ if(r.isConfirmed) executar(); });

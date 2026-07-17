@@ -47,6 +47,7 @@ class EscolaIntegracoes {
 	public $evolution_numero;
 	public $whatsapp_delay_segundos = 5;
 	public $whatsapp_max_hora = 40;
+	public $whatsapp_grupo_delay_segundos = 3600;
 	public $whatsapp_horario_inicio;
 	public $whatsapp_horario_fim;
 	public $whatsapp_dias = '1,2,3,4,5';
@@ -155,6 +156,26 @@ class EscolaIntegracoes {
 		return $cache;
 	}
 
+	public static function temColunaWhatsappGrupoDelay(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'whatsapp_grupo_delay_segundos'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
 	public static function tabelaExiste(): bool {
 		try {
 			$host = getenv('DB_HOST');
@@ -247,6 +268,9 @@ class EscolaIntegracoes {
 			$dados['evolution_numero'] = $this->evolution_numero;
 			$dados['whatsapp_delay_segundos'] = (int)($this->whatsapp_delay_segundos ?? 5);
 			$dados['whatsapp_max_hora'] = (int)($this->whatsapp_max_hora ?? 40);
+			if (self::temColunaWhatsappGrupoDelay()) {
+				$dados['whatsapp_grupo_delay_segundos'] = max(60, (int)($this->whatsapp_grupo_delay_segundos ?? 3600));
+			}
 			if (self::temColunasHorarioWhatsapp()) {
 				$dados['whatsapp_horario_inicio'] = $this->whatsapp_horario_inicio ?: null;
 				$dados['whatsapp_horario_fim'] = $this->whatsapp_horario_fim ?: null;
