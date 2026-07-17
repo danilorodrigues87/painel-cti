@@ -5,6 +5,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
   <title>{{title}}</title>
+  <link rel="shortcut icon" type="image/x-icon" href="{{URL}}/resources/assets/img/icons/icone.png">
   <link href="{{URL}}/resources/css/styles.css" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.4/dist/sweetalert2.min.css">
   <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
@@ -13,17 +14,21 @@
 </head>
 <body class="sb-nav-fixed">
   <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-    <a class="navbar-brand ps-3" href="{{URL}}/master">
-      <i class="fas fa-crown text-warning me-1"></i> Painel Master
+    <a class="navbar-brand ps-3 d-flex align-items-center" href="{{URL}}/master">
+      <img src="{{URL}}/resources/assets/img/icons/logo-2.png" height="40" class="me-2" alt="CTI">
+      <span><i class="fas fa-crown text-warning me-1"></i> Master</span>
     </a>
     <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
-    <div class="d-none d-md-inline-block form-inline ms-auto me-0 me-md-3 my-2 my-md-0 small text-white-50">
+    <div class="d-none d-md-inline-block form-inline ms-auto me-0 me-md-3 my-2 my-md-0 small text-white-50" id="nav-master-nome">
       {{user}}
     </div>
     <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
       <li class="nav-item dropdown">
-        <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
+        <a class="nav-link dropdown-toggle d-flex align-items-center" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <img id="nav-master-foto" src="{{foto_url}}" alt="" width="28" height="28" class="rounded-circle" style="object-fit:cover;border:1px solid rgba(255,255,255,.35);">
+        </a>
         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+          <li><a class="dropdown-item" href="{{URL}}/master/perfil"><i class="fa-regular fa-id-badge me-1"></i> Perfil e senha</a></li>
           <li><hr class="dropdown-divider" /></li>
           <li><a class="dropdown-item" href="{{URL}}/logout"><i class="fas fa-arrow-right-from-bracket me-1"></i> Sair</a></li>
         </ul>
@@ -40,7 +45,10 @@
       </main>
       <footer class="py-4 bg-dark text-white mt-auto">
         <div class="container-fluid px-4">
-          <div class="small text-muted">Painel Master &copy; <a target="_blank" href="https://xdtec.com.br">XDTEC 2026</a></div>
+          <div class="small text-muted d-flex flex-wrap gap-2 justify-content-between align-items-center">
+            <span>&copy; <a class="text-muted text-decoration-none" target="_blank" rel="noopener noreferrer" href="https://ctieducacional.com.br">Centro de Tecnologia e Inovação Educacional</a></span>
+            <span>Desenvolvido por <a class="text-muted text-decoration-none" target="_blank" rel="noopener noreferrer" href="https://xdtec.com.br">XDTEC</a></span>
+          </div>
         </div>
       </footer>
     </div>
@@ -48,5 +56,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{URL}}/resources/js/sidebarToggle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="{{URL}}/resources/js/script.js"></script>
 </body>
 </html>

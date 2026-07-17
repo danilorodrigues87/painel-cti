@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Communication\WhatsappChatbotService;
 use App\Common\Communication\WhatsappMediaStorage;
+use App\Common\Communication\EvolutionApiService;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
 use App\Model\Entity\WhatsappSetor;
@@ -43,6 +44,7 @@ class WhatsappInbox extends Page {
 			'enviar'           => 'enviar',
 			'enviar_midia'     => 'enviarMidia',
 			'assumir'          => 'assumir',
+			'iniciar_atendimento' => 'iniciarAtendimento',
 			'transferir'       => 'transferir',
 			'atendentes_setor' => 'atendentesSetor',
 			'fechar'           => 'fechar',
@@ -270,6 +272,52 @@ class WhatsappInbox extends Page {
 		]);
 
 		return json_encode(['success' => true, 'message' => 'Conversa assumida.']);
+	}
+
+	/**
+	 * Abre (ou cria) conversa a partir de aluno, responsável ou lead e assume o atendimento.
+	 */
+	private static function iniciarAtendimento(array $post): string {
+		if (!WhatsappConversa::tabelaExiste()) {
+			return self::json(['success' => false, 'message' => 'Módulo WhatsApp não configurado.']);
+		}
+
+		$idAdmin = self::idAdmin();
+		$uid = (int)(self::user()['usuario']['id'] ?? 0);
+		$telefone = EvolutionApiService::normalizarTelefone((string)($post['telefone'] ?? ''));
+		$nome = trim((string)($post['nome'] ?? ''));
+
+		if ($telefone === '' || strlen($telefone) < 12) {
+			return self::json(['success' => false, 'message' => 'WhatsApp inválido ou incompleto.']);
+		}
+
+		$statusWa = \App\Common\Communication\WhatsappEscolaService::status($idAdmin);
+		if (empty($statusWa['conectado'])) {
+			return self::json(['success' => false, 'message' => 'WhatsApp da escola não está conectado.']);
+		}
+
+		$conv = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome !== '' ? $nome : null);
+		if (!$conv instanceof WhatsappConversa) {
+			return self::json(['success' => false, 'message' => 'Não foi possível abrir a conversa.']);
+		}
+
+		$upd = [
+			'status'         => 'em_atendimento',
+			'chatbot_estado' => 'humano',
+			'id_atendente'   => $uid,
+			'assigned_at'    => date('Y-m-d H:i:s'),
+		];
+		if ($nome !== '') {
+			$upd['nome_contato'] = $nome;
+		}
+		$conv->atualizar($upd);
+
+		return self::json([
+			'success'     => true,
+			'message'     => 'Atendimento iniciado.',
+			'conversa_id' => (int)$conv->id,
+			'redirect'    => rtrim((string)URL, '/').'/painel/whatsapp?conversa='.(int)$conv->id,
+		]);
 	}
 
 	private static function transferir(array $post): string {

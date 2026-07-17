@@ -6,7 +6,10 @@ use \App\Utils\View;
 use \App\Model\Entity\Trilhas as EntityTrilhas;
 use \App\Model\Entity\User as EntityUser;
 use \App\Model\Entity\Certificados as EntityCertificados;
+use \App\Model\Entity\EscolasAssinantes;
+use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\BrandingHelper;
 
 class CertificadoPdf extends Page {
 
@@ -45,42 +48,59 @@ class CertificadoPdf extends Page {
 
         // Busca dados do aluno
         $obUser = (array) EntityUser::getUserById($id_aluno);
-        $nome   = $obUser['nome'];
+        $nome   = $obUser['nome'] ?? '';
 
         // Busca dados da trilha/curso
         $dadosTrilha = (array) EntityTrilhas::getTrilhaById($id_trilha);
-        $curso       = $dadosTrilha['nome'];
+        $curso       = $dadosTrilha['nome'] ?? '';
+
+        // Modelo de fundo por escola (já personalizado com logo)
+        $modeloArquivo = null;
+        $idAdminCert = (int)($dados['id_admin'] ?? 0);
+        if ($idAdminCert <= 0) {
+            $sess = SessionUser::getUserLogedData();
+            $idAdminCert = (int)($sess['escola']['id'] ?? $sess['usuario']['id_admin'] ?? 0);
+        }
+        if ($idAdminCert > 0 && EscolasAssinantes::temColunaModeloCertificado()) {
+            $escola = EscolasAssinantes::getEscolaById($idAdminCert);
+            if ($escola instanceof EscolasAssinantes) {
+                $modeloArquivo = $escola->modelo_certificado ?? null;
+            }
+        }
+        $modeloCertUrl = BrandingHelper::urlModeloCertificado($modeloArquivo);
+        $modeloCertJs  = json_encode($modeloCertUrl, JSON_UNESCAPED_SLASHES);
+
+        // Escape seguro para strings no JS
+        $nomeJs = json_encode((string)$nome, JSON_UNESCAPED_UNICODE);
+        $cursoJs = json_encode((string)$curso, JSON_UNESCAPED_UNICODE);
+        $descricaoJs = json_encode((string)$descricao, JSON_UNESCAPED_UNICODE);
+        $dataJs = json_encode((string)$dataDeConclusao, JSON_UNESCAPED_UNICODE);
+        $horaJs = json_encode((string)$hora, JSON_UNESCAPED_UNICODE);
+        $codigoJs = json_encode((string)$codigo, JSON_UNESCAPED_UNICODE);
 
         // URL para a API de QR Code
         $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='.SITE.'/certificado?crt='.$codigo; 
 
         // --- LÓGICA DE CAMINHOS FÍSICOS (SISTEMA) ---
-        // Sobe 3 níveis a partir de App/Controller/Admin para chegar na raiz do projeto
         $caminhoProjeto = realpath(__DIR__ . '/../../../'); 
         $diretorioImg   = '/uploads/img/certificado/';
         $caminhoSalvar  = $caminhoProjeto . $diretorioImg;
 
-        // Cria a pasta caso ela não exista
         if (!is_dir($caminhoSalvar)) {
             mkdir($caminhoSalvar, 0755, true);
         }
 
-        // Nome único para o QR Code para evitar conflitos com o modelo de fundo
         $nomeArquivoQr   = 'qr_' . $codigo . '.png';
         $caminhoCompleto = $caminhoSalvar . $nomeArquivoQr;
 
-        // Baixa a imagem da API e salva no servidor
         $imgData = @file_get_contents($qrCodeUrl);
         if ($imgData === false || file_put_contents($caminhoCompleto, $imgData) === false) {
             throw new \Exception("Erro ao salvar a imagem QR Code em: " . $caminhoCompleto);
         }
 
-        // --- LÓGICA DE URL (NAVEGADOR) ---
         $img_qrcode = '<img id="qrCodeImg" src="' . URL . $diretorioImg . $nomeArquivoQr . '" style="display:none;">';
         $baseUrl    = URL;
-
-        // Script JavaScript para renderização no Canvas
-
+        $qrUrlJs    = json_encode($baseUrl . $diretorioImg . $nomeArquivoQr, JSON_UNESCAPED_SLASHES);
 
 $script = <<<SCRIPT
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -90,19 +110,16 @@ $script = <<<SCRIPT
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
-    // Configuração do tamanho A4 em modo Paisagem (Pixels)
     canvas.width = 842; 
     canvas.height = 595; 
 
-    // Variáveis vindas do PHP
-    const name = "{$nome}";
-    const curso = "{$curso}";
-    const descricao = "{$descricao}";
-    const dataDeConclusao = "{$dataDeConclusao}";
-    const hora = "{$hora}";
-    const codigoCert = "{$codigo}";
+    const name = {$nomeJs};
+    const curso = {$cursoJs};
+    const descricao = {$descricaoJs};
+    const dataDeConclusao = {$dataJs};
+    const hora = {$horaJs};
+    const codigoCert = {$codigoJs};
 
-    // Controle de carregamento de imagens
     const certImage = new Image();
     const qrCodeImg = new Image();
     let imagensCarregadas = 0;
@@ -111,7 +128,6 @@ $script = <<<SCRIPT
     function aoCarregarImagem() {
         imagensCarregadas++;
         if (imagensCarregadas === totalImagens) {
-            console.log("Sucesso: Todas as imagens prontas. Desenhando...");
             draw();
         }
     }
@@ -122,34 +138,26 @@ $script = <<<SCRIPT
     certImage.onload = aoCarregarImagem;
     qrCodeImg.onload = aoCarregarImagem;
 
-    // Define as fontes (URLs) das imagens
-    certImage.src = "{$baseUrl}/uploads/img/certificado/modelo_cert.png";
-    qrCodeImg.src = "{$baseUrl}/uploads/img/certificado/{$nomeArquivoQr}";
+    certImage.src = {$modeloCertJs};
+    qrCodeImg.src = {$qrUrlJs};
 
     function draw() {
-        // 1. Limpa o canvas e desenha o fundo
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(certImage, 0, 0, canvas.width, canvas.height);
-        
-        // 2. Desenha o QR Code
         ctx.drawImage(qrCodeImg, 50, 470, 80, 80);
 
-        // 3. Configurações de Texto
         ctx.fillStyle = "black";
         ctx.textAlign = "center";
 
-        // Nome do Aluno
         ctx.font = "bold italic 26pt Arial";
         ctx.fillText(name, 421, 280);
 
-        // Texto do Curso
         ctx.font = "normal 16pt Arial";
         ctx.fillText("Concluiu com louvor o curso de", 421, 325);
         
         ctx.font = "bold 18pt Arial";
         ctx.fillText(curso, 421, 355);
 
-        // Descrição com Quebra de Linha Automática
         ctx.font = "normal 12pt Arial";
         const maxWidth = 650;
         const lineHeight = 25;
@@ -171,18 +179,14 @@ $script = <<<SCRIPT
         }
         ctx.fillText(line, x, y);
 
-        // Data e Carga Horária
         ctx.font = "italic 11pt Arial";
         ctx.textAlign = "left";
         ctx.fillText(hora, 500, 480);
         ctx.fillText(dataDeConclusao, 500, 500);
         
-        // Código de Autenticação (opcional, perto do QR Code)
         ctx.font = "8pt Arial";
-        //ctx.fillText("Cód: " + codigoCert, 50, 565);
     }
 
-    // Evento para baixar PDF
     document.getElementById("dpdf").addEventListener("click", function () {
         const { jsPDF } = window.jspdf;
         const imgData = canvas.toDataURL("image/jpeg", 1.0);
@@ -191,7 +195,6 @@ $script = <<<SCRIPT
         pdf.save("certificado_" + codigoCert + ".pdf");
     });
 
-    // Evento para baixar Imagem
     document.getElementById("dimg").addEventListener("click", function () {
         const imgData = canvas.toDataURL("image/png", 1.0);
         const link = document.createElement("a");
@@ -201,7 +204,6 @@ $script = <<<SCRIPT
     });
 </script>
 SCRIPT;
-
 
         return [
             'img_qrcode' => $img_qrcode,

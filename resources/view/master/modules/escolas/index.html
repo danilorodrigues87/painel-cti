@@ -84,6 +84,33 @@
 							<label class="form-label" for="escola_cep">CEP</label>
 							<input type="text" class="form-control" id="escola_cep">
 						</div>
+						<div class="col-12">
+							<label class="form-label">Logo da escola (impressos)</label>
+							<div class="d-flex align-items-center gap-3 flex-wrap">
+								<img id="preview-escola-logo" src="{{URL}}/resources/assets/img/icons/logo-2.png" alt="Logo"
+									style="max-height:64px;max-width:160px;object-fit:contain;border:1px solid #dee2e6;padding:4px;background:#fff;">
+								<div class="flex-grow-1" style="min-width:220px;">
+									<input type="file" class="form-control form-control-sm" id="escola_logo" accept="image/*"
+										onchange="if(typeof displaySelectedImage==='function'){displaySelectedImage(event,'preview-escola-logo');}">
+									<div class="form-text">Usada em contrato e recibo. JPG/PNG/WEBP · máx. 5 MB. Sem logo, usa a CTI.</div>
+								</div>
+							</div>
+						</div>
+						<div class="col-12" id="wrap-modelo-certificado">
+							<label class="form-label">Modelo de certificado</label>
+							<div class="d-flex align-items-start gap-3 flex-wrap">
+								<img id="preview-modelo-cert" src="" alt="Modelo"
+									style="max-height:90px;max-width:160px;object-fit:contain;border:1px solid #dee2e6;padding:4px;background:#fff;">
+								<div class="flex-grow-1" style="min-width:220px;">
+									<input type="file" class="form-control form-control-sm" id="escola_modelo_certificado" accept="image/png,image/jpeg,image/webp"
+										onchange="if(typeof displaySelectedImage==='function'){displaySelectedImage(event,'preview-modelo-cert');}">
+									<div class="form-text">Imagem A4 paisagem já com a logo da escola. PNG/JPG · máx. 8 MB. Sem arquivo, usa o modelo padrão CTI.</div>
+								</div>
+							</div>
+						</div>
+						<div id="alert-modelo-cert" class="col-12 alert alert-warning small d-none py-2">
+							Execute o SQL da coluna <code>modelo_certificado</code> para habilitar o upload do modelo por escola.
+						</div>
 						<div class="col-md-6">
 							<label class="form-label" for="escola_endereco">Endereço</label>
 							<input type="text" class="form-control" id="escola_endereco">
@@ -147,5 +174,7 @@
 window.MASTER_MODULOS = {{modulos_json}};
 window.MASTER_PLANOS = {{planos_json}};
 window.MASTER_TEM_PLAN_ID = {{tem_plan_id}};
+window.MASTER_TEM_MODELO_CERT = {{tem_modelo_cert}};
+window.MASTER_MODELO_CERT_PADRAO = {{modelo_cert_padrao_json}};
 </script>
-<script src="{{URL}}/resources/js/master-escolas.js?v=20260716p"></script>
+<script src="{{URL}}/resources/js/master-escolas.js?v=20260717b"></script>

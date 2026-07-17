@@ -82,6 +82,10 @@ class CampanhaWorker {
 		$email = $canal === 'email' ? Email::escola($escolaId) : null;
 		$fila = CampanhaFila::getPendentesPorCanal($escolaId, $canal, $limite);
 
+		$enviadosGrupoHora = ($canal === 'whatsapp') ? self::contarEnviadosGrupoUltimaHora($escolaId) : 0;
+		$podeEnviarGrupo = $enviadosGrupoHora < 1;
+		$grupoEnviadoNestaRun = false;
+
 		while ($item = $fila->fetchObject(CampanhaFila::class)) {
 			$resumo['processados']++;
 			$campanha = Campanhas::getById((int)$item->campanha_id, $escolaId);
@@ -91,6 +95,15 @@ class CampanhaWorker {
 				$resumo['erros']++;
 				$stats['erros']++;
 				continue;
+			}
+
+			$isGrupo = $canal === 'whatsapp' && self::itemEhGrupoOuLista($item);
+			if ($isGrupo) {
+				// Pacing conservador: ~1 mensagem de grupo/lista por hora (sem sleep longo)
+				if (!$podeEnviarGrupo || $grupoEnviadoNestaRun) {
+					$stats['motivo'] = $stats['motivo'] ?: 'pacing_grupo';
+					continue;
+				}
 			}
 
 			$vars = [
@@ -128,6 +141,10 @@ class CampanhaWorker {
 				$item->marcarEnviado();
 				$resumo['enviados']++;
 				$stats['enviados']++;
+				if ($isGrupo) {
+					$grupoEnviadoNestaRun = true;
+					$podeEnviarGrupo = false;
+				}
 			} else {
 				$item->marcarErro($erroMsg);
 				$resumo['erros']++;
@@ -136,12 +153,42 @@ class CampanhaWorker {
 
 			$campanha->recalcularTotais();
 
-			if ($aplicarDelay && $delay > 0) {
+			// Delay só para 1:1 / e-mail — grupos usam pacing de 1/hora via skip
+			if ($aplicarDelay && $delay > 0 && !$isGrupo) {
 				sleep($delay);
 			}
 		}
 
 		return $stats;
+	}
+
+	private static function itemEhGrupoOuLista(CampanhaFila $item): bool {
+		$tipo = strtolower(trim((string)($item->destinatario_tipo ?? '')));
+		if ($tipo === 'grupo' || $tipo === 'lista' || $tipo === 'whatsapp_grupos') {
+			return true;
+		}
+		return EvolutionApiService::isJidGrupoOuLista((string)($item->contato ?? ''));
+	}
+
+	/** Envios de grupo/lista nas últimas 1h (para pacing ~1/hora). */
+	private static function contarEnviadosGrupoUltimaHora(int $idAdmin): int {
+		$desde = date('Y-m-d H:i:s', strtotime('-1 hour'));
+		$sql = '
+			SELECT COUNT(*) AS qtd
+			FROM campanha_fila f
+			INNER JOIN campanhas c ON c.id = f.campanha_id
+			WHERE f.id_admin = '.(int)$idAdmin.'
+			  AND f.status = "enviado"
+			  AND f.enviado_em >= "'.addslashes($desde).'"
+			  AND c.canal = "whatsapp"
+			  AND (
+			    f.destinatario_tipo IN ("grupo","lista","whatsapp_grupos")
+			    OR f.contato LIKE "%@g.us%"
+			    OR f.contato LIKE "%@broadcast%"
+			  )
+		';
+		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
+		return (int)($row['qtd'] ?? 0);
 	}
 
 	private static function escolasComCampanhasAtivas(int $idAdminFiltro = 0): array {

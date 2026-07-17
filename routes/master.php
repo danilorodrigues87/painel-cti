@@ -38,6 +38,27 @@ $obRouter->post('/master/planos', [
 	}
 ]);
 
+$obRouter->get('/master/perfil', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Perfil::index($request));
+	}
+]);
+
+$obRouter->post('/master/perfil/salvar', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Perfil::salvar($request));
+	}
+]);
+
+$obRouter->post('/master/perfil/senha', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Perfil::alterarSenha($request));
+	}
+]);
+
 // Voltar do impersonate (usa sessão do diretor + snapshot master)
 $obRouter->get('/master/voltar', [
 	'middlewares' => ['required-admin-login'],

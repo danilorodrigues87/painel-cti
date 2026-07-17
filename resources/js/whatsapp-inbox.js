@@ -475,6 +475,15 @@ $(function(){
 	// Atualiza lista + chat aberto a cada 5s (sem recarregar a página)
 	waPoll = setInterval(atualizarInbox, 5000);
 
+	// Deep-link: /painel/whatsapp?conversa=ID
+	try {
+		const params = new URLSearchParams(window.location.search || '');
+		const convParam = parseInt(params.get('conversa') || '0', 10);
+		if (convParam > 0) {
+			setTimeout(function(){ abrirConversa(convParam); }, 400);
+		}
+	} catch (e) {}
+
 	$('#btn-wa-refresh').on('click', atualizarInbox);
 	$('#wa-lista-conversas').on('click', 'a[data-id]', function(e){
 		e.preventDefault();

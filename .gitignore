@@ -4,5 +4,4 @@
 .cursor/
 .vscode/
 resources/assets/img/*
-uploads/img/site/*
-uploads/img/certificado/qr_*.png
+uploads/*

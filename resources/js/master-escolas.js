@@ -1,4 +1,7 @@
 const MASTER_ESCOLAS_URL = 'master/escolas';
+const LOGO_CTI_PADRAO = (typeof url_base !== 'undefined' ? url_base : '/') + 'resources/assets/img/icons/logo-2.png';
+const MODELO_CERT_PADRAO = window.MASTER_MODELO_CERT_PADRAO
+	|| ((typeof url_base !== 'undefined' ? url_base : '/') + 'uploads/img/certificado/modelo_cert.png');
 let masterEscolasCache = [];
 
 function esc(s){
@@ -7,6 +10,10 @@ function esc(s){
 
 function temPlanId(){
 	return String(window.MASTER_TEM_PLAN_ID) === '1';
+}
+
+function temModeloCert(){
+	return String(window.MASTER_TEM_MODELO_CERT) === '1';
 }
 
 function popularSelectPlanos(selected){
@@ -77,6 +84,10 @@ function limparForm(){
 	$('#escola_cep, #escola_endereco, #escola_numero, #escola_bairro, #escola_cidade, #escola_estado').val('');
 	$('#diretor_nome, #diretor_email').val('');
 	$('#escola_ativo').val('1');
+	$('#escola_logo').val('');
+	$('#preview-escola-logo').attr('src', LOGO_CTI_PADRAO);
+	$('#escola_modelo_certificado').val('');
+	$('#preview-modelo-cert').attr('src', MODELO_CERT_PADRAO);
 	$('#todos_modulos').prop('checked', true);
 	popularSelectPlanos('');
 	$('#wrap-diretor-novo').show();
@@ -168,6 +179,10 @@ function abrirEdicao(id){
 		$('#escola_cidade').val(e.cidade || '');
 		$('#escola_estado').val(e.estado || '');
 		$('#escola_ativo').val(e.ativo ? '1' : '0');
+		$('#escola_logo').val('');
+		$('#preview-escola-logo').attr('src', e.logo_url || LOGO_CTI_PADRAO);
+		$('#escola_modelo_certificado').val('');
+		$('#preview-modelo-cert').attr('src', e.modelo_certificado_url || MODELO_CERT_PADRAO);
 		$('#todos_modulos').prop('checked', !!e.todos_modulos);
 		popularSelectPlanos(e.plan_id || '');
 		$('#wrap-diretor-novo').hide();
@@ -179,39 +194,57 @@ function abrirEdicao(id){
 
 function salvarEscola(){
 	const id = $('#escola_id').val();
-	const dados = {
-		acao: 'salvar',
-		id: id,
-		nome: $('#escola_nome').val(),
-		email: $('#escola_email').val(),
-		telefone: $('#escola_telefone').val(),
-		cpf_cnpj: $('#escola_cpf_cnpj').val(),
-		site: $('#escola_site').val(),
-		cep: $('#escola_cep').val(),
-		endereco: $('#escola_endereco').val(),
-		numero: $('#escola_numero').val(),
-		bairro: $('#escola_bairro').val(),
-		cidade: $('#escola_cidade').val(),
-		estado: $('#escola_estado').val(),
-		ativo: $('#escola_ativo').val(),
-		plan_id: $('#escola_plan_id').val() || '',
-		todos_modulos: $('#todos_modulos').is(':checked') ? 1 : 0,
-		modulos_json: JSON.stringify(coletarSlugs()),
-		diretor_nome: $('#diretor_nome').val(),
-		diretor_email: $('#diretor_email').val()
-	};
+	const nome = ($('#escola_nome').val() || '').trim();
+	const diretorNome = ($('#diretor_nome').val() || '').trim();
+	const diretorEmail = ($('#diretor_email').val() || '').trim();
 
-	if(!String(dados.nome || '').trim()){
+	if(!nome){
 		Swal.fire('Atenção', 'Informe o nome da escola.', 'warning');
 		return;
 	}
-	if(!id && (!String(dados.diretor_nome||'').trim() || !String(dados.diretor_email||'').trim())){
+	if(!id && (!diretorNome || !diretorEmail)){
 		Swal.fire('Atenção', 'Informe nome e e-mail do Diretor.', 'warning');
 		return;
 	}
 
+	const fd = new FormData();
+	fd.append('acao', 'salvar');
+	fd.append('id', id || '');
+	fd.append('nome', nome);
+	fd.append('email', $('#escola_email').val() || '');
+	fd.append('telefone', $('#escola_telefone').val() || '');
+	fd.append('cpf_cnpj', $('#escola_cpf_cnpj').val() || '');
+	fd.append('site', $('#escola_site').val() || '');
+	fd.append('cep', $('#escola_cep').val() || '');
+	fd.append('endereco', $('#escola_endereco').val() || '');
+	fd.append('numero', $('#escola_numero').val() || '');
+	fd.append('bairro', $('#escola_bairro').val() || '');
+	fd.append('cidade', $('#escola_cidade').val() || '');
+	fd.append('estado', $('#escola_estado').val() || '');
+	fd.append('ativo', $('#escola_ativo').val());
+	fd.append('plan_id', $('#escola_plan_id').val() || '');
+	fd.append('todos_modulos', $('#todos_modulos').is(':checked') ? '1' : '0');
+	fd.append('modulos_json', JSON.stringify(coletarSlugs()));
+	fd.append('diretor_nome', diretorNome);
+	fd.append('diretor_email', diretorEmail);
+	const logoFile = $('#escola_logo')[0] && $('#escola_logo')[0].files[0];
+	if(logoFile){
+		fd.append('logo', logoFile);
+	}
+	const modeloFile = $('#escola_modelo_certificado')[0] && $('#escola_modelo_certificado')[0].files[0];
+	if(modeloFile){
+		fd.append('modelo_certificado', modeloFile);
+	}
+
 	$('#btn-salvar-escola').prop('disabled', true);
-	$.post(url_base + MASTER_ESCOLAS_URL, dados, function(res){
+	$.ajax({
+		url: url_base + MASTER_ESCOLAS_URL,
+		method: 'POST',
+		data: fd,
+		processData: false,
+		contentType: false,
+		dataType: 'json'
+	}).done(function(res){
 		$('#btn-salvar-escola').prop('disabled', false);
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) || 'Não foi possível salvar.', 'error');
@@ -224,7 +257,7 @@ function salvarEscola(){
 			return;
 		}
 		Swal.fire('OK', res.message, 'success');
-	}, 'json').fail(function(){
+	}).fail(function(){
 		$('#btn-salvar-escola').prop('disabled', false);
 		Swal.fire('Erro', 'Falha ao salvar.', 'error');
 	});
@@ -234,6 +267,11 @@ $(function(){
 	if(!temPlanId()){
 		$('#alert-plan-id').removeClass('d-none');
 	}
+	if(!temModeloCert()){
+		$('#alert-modelo-cert').removeClass('d-none');
+		$('#escola_modelo_certificado').prop('disabled', true);
+	}
+	$('#preview-modelo-cert').attr('src', MODELO_CERT_PADRAO);
 	popularSelectPlanos('');
 	renderModulosChecks([], true);
 	carregarEscolas();

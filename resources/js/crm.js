@@ -329,6 +329,9 @@ function preencherModalDetalhes(result){
 	$('#response-detalhe-lead').html('');
 
 	$('#btn-whatsapp-lead').attr('href', result.whatsapp_link);
+	$('#btn-atendimento-lead').off('click').on('click', function(){
+		iniciarAtendimentoWa(lead.whatsapp, lead.nome);
+	});
 }
 
 function abrirDetalhesLead(id){

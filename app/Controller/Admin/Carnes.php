@@ -11,6 +11,8 @@
   use \App\Common\Helpers\NumeroHelper;
   use \App\Model\Entity\Caixa;
   use \App\Common\Helpers\TenantHelper;
+  use \App\Common\Helpers\BrandingHelper;
+  use \App\Model\Entity\Responsaveis as EntityRes;
 
   class Carnes extends Page{
 
@@ -398,6 +400,47 @@
     }
 
     $dados = (array) Caixa::getCaixaById($id);
+    $userLogedData = SessionUser::getUserLogedData();
+    $escola = $userLogedData['escola'] ?? [];
+    $logoUrl = htmlspecialchars(BrandingHelper::urlLogoEscola($escola['logo'] ?? null), ENT_QUOTES, 'UTF-8');
+    $nomeEscola = htmlspecialchars((string)($escola['nome'] ?? 'Escola'), ENT_QUOTES, 'UTF-8');
+    $cnpjEscola = htmlspecialchars((string)($escola['cpf_cnpj'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $siteEscola = trim((string)($escola['site'] ?? ''));
+    if ($siteEscola === '') {
+      $siteEscola = 'www.ctieducacional.com.br';
+    }
+    $siteEscola = htmlspecialchars($siteEscola, ENT_QUOTES, 'UTF-8');
+    $cidadeLinha = '';
+    $cidadeRaw = trim((string)($escola['cidade'] ?? ''));
+    $estadoRaw = trim((string)($escola['estado'] ?? ''));
+    if ($cidadeRaw !== '' || $estadoRaw !== '') {
+      if (ctype_digit($cidadeRaw) || ctype_digit($estadoRaw)) {
+        try {
+          $cid = ctype_digit($cidadeRaw)
+            ? \App\Model\Entity\EstadoCidades::getCidades('id = '.(int)$cidadeRaw)->fetchObject()
+            : null;
+          $est = ctype_digit($estadoRaw)
+            ? \App\Model\Entity\EstadoCidades::getEstados('id = '.(int)$estadoRaw)->fetchObject()
+            : null;
+          $parts = [];
+          if ($cid && !empty($cid->nome)) {
+            $parts[] = $cid->nome;
+          } elseif ($cidadeRaw !== '' && !ctype_digit($cidadeRaw)) {
+            $parts[] = $cidadeRaw;
+          }
+          if ($est && !empty($est->sigla)) {
+            $parts[] = $est->sigla;
+          } elseif ($estadoRaw !== '' && !ctype_digit($estadoRaw)) {
+            $parts[] = $estadoRaw;
+          }
+          $cidadeLinha = htmlspecialchars(implode(' - ', $parts), ENT_QUOTES, 'UTF-8');
+        } catch (\Throwable $e) {
+          $cidadeLinha = '';
+        }
+      } else {
+        $cidadeLinha = htmlspecialchars(trim($cidadeRaw.($estadoRaw !== '' ? ' - '.$estadoRaw : '')), ENT_QUOTES, 'UTF-8');
+      }
+    }
 
     // Definimos a largura útil (Safe Zone)
     // Para 58mm, o ideal é usar entre 48mm e 52mm para evitar cortes físicos
@@ -455,10 +498,10 @@
 
 <body>
         <div class="center">
-            <strong>CTI EDUCACIONAL</strong><br>
-            <span class="small">Cursos Profissionalizantes e Tecnologia</span><br>
-            Guapiara - SP<br>
-            CNPJ: 41.371.814/0001-31
+            <img src="'.$logoUrl.'" alt="" style="max-width:42mm;max-height:18mm;object-fit:contain;"><br>
+            <strong>'.$nomeEscola.'</strong><br>
+            '.($cidadeLinha !== '' ? $cidadeLinha.'<br>' : '').'
+            '.($cnpjEscola !== '' ? 'CNPJ: '.$cnpjEscola : '').'
         </div>
 
         <div class="line"></div>
@@ -517,7 +560,7 @@
 
         <div class="center small">
             Obrigado pela preferência!<br>
-            <strong>www.ctieducacional.com.br</strong>
+            <strong>'.$siteEscola.'</strong>
         </div>
 
         <br>
@@ -594,27 +637,31 @@ $valor_pagar = floatval($valor_pagar);
     // DADOS DO CONTRATO
     $obMatricula = (array) EntityMatri::getMatriculaById($id);
     // DADOS DO CLIENTE
-    $dadosUser = (array) EntityUser::getUserById($obMatricula['id_aluno']);
+    $obAluno = EntityUser::getUserById($obMatricula['id_aluno'] ?? 0);
+    $dadosUser = $obAluno ? (array) $obAluno : [];
+    $nomeAluno = (string)($dadosUser['nome'] ?? 'Aluno não encontrado');
     // DADOS DA TRILHA
-    $obTrilha = (array) EntityTrilhas::getTrilhaById($obMatricula['id_trilha']);
+    $obTrilhaObj = EntityTrilhas::getTrilhaById($obMatricula['id_trilha'] ?? 0);
+    $obTrilha = $obTrilhaObj ? (array) $obTrilhaObj : [];
 
-    // DADOS DO RESPONSÁVEL FINANCEIRO
-    $responsavelFinanceiro ='';
-    if($obMatricula['id_responsavel'] > 0){
-      $obResponsavel = (array) EntityUser::getUserById($obMatricula['id_responsavel']);
-      $responsavelFinanceiro = $obResponsavel['nome'];
-    } else {
-      $responsavelFinanceiro = $dadosUser['nome'];
+    // DADOS DO RESPONSÁVEL FINANCEIRO (tabela responsaveis, não usuarios)
+    $responsavelFinanceiro = $nomeAluno;
+    $idResponsavel = (int)($obMatricula['id_responsavel'] ?? 0);
+    if ($idResponsavel > 0) {
+      $obResponsavel = EntityRes::getResById($idResponsavel);
+      if ($obResponsavel && !empty($obResponsavel->nome)) {
+        $responsavelFinanceiro = (string)$obResponsavel->nome;
+      }
     }
 
-    $total = NumeroHelper::moedaBr($obMatricula['qtd_parcelas'] * $obMatricula['valor']);
+    $total = NumeroHelper::moedaBr(($obMatricula['qtd_parcelas'] ?? 0) * ($obMatricula['valor'] ?? 0));
 
     $count = 1;
     $carne = '';
     $qrCode = '';
 
       // VERIFICA SE TEM DESCONTO PONTUALIDADE
-    $obs = ($obMatricula['desconto_pontualidade']) ? '<b class="tag">Obs: 10% de desconto ao pagar até o dia do vencimento</b>' : 'Observações';
+    $obs = ($obMatricula['desconto_pontualidade'] ?? false) ? '<b class="tag">Obs: 10% de desconto ao pagar até o dia do vencimento</b>' : 'Observações';
 
     $results = Caixa::getCaixa("id_ref =".$obMatricula['id']);
 
@@ -650,15 +697,15 @@ $valor_pagar = floatval($valor_pagar);
       </td>
       </tr>
       <tr>
-      <td colspan="2" class="tag"><b>'.$userLogedData['escola']['nome'].'</b>
+      <td colspan="2" class="tag"><b>'.htmlspecialchars((string)($userLogedData['escola']['nome'] ?? ''), ENT_QUOTES, 'UTF-8').'</b>
       <br>
-      <span>CNPJ: '.$userLogedData['escola']['cpf_cnpj'].'</span>
+      <span>CNPJ: '.htmlspecialchars((string)($userLogedData['escola']['cpf_cnpj'] ?? ''), ENT_QUOTES, 'UTF-8').'</span>
       </td>
       </tr>
       <tr>
       <td class="tag"><b>Aluno</b>
       <br>
-      <span>'.$dadosUser['nome'].'</span>
+      <span>'.htmlspecialchars($nomeAluno, ENT_QUOTES, 'UTF-8').'</span>
       </td>
       <td class="tag"><b>Valor Total</b>
       <br>
@@ -692,7 +739,7 @@ $valor_pagar = floatval($valor_pagar);
       <tr>
       <td colspan="1" class="tag"><b>Produto/Serviço</b>
       <br>
-      <span>'.$obTrilha['nome'].'</span>
+      <span>'.htmlspecialchars((string)($obTrilha['nome'] ?? ''), ENT_QUOTES, 'UTF-8').'</span>
       </td>
       <td class="tag"><b>Valor Total</b>
       <br>
@@ -703,7 +750,7 @@ $valor_pagar = floatval($valor_pagar);
       <tr>
       <td colspan="1" class="tag"><b>Aluno</b>
       <br>
-      <span>'.$dadosUser['nome'].'</span>
+      <span>'.htmlspecialchars($nomeAluno, ENT_QUOTES, 'UTF-8').'</span>
       </td>
       <!--
       <td class="tag"><b>Responssável fianceito</b>

@@ -301,9 +301,12 @@
 			<div class="modal-body">
 				<div id="response-detalhe-lead"></div>
 
-				<div class="d-flex gap-2 mb-3">
-					<a href="#" target="_blank" rel="noopener" id="btn-whatsapp-lead" class="btn btn-success btn-sm">
-						<i class="fa-brands fa-whatsapp"></i> Abrir WhatsApp
+				<div class="d-flex gap-2 mb-3 flex-wrap">
+					<button type="button" id="btn-atendimento-lead" class="btn btn-success btn-sm">
+						<i class="fa-brands fa-whatsapp"></i> Atendimento no painel
+					</button>
+					<a href="#" target="_blank" rel="noopener" id="btn-whatsapp-lead" class="btn btn-outline-success btn-sm">
+						<i class="fa-brands fa-whatsapp"></i> Abrir WhatsApp Web
 					</a>
 				</div>
 
@@ -559,4 +562,5 @@
 	let salvarFunil   = 'painel/crm/funis/save';
 	let excluirFunil  = 'painel/crm/funis/delete';
 </script>
-<script src="{{URL}}/resources/js/crm.js?v=20260714b"></script>
+<script src="{{URL}}/resources/js/whatsapp-iniciar.js?v=20260717b"></script>
+<script src="{{URL}}/resources/js/crm.js?v=20260717b"></script>

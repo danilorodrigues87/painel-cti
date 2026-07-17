@@ -62,7 +62,6 @@ class Page {
 			'content' => $content,
 			'user' => $userLogedData['usuario']['nome'],
 			'company' => $userLogedData['escola']['nome'] ?? '',
-			'logo' => $userLogedData['escola']['logo'] ?? '',
 			'banner_impersonate' => $bannerImpersonate,
 			'foto_url' => $fotoUser,
 		]);

@@ -10,6 +10,8 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\EmailValidator;
 use \App\Common\Helpers\UserFotoHelper;
+use \App\Model\Entity\AlunoObservacao;
+use \App\Session\User\Login as SessionUser;
 
 class Clientes extends Page{
 
@@ -98,7 +100,10 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			<a class="dropdown-item" href="#" onclick="list_itens('.$obUsers->id.', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
 			</li>
 			<li>
-			<a class="dropdown-item" href="#" onclick="anotacoes('.$obUsers->id.', \'editar\')"><i class="fa-regular fa-note-sticky fa-lg"></i> Anotações</a>
+			<a class="dropdown-item" href="#" onclick="anotacoesAluno('.$obUsers->id.')"><i class="fa-regular fa-note-sticky fa-lg"></i> Anotações</a>
+			</li>
+			<li>
+			<a class="dropdown-item" href="#" onclick=\'iniciarAtendimentoWa('.json_encode((string)$obUsers->whatsapp).', '.json_encode((string)$obUsers->nome).')\'><i class="fa-brands fa-whatsapp fa-lg text-success"></i> Atendimento WhatsApp</a>
 			</li>
 			<li>
 			<a class="dropdown-item" href="#" onclick="resetSenha('.$obUsers->id.')"><i class="fa-solid fa-key fa-lg"></i> Resetar Senha</a>
@@ -495,6 +500,96 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			return 'Erro ao excluir usuário';
 		}
 		
+	}
+
+	/** Listar / salvar anotações do aluno (modal). */
+	public static function anotacoes($request) {
+		$post = $request->getPostVars();
+		$acao = (string)($post['acao'] ?? 'form');
+		$idAdmin = parent::getIdAdminInt();
+		$alunoId = (int)($post['id'] ?? $post['aluno_id'] ?? 0);
+
+		if (!TenantHelper::pertenceUsuario($alunoId, $idAdmin, 'Cliente')) {
+			return json_encode(['success' => false, 'message' => 'Aluno não encontrado.']);
+		}
+
+		if (!AlunoObservacao::tabelaExiste()) {
+			return json_encode([
+				'success' => false,
+				'message' => 'Execute o SQL da tabela aluno_observacoes (database/aluno_observacoes.sql).',
+			]);
+		}
+
+		if ($acao === 'salvar') {
+			$texto = trim((string)($post['observacao'] ?? ''));
+			if ($texto === '') {
+				return json_encode(['success' => false, 'message' => 'Informe a observação.']);
+			}
+			$user = SessionUser::getUserLogedData();
+			$ob = new AlunoObservacao;
+			$ob->id_admin = $idAdmin;
+			$ob->aluno_id = $alunoId;
+			$ob->usuario_id = (int)($user['usuario']['id'] ?? 0);
+			$ob->observacao = $texto;
+			$ob->cadastrar();
+			return json_encode([
+				'success' => true,
+				'message' => 'Observação salva.',
+				'html'    => self::htmlListaObservacoes($alunoId, $idAdmin),
+			]);
+		}
+
+		$aluno = EntityUser::getUserById($alunoId);
+		$nome = ($aluno instanceof EntityUser) ? (string)$aluno->nome : 'Aluno';
+
+		$html = '
+		<div class="modal-header">
+			<h5 class="modal-title">Anotações — '.htmlspecialchars($nome, ENT_QUOTES, 'UTF-8').'</h5>
+			<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+		</div>
+		<div class="modal-body">
+			<div id="aluno-obs-alert"></div>
+			<div class="mb-3">
+				<label class="form-label" for="aluno-obs-texto">Nova observação</label>
+				<textarea class="form-control" id="aluno-obs-texto" rows="3" placeholder="Escreva aqui..."></textarea>
+			</div>
+			<button type="button" class="btn btn-primary btn-sm mb-3" id="btn-salvar-aluno-obs" data-aluno="'.$alunoId.'">
+				<i class="fas fa-plus"></i> Adicionar
+			</button>
+			<hr>
+			<div id="aluno-obs-lista">'.self::htmlListaObservacoes($alunoId, $idAdmin).'</div>
+		</div>
+		<div class="modal-footer">
+			<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+		</div>';
+
+		return json_encode(['success' => true, 'html' => $html]);
+	}
+
+	private static function htmlListaObservacoes(int $alunoId, int $idAdmin): string {
+		$results = AlunoObservacao::get(
+			'aluno_id = '.$alunoId.' AND id_admin = '.$idAdmin,
+			'criado_em DESC',
+			'100'
+		);
+		$itens = '';
+		while ($ob = $results->fetchObject(AlunoObservacao::class)) {
+			$autor = EntityUser::getUserById((int)$ob->usuario_id);
+			$nomeAutor = ($autor instanceof EntityUser) ? $autor->nome : 'Usuário';
+			$data = !empty($ob->criado_em) ? date('d/m/Y H:i', strtotime($ob->criado_em)) : '';
+			$itens .= '
+			<div class="border rounded p-2 mb-2 bg-light">
+				<div class="d-flex justify-content-between small text-muted mb-1">
+					<span><i class="fas fa-user"></i> '.htmlspecialchars((string)$nomeAutor, ENT_QUOTES, 'UTF-8').'</span>
+					<span>'.htmlspecialchars($data, ENT_QUOTES, 'UTF-8').'</span>
+				</div>
+				<div>'.nl2br(htmlspecialchars((string)$ob->observacao, ENT_QUOTES, 'UTF-8')).'</div>
+			</div>';
+		}
+		if ($itens === '') {
+			return '<p class="text-muted small mb-0">Nenhuma observação ainda.</p>';
+		}
+		return $itens;
 	}
 
 }

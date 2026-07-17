@@ -93,6 +93,9 @@ $results = EntityRes::getRes($where, 'id DESC', $obPagination->getLimit());
 			<a class="dropdown-item" href="#" onclick="list_itens('.$obUsers->id.', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
 			</li>
 			<li>
+			<a class="dropdown-item" href="#" onclick=\'iniciarAtendimentoWa('.json_encode((string)$obUsers->whatsapp).', '.json_encode((string)$obUsers->nome).')\'><i class="fa-brands fa-whatsapp fa-lg text-success"></i> Atendimento WhatsApp</a>
+			</li>
+			<li>
 			<a class="dropdown-item" href="#" onclick="excluir('.$obUsers->id.')" ><i class="far fa-trash-alt fa-lg"></i> Excluir</a>
 			</li>
 			</ul>

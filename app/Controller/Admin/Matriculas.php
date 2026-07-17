@@ -13,6 +13,7 @@ use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\BrandingHelper;
 
 
 class Matriculas extends Page{
@@ -550,7 +551,8 @@ public static function verContrato($request,$id){
         // DADOS DA EMPRESA CONTRATADA
   $empresa='';
 
-  $empresa .= '<img src="'.URL.'/resources/assets/img/icons/logo-2.png" width="100">';
+  $logoEscola = BrandingHelper::urlLogoEscola($userLogedData['escola']['logo'] ?? null);
+  $empresa .= '<img src="'.htmlspecialchars($logoEscola, ENT_QUOTES, 'UTF-8').'" width="100" alt="Logo">';
 
   $empresa .= '<h2 style="text-align: center;">Contrato de Prestação de Serviços Educacionais</h2><hr><br>';
 

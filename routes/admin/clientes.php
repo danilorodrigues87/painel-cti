@@ -64,6 +64,16 @@ $obRouter->post('/painel/clientes/excluir',[
 	}
 ]);
 
+// Anotações / histórico de observações do aluno
+$obRouter->post('/painel/clientes/anotacoes',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\Clientes::anotacoes($request));
+	}
+]);
+
 
 
 

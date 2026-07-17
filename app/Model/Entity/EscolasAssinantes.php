@@ -25,21 +25,34 @@ class EscolasAssinantes {
 	public $cep;
 	public $modulos_liberados;
 	public $plan_id;
+	public $modelo_certificado;
 
 	public static function temColunaPlanId(): bool {
-		static $cache = null;
-		if ($cache !== null) {
-			return $cache;
+		return self::temColuna('plan_id');
+	}
+
+	public static function temColunaModeloCertificado(): bool {
+		return self::temColuna('modelo_certificado');
+	}
+
+	private static function temColuna(string $coluna): bool {
+		static $cache = [];
+		$coluna = preg_replace('/[^a-z0-9_]/i', '', $coluna) ?: '';
+		if ($coluna === '') {
+			return false;
+		}
+		if (array_key_exists($coluna, $cache)) {
+			return $cache[$coluna];
 		}
 		try {
 			$row = (new Database('escolas_assinantes'))->execute(
-				"SHOW COLUMNS FROM escolas_assinantes LIKE 'plan_id'"
+				"SHOW COLUMNS FROM escolas_assinantes LIKE '{$coluna}'"
 			)->fetch(\PDO::FETCH_ASSOC);
-			$cache = !empty($row);
+			$cache[$coluna] = !empty($row);
 		} catch (\Throwable $e) {
-			$cache = false;
+			$cache[$coluna] = false;
 		}
-		return $cache;
+		return $cache[$coluna];
 	}
 
 	public static function getEscolaById($id) {
@@ -101,6 +114,9 @@ class EscolasAssinantes {
 				? (int)$this->plan_id
 				: null;
 		}
+		if (self::temColunaModeloCertificado()) {
+			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
+		}
 		$this->id = (int)$obDatabase->insert($dados);
 
 		// Tenant = PK da escola
@@ -138,6 +154,9 @@ class EscolasAssinantes {
 			$dados['plan_id'] = $this->plan_id !== null && $this->plan_id !== ''
 				? (int)$this->plan_id
 				: null;
+		}
+		if (self::temColunaModeloCertificado()) {
+			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
 		}
 		return (new Database('escolas_assinantes'))->update('id = '.(int)$this->id, $dados);
 	}

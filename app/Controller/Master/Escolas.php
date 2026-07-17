@@ -9,6 +9,7 @@ use App\Model\Entity\EscolasAssinantes;
 use App\Model\Entity\PlanosAssinatura;
 use App\Model\Entity\User as EntityUser;
 use App\Session\User\Login as SessionUser;
+use App\Common\Helpers\BrandingHelper;
 
 class Escolas extends Page {
 
@@ -17,6 +18,8 @@ class Escolas extends Page {
 			'modulos_json' => json_encode(self::catalogoModulos(), JSON_UNESCAPED_UNICODE),
 			'planos_json'  => json_encode(Planos::listarAtivosResumo(), JSON_UNESCAPED_UNICODE),
 			'tem_plan_id'  => EscolasAssinantes::temColunaPlanId() ? '1' : '0',
+			'tem_modelo_cert' => EscolasAssinantes::temColunaModeloCertificado() ? '1' : '0',
+			'modelo_cert_padrao_json' => json_encode(BrandingHelper::urlModeloCertPadrao(), JSON_UNESCAPED_SLASHES),
 		]);
 		return parent::getPanel('Escolas — Master', $content, 'escolas');
 	}
@@ -31,7 +34,7 @@ class Escolas extends Page {
 			case 'detalhes':
 				return self::detalhes($post);
 			case 'salvar':
-				return self::salvar($post);
+				return self::salvar($post, $request->getFileVars());
 			case 'toggle_ativo':
 				return self::toggleAtivo($post);
 			case 'reset_diretor':
@@ -72,7 +75,7 @@ class Escolas extends Page {
 		return json_encode(['success' => true, 'escola' => $data]);
 	}
 
-	private static function salvar(array $post): string {
+	private static function salvar(array $post, array $files = []): string {
 		$id = (int)($post['id'] ?? 0);
 		$nome = trim((string)($post['nome'] ?? ''));
 		$email = trim((string)($post['email'] ?? ''));
@@ -98,6 +101,13 @@ class Escolas extends Page {
 				return json_encode(['success' => false, 'message' => 'Escola não encontrada.']);
 			}
 			self::preencherDadosEscola($ob, $post, $nome, $email, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
+			$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, $ob->logo ?? null);
+			if (EscolasAssinantes::temColunaModeloCertificado()) {
+				$ob->modelo_certificado = BrandingHelper::processarUploadModeloCertificado(
+					$files['modelo_certificado'] ?? null,
+					$ob->modelo_certificado ?? null
+				);
+			}
 			$ob->id_admin = (int)$ob->id;
 			$ob->atualizar();
 			ModuleGateHelper::limparCache((int)$ob->id);
@@ -121,7 +131,13 @@ class Escolas extends Page {
 
 		$ob = new EscolasAssinantes;
 		self::preencherDadosEscola($ob, $post, $nome, $email !== '' ? $email : $diretorEmail, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
-		$ob->logo = null;
+		$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, null);
+		if (EscolasAssinantes::temColunaModeloCertificado()) {
+			$ob->modelo_certificado = BrandingHelper::processarUploadModeloCertificado(
+				$files['modelo_certificado'] ?? null,
+				null
+			);
+		}
 		$ob->instagram = null;
 		$ob->youtube = null;
 		$ob->id_admin = 0;
@@ -380,6 +396,15 @@ class Escolas extends Page {
 			$out['cidade'] = $e->cidade;
 			$out['estado'] = $e->estado;
 			$out['cep'] = $e->cep;
+			$out['logo'] = $e->logo;
+			$out['logo_url'] = BrandingHelper::urlLogoEscola($e->logo ?? null);
+			$out['modelo_certificado'] = EscolasAssinantes::temColunaModeloCertificado()
+				? ($e->modelo_certificado ?? null)
+				: null;
+			$out['modelo_certificado_url'] = BrandingHelper::urlModeloCertificado(
+				EscolasAssinantes::temColunaModeloCertificado() ? ($e->modelo_certificado ?? null) : null
+			);
+			$out['tem_modelo_certificado'] = EscolasAssinantes::temColunaModeloCertificado() ? 1 : 0;
 		}
 
 		return $out;
