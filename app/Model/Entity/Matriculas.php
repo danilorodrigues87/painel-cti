@@ -6,6 +6,7 @@ use App\Model\Entity\Caixa;
 use App\Model\Entity\User as EntityUser;
 use \App\Model\Entity\Responsaveis as EntityRes;
 use App\Common\Helpers\MercadoPagoEscolaHelper;
+use App\Model\Entity\EscolasAssinantes;
 
 class Matriculas{
 
@@ -86,6 +87,15 @@ class Matriculas{
 			&& MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$this->id_admin);
 		$pixGateway = $gerarPix ? MercadoPagoEscolaHelper::pixDaEscola((int)$this->id_admin) : null;
 
+		$escola = EscolasAssinantes::getEscolaById((int)$this->id_admin);
+		$emailEscola = '';
+		$nomeEscola = 'ESCOLA';
+		if ($escola instanceof EscolasAssinantes) {
+			$emailEscola = trim((string)($escola->email ?? ''));
+			$nomeEscola = trim((string)($escola->nome ?? 'ESCOLA')) ?: 'ESCOLA';
+		}
+		$notificationUrl = MercadoPagoEscolaHelper::webhookUrl((int)$this->id_admin);
+
 		$count = 1;
 		$ano_vence = $this->primeiro_ano;
 		$mes_vence = $this->primeiro_mes - 1;
@@ -123,14 +133,24 @@ class Matriculas{
 
 			if ($pixGateway && !empty($obCaixa->id)) {
 				$emailPagador = trim((string)($dadosPagador['email'] ?? ''));
+				if ($emailPagador === '') {
+					$emailPagador = trim((string)($dadosAluno['email'] ?? ''));
+				}
 				$pix = $pixGateway->criarCobrancaPix([
-					'valor'               => $this->valor,
-					'descricao'           => $descricao,
-					'vencimento'          => $vencimento,
-					'external_reference'  => (int)$this->id_admin.':'.(int)$obCaixa->id,
-					'pagador_nome'        => (string)($dadosPagador['nome'] ?? ''),
-					'pagador_cpf'         => (string)($dadosPagador['cpf'] ?? ''),
-					'pagador_email'       => $emailPagador,
+					'valor'                 => $this->valor,
+					'descricao'             => $descricao,
+					'vencimento'            => $vencimento,
+					'external_reference'    => (int)$this->id_admin.':'.(int)$obCaixa->id,
+					'notification_url'      => $notificationUrl,
+					'statement_descriptor'  => $nomeEscola,
+					'pagador_nome'          => (string)($dadosPagador['nome'] ?? ''),
+					'pagador_cpf'           => (string)($dadosPagador['cpf'] ?? ''),
+					'pagador_email'         => $emailPagador,
+					'email_fallback'        => $emailEscola,
+					'pagador_endereco'      => (string)($dadosPagador['endereco'] ?? ''),
+					'pagador_numero'        => (string)($dadosPagador['numero'] ?? ''),
+					'pagador_bairro'        => (string)($dadosPagador['bairro'] ?? ''),
+					'pagador_cep'           => (string)($dadosPagador['cep'] ?? ''),
 				]);
 				if (is_array($pix) && !empty($pix['id']) && !empty($pix['copia_cola'])) {
 					$obCaixa->txt_id = $pix['id'];
