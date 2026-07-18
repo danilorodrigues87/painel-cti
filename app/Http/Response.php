@@ -46,7 +46,10 @@ class Response{
 				echo $this->content;
 				exit;
 			case 'application/json':
-				echo json_encode($this->content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+				// Controllers costumam já devolver json_encode(...); não re-encodar string.
+				echo is_string($this->content)
+					? $this->content
+					: json_encode($this->content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 				exit;
 			
 		}
