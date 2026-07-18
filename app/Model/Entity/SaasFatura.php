@@ -15,9 +15,26 @@ class SaasFatura {
 	public $status = 'aberta';
 	public $mp_payment_id;
 	public $pix_copia_cola;
+	public $pix_qr_base64;
 	public $pago_em;
 	public $criado_em;
 	public $atualizado_em;
+
+	public static function temColunaPixQrBase64(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('saas_faturas'))->execute(
+				"SHOW COLUMNS FROM saas_faturas LIKE 'pix_qr_base64'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
 
 	public static function tabelaExiste(): bool {
 		static $cache = null;
@@ -47,7 +64,7 @@ class SaasFatura {
 	}
 
 	public function cadastrar(): bool {
-		$this->id = (int)(new Database('saas_faturas'))->insert([
+		$dados = [
 			'id_admin'       => (int)$this->id_admin,
 			'plan_id'        => $this->plan_id !== null && $this->plan_id !== '' ? (int)$this->plan_id : null,
 			'competencia'    => $this->competencia,
@@ -57,12 +74,16 @@ class SaasFatura {
 			'mp_payment_id'  => $this->mp_payment_id ?: null,
 			'pix_copia_cola' => $this->pix_copia_cola ?: null,
 			'pago_em'        => $this->pago_em ?: null,
-		]);
+		];
+		if (self::temColunaPixQrBase64()) {
+			$dados['pix_qr_base64'] = $this->pix_qr_base64 ?: null;
+		}
+		$this->id = (int)(new Database('saas_faturas'))->insert($dados);
 		return $this->id > 0;
 	}
 
 	public function atualizar(): bool {
-		return (bool)(new Database('saas_faturas'))->update('id = '.(int)$this->id, [
+		$dados = [
 			'plan_id'        => $this->plan_id !== null && $this->plan_id !== '' ? (int)$this->plan_id : null,
 			'valor'          => round((float)$this->valor, 2),
 			'vencimento'     => $this->vencimento,
@@ -70,7 +91,11 @@ class SaasFatura {
 			'mp_payment_id'  => $this->mp_payment_id ?: null,
 			'pix_copia_cola' => $this->pix_copia_cola ?: null,
 			'pago_em'        => $this->pago_em ?: null,
-		]);
+		];
+		if (self::temColunaPixQrBase64()) {
+			$dados['pix_qr_base64'] = $this->pix_qr_base64 ?: null;
+		}
+		return (bool)(new Database('saas_faturas'))->update('id = '.(int)$this->id, $dados);
 	}
 
 	public static function getPorEscolaCompetencia(int $idAdmin, string $competencia) {

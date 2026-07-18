@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS saas_faturas (
   status VARCHAR(20) NOT NULL DEFAULT 'aberta' COMMENT 'aberta,pago,cancelada,vencida',
   mp_payment_id VARCHAR(64) NULL DEFAULT NULL,
   pix_copia_cola TEXT NULL,
+  pix_qr_base64 MEDIUMTEXT NULL,
   pago_em DATETIME NULL DEFAULT NULL,
   criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   atualizado_em DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

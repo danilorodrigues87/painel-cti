@@ -192,6 +192,7 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			$allPermittedModules[] = 'Comunicação';
 			$allPermittedModules[] = 'Campanhas';
 			$allPermittedModules[] = 'WhatsApp';
+			$allPermittedModules[] = 'Assinatura';
 			$idAdminGate = (int)($userLogedData['usuario']['id_admin'] ?? 0);
 			$slugsEscola = ModuleGateHelper::getSlugsEscola($idAdminGate);
 			// Modelo de contrato / Pagamentos: só se o plano/escola liberar

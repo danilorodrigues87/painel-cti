@@ -1,5 +1,6 @@
 const MASTER_ASSINATURAS_URL = 'master/assinaturas';
 const pixCache = {};
+const pixQrCache = {};
 
 function esc(s){
 	return $('<div>').text(s == null ? '' : String(s)).html();
@@ -34,6 +35,7 @@ function renderLista(faturas){
 	}
 	faturas.forEach(function(f){
 		pixCache[f.id] = f.pix_copia_cola || '';
+		pixQrCache[f.id] = f.pix_qr_src || '';
 		const acoes = [];
 		if(f.tem_pix){
 			acoes.push('<button type="button" class="btn btn-sm btn-outline-success me-1 btn-ver-pix" data-id="'+f.id+'" data-info="'+esc(f.escola_nome+' · '+f.competencia+' · R$ '+f.valor_br)+'"><i class="fas fa-qrcode"></i></button>');
@@ -149,8 +151,17 @@ $(function(){
 
 	$(document).on('click', '.btn-ver-pix', function(){
 		const id = $(this).data('id');
+		const pix = pixCache[id] || '';
+		const qr = pixQrCache[id] || (pix
+			? ('https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&margin=8&data='+encodeURIComponent(pix))
+			: '');
 		$('#pix-saas-info').text($(this).data('info') || '');
-		$('#pix-saas-copia').val(pixCache[id] || '');
+		$('#pix-saas-copia').val(pix);
+		if(qr){
+			$('#pix-saas-qr').attr('src', qr).removeClass('d-none');
+		} else {
+			$('#pix-saas-qr').addClass('d-none').attr('src', '');
+		}
 		$('#modalPixSaas').modal('show');
 	});
 	$('#btn-copiar-pix').on('click', function(){

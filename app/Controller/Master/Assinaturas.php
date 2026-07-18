@@ -161,6 +161,7 @@ class Assinaturas extends Page {
 		// Novo PIX (substitui o anterior)
 		$fat->mp_payment_id = null;
 		$fat->pix_copia_cola = null;
+		$fat->pix_qr_base64 = null;
 		$ok = SaasAssinaturaService::anexarPix($fat);
 		if (!$ok) {
 			$err = \App\Common\Gateways\MercadoPago\Pix::getUltimoErro();

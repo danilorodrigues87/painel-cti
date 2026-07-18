@@ -121,6 +121,9 @@ class SaasAssinaturaService {
 		}
 		$fat->mp_payment_id = $cob['id'];
 		$fat->pix_copia_cola = $cob['copia_cola'];
+		if (SaasFatura::temColunaPixQrBase64() && !empty($cob['qr_base64'])) {
+			$fat->pix_qr_base64 = (string)$cob['qr_base64'];
+		}
 		$fat->atualizar();
 		return true;
 	}
@@ -245,6 +248,8 @@ class SaasAssinaturaService {
 		if (!$escola instanceof EscolasAssinantes) {
 			$escola = EscolasAssinantes::getEscolaById((int)$f->id_admin);
 		}
+		$copia = trim((string)($f->pix_copia_cola ?? ''));
+		$qrImg = self::pixQrImageSrc($f);
 		return [
 			'id'             => (int)$f->id,
 			'id_admin'       => (int)$f->id_admin,
@@ -256,9 +261,28 @@ class SaasAssinaturaService {
 			'vencimento'     => (string)$f->vencimento,
 			'status'         => (string)$f->status,
 			'mp_payment_id'  => (string)($f->mp_payment_id ?? ''),
-			'pix_copia_cola' => (string)($f->pix_copia_cola ?? ''),
+			'pix_copia_cola' => $copia,
+			'pix_qr_src'     => $qrImg,
 			'pago_em'        => $f->pago_em,
-			'tem_pix'        => trim((string)($f->pix_copia_cola ?? '')) !== '',
+			'tem_pix'        => $copia !== '',
 		];
+	}
+
+	/** data URI do MP ou URL gerada a partir do copia-e-cola */
+	public static function pixQrImageSrc(SaasFatura $f): string {
+		if (SaasFatura::temColunaPixQrBase64()) {
+			$b64 = trim((string)($f->pix_qr_base64 ?? ''));
+			if ($b64 !== '') {
+				if (strpos($b64, 'data:image') === 0) {
+					return $b64;
+				}
+				return 'data:image/png;base64,'.$b64;
+			}
+		}
+		$copia = trim((string)($f->pix_copia_cola ?? ''));
+		if ($copia === '') {
+			return '';
+		}
+		return 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&margin=8&data='.rawurlencode($copia);
 	}
 }

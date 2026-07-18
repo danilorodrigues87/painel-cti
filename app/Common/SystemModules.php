@@ -195,6 +195,10 @@ class SystemModules {
 				'icon' => 'fas fa-caret-down',
 				'items' => [
 					[
+						'label' => 'Assinatura',
+						'link' => URL.'/painel/assinatura'
+					],
+					[
 						'label' => 'Carnês',
 						'link' => URL.'/painel/carnes'
 					],

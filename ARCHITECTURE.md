@@ -425,14 +425,15 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | **Master fase 2 — cobrança SaaS** (PIX conta CTI, faturas, webhook, worker, grace 5 dias) | Feito (MVP) — SQL `database/saas_assinatura.sql` |
 
 ### Master fase 2 — Assinaturas SaaS
-- **UI:** `/master/assinaturas` — listar faturas, gerar mês / 1 escola, PIX, marcar paga, rodar worker
+- **UI Master:** `/master/assinaturas` — listar faturas, gerar mês / 1 escola, PIX, marcar paga, rodar worker
+- **UI Escola (Diretor):** `/painel/assinatura` (menu Financeiro → Assinatura) — fatura aberta, PIX copia e cola, atualizar PIX, verificar pagamento, histórico
 - **Preço:** `planos_assinatura.valor_mensal` (editável em Planos)
 - **Escola:** `dia_vencimento_assinatura` (1–28), `assinatura_status`, `assinatura_proximo_vencimento`
 - **Tabela:** `saas_faturas` (competência YYYY-MM, valor, vencimento, status, mp_payment_id, pix)
 - **Credenciais CTI (.env):** `MP_CTI_ACCESS_TOKEN`, opcional `MP_CTI_WEBHOOK_SECRET`, `MP_CTI_WEBHOOK_TOKEN`, `MP_CTI_PAYER_EMAIL`
 - **Webhook:** `POST /webhook/mercadopago/saas/{token}` (conta CTI — distinto do webhook por escola)
 - **Worker:** `php worker/saas.php` — gera fatura do mês + suspende (`ativo=n`) após 5 dias do vencimento
-- **Fluxo:** plano com preço → gerar fatura → PIX CTI → pagamento (webhook ou manual) → escola ativa; inadimplência → inativa
+- **Fluxo:** plano com preço → gerar fatura → PIX CTI → Diretor paga em `/painel/assinatura` (ou Master envia PIX) → webhook/verificar → escola ativa; inadimplência → inativa (login bloqueado — regularizar via Master/suporte)
 
 ### Checklist deploy (produção)
 1. Subir código; rodar SQLs pendentes (`escolas_modelo_contrato.sql`, `escola_integracoes_mercadopago.sql`, `saas_assinatura.sql`, etc.)
