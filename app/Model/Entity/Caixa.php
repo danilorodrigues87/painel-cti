@@ -6,7 +6,8 @@ use App\Session\User\Login as SessionUser;
 
 class Caixa{
  
-	public	$id_admin,
+	public	$id,
+				$id_admin,
 				$id_usuario,
 				$descricao,
 				$tipo_transacao,
@@ -83,23 +84,49 @@ class Caixa{
  
 	}
 
-	// DA BAIXA VIA API DO BANCO
-public function baixaViaApi() {
-    // Valida se as propriedades estão setadas corretamente
-    if (!isset($this->txt_id) || !isset($this->valor_pago) || !isset($this->data_pagamento) || !isset($this->ultima_alteracao)) {
-        throw new \Exception('Dados incompletos para a baixa via API');
-    }
+	/** Atualiza dados PIX após criar cobrança no gateway. */
+	public function atualizarPix() {
+		$id = (int)($this->id ?? 0);
+		if ($id <= 0) {
+			return false;
+		}
+		return (new Database('caixa'))->update('id = '.$id, [
+			'txt_id' => (string)($this->txt_id ?? ''),
+			'pix_copia_cola' => (string)($this->pix_copia_cola ?? ''),
+			'ultima_alteracao' => date('Y-m-d H:i:s'),
+		]);
+	}
 
-    // Atualiza os dados no banco de dados
-    return (new Database('caixa'))->update("txt_id = '{$this->txt_id}'", [
-        'valor_pago' => $this->valor_pago,
-        'status' => 1,
-        'id_usuario' => 0,
-        'tipo_pagamento' => 'QrCode',
-        'data_pagamento' => $this->data_pagamento,
-        'ultima_alteracao' => $this->ultima_alteracao
-    ]);
-}
+	// DA BAIXA VIA API (webhook PIX)
+	public function baixaViaApi() {
+		if (!isset($this->txt_id) || !isset($this->valor_pago) || !isset($this->data_pagamento) || !isset($this->ultima_alteracao)) {
+			throw new \Exception('Dados incompletos para a baixa via API');
+		}
+
+		$txtId = preg_replace('/[^a-zA-Z0-9_-]/', '', (string)$this->txt_id);
+		if ($txtId === '') {
+			throw new \Exception('txt_id inválido');
+		}
+
+		$where = "txt_id = '".$txtId."'";
+		$idAdmin = (int)($this->id_admin ?? 0);
+		if ($idAdmin > 0) {
+			$where .= ' AND id_admin = '.$idAdmin;
+		}
+		if (!empty($this->id)) {
+			$where = 'id = '.(int)$this->id.($idAdmin > 0 ? ' AND id_admin = '.$idAdmin : '');
+		}
+
+		return (new Database('caixa'))->update($where, [
+			'valor_pago' => $this->valor_pago,
+			'status' => 1,
+			'id_usuario' => 0,
+			'tipo_pagamento' => 'Pix',
+			'data_pagamento' => $this->data_pagamento,
+			'ultima_alteracao' => $this->ultima_alteracao,
+			'txt_id' => $txtId,
+		]);
+	}
 
 
 

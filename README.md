@@ -12,7 +12,7 @@ Sistema de gestão escolar multi-tenant (PHP MVC) para escolas de informática /
 | Área | Funcionalidades |
 |------|-----------------|
 | **Pedagógico** | Alunos, responsáveis, trilhas/cursos, matrículas, certificados |
-| **Financeiro** | Entrada/saída de caixa, carnês, carrinho de pagamento, relatórios, Pix Banco Inter |
+| **Financeiro** | Entrada/saída de caixa, carnês, carrinho de pagamento, relatórios, PIX Mercado Pago |
 | **CRM** | Leads (Kanban), funis, tarefas (Trello-like), histórico |
 | **Agenda** | Laboratórios, horários, agendamentos, diário de presença |
 | **Comunicação** | SMTP por escola, campanhas de e-mail, cobrança automática de mensalidades |

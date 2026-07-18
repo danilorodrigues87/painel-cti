@@ -13,6 +13,7 @@ use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\ModuleGateHelper;
 use \App\Common\Helpers\BrandingHelper;
 use \App\Common\Helpers\ContratoTemplateHelper;
 use \App\Model\Entity\EscolasAssinantes;
@@ -89,6 +90,8 @@ class Matriculas extends Page{
 		//RESULTADOS DA PAGINA
 		$results = EntityMatri::getMatriculas($where, 'id DESC', $obPagination->getLimit()); 
 
+		$temContrato = in_array('contratos', ModuleGateHelper::getSlugsEscola((int)$id_admin), true);
+
 		//REDERIZA O ITEM
 		while ($dados = $results->fetchObject(EntityMatri::class)) {
 			$dadosUser = (array) EntityUser::getUserById($dados->id_aluno);
@@ -126,10 +129,10 @@ class Matriculas extends Page{
         <i class="far fa-edit fa-lg"></i>
         </button>
         <ul class="dropdown-menu">
-        <li>
+        '.($temContrato ? '<li>
         <a class="dropdown-item" target="_blank" href="'.URL.'/painel/matricula/'.$dados->id.'" >
         <i class="fa-regular fa-paste fa-lg"></i> Ver Contrato</a>
-        </li>
+        </li>' : '').'
         <li>
         <a class="dropdown-item disabled" href="#" onclick="list_itens('.$dados->id.', \'editar\')">
         <i class="far fa-edit fa-lg"></i> Editar</a>
@@ -373,8 +376,11 @@ $form = '<form id="form" method="post">
 <label>Tipo Parcelamento</label>
 <select class="form-control" name="tipo_parcelamento">
 <option ' . (isset($dados['tipo_parcelamento']) && $dados['tipo_parcelamento'] == 'Carnê Simples' ? 'selected' : '') . ' value="Carnê Simples">Carnê Simples</option>
-<option ' . (isset($dados['tipo_parcelamento']) && $dados['tipo_parcelamento'] == 'Carnê com Pix' ? 'selected' : '') . ' value="Carnê com Pix">Carnê com Pix</option>
+'.(\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin) ? '
+<option ' . (isset($dados['tipo_parcelamento']) && $dados['tipo_parcelamento'] == 'Carnê com Pix' ? 'selected' : '') . ' value="Carnê com Pix">Carnê com Pix (Mercado Pago)</option>
+' : '').'
 </select>
+'.(!\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin) ? '<div class="form-text">PIX indisponível: configure em Configurações → Pagamentos.</div>' : '').'
 </div>
 </div>
 
@@ -436,7 +442,8 @@ $resposta = [
  $primeiro_mes = filter_var($postVars['primeiromes'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $primeiro_ano = filter_var($postVars['primeiroano'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $tipo_parcelamento = trim(strip_tags((string)($postVars['tipo_parcelamento'] ?? 'Carnê Simples')));
- if ($tipo_parcelamento !== 'Carnê com Pix') {
+ if ($tipo_parcelamento !== 'Carnê com Pix'
+ 	|| !\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin)) {
    $tipo_parcelamento = 'Carnê Simples';
  }
 
@@ -558,14 +565,43 @@ public static function verContrato($request,$id){
   $id = (int)$id;
   $id_admin = (int)$userLogedData['usuario']['id_admin'];
 
+  if (!in_array('contratos', ModuleGateHelper::getSlugsEscola($id_admin), true)) {
+    return 'Contrato não disponível para esta escola.';
+  }
+
   if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
     return 'Matrícula não encontrada.';
   }
 
-  $cidade = EstadoCidades::getCidades('id = ' . $userLogedData['escola']['cidade'])->fetchObject();
-  $estado = EstadoCidades::getEstados('id = ' . $userLogedData['escola']['estado'])->fetchObject();
-
-  $endereco_escola = $userLogedData['escola']['endereco'].', '.$userLogedData['escola']['numero'].' '.$userLogedData['escola']['bairro'].' '.$cidade->nome.'/'.$estado->sigla;
+  $cidadeId = (int)($userLogedData['escola']['cidade'] ?? 0);
+  $estadoId = (int)($userLogedData['escola']['estado'] ?? 0);
+  $cidadeNome = '';
+  $estadoSigla = '';
+  if ($cidadeId > 0) {
+    $cidade = EstadoCidades::getCidades('id = '.$cidadeId)->fetchObject();
+    if (is_object($cidade)) {
+      $cidadeNome = (string)($cidade->nome ?? '');
+    }
+  }
+  if ($estadoId > 0) {
+    $estado = EstadoCidades::getEstados('id = '.$estadoId)->fetchObject();
+    if (is_object($estado)) {
+      $estadoSigla = (string)($estado->sigla ?? '');
+    }
+  }
+  $cidadeUf = trim($cidadeNome.($estadoSigla !== '' ? '/'.$estadoSigla : ''));
+  $partesEndEscola = [];
+  foreach ([
+    trim((string)($userLogedData['escola']['endereco'] ?? '')),
+    trim((string)($userLogedData['escola']['numero'] ?? '')),
+    trim((string)($userLogedData['escola']['bairro'] ?? '')),
+    $cidadeUf,
+  ] as $parte) {
+    if ($parte !== '') {
+      $partesEndEscola[] = $parte;
+    }
+  }
+  $endereco_escola = $partesEndEscola ? implode(', ', $partesEndEscola) : 'endereço não informado';
 
   $categoria1 = 2; // PROFISSIONALIZANTES
   $categoria2 = 7; // MUSICA
@@ -729,7 +765,8 @@ $ano_contrato = DateTimeHelper::extraiAno($dados['inicio']);
 $mes_semZeroInicio = ltrim (DateTimeHelper::extraiMes($dados['inicio']), '0');
 $mes_contrato = DateTimeHelper::imprimeMes($mes_semZeroInicio);
 
-$data_contrato = '<p style="text-align: right;"><b>'.$cidade->nome.'/'.$estado->sigla.'</b> dia '.$dia_contrato. ' de '.$mes_contrato.' de '.$ano_contrato.'</p><br>';
+$localContrato = $cidadeUf !== '' ? $cidadeUf : 'Local';
+$data_contrato = '<p style="text-align: right;"><b>'.$localContrato.'</b> dia '.$dia_contrato. ' de '.$mes_contrato.' de '.$ano_contrato.'</p><br>';
 
 $escolaEnt = EscolasAssinantes::getEscolaById($id_admin);
 if (!$escolaEnt instanceof EscolasAssinantes) {

@@ -41,10 +41,44 @@ class TermosDeUso extends Page{
 
 		$checkDisabled = ($termosAceito) ? 'checked disabled' : '';
 
-		$cidade = EstadoCidades::getCidades('id = ' . $userLogedData['escola']['cidade'])->fetchObject();
-		$estado = EstadoCidades::getEstados('id = ' . $userLogedData['escola']['estado'])->fetchObject();
+		// Preferência: endereço do usuário; se vazio, usa cidade/UF da escola
+		$cidadeId = (int)($dadosUser['cidade'] ?? 0);
+		$estadoId = (int)($dadosUser['uf'] ?? 0);
+		if ($cidadeId <= 0) {
+			$cidadeId = (int)($dadosEscola['cidade'] ?? 0);
+		}
+		if ($estadoId <= 0) {
+			$estadoId = (int)($dadosEscola['estado'] ?? 0);
+		}
 
-		$enderecoUser = $dadosUser['endereco'].', '.$dadosUser['numero'].' '.$dadosUser['bairro'].' '.$cidade->nome.'/'.$estado->sigla;
+		$cidadeNome = '';
+		$estadoSigla = '';
+		if ($cidadeId > 0) {
+			$cidade = EstadoCidades::getCidades('id = '.$cidadeId)->fetchObject();
+			if (is_object($cidade)) {
+				$cidadeNome = (string)($cidade->nome ?? '');
+			}
+		}
+		if ($estadoId > 0) {
+			$estado = EstadoCidades::getEstados('id = '.$estadoId)->fetchObject();
+			if (is_object($estado)) {
+				$estadoSigla = (string)($estado->sigla ?? '');
+			}
+		}
+
+		$cidadeUf = trim($cidadeNome.($estadoSigla !== '' ? '/'.$estadoSigla : ''));
+		$partesEndereco = [];
+		foreach ([
+			trim((string)($dadosUser['endereco'] ?? '')),
+			trim((string)($dadosUser['numero'] ?? '')),
+			trim((string)($dadosUser['bairro'] ?? '')),
+			$cidadeUf,
+		] as $parte) {
+			if ($parte !== '') {
+				$partesEndereco[] = $parte;
+			}
+		}
+		$enderecoUser = $partesEndereco ? implode(', ', $partesEndereco) : 'endereço não informado';
 
 
 		$declaracao = 'Declaro estar ciente e concordar com os termos deste documento, assumindo total responsabilidade pelo uso adequado dos dados dos clientes da escola <b>'.$dadosEscola['nome'].'.</b>';

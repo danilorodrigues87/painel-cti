@@ -109,8 +109,13 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 ### 5.2 Financeiro
 - `caixa` — títulos de entrada/saída; carnê gera parcelas com `status` `Em aberto` / pago (`0`/`1` misturado no legado — tratar ambos)
 - Carnês ligados a `matriculas` via `caixa.id_ref`
-- Carrinho de pagamento + recibos
-- Gateway Banco Inter (Pix) em `app/Common/Gateways/BancoInter/`
+- Carrinho de pagamento + recibos (baixa manual dinheiro/cartão)
+- Gateway **Mercado Pago** (PIX QR no carnê) em `app/Common/Gateways/MercadoPago/`
+  - Credenciais por escola: `escola_integracoes` (`mp_*`) + tela `/painel/config/pagamentos`
+  - Webhook: `POST /webhook/mercadopago/{idAdmin}/{token}` → baixa automática
+  - SQL: `database/escola_integracoes_mercadopago.sql`
+  - Sem MP ativo: matrícula só oferece **Carnê Simples**
+  - Interface `PixGatewayInterface` para próximos bancos
 
 ### 5.3 CRM
 - `crm_leads` Kanban, funis, histórico, importação planilha
@@ -407,11 +412,12 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | Branding CTI UI + logo escola em impressos + rodapé | Feito (Fase A) |
 | WA a partir de aluno/resp/lead + observações aluno + campanhas grupo recorrentes | Feito (Fase B) |
 | Modelo de contrato por escola + frase certificado | Feito (Fase C) — SQL `database/escolas_modelo_contrato.sql` |
+| Carnê PIX Mercado Pago (credenciais escola + webhook + carnê simples/PIX) | Feito (Fase D–E base) — SQL `database/escola_integracoes_mercadopago.sql` |
 
 ### Próximo (ordem recomendada)
 | Fase | Escopo | Notas |
 |------|--------|-------|
-| **Fase D–E** | Carnê multi-gateway + reforço segurança financeira | |
+| **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 5** | Automações CRM (mensagem ao mudar status do lead) | |
 | **Painel Master (fase 2)** | Planos comerciais, cobrança de assinatura, dashboard SaaS | |

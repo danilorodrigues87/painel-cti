@@ -5,8 +5,7 @@ use App\Model\Db\Database;
 use App\Model\Entity\Caixa;
 use App\Model\Entity\User as EntityUser;
 use \App\Model\Entity\Responsaveis as EntityRes;
-use App\Common\Gateways\BancoInter\Authentication;
-use App\Common\Gateways\BancoInter\Pix;
+use App\Common\Helpers\MercadoPagoEscolaHelper;
 
 class Matriculas{
 
@@ -83,19 +82,9 @@ class Matriculas{
 			$desconto = 0;
 		}
 
-		$pixCopiaECola='';
-		$txtId='';
-
-
-		$accessToken=null;
-		if($this->tipo_parcelamento == 'Carnê com Pix'){
-
-			$accessToken = Authentication::getAccessToken();
-
-		}
-
-		//$accessToken = '09c35a91-74a7-48a6-98c2-4c3bae5904ab';
-
+		$gerarPix = ($this->tipo_parcelamento === 'Carnê com Pix')
+			&& MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$this->id_admin);
+		$pixGateway = $gerarPix ? MercadoPagoEscolaHelper::pixDaEscola((int)$this->id_admin) : null;
 
 		$count = 1;
 		$ano_vence = $this->primeiro_ano;
@@ -113,59 +102,8 @@ class Matriculas{
 			$vencimento = date("Y-m-d", strtotime($ano_vence.'/'.$mes_vence.'/'.$this->dia_vencimento));
 			$descricao = 'Cód '.$this->id.' '.$dadosAluno['nome'].' parc '.$count.'/'.$this->qtd_parcelas;
 
-			$cpfPagador = preg_replace('/\D/', '', (string)($dadosPagador['cpf'] ?? ''));
-
-
-			if($this->tipo_parcelamento == 'Carnê com Pix'){
-
-				if ($cpfPagador === '' || empty($dadosPagador['nome'])) {
-					$pixCopiaECola = '';
-					$txtId = '';
-				} else {
-				$txtId = bin2hex(random_bytes(16));
-				$chavePix = 'ea01c8b0-dc2f-40b9-961a-98f08a330a42';
-
-
-			        // Dados do Pix
-				$data = [
-					"calendario" => [
-						"dataDeVencimento" => $vencimento,
-						"validadeAposVencimento" => 30
-					],
-					"devedor" => [
-						"cpf" => $cpfPagador,
-						"nome" => $dadosPagador['nome']
-					],
-					"valor" => [
-						"original" => number_format($this->valor, 2, '.', ''),
-						"multa" => [
-							"modalidade" => "2",
-							"valorPerc" => "10.00"
-						],
-						"juros" => [
-							"modalidade" => "2",
-							"valorPerc" => "2.00"
-						],
-						"desconto" => [
-							"modalidade" => "2",
-							"descontoDataFixa" => [
-								[
-									"data" => $vencimento,
-									"valorPerc" => "0.00"
-								]
-							]
-						]
-					],
-					"chave" => $chavePix,
-					"solicitacaoPagador" => "Mensalidade Curso"
-				];
-
-
-				$pixCopiaECola = Pix::pixComVencimento($accessToken,$data, $txtId);
-				}
-			}
-
-			
+			$pixCopiaECola = '';
+			$txtId = '';
 
 			//NOVA INSTANCIA
 			$obCaixa = new Caixa;
@@ -179,9 +117,27 @@ class Matriculas{
 			$obCaixa->status = 'Em aberto';
 			$obCaixa->tipo_pagamento = '';
 			$obCaixa->valor_pago = 0;
-			$obCaixa->txt_id = $txtId;
-			$obCaixa->pix_copia_cola = $pixCopiaECola;
+			$obCaixa->txt_id = '';
+			$obCaixa->pix_copia_cola = '';
 			$obCaixa->lancarMovimentacao();
+
+			if ($pixGateway && !empty($obCaixa->id)) {
+				$emailPagador = trim((string)($dadosPagador['email'] ?? ''));
+				$pix = $pixGateway->criarCobrancaPix([
+					'valor'               => $this->valor,
+					'descricao'           => $descricao,
+					'vencimento'          => $vencimento,
+					'external_reference'  => (int)$this->id_admin.':'.(int)$obCaixa->id,
+					'pagador_nome'        => (string)($dadosPagador['nome'] ?? ''),
+					'pagador_cpf'         => (string)($dadosPagador['cpf'] ?? ''),
+					'pagador_email'       => $emailPagador,
+				]);
+				if (is_array($pix) && !empty($pix['id']) && !empty($pix['copia_cola'])) {
+					$obCaixa->txt_id = $pix['id'];
+					$obCaixa->pix_copia_cola = $pix['copia_cola'];
+					$obCaixa->atualizarPix();
+				}
+			}
 
 			$count++;
 		}
@@ -295,8 +251,5 @@ class Matriculas{
 			$group
 		);
 	}
-
-
-
 
 }

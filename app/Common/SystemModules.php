@@ -21,10 +21,11 @@ class SystemModules {
 		'certificacoes'   => 'Certificações',
 		'alunos'          => 'Alunos',
 		'matriculas'      => 'Matriculas',
-		'contratos'       => 'Contratos',
+		'contratos'       => 'Modelo de contrato',
 		'entrada'         => 'Entrada',
 		'saida'           => 'Saída',
 		'carnes'          => 'Carnês',
+		'pagamentos'      => 'Pagamentos',
 		'vendas'          => 'Vendas',
 		'recorrente'      => 'Recorrente',
 		'relatorios'      => 'Relatórios',
@@ -38,6 +39,7 @@ class SystemModules {
 	/** Labels legados aceitos na leitura de usuarios.acesso */
 	private static $labelAliases = [
 		'Laboratório' => 'Agendamentos',
+		'Contratos'   => 'Modelo de contrato',
 	];
 
 	public static function getCatalog(): array {
@@ -246,6 +248,10 @@ class SystemModules {
 					[
 						'label' => 'Comunicação',
 						'link' => URL.'/painel/config/comunicacao'
+					],
+					[
+						'label' => 'Pagamentos',
+						'link' => URL.'/painel/config/pagamentos'
 					],
 					[
 						'label' => 'Modelo de contrato',

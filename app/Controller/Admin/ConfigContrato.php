@@ -5,14 +5,22 @@ namespace App\Controller\Admin;
 use App\Utils\View;
 use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
+use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\ContratoTemplateHelper;
 use App\Model\Entity\EscolasAssinantes;
 
 class ConfigContrato extends Page {
 
-	private static function assertDiretor($request, bool $api = false): bool {
+	private static function assertAcesso($request, bool $api = false): bool {
 		$user = SessionUser::getUserLogedData();
 		if (($user['usuario']['nivel'] ?? '') !== 'Diretor') {
+			if (!$api) {
+				$request->getRouter()->redirect('/painel');
+			}
+			return false;
+		}
+		$idAdmin = (int)($user['usuario']['id_admin'] ?? 0);
+		if (!in_array('contratos', ModuleGateHelper::getSlugsEscola($idAdmin), true)) {
 			if (!$api) {
 				$request->getRouter()->redirect('/painel');
 			}
@@ -22,7 +30,7 @@ class ConfigContrato extends Page {
 	}
 
 	public static function index($request) {
-		if (!self::assertDiretor($request)) {
+		if (!self::assertAcesso($request)) {
 			return '';
 		}
 		$content = View::render('admin/modules/config/contrato', []);
@@ -30,7 +38,7 @@ class ConfigContrato extends Page {
 	}
 
 	public static function getInfo($request) {
-		if (!self::assertDiretor($request, true)) {
+		if (!self::assertAcesso($request, true)) {
 			return json_encode(['success' => false, 'message' => 'Acesso negado.']);
 		}
 

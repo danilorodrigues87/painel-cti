@@ -191,7 +191,15 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			$allPermittedModules[] = 'Comunicação';
 			$allPermittedModules[] = 'Campanhas';
 			$allPermittedModules[] = 'WhatsApp';
-			$allPermittedModules[] = 'Modelo de contrato';
+			$idAdminGate = (int)($userLogedData['usuario']['id_admin'] ?? 0);
+			$slugsEscola = ModuleGateHelper::getSlugsEscola($idAdminGate);
+			// Modelo de contrato / Pagamentos: só se o plano/escola liberar
+			if (in_array('contratos', $slugsEscola, true)) {
+				$allPermittedModules[] = 'Modelo de contrato';
+			}
+			if (in_array('pagamentos', $slugsEscola, true)) {
+				$allPermittedModules[] = 'Pagamentos';
+			}
 		}
 
 		$temAcesso = in_array($currentModule, $allPermittedModules);

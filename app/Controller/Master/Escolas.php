@@ -6,6 +6,7 @@ use App\Utils\View;
 use App\Common\SystemModules;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Model\Entity\EscolasAssinantes;
+use App\Model\Entity\EstadoCidades;
 use App\Model\Entity\PlanosAssinatura;
 use App\Model\Entity\User as EntityUser;
 use App\Session\User\Login as SessionUser;
@@ -17,6 +18,7 @@ class Escolas extends Page {
 		$content = View::render('master/modules/escolas/index', [
 			'modulos_json' => json_encode(self::catalogoModulos(), JSON_UNESCAPED_UNICODE),
 			'planos_json'  => json_encode(Planos::listarAtivosResumo(), JSON_UNESCAPED_UNICODE),
+			'estados_json' => json_encode(self::listarEstados(), JSON_UNESCAPED_UNICODE),
 			'tem_plan_id'  => EscolasAssinantes::temColunaPlanId() ? '1' : '0',
 			'tem_modelo_cert' => EscolasAssinantes::temColunaModeloCertificado() ? '1' : '0',
 			'modelo_cert_padrao_json' => json_encode(BrandingHelper::urlModeloCertPadrao(), JSON_UNESCAPED_SLASHES),
@@ -35,6 +37,8 @@ class Escolas extends Page {
 				return self::detalhes($post);
 			case 'salvar':
 				return self::salvar($post, $request->getFileVars());
+			case 'cidades':
+				return self::cidades($post);
 			case 'toggle_ativo':
 				return self::toggleAtivo($post);
 			case 'reset_diretor':
@@ -76,113 +80,121 @@ class Escolas extends Page {
 	}
 
 	private static function salvar(array $post, array $files = []): string {
-		$id = (int)($post['id'] ?? 0);
-		$nome = trim((string)($post['nome'] ?? ''));
-		$email = trim((string)($post['email'] ?? ''));
-		$telefone = trim((string)($post['telefone'] ?? ''));
-		$cpfCnpj = trim((string)($post['cpf_cnpj'] ?? ''));
-		$ativo = !empty($post['ativo']) ? 's' : 'n';
-		$diretorNome = trim((string)($post['diretor_nome'] ?? ''));
-		$diretorEmail = trim((string)($post['diretor_email'] ?? ''));
-		$planId = (int)($post['plan_id'] ?? 0);
+		try {
+			$id = (int)($post['id'] ?? 0);
+			$nome = trim((string)($post['nome'] ?? ''));
+			$email = trim((string)($post['email'] ?? ''));
+			$telefone = trim((string)($post['telefone'] ?? ''));
+			$cpfCnpj = trim((string)($post['cpf_cnpj'] ?? ''));
+			$ativo = !empty($post['ativo']) ? 's' : 'n';
+			$diretorNome = trim((string)($post['diretor_nome'] ?? ''));
+			$diretorEmail = trim((string)($post['diretor_email'] ?? ''));
+			$planId = (int)($post['plan_id'] ?? 0);
 
-		if ($nome === '') {
-			return json_encode(['success' => false, 'message' => 'Informe o nome da escola.']);
-		}
-
-		[$modulosJson, $planIdSalvar, $erroMods] = self::resolverModulosEPlano($post, $planId);
-		if ($erroMods !== null) {
-			return json_encode(['success' => false, 'message' => $erroMods]);
-		}
-
-		if ($id > 0) {
-			$ob = EscolasAssinantes::getEscolaById($id);
-			if (!$ob instanceof EscolasAssinantes) {
-				return json_encode(['success' => false, 'message' => 'Escola não encontrada.']);
+			if ($nome === '') {
+				return json_encode(['success' => false, 'message' => 'Informe o nome da escola.']);
 			}
-			self::preencherDadosEscola($ob, $post, $nome, $email, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
-			$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, $ob->logo ?? null);
+
+			[$modulosJson, $planIdSalvar, $erroMods] = self::resolverModulosEPlano($post, $planId);
+			if ($erroMods !== null) {
+				return json_encode(['success' => false, 'message' => $erroMods]);
+			}
+
+			if ($id > 0) {
+				$ob = EscolasAssinantes::getEscolaById($id);
+				if (!$ob instanceof EscolasAssinantes) {
+					return json_encode(['success' => false, 'message' => 'Escola não encontrada.']);
+				}
+				self::preencherDadosEscola($ob, $post, $nome, $email, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
+				$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, $ob->logo ?? null) ?: '';
+				if (EscolasAssinantes::temColunaModeloCertificado()) {
+					$ob->modelo_certificado = BrandingHelper::processarUploadModeloCertificado(
+						$files['modelo_certificado'] ?? null,
+						$ob->modelo_certificado ?? null
+					);
+				}
+				$ob->id_admin = (int)$ob->id;
+				$ob->atualizar();
+				ModuleGateHelper::limparCache((int)$ob->id);
+
+				return json_encode([
+					'success' => true,
+					'message' => 'Escola atualizada.',
+					'escola'  => self::formatar($ob, true),
+				]);
+			}
+
+			if ($diretorNome === '' || $diretorEmail === '') {
+				return json_encode(['success' => false, 'message' => 'Informe nome e e-mail do Diretor da escola.']);
+			}
+			if (!filter_var($diretorEmail, FILTER_VALIDATE_EMAIL)) {
+				return json_encode(['success' => false, 'message' => 'E-mail do Diretor inválido.']);
+			}
+			if (EntityUser::getUserByEmail($diretorEmail) instanceof EntityUser) {
+				return json_encode(['success' => false, 'message' => 'Este e-mail do Diretor já está cadastrado.']);
+			}
+
+			$ob = new EscolasAssinantes;
+			self::preencherDadosEscola($ob, $post, $nome, $email !== '' ? $email : $diretorEmail, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
+			$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, null) ?: '';
 			if (EscolasAssinantes::temColunaModeloCertificado()) {
 				$ob->modelo_certificado = BrandingHelper::processarUploadModeloCertificado(
 					$files['modelo_certificado'] ?? null,
-					$ob->modelo_certificado ?? null
+					null
 				);
 			}
-			$ob->id_admin = (int)$ob->id;
-			$ob->atualizar();
+			$ob->instagram = null;
+			$ob->youtube = null;
+			$ob->id_admin = 0;
+			$ob->cadastrar();
+
+			if ((int)$ob->id <= 0) {
+				return json_encode(['success' => false, 'message' => 'Falha ao criar a escola.']);
+			}
+
 			ModuleGateHelper::limparCache((int)$ob->id);
+
+			$senhaTemp = self::gerarSenhaTemporaria();
+			$labelsAcesso = ($modulosJson === null)
+				? SystemModules::getPermissions()
+				: SystemModules::slugsParaLabels(json_decode($modulosJson, true) ?: []);
+
+			$diretor = new EntityUser;
+			$diretor->nome = $diretorNome;
+			$diretor->email = $diretorEmail;
+			$diretor->nivel = 'Diretor';
+			$diretor->senha = password_hash($senhaTemp, PASSWORD_DEFAULT);
+			$diretor->id_responsavel = 0;
+			$diretor->whatsapp = $telefone !== '' ? $telefone : '';
+			$diretor->rg = '';
+			$diretor->cpf = '';
+			$diretor->nascimento = null;
+			$diretor->endereco = (string)($ob->endereco ?? '');
+			$diretor->numero = (string)($ob->numero ?? '');
+			$diretor->bairro = (string)($ob->bairro ?? '');
+			$diretor->uf = (int)($ob->estado ?: 0);
+			$diretor->cidade = (int)($ob->cidade ?: 0);
+			$diretor->ativo = 's';
+			$diretor->acesso = json_encode(array_values($labelsAcesso), JSON_UNESCAPED_UNICODE);
+			$diretor->id_admin = (int)$ob->id;
+			$diretor->cadastrar();
 
 			return json_encode([
 				'success' => true,
-				'message' => 'Escola atualizada.',
+				'message' => 'Escola criada com sucesso.',
 				'escola'  => self::formatar($ob, true),
+				'diretor' => [
+					'nome'  => $diretorNome,
+					'email' => $diretorEmail,
+					'senha' => $senhaTemp,
+				],
+			]);
+		} catch (\Throwable $e) {
+			return json_encode([
+				'success' => false,
+				'message' => 'Erro ao salvar escola: '.$e->getMessage(),
 			]);
 		}
-
-		if ($diretorNome === '' || $diretorEmail === '') {
-			return json_encode(['success' => false, 'message' => 'Informe nome e e-mail do Diretor da escola.']);
-		}
-		if (!filter_var($diretorEmail, FILTER_VALIDATE_EMAIL)) {
-			return json_encode(['success' => false, 'message' => 'E-mail do Diretor inválido.']);
-		}
-		if (EntityUser::getUserByEmail($diretorEmail) instanceof EntityUser) {
-			return json_encode(['success' => false, 'message' => 'Este e-mail do Diretor já está cadastrado.']);
-		}
-
-		$ob = new EscolasAssinantes;
-		self::preencherDadosEscola($ob, $post, $nome, $email !== '' ? $email : $diretorEmail, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
-		$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, null);
-		if (EscolasAssinantes::temColunaModeloCertificado()) {
-			$ob->modelo_certificado = BrandingHelper::processarUploadModeloCertificado(
-				$files['modelo_certificado'] ?? null,
-				null
-			);
-		}
-		$ob->instagram = null;
-		$ob->youtube = null;
-		$ob->id_admin = 0;
-		$ob->cadastrar();
-
-		if ((int)$ob->id <= 0) {
-			return json_encode(['success' => false, 'message' => 'Falha ao criar a escola.']);
-		}
-
-		ModuleGateHelper::limparCache((int)$ob->id);
-
-		$senhaTemp = self::gerarSenhaTemporaria();
-		$labelsAcesso = ($modulosJson === null)
-			? SystemModules::getPermissions()
-			: SystemModules::slugsParaLabels(json_decode($modulosJson, true) ?: []);
-
-		$diretor = new EntityUser;
-		$diretor->nome = $diretorNome;
-		$diretor->email = $diretorEmail;
-		$diretor->nivel = 'Diretor';
-		$diretor->senha = password_hash($senhaTemp, PASSWORD_DEFAULT);
-		$diretor->whatsapp = $telefone;
-		$diretor->rg = '';
-		$diretor->cpf = '';
-		$diretor->nascimento = '';
-		$diretor->endereco = $ob->endereco ?? '';
-		$diretor->numero = $ob->numero ?? '';
-		$diretor->bairro = $ob->bairro ?? '';
-		$diretor->uf = $ob->estado ?? '';
-		$diretor->cidade = $ob->cidade ?? '';
-		$diretor->ativo = 's';
-		$diretor->acesso = json_encode(array_values($labelsAcesso), JSON_UNESCAPED_UNICODE);
-		$diretor->id_admin = (int)$ob->id;
-		$diretor->cadastrar();
-
-		return json_encode([
-			'success' => true,
-			'message' => 'Escola criada com sucesso.',
-			'escola'  => self::formatar($ob, true),
-			'diretor' => [
-				'nome'  => $diretorNome,
-				'email' => $diretorEmail,
-				'senha' => $senhaTemp,
-			],
-		]);
 	}
 
 	private static function preencherDadosEscola(
@@ -197,19 +209,48 @@ class Escolas extends Page {
 		$planIdSalvar
 	): void {
 		$ob->nome = $nome;
-		$ob->email = $email !== '' ? $email : null;
-		$ob->telefone = $telefone !== '' ? $telefone : null;
-		$ob->cpf_cnpj = $cpfCnpj !== '' ? $cpfCnpj : null;
-		$ob->site = trim((string)($post['site'] ?? '')) ?: null;
-		$ob->endereco = trim((string)($post['endereco'] ?? '')) ?: null;
-		$ob->numero = trim((string)($post['numero'] ?? '')) ?: null;
-		$ob->bairro = trim((string)($post['bairro'] ?? '')) ?: null;
-		$ob->cidade = trim((string)($post['cidade'] ?? '')) ?: null;
-		$ob->estado = trim((string)($post['estado'] ?? '')) ?: null;
-		$ob->cep = trim((string)($post['cep'] ?? '')) ?: null;
+		$ob->email = $email;
+		$ob->telefone = $telefone;
+		$ob->cpf_cnpj = $cpfCnpj;
+		$ob->site = trim((string)($post['site'] ?? ''));
+		$ob->endereco = trim((string)($post['endereco'] ?? ''));
+		$ob->numero = trim((string)($post['numero'] ?? ''));
+		$ob->bairro = trim((string)($post['bairro'] ?? ''));
+		$ob->cidade = (int)($post['cidade'] ?? 0);
+		$ob->estado = (int)($post['estado'] ?? 0);
+		$ob->cep = trim((string)($post['cep'] ?? ''));
 		$ob->ativo = $ativo;
 		$ob->modulos_liberados = $modulosJson;
 		$ob->plan_id = $planIdSalvar;
+	}
+
+	/** @return array<int, array{id:int,nome:string,sigla:string}> */
+	private static function listarEstados(): array {
+		$out = [];
+		$results = EstadoCidades::getEstados(null, 'nome ASC');
+		while ($e = $results->fetchObject()) {
+			$out[] = [
+				'id'    => (int)$e->id,
+				'nome'  => (string)$e->nome,
+				'sigla' => (string)($e->sigla ?? ''),
+			];
+		}
+		return $out;
+	}
+
+	private static function cidades(array $post): string {
+		$estadoId = (int)($post['estado'] ?? 0);
+		$lista = [];
+		if ($estadoId > 0) {
+			$results = EstadoCidades::getCidades('estados_id = '.$estadoId, 'nome ASC');
+			while ($c = $results->fetchObject()) {
+				$lista[] = [
+					'id'   => (int)$c->id,
+					'nome' => (string)$c->nome,
+				];
+			}
+		}
+		return json_encode(['success' => true, 'cidades' => $lista], JSON_UNESCAPED_UNICODE);
 	}
 
 	/**

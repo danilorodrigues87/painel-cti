@@ -54,6 +54,10 @@ class EscolaIntegracoes {
 	public $whatsapp_msg_fora;
 	/** Quando true, o salvar() também grava campos Evolution/WhatsApp. */
 	public $touchEvolution = false;
+	public $mp_ativo = 0;
+	public $mp_access_token;
+	public $mp_webhook_secret;
+	public $mp_webhook_token;
 	public $updated_at;
 
 	public static function temColunasCobranca(): bool {
@@ -176,6 +180,26 @@ class EscolaIntegracoes {
 		return $cache;
 	}
 
+	public static function temColunasMercadoPago(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'mp_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
 	public static function tabelaExiste(): bool {
 		try {
 			$host = getenv('DB_HOST');
@@ -208,6 +232,102 @@ class EscolaIntegracoes {
 
 	public function getSenhaDescriptografada(): ?string {
 		return CryptoHelper::decrypt($this->smtp_pass ?? null);
+	}
+
+	public function getMpAccessTokenDescriptografado(): ?string {
+		return CryptoHelper::decrypt($this->mp_access_token ?? null);
+	}
+
+	public function getMpWebhookSecretDescriptografado(): ?string {
+		return CryptoHelper::decrypt($this->mp_webhook_secret ?? null);
+	}
+
+	public function temMercadoPagoAtivo(): bool {
+		return self::temColunasMercadoPago()
+			&& (int)$this->mp_ativo === 1
+			&& !empty($this->getMpAccessTokenDescriptografado());
+	}
+
+	/** Garante linha + token de webhook. */
+	public static function garantirRegistroMp(int $idAdmin): ?self {
+		if (!self::temColunasMercadoPago() || $idAdmin <= 0) {
+			return null;
+		}
+		$cfg = self::getByIdAdmin($idAdmin);
+		if (!$cfg instanceof self) {
+			$cfg = new self;
+			$cfg->id_admin = $idAdmin;
+			$cfg->mp_ativo = 0;
+			$cfg->mp_webhook_token = bin2hex(random_bytes(24));
+			if (!$cfg->salvarMercadoPago(null, null)) {
+				return null;
+			}
+			$cfg = self::getByIdAdmin($idAdmin);
+		}
+		if ($cfg instanceof self && empty($cfg->mp_webhook_token)) {
+			$cfg->mp_webhook_token = bin2hex(random_bytes(24));
+			$cfg->salvarMercadoPago(null, null);
+			$cfg = self::getByIdAdmin($idAdmin);
+		}
+		return $cfg instanceof self ? $cfg : null;
+	}
+
+	/**
+	 * Atualiza só campos Mercado Pago.
+	 * @param ?string $accessTokenNovo null = manter; string = criptografar e gravar
+	 * @param ?string $webhookSecretNovo null = manter
+	 */
+	public function salvarMercadoPago(?string $accessTokenNovo, ?string $webhookSecretNovo): bool {
+		self::$ultimoErro = null;
+		if (!self::temColunasMercadoPago()) {
+			self::$ultimoErro = 'Colunas do Mercado Pago ausentes.';
+			return false;
+		}
+
+		$dados = [
+			'mp_ativo' => (int)$this->mp_ativo,
+		];
+		if (!empty($this->mp_webhook_token)) {
+			$dados['mp_webhook_token'] = $this->mp_webhook_token;
+		}
+
+		if ($accessTokenNovo !== null && $accessTokenNovo !== '') {
+			$cript = CryptoHelper::encrypt($accessTokenNovo);
+			if ($cript === null) {
+				self::$ultimoErro = 'Não foi possível criptografar o Access Token.';
+				return false;
+			}
+			$dados['mp_access_token'] = $cript;
+		}
+
+		if ($webhookSecretNovo !== null && $webhookSecretNovo !== '') {
+			$cript = CryptoHelper::encrypt($webhookSecretNovo);
+			if ($cript === null) {
+				self::$ultimoErro = 'Não foi possível criptografar o webhook secret.';
+				return false;
+			}
+			$dados['mp_webhook_secret'] = $cript;
+		}
+
+		$existente = self::getByIdAdmin((int)$this->id_admin);
+		$db = new Database('escola_integracoes');
+
+		if ($existente instanceof self) {
+			$db->update('id_admin = '.(int)$this->id_admin, $dados);
+			return true;
+		}
+
+		$dados['id_admin'] = (int)$this->id_admin;
+		$dados['smtp_pass'] = null;
+		$dados['smtp_port'] = 587;
+		$dados['smtp_encryption'] = 'tls';
+		$dados['smtp_ativo'] = 0;
+		if (empty($dados['mp_webhook_token'])) {
+			$dados['mp_webhook_token'] = bin2hex(random_bytes(24));
+			$this->mp_webhook_token = $dados['mp_webhook_token'];
+		}
+		$db->insert($dados);
+		return true;
 	}
 
 	public function salvar(): bool {

@@ -78,10 +78,41 @@ function coletarSlugs(){
 	return slugs;
 }
 
+function popularSelectEstados(selected){
+	const $sel = $('#escola_estado').empty();
+	$sel.append('<option value="">Selecione</option>');
+	(window.MASTER_ESTADOS || []).forEach(function(e){
+		const label = e.sigla ? (e.sigla + ' — ' + e.nome) : e.nome;
+		$sel.append('<option value="'+e.id+'">'+esc(label)+'</option>');
+	});
+	if(selected) $sel.val(String(selected));
+}
+
+function carregarCidades(estadoId, cidadeSelected, done){
+	const $cid = $('#escola_cidade').empty();
+	if(!estadoId){
+		$cid.append('<option value="">Selecione o estado</option>');
+		if(typeof done === 'function') done();
+		return;
+	}
+	$cid.append('<option value="">Carregando...</option>');
+	$.post(url_base + MASTER_ESCOLAS_URL, { acao: 'cidades', estado: estadoId }, function(res){
+		$cid.empty().append('<option value="">Selecione</option>');
+		((res && res.cidades) || []).forEach(function(c){
+			$cid.append('<option value="'+c.id+'">'+esc(c.nome)+'</option>');
+		});
+		if(cidadeSelected) $cid.val(String(cidadeSelected));
+		if(typeof done === 'function') done();
+	}, 'json').fail(function(){
+		$cid.empty().append('<option value="">Falha ao carregar cidades</option>');
+		if(typeof done === 'function') done();
+	});
+}
+
 function limparForm(){
 	$('#escola_id').val('');
 	$('#escola_nome, #escola_email, #escola_telefone, #escola_cpf_cnpj, #escola_site').val('');
-	$('#escola_cep, #escola_endereco, #escola_numero, #escola_bairro, #escola_cidade, #escola_estado').val('');
+	$('#escola_cep, #escola_endereco, #escola_numero, #escola_bairro').val('');
 	$('#diretor_nome, #diretor_email').val('');
 	$('#escola_ativo').val('1');
 	$('#escola_logo').val('');
@@ -90,6 +121,8 @@ function limparForm(){
 	$('#preview-modelo-cert').attr('src', MODELO_CERT_PADRAO);
 	$('#todos_modulos').prop('checked', true);
 	popularSelectPlanos('');
+	popularSelectEstados('');
+	carregarCidades('', '');
 	$('#wrap-diretor-novo').show();
 	$('#titulo-modal-escola').text('Nova escola');
 	renderModulosChecks([], true);
@@ -176,8 +209,6 @@ function abrirEdicao(id){
 		$('#escola_endereco').val(e.endereco || '');
 		$('#escola_numero').val(e.numero || '');
 		$('#escola_bairro').val(e.bairro || '');
-		$('#escola_cidade').val(e.cidade || '');
-		$('#escola_estado').val(e.estado || '');
 		$('#escola_ativo').val(e.ativo ? '1' : '0');
 		$('#escola_logo').val('');
 		$('#preview-escola-logo').attr('src', e.logo_url || LOGO_CTI_PADRAO);
@@ -185,6 +216,8 @@ function abrirEdicao(id){
 		$('#preview-modelo-cert').attr('src', e.modelo_certificado_url || MODELO_CERT_PADRAO);
 		$('#todos_modulos').prop('checked', !!e.todos_modulos);
 		popularSelectPlanos(e.plan_id || '');
+		popularSelectEstados(e.estado || '');
+		carregarCidades(e.estado || '', e.cidade || '');
 		$('#wrap-diretor-novo').hide();
 		$('#titulo-modal-escola').text('Editar escola #'+e.id);
 		renderModulosChecks(e.modulos || [], !!e.todos_modulos);
@@ -257,9 +290,19 @@ function salvarEscola(){
 			return;
 		}
 		Swal.fire('OK', res.message, 'success');
-	}).fail(function(){
+	}).fail(function(xhr){
 		$('#btn-salvar-escola').prop('disabled', false);
-		Swal.fire('Erro', 'Falha ao salvar.', 'error');
+		let msg = 'Falha ao salvar.';
+		const raw = (xhr && xhr.responseText) ? String(xhr.responseText) : '';
+		if(raw.indexOf('ERROR:') === 0){
+			msg = raw.replace(/^ERROR:\s*/, '').slice(0, 280);
+		} else if(raw){
+			try {
+				const parsed = JSON.parse(raw);
+				if(parsed && parsed.message) msg = parsed.message;
+			} catch (e) { /* ignore */ }
+		}
+		Swal.fire('Erro', msg, 'error');
 	});
 }
 
@@ -273,6 +316,8 @@ $(function(){
 	}
 	$('#preview-modelo-cert').attr('src', MODELO_CERT_PADRAO);
 	popularSelectPlanos('');
+	popularSelectEstados('');
+	carregarCidades('', '');
 	renderModulosChecks([], true);
 	carregarEscolas();
 
@@ -281,6 +326,9 @@ $(function(){
 		$('#modalEscolaMaster').modal('show');
 	});
 	$('#btn-salvar-escola').on('click', salvarEscola);
+	$('#escola_estado').on('change', function(){
+		carregarCidades($(this).val() || '', '');
+	});
 	$('#todos_modulos').on('change', aplicarUiPlanoModulos);
 	$('#escola_plan_id').on('change', aplicarUiPlanoModulos);
 	$('#filtro-escola').on('input', function(){ renderLista(masterEscolasCache); });

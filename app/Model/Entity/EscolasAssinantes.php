@@ -98,27 +98,32 @@ class EscolasAssinantes {
 		return self::isAtivaValor($this->ativo ?? null);
 	}
 
-	public function cadastrar() {
-		$obDatabase = new Database('escolas_assinantes');
-		$dados = [
-			'nome'               => $this->nome,
+	/** Normaliza campos NOT NULL da tabela (legado sem DEFAULT). */
+	private function dadosPersistencia(): array {
+		return [
+			'nome'               => (string)($this->nome ?? ''),
 			'id_admin'           => (int)($this->id_admin ?: 0),
-			'ativo'              => $this->ativo,
-			'cpf_cnpj'           => $this->cpf_cnpj,
-			'email'              => $this->email,
-			'site'               => $this->site,
-			'logo'               => $this->logo,
-			'youtube'            => $this->youtube,
-			'instagram'          => $this->instagram,
-			'telefone'           => $this->telefone,
-			'endereco'           => $this->endereco,
-			'numero'             => $this->numero,
-			'bairro'             => $this->bairro,
-			'estado'             => $this->estado,
-			'cidade'             => $this->cidade,
-			'cep'                => $this->cep,
+			'ativo'              => self::isAtivaValor($this->ativo ?? null) ? 's' : 'n',
+			'cpf_cnpj'           => (string)($this->cpf_cnpj ?? ''),
+			'email'              => (string)($this->email ?? ''),
+			'site'               => (string)($this->site ?? ''),
+			'logo'               => (string)($this->logo ?? ''),
+			'youtube'            => $this->youtube !== null && $this->youtube !== '' ? (string)$this->youtube : null,
+			'instagram'          => $this->instagram !== null && $this->instagram !== '' ? (string)$this->instagram : null,
+			'telefone'           => (string)($this->telefone ?? ''),
+			'endereco'           => (string)($this->endereco ?? ''),
+			'numero'             => (string)($this->numero ?? ''),
+			'bairro'             => (string)($this->bairro ?? ''),
+			'estado'             => (int)($this->estado ?: 0),
+			'cidade'             => (int)($this->cidade ?: 0),
+			'cep'                => (string)($this->cep ?? ''),
 			'modulos_liberados'  => $this->modulos_liberados,
 		];
+	}
+
+	public function cadastrar() {
+		$obDatabase = new Database('escolas_assinantes');
+		$dados = $this->dadosPersistencia();
 		if (self::temColunaPlanId()) {
 			$dados['plan_id'] = $this->plan_id !== null && $this->plan_id !== ''
 				? (int)$this->plan_id
@@ -151,25 +156,8 @@ class EscolasAssinantes {
 	}
 
 	public function atualizar() {
-		$dados = [
-			'nome'               => $this->nome,
-			'id_admin'           => (int)($this->id_admin ?: $this->id),
-			'ativo'              => $this->ativo,
-			'cpf_cnpj'           => $this->cpf_cnpj,
-			'email'              => $this->email,
-			'site'               => $this->site,
-			'logo'               => $this->logo,
-			'youtube'            => $this->youtube,
-			'instagram'          => $this->instagram,
-			'telefone'           => $this->telefone,
-			'endereco'           => $this->endereco,
-			'numero'             => $this->numero,
-			'bairro'             => $this->bairro,
-			'estado'             => $this->estado,
-			'cidade'             => $this->cidade,
-			'cep'                => $this->cep,
-			'modulos_liberados'  => $this->modulos_liberados,
-		];
+		$dados = $this->dadosPersistencia();
+		$dados['id_admin'] = (int)($this->id_admin ?: $this->id);
 		if (self::temColunaPlanId()) {
 			$dados['plan_id'] = $this->plan_id !== null && $this->plan_id !== ''
 				? (int)$this->plan_id

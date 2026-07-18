@@ -123,13 +123,17 @@
 							<label class="form-label" for="escola_bairro">Bairro</label>
 							<input type="text" class="form-control" id="escola_bairro">
 						</div>
-						<div class="col-md-6">
-							<label class="form-label" for="escola_cidade">Cidade</label>
-							<input type="text" class="form-control" id="escola_cidade">
+						<div class="col-md-4">
+							<label class="form-label" for="escola_estado">Estado</label>
+							<select class="form-select" id="escola_estado">
+								<option value="">Selecione</option>
+							</select>
 						</div>
-						<div class="col-md-2">
-							<label class="form-label" for="escola_estado">UF</label>
-							<input type="text" class="form-control" id="escola_estado" maxlength="2">
+						<div class="col-md-4">
+							<label class="form-label" for="escola_cidade">Cidade</label>
+							<select class="form-select" id="escola_cidade">
+								<option value="">Selecione o estado</option>
+							</select>
 						</div>
 
 						<div class="col-12" id="wrap-diretor-novo">
@@ -173,8 +177,9 @@
 <script>
 window.MASTER_MODULOS = {{modulos_json}};
 window.MASTER_PLANOS = {{planos_json}};
+window.MASTER_ESTADOS = {{estados_json}};
 window.MASTER_TEM_PLAN_ID = {{tem_plan_id}};
 window.MASTER_TEM_MODELO_CERT = {{tem_modelo_cert}};
 window.MASTER_MODELO_CERT_PADRAO = {{modelo_cert_padrao_json}};
 </script>
-<script src="{{URL}}/resources/js/master-escolas.js?v=20260717b"></script>
+<script src="{{URL}}/resources/js/master-escolas.js?v=20260718a"></script>
