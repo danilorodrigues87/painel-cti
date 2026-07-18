@@ -25,7 +25,7 @@ class Campanhas extends Page {
 
 	public static function index($request) {
 		$content = View::render('admin/modules/campanhas/index', []);
-		return parent::getPanel('Campanhas', $content, 'config');
+		return parent::getPanel('Campanhas', $content, 'campanhas');
 	}
 
 	public static function getInfo($request) {

@@ -10,10 +10,27 @@ class PlanosAssinatura {
 	public $id;
 	public $nome;
 	public $descricao;
+	public $valor_mensal = 0;
 	public $modulos;
 	public $ativo = 1;
 	public $ordem = 0;
 	public $criado_em;
+
+	public static function temColunaValorMensal(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('planos_assinatura'))->execute(
+				"SHOW COLUMNS FROM planos_assinatura LIKE 'valor_mensal'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
 
 	public static function tabelaExiste(): bool {
 		static $cache = null;
@@ -43,24 +60,32 @@ class PlanosAssinatura {
 	}
 
 	public function cadastrar(): bool {
-		$this->id = (int)(new Database('planos_assinatura'))->insert([
+		$dados = [
 			'nome'      => $this->nome,
 			'descricao' => $this->descricao,
 			'modulos'   => $this->modulos,
 			'ativo'     => (int)$this->ativo ? 1 : 0,
 			'ordem'     => (int)$this->ordem,
-		]);
+		];
+		if (self::temColunaValorMensal()) {
+			$dados['valor_mensal'] = round((float)($this->valor_mensal ?? 0), 2);
+		}
+		$this->id = (int)(new Database('planos_assinatura'))->insert($dados);
 		return $this->id > 0;
 	}
 
 	public function atualizar(): bool {
-		return (bool)(new Database('planos_assinatura'))->update('id = '.(int)$this->id, [
+		$dados = [
 			'nome'      => $this->nome,
 			'descricao' => $this->descricao,
 			'modulos'   => $this->modulos,
 			'ativo'     => (int)$this->ativo ? 1 : 0,
 			'ordem'     => (int)$this->ordem,
-		]);
+		];
+		if (self::temColunaValorMensal()) {
+			$dados['valor_mensal'] = round((float)($this->valor_mensal ?? 0), 2);
+		}
+		return (bool)(new Database('planos_assinatura'))->update('id = '.(int)$this->id, $dados);
 	}
 
 	public function excluir(): bool {

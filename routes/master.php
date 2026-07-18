@@ -38,6 +38,20 @@ $obRouter->post('/master/planos', [
 	}
 ]);
 
+$obRouter->get('/master/assinaturas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Assinaturas::index($request));
+	}
+]);
+
+$obRouter->post('/master/assinaturas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Assinaturas::getInfo($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/perfil', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

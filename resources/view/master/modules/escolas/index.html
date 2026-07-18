@@ -58,11 +58,15 @@
 								<option value="0">Inativa</option>
 							</select>
 						</div>
-						<div class="col-md-6" id="wrap-plan-id">
+						<div class="col-md-4" id="wrap-plan-id">
 							<label class="form-label" for="escola_plan_id">Plano</label>
 							<select class="form-select" id="escola_plan_id">
 								<option value="">Personalizado (módulos manuais)</option>
 							</select>
+						</div>
+						<div class="col-md-2">
+							<label class="form-label" for="escola_dia_venc">Dia venc. assinatura</label>
+							<input type="number" class="form-control" id="escola_dia_venc" min="1" max="28" value="10">
 						</div>
 						<div class="col-md-6">
 							<label class="form-label" for="escola_email">E-mail da escola</label>
@@ -182,4 +186,4 @@ window.MASTER_TEM_PLAN_ID = {{tem_plan_id}};
 window.MASTER_TEM_MODELO_CERT = {{tem_modelo_cert}};
 window.MASTER_MODELO_CERT_PADRAO = {{modelo_cert_padrao_json}};
 </script>
-<script src="{{URL}}/resources/js/master-escolas.js?v=20260718a"></script>
+<script src="{{URL}}/resources/js/master-escolas.js?v=20260718b"></script>

@@ -20,11 +20,12 @@ class Page {
 		}
 
 		$menu = View::render('master/panel', [
-			'user'            => $nome,
-			'current_home'    => $menuAtivo === 'home' ? 'active' : '',
-			'current_escolas' => $menuAtivo === 'escolas' ? 'active' : '',
-			'current_planos'  => $menuAtivo === 'planos' ? 'active' : '',
-			'current_perfil'  => $menuAtivo === 'perfil' ? 'active' : '',
+			'user'                 => $nome,
+			'current_home'         => $menuAtivo === 'home' ? 'active' : '',
+			'current_escolas'      => $menuAtivo === 'escolas' ? 'active' : '',
+			'current_planos'       => $menuAtivo === 'planos' ? 'active' : '',
+			'current_assinaturas'  => $menuAtivo === 'assinaturas' ? 'active' : '',
+			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',
 		]);
 
 		return View::render('master/page', [

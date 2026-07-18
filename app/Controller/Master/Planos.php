@@ -98,6 +98,7 @@ class Planos extends Page {
 		$ordem = (int)($post['ordem'] ?? 0);
 		$ativo = !empty($post['ativo']) ? 1 : 0;
 		$todos = !empty($post['todos_modulos']);
+		$valorMensal = self::parseValorMensal($post['valor_mensal'] ?? 0);
 
 		if ($nome === '') {
 			return json_encode(['success' => false, 'message' => 'Informe o nome do plano.']);
@@ -126,6 +127,9 @@ class Planos extends Page {
 		$ob->modulos = $modulosJson;
 		$ob->ativo = $ativo;
 		$ob->ordem = $ordem;
+		if (PlanosAssinatura::temColunaValorMensal()) {
+			$ob->valor_mensal = $valorMensal;
+		}
 
 		if ($id > 0) {
 			$ob->atualizar();
@@ -173,10 +177,15 @@ class Planos extends Page {
 	}
 
 	private static function formatar(PlanosAssinatura $p): array {
+		$valor = PlanosAssinatura::temColunaValorMensal()
+			? round((float)($p->valor_mensal ?? 0), 2)
+			: 0.0;
 		return [
 			'id'            => (int)$p->id,
 			'nome'          => $p->nome,
 			'descricao'     => $p->descricao,
+			'valor_mensal'  => $valor,
+			'valor_br'      => number_format($valor, 2, ',', '.'),
 			'ativo'         => (int)$p->ativo ? 1 : 0,
 			'ordem'         => (int)$p->ordem,
 			'todos_modulos' => $p->temTodosModulos(),
@@ -185,6 +194,22 @@ class Planos extends Page {
 				? count(SystemModules::getSlugs())
 				: count($p->getSlugs()),
 		];
+	}
+
+	private static function parseValorMensal($raw): float {
+		if (is_numeric($raw)) {
+			return max(0, round((float)$raw, 2));
+		}
+		$s = trim((string)$raw);
+		if ($s === '') {
+			return 0.0;
+		}
+		$s = str_replace(['R$', ' '], '', $s);
+		if (strpos($s, ',') !== false) {
+			$s = str_replace('.', '', $s);
+			$s = str_replace(',', '.', $s);
+		}
+		return max(0, round((float)$s, 2));
 	}
 
 	/** @return string[] */

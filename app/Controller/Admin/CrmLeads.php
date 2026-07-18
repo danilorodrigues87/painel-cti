@@ -11,6 +11,7 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\PlanilhaHelper;
 use \App\Common\Helpers\EmailValidator;
+use \App\Common\Communication\WhatsappEscolaService;
 use \App\Model\Db\Pagination;
 
 class CrmLeads extends Page{
@@ -532,7 +533,7 @@ class CrmLeads extends Page{
 
 		self::registrarHistorico($obLead->id, $id_usuario, 'status_alterado', $msgHistorico);
 
-		self::dispararMensagemWhatsApp($obLead, $statusAnterior, $status);
+		self::dispararMensagemWhatsApp($obLead, $statusAnterior, $status, (int)$id_usuario);
 
 		$resposta['sucesso'] = true;
 		return json_encode($resposta);
@@ -1120,6 +1121,9 @@ class CrmLeads extends Page{
 			} elseif($obHist->acao == 'dados_atualizados'){
 				$icone  = 'fa-pen text-info';
 				$titulo = 'Dados atualizados';
+			} elseif($obHist->acao == 'whatsapp_automatico'){
+				$icone  = 'fa-brands fa-whatsapp text-success';
+				$titulo = 'WhatsApp automático';
 			}
 
 			$dataFormatada = DateTimeHelper::databr($obHist->data_registro);
@@ -1148,19 +1152,53 @@ class CrmLeads extends Page{
 		return '<ul class="timeline-list">'.$itens.'</ul>';
 	}
 
-	private static function dispararMensagemWhatsApp($lead, $statusAnterior, $statusNovo){
-
-		if(!in_array($statusNovo, ['novo','em_atendimento'])){
-			return;
-		}
+	private static function dispararMensagemWhatsApp($lead, $statusAnterior, $statusNovo, int $usuarioId = 0){
 
 		if($statusAnterior === $statusNovo){
 			return;
 		}
 
-		// TODO: Implementar envio via Evolution API
-		// curl_setopt($ch, CURLOPT_URL, EVOLUTION_API_URL.'/message/sendText/'.$lead->id_instancia_wa);
-		// curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['number' => $lead->whatsapp, 'text' => $mensagem]));
+		$mensagem = self::mensagemAutomaticaStatus($lead, $statusNovo);
+		if($mensagem === null || $mensagem === ''){
+			return;
+		}
+
+		$telefone = preg_replace('/\D/', '', (string)($lead->whatsapp ?? ''));
+		if($telefone === ''){
+			return;
+		}
+
+		$idAdmin = (int)($lead->id_admin ?? 0);
+		if($idAdmin <= 0){
+			return;
+		}
+
+		$envio = WhatsappEscolaService::enviarTexto($idAdmin, $telefone, $mensagem);
+		if(!empty($envio['ok']) && $usuarioId > 0){
+			self::registrarHistorico(
+				(int)$lead->id,
+				$usuarioId,
+				'whatsapp_automatico',
+				'Mensagem automática enviada ao mudar para "'.(self::$labelsStatus[$statusNovo] ?? $statusNovo).'".'
+			);
+		}
+	}
+
+	/** Templates enxutos por status (null = não envia). */
+	private static function mensagemAutomaticaStatus($lead, string $statusNovo): ?string {
+		$nome = trim((string)($lead->nome ?? ''));
+		$primeiro = $nome !== '' ? explode(' ', $nome)[0] : 'olá';
+
+		switch ($statusNovo) {
+			case 'novo':
+				return 'Olá, '.$primeiro.'! Recebemos seu contato. Em breve um atendente da escola falará com você.';
+			case 'em_atendimento':
+				return 'Olá, '.$primeiro.'! Seu atendimento foi iniciado. Podemos te ajudar com dúvidas sobre cursos e horários.';
+			case 'matriculado':
+				return 'Parabéns, '.$primeiro.'! Sua matrícula foi registrada. Se precisar de algo, é só responder esta mensagem.';
+			default:
+				return null;
+		}
 	}
 
 }

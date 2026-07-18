@@ -25,12 +25,19 @@ class EscolasAssinantes {
 	public $cep;
 	public $modulos_liberados;
 	public $plan_id;
+	public $dia_vencimento_assinatura = 10;
+	public $assinatura_status = 'ativa';
+	public $assinatura_proximo_vencimento;
 	public $modelo_certificado;
 	public $modelo_contrato_html;
 	public $certificado_frase_conclusao;
 
 	public static function temColunaPlanId(): bool {
 		return self::temColuna('plan_id');
+	}
+
+	public static function temColunasAssinatura(): bool {
+		return self::temColuna('dia_vencimento_assinatura');
 	}
 
 	public static function temColunaModeloCertificado(): bool {
@@ -129,6 +136,13 @@ class EscolasAssinantes {
 				? (int)$this->plan_id
 				: null;
 		}
+		if (self::temColunasAssinatura()) {
+			$dados['dia_vencimento_assinatura'] = max(1, min(28, (int)($this->dia_vencimento_assinatura ?: 10)));
+			$dados['assinatura_status'] = in_array((string)($this->assinatura_status ?? ''), ['ativa', 'suspensa', 'trial'], true)
+				? (string)$this->assinatura_status
+				: 'ativa';
+			$dados['assinatura_proximo_vencimento'] = $this->assinatura_proximo_vencimento ?: null;
+		}
 		if (self::temColunaModeloCertificado()) {
 			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
 		}
@@ -163,6 +177,13 @@ class EscolasAssinantes {
 				? (int)$this->plan_id
 				: null;
 		}
+		if (self::temColunasAssinatura()) {
+			$dados['dia_vencimento_assinatura'] = max(1, min(28, (int)($this->dia_vencimento_assinatura ?: 10)));
+			$dados['assinatura_status'] = in_array((string)($this->assinatura_status ?? ''), ['ativa', 'suspensa', 'trial'], true)
+				? (string)$this->assinatura_status
+				: 'ativa';
+			$dados['assinatura_proximo_vencimento'] = $this->assinatura_proximo_vencimento ?: null;
+		}
 		if (self::temColunaModeloCertificado()) {
 			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
 		}
@@ -177,6 +198,30 @@ class EscolasAssinantes {
 				: null;
 		}
 		return (new Database('escolas_assinantes'))->update('id = '.(int)$this->id, $dados);
+	}
+
+	/**
+	 * Atualização operacional pelo Diretor (não altera nome, CNPJ, ativo, plano, módulos).
+	 */
+	public function atualizarOperacional(): bool {
+		$dados = [
+			'email'     => (string)($this->email ?? ''),
+			'telefone'  => (string)($this->telefone ?? ''),
+			'site'      => (string)($this->site ?? ''),
+			'logo'      => (string)($this->logo ?? ''),
+			'youtube'   => $this->youtube !== null && $this->youtube !== '' ? (string)$this->youtube : null,
+			'instagram' => $this->instagram !== null && $this->instagram !== '' ? (string)$this->instagram : null,
+			'endereco'  => (string)($this->endereco ?? ''),
+			'numero'    => (string)($this->numero ?? ''),
+			'bairro'    => (string)($this->bairro ?? ''),
+			'estado'    => (int)($this->estado ?: 0),
+			'cidade'    => (int)($this->cidade ?: 0),
+			'cep'       => (string)($this->cep ?? ''),
+		];
+		if (self::temColunaModeloCertificado()) {
+			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
+		}
+		return (bool)(new Database('escolas_assinantes'))->update('id = '.(int)$this->id, $dados);
 	}
 
 	/** Atualiza só o HTML do contrato (ou NULL = padrão CTI). */

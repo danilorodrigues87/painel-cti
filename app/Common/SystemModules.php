@@ -15,6 +15,7 @@ class SystemModules {
 		'comunicacao'     => 'Comunicação',
 		'campanhas'       => 'Campanhas',
 		'whatsapp'        => 'WhatsApp',
+		'dados_escola'    => 'Dados da escola',
 		'vouchers'        => 'Vouchers',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
@@ -181,6 +182,11 @@ class SystemModules {
 			'link' => URL.'/painel/whatsapp',
 			'icon' => 'fab fa-whatsapp'
 		],
+		'campanhas' => [
+			'label' => 'Campanhas',
+			'link' => URL.'/painel/campanhas',
+			'icon' => 'fa-solid fa-bullhorn'
+		],
 		'Financeiro' => [
 			'label' => 'Financeiro',
 			'icon' => 'fa-solid fa-coins',
@@ -188,6 +194,10 @@ class SystemModules {
 				'name' => 'Layouts-Financeiro',
 				'icon' => 'fas fa-caret-down',
 				'items' => [
+					[
+						'label' => 'Carnês',
+						'link' => URL.'/painel/carnes'
+					],
 					[
 						'label' => 'Entrada',
 						'link' => URL.'/painel/caixa/entrada'
@@ -197,10 +207,6 @@ class SystemModules {
 						'link' => URL.'/painel/caixa/saida'
 					],
 					[
-						'label' => 'Carnês',
-						'link' => URL.'/painel/carnes'
-					],
-					[
 						'label' => 'Relatórios',
 						'link' => URL.'/painel/caixa/relatorio'
 					]
@@ -208,7 +214,7 @@ class SystemModules {
 			]
 		],
 		'agenda' => [
-			'label' => 'Agenda e Horários',
+			'label' => 'Agenda',
 			'icon' => 'fa-regular fa-calendar-check',
 			'subsections' => [
 				'name' => 'Layouts-agenda',
@@ -233,11 +239,6 @@ class SystemModules {
 				]
 			]
 		],
-		'Termos de Uso' => [
-			'label' => 'Termos de Uso',
-			'link' => URL.'/painel/termos-de-uso',
-			'icon' => 'fa-solid fa-file-circle-check'
-		],
 		'config' => [
 			'label' => 'Configurações',
 			'icon' => 'fa-solid fa-gear',
@@ -245,6 +246,10 @@ class SystemModules {
 				'name' => 'Layouts-config',
 				'icon' => 'fas fa-caret-down',
 				'items' => [
+					[
+						'label' => 'Dados da escola',
+						'link' => URL.'/painel/config/escola'
+					],
 					[
 						'label' => 'Comunicação',
 						'link' => URL.'/painel/config/comunicacao'
@@ -256,13 +261,14 @@ class SystemModules {
 					[
 						'label' => 'Modelo de contrato',
 						'link' => URL.'/painel/config/contrato'
-					],
-					[
-						'label' => 'Campanhas',
-						'link' => URL.'/painel/campanhas'
 					]
 				]
 			]
+		],
+		'Termos de Uso' => [
+			'label' => 'Termos de Uso',
+			'link' => URL.'/painel/termos-de-uso',
+			'icon' => 'fa-solid fa-file-circle-check'
 		]
 
 	];

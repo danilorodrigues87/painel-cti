@@ -222,6 +222,10 @@ class Escolas extends Page {
 		$ob->ativo = $ativo;
 		$ob->modulos_liberados = $modulosJson;
 		$ob->plan_id = $planIdSalvar;
+		if (EscolasAssinantes::temColunasAssinatura()) {
+			$dia = (int)($post['dia_vencimento_assinatura'] ?? $ob->dia_vencimento_assinatura ?? 10);
+			$ob->dia_vencimento_assinatura = max(1, min(28, $dia ?: 10));
+		}
 	}
 
 	/** @return array<int, array{id:int,nome:string,sigla:string}> */
@@ -427,6 +431,15 @@ class Escolas extends Page {
 			'modulos_qtd'   => $todos ? count(SystemModules::getSlugs()) : count($slugs),
 			'plan_id'       => $planId ?: null,
 			'plano_nome'    => $planoNome,
+			'dia_vencimento_assinatura' => EscolasAssinantes::temColunasAssinatura()
+				? max(1, min(28, (int)($e->dia_vencimento_assinatura ?? 10)))
+				: 10,
+			'assinatura_status' => EscolasAssinantes::temColunasAssinatura()
+				? (string)($e->assinatura_status ?? 'ativa')
+				: 'ativa',
+			'assinatura_proximo_vencimento' => EscolasAssinantes::temColunasAssinatura()
+				? ($e->assinatura_proximo_vencimento ?? null)
+				: null,
 		];
 
 		if ($completo) {

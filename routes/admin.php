@@ -40,6 +40,8 @@ include __DIR__.'/admin/tarefas.php';
 
 include __DIR__.'/admin/comunicacao.php';
 
+include __DIR__.'/admin/escola.php';
+
 include __DIR__.'/admin/contrato.php';
 
 include __DIR__.'/admin/campanhas.php';

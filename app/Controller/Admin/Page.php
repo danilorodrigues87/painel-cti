@@ -188,6 +188,7 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 		$allPermittedModules = array_merge($defaultModules, $permittedModules);
 
 		if (($userLogedData['usuario']['nivel'] ?? '') === 'Diretor') {
+			$allPermittedModules[] = 'Dados da escola';
 			$allPermittedModules[] = 'Comunicação';
 			$allPermittedModules[] = 'Campanhas';
 			$allPermittedModules[] = 'WhatsApp';

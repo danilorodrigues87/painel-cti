@@ -3,16 +3,22 @@
 namespace App\Controller\Webhook;
 
 use App\Common\Helpers\MercadoPagoEscolaHelper;
+use App\Common\Helpers\MercadoPagoCtiHelper;
+use App\Common\Helpers\SaasAssinaturaService;
 use App\Common\Gateways\MercadoPago\Pix;
 use App\Model\Entity\Caixa;
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\SaasFatura;
 
 class MercadoPago {
 
-	public static function receber($request, $idAdmin, $token): string {
-		$idAdmin = (int)$idAdmin;
-		if ($idAdmin <= 0 || !MercadoPagoEscolaHelper::validarWebhookToken($idAdmin, (string)$token)) {
+	/** Webhook conta CTI — faturas SaaS (escolas pagam a CTI). */
+	public static function receberSaas($request, $token): string {
+		if (!MercadoPagoCtiHelper::validarWebhookToken((string)$token)) {
 			return json_encode(['success' => false, 'message' => 'Token inválido.']);
+		}
+		if (!MercadoPagoCtiHelper::validarAssinatura($request)) {
+			return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
 		}
 
 		$raw = file_get_contents('php://input');
@@ -22,9 +28,107 @@ class MercadoPago {
 			$payload = is_array($post) ? $post : [];
 		}
 
-		$type = strtolower((string)($payload['type'] ?? $payload['topic'] ?? ''));
+		$query = $request->getQueryParams();
+		$type = strtolower((string)($payload['type'] ?? $payload['topic'] ?? $query['topic'] ?? ''));
 		$action = strtolower((string)($payload['action'] ?? ''));
-		$dataId = (string)($payload['data']['id'] ?? $payload['id'] ?? '');
+		$dataId = (string)($payload['data']['id'] ?? $payload['id'] ?? $query['data.id'] ?? $query['id'] ?? '');
+
+		if ($dataId === '' && isset($payload['resource'])) {
+			$dataId = basename((string)$payload['resource']);
+		}
+
+		if ($type !== '' && $type !== 'payment' && strpos($type, 'payment') === false) {
+			return json_encode(['success' => true, 'ignored' => true]);
+		}
+
+		if ($dataId === '' && preg_match('/payment/i', $action) !== 1) {
+			return json_encode(['success' => true, 'ignored' => true, 'reason' => 'sem_id']);
+		}
+
+		$pix = MercadoPagoCtiHelper::pix();
+		if (!$pix instanceof Pix) {
+			return json_encode(['success' => false, 'message' => 'MP CTI não configurado.']);
+		}
+
+		$pagamento = $pix->consultarPagamento($dataId);
+		if (!$pagamento || ($pagamento['status'] ?? '') !== 'approved') {
+			return json_encode(['success' => true, 'status' => $pagamento['status'] ?? 'unknown']);
+		}
+
+		$ok = self::baixarFaturaSaas($pagamento);
+		return json_encode(['success' => true, 'baixado' => $ok]);
+	}
+
+	/** @param array{id:string,status:string,transaction_amount:float,external_reference:string,date_approved:?string} $pagamento */
+	private static function baixarFaturaSaas(array $pagamento): bool {
+		if (!SaasFatura::tabelaExiste()) {
+			return false;
+		}
+
+		$paymentId = preg_replace('/\D/', '', (string)$pagamento['id']);
+		$fat = $paymentId !== '' ? SaasFatura::getPorMpPaymentId($paymentId) : false;
+
+		if (!$fat instanceof SaasFatura) {
+			$ref = (string)($pagamento['external_reference'] ?? '');
+			if (preg_match('/^saas:(\d+)$/', $ref, $m)) {
+				$fat = SaasFatura::getById((int)$m[1]);
+			}
+		}
+
+		if (!$fat instanceof SaasFatura) {
+			return false;
+		}
+		if ($fat->status === 'pago') {
+			return true;
+		}
+
+		$pagoEm = date('Y-m-d H:i:s');
+		if (!empty($pagamento['date_approved'])) {
+			try {
+				$pagoEm = (new \DateTimeImmutable((string)$pagamento['date_approved']))->format('Y-m-d H:i:s');
+			} catch (\Throwable $e) {
+				// keep now
+			}
+		}
+
+		if ($paymentId !== '') {
+			$fat->mp_payment_id = $paymentId;
+		}
+		return SaasAssinaturaService::marcarPaga($fat, $pagoEm);
+	}
+
+	public static function pingSaas($token): string {
+		if (!MercadoPagoCtiHelper::validarWebhookToken((string)$token)) {
+			return json_encode(['ok' => false, 'message' => 'Token inválido.']);
+		}
+		return json_encode([
+			'ok'      => true,
+			'service' => 'mercadopago-saas',
+			'mp_ok'   => MercadoPagoCtiHelper::configurado(),
+		]);
+	}
+
+	public static function receber($request, $idAdmin, $token): string {
+		$idAdmin = (int)$idAdmin;
+		if ($idAdmin <= 0 || !MercadoPagoEscolaHelper::validarWebhookToken($idAdmin, (string)$token)) {
+			return json_encode(['success' => false, 'message' => 'Token inválido.']);
+		}
+
+		if (!MercadoPagoEscolaHelper::validarAssinaturaWebhook($idAdmin, $request)) {
+			return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
+		}
+
+		$raw = file_get_contents('php://input');
+		$payload = json_decode((string)$raw, true);
+		if (!is_array($payload)) {
+			$post = $request->getPostVars();
+			$payload = is_array($post) ? $post : [];
+		}
+
+		$query = $request->getQueryParams();
+		$type = strtolower((string)($payload['type'] ?? $payload['topic'] ?? $query['topic'] ?? ''));
+		$action = strtolower((string)($payload['action'] ?? ''));
+		$dataId = (string)($payload['data']['id'] ?? $payload['id'] ?? $query['data.id'] ?? $query['id'] ?? '');
 
 		// Notificação antiga: topic=payment&id=...
 		if ($dataId === '' && isset($payload['resource'])) {

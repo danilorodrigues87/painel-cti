@@ -17,13 +17,14 @@
 					<tr>
 						<th>Ordem</th>
 						<th>Nome</th>
+						<th>Valor/mês</th>
 						<th>Módulos</th>
 						<th>Status</th>
 						<th class="text-end">Ações</th>
 					</tr>
 				</thead>
 				<tbody id="lista-planos-master">
-					<tr><td colspan="5" class="text-center text-muted py-4">Carregando...</td></tr>
+					<tr><td colspan="6" class="text-center text-muted py-4">Carregando...</td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -55,9 +56,14 @@
 							<option value="0">Inativo</option>
 						</select>
 					</div>
-					<div class="col-12">
+					<div class="col-md-8">
 						<label class="form-label" for="plano_descricao">Descrição</label>
 						<input type="text" class="form-control" id="plano_descricao">
+					</div>
+					<div class="col-md-4">
+						<label class="form-label" for="plano_valor_mensal">Valor mensal (R$)</label>
+						<input type="text" class="form-control" id="plano_valor_mensal" placeholder="0,00" inputmode="decimal">
+						<div class="form-text">Usado na cobrança SaaS (Assinaturas).</div>
 					</div>
 					<div class="col-12">
 						<div class="d-flex justify-content-between align-items-center mb-2">
@@ -83,4 +89,4 @@
 <script>
 window.MASTER_MODULOS = {{modulos_json}};
 </script>
-<script src="{{URL}}/resources/js/master-planos.js?v=20260716a"></script>
+<script src="{{URL}}/resources/js/master-planos.js?v=20260718a"></script>

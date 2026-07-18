@@ -1,0 +1,94 @@
+<h1 class="mt-4">Assinaturas</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Cobrança mensal das escolas (PIX conta CTI)</li>
+</ol>
+
+<div id="alert-mp-cti" class="alert alert-warning {{mp_ok_hidden}}">
+	Configure <code>MP_CTI_ACCESS_TOKEN</code> no <code>.env</code> para gerar PIX.
+	Opcional: <code>MP_CTI_WEBHOOK_SECRET</code>, <code>MP_CTI_WEBHOOK_TOKEN</code>, <code>MP_CTI_PAYER_EMAIL</code>.
+</div>
+
+<div class="card shadow-sm mb-3">
+	<div class="card-body">
+		<div class="row g-2 align-items-end">
+			<div class="col-md-2">
+				<label class="form-label" for="filtro_competencia">Competência</label>
+				<input type="month" class="form-control form-control-sm" id="filtro_competencia" value="{{competencia}}">
+			</div>
+			<div class="col-md-3">
+				<label class="form-label" for="filtro_escola">Escola</label>
+				<select class="form-select form-select-sm" id="filtro_escola">
+					<option value="">Todas</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<label class="form-label" for="filtro_status">Status</label>
+				<select class="form-select form-select-sm" id="filtro_status">
+					<option value="">Todos</option>
+					<option value="aberta">Aberta</option>
+					<option value="pago">Paga</option>
+					<option value="vencida">Vencida</option>
+					<option value="cancelada">Cancelada</option>
+				</select>
+			</div>
+			<div class="col-md-5 text-md-end">
+				<button type="button" class="btn btn-sm btn-outline-secondary me-1" id="btn-filtrar">Filtrar</button>
+				<button type="button" class="btn btn-sm btn-primary me-1" id="btn-gerar-mes">Gerar mês</button>
+				<button type="button" class="btn btn-sm btn-outline-primary me-1" id="btn-gerar-escola">Gerar 1 escola</button>
+				<button type="button" class="btn btn-sm btn-outline-dark" id="btn-processar">Rodar worker</button>
+			</div>
+		</div>
+		<div class="form-text mt-2">
+			Após {{grace_dias}} dias do vencimento sem pagamento, a escola fica <strong>inativa</strong> (login bloqueado).
+			<span id="webhook-hint" class="d-none">Webhook: <code id="webhook-url"></code></span>
+		</div>
+	</div>
+</div>
+
+<div class="card shadow-sm">
+	<div class="card-body p-0">
+		<div class="table-responsive">
+			<table class="table table-hover mb-0 align-middle">
+				<thead class="table-light">
+					<tr>
+						<th>Escola</th>
+						<th>Competência</th>
+						<th>Valor</th>
+						<th>Vencimento</th>
+						<th>Status</th>
+						<th class="text-end">Ações</th>
+					</tr>
+				</thead>
+				<tbody id="lista-faturas-saas">
+					<tr><td colspan="6" class="text-center text-muted py-4">Carregando...</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="modalPixSaas" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">PIX da fatura</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<p class="mb-2" id="pix-saas-info"></p>
+				<textarea class="form-control font-monospace" id="pix-saas-copia" rows="5" readonly></textarea>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+				<button type="button" class="btn btn-primary" id="btn-copiar-pix">Copiar PIX</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+window.MASTER_ESCOLAS_SAAS = {{escolas_json}};
+window.MASTER_MP_CTI_OK = {{mp_ok}};
+window.MASTER_WEBHOOK_SAAS = {{webhook_url_json}};
+</script>
+<script src="{{URL}}/resources/js/master-assinaturas.js?v=20260718a"></script>

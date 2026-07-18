@@ -54,4 +54,78 @@ class MercadoPagoEscolaHelper {
 		$esperado = (string)($cfg->mp_webhook_token ?? '');
 		return $esperado !== '' && hash_equals($esperado, $token);
 	}
+
+	/**
+	 * Valida x-signature do Mercado Pago quando o secret estiver configurado.
+	 * Sem secret salvo, aceita (token da URL já autentica a escola).
+	 */
+	public static function validarAssinaturaWebhook(int $idAdmin, $request): bool {
+		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if (!$cfg instanceof EscolaIntegracoes) {
+			return false;
+		}
+		$secret = $cfg->getMpWebhookSecretDescriptografado();
+		if ($secret === null || $secret === '') {
+			return true;
+		}
+
+		$headers = self::headersNormalizados($request->getHeaders());
+		$xSignature = (string)($headers['x-signature'] ?? '');
+		$xRequestId = (string)($headers['x-request-id'] ?? '');
+		if ($xSignature === '') {
+			return false;
+		}
+
+		$ts = '';
+		$v1 = '';
+		foreach (explode(',', $xSignature) as $part) {
+			$part = trim($part);
+			if (strpos($part, '=') === false) {
+				continue;
+			}
+			[$k, $v] = explode('=', $part, 2);
+			$k = strtolower(trim($k));
+			if ($k === 'ts') {
+				$ts = trim($v);
+			} elseif ($k === 'v1') {
+				$v1 = trim($v);
+			}
+		}
+		if ($ts === '' || $v1 === '') {
+			return false;
+		}
+
+		$query = $request->getQueryParams();
+		$dataId = (string)($query['data.id'] ?? $query['data_id'] ?? '');
+		if ($dataId === '') {
+			$post = $request->getPostVars();
+			if (is_array($post)) {
+				$dataId = (string)($post['data']['id'] ?? $post['id'] ?? '');
+			}
+		}
+		if ($dataId !== '' && preg_match('/[a-zA-Z]/', $dataId)) {
+			$dataId = strtolower($dataId);
+		}
+
+		$manifest = '';
+		if ($dataId !== '') {
+			$manifest .= 'id:'.$dataId.';';
+		}
+		if ($xRequestId !== '') {
+			$manifest .= 'request-id:'.$xRequestId.';';
+		}
+		$manifest .= 'ts:'.$ts.';';
+
+		$calc = hash_hmac('sha256', $manifest, $secret);
+		return hash_equals($calc, $v1);
+	}
+
+	/** @param array<string,mixed> $headers */
+	private static function headersNormalizados(array $headers): array {
+		$out = [];
+		foreach ($headers as $k => $v) {
+			$out[strtolower((string)$k)] = $v;
+		}
+		return $out;
+	}
 }

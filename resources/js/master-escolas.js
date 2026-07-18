@@ -115,6 +115,7 @@ function limparForm(){
 	$('#escola_cep, #escola_endereco, #escola_numero, #escola_bairro').val('');
 	$('#diretor_nome, #diretor_email').val('');
 	$('#escola_ativo').val('1');
+	$('#escola_dia_venc').val('10');
 	$('#escola_logo').val('');
 	$('#preview-escola-logo').attr('src', LOGO_CTI_PADRAO);
 	$('#escola_modelo_certificado').val('');
@@ -210,6 +211,7 @@ function abrirEdicao(id){
 		$('#escola_numero').val(e.numero || '');
 		$('#escola_bairro').val(e.bairro || '');
 		$('#escola_ativo').val(e.ativo ? '1' : '0');
+		$('#escola_dia_venc').val(e.dia_vencimento_assinatura || 10);
 		$('#escola_logo').val('');
 		$('#preview-escola-logo').attr('src', e.logo_url || LOGO_CTI_PADRAO);
 		$('#escola_modelo_certificado').val('');
@@ -255,6 +257,7 @@ function salvarEscola(){
 	fd.append('cidade', $('#escola_cidade').val() || '');
 	fd.append('estado', $('#escola_estado').val() || '');
 	fd.append('ativo', $('#escola_ativo').val());
+	fd.append('dia_vencimento_assinatura', $('#escola_dia_venc').val() || '10');
 	fd.append('plan_id', $('#escola_plan_id').val() || '');
 	fd.append('todos_modulos', $('#todos_modulos').is(':checked') ? '1' : '0');
 	fd.append('modulos_json', JSON.stringify(coletarSlugs()));

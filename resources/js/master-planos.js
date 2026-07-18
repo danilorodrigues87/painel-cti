@@ -36,7 +36,7 @@ function coletarSlugs(){
 
 function limpar(){
 	$('#plano_id').val('');
-	$('#plano_nome, #plano_descricao').val('');
+	$('#plano_nome, #plano_descricao, #plano_valor_mensal').val('');
 	$('#plano_ordem').val('0');
 	$('#plano_ativo').val('1');
 	$('#plano_todos_modulos').prop('checked', false);
@@ -47,16 +47,18 @@ function limpar(){
 function renderLista(planos){
 	const $tb = $('#lista-planos-master').empty();
 	if(!planos || !planos.length){
-		$tb.append('<tr><td colspan="5" class="text-center text-muted py-4">Nenhum plano ainda.</td></tr>');
+		$tb.append('<tr><td colspan="6" class="text-center text-muted py-4">Nenhum plano ainda.</td></tr>');
 		return;
 	}
 	planos.forEach(function(p){
 		const badge = p.ativo ? '<span class="badge bg-success">Ativo</span>' : '<span class="badge bg-secondary">Inativo</span>';
 		const mods = p.todos_modulos ? 'Todos' : ((p.modulos_qtd||0)+' módulos');
+		const valor = (p.valor_br != null) ? ('R$ '+p.valor_br) : '—';
 		$tb.append(
 			'<tr>'
 			+'<td>'+esc(p.ordem)+'</td>'
 			+'<td><strong>'+esc(p.nome)+'</strong><br><small class="text-muted">'+esc(p.descricao||'')+'</small></td>'
+			+'<td>'+esc(valor)+'</td>'
 			+'<td>'+esc(mods)+'</td>'
 			+'<td>'+badge+'</td>'
 			+'<td class="text-end">'
@@ -87,6 +89,7 @@ function abrir(id){
 		$('#plano_id').val(p.id);
 		$('#plano_nome').val(p.nome || '');
 		$('#plano_descricao').val(p.descricao || '');
+		$('#plano_valor_mensal').val(p.valor_br || '0,00');
 		$('#plano_ordem').val(p.ordem || 0);
 		$('#plano_ativo').val(p.ativo ? '1' : '0');
 		$('#plano_todos_modulos').prop('checked', !!p.todos_modulos);
@@ -102,6 +105,7 @@ function salvar(){
 		id: $('#plano_id').val(),
 		nome: $('#plano_nome').val(),
 		descricao: $('#plano_descricao').val(),
+		valor_mensal: $('#plano_valor_mensal').val(),
 		ordem: $('#plano_ordem').val(),
 		ativo: $('#plano_ativo').val(),
 		todos_modulos: $('#plano_todos_modulos').is(':checked') ? 1 : 0,

@@ -22,6 +22,20 @@ $obRouter->post('/painel/config/pagamentos', [
 	}
 ]);
 
+$obRouter->post('/webhook/mercadopago/saas/{token}', [
+	'middlewares' => [],
+	function($request, $token) {
+		return new Response(200, Webhook\MercadoPago::receberSaas($request, $token), 'application/json');
+	}
+]);
+
+$obRouter->get('/webhook/mercadopago/saas/{token}', [
+	'middlewares' => [],
+	function($request, $token) {
+		return new Response(200, Webhook\MercadoPago::pingSaas($token), 'application/json');
+	}
+]);
+
 $obRouter->post('/webhook/mercadopago/{idAdmin}/{token}', [
 	'middlewares' => [],
 	function($request, $idAdmin, $token) {

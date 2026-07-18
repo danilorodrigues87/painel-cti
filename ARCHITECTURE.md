@@ -3,7 +3,7 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-15  
+**Última atualização:** 2026-07-18  
 **Repo:** `painel-cti`  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
 **Estilo:** segurança e performance · Migração de upload manual → Git em andamento
@@ -13,7 +13,7 @@
 ## 1. Visão geral do produto
 
 Painel administrativo multi-tenant para **escolas** (assinantes). Cada escola é isolada por `id_admin`.  
-Há um **Painel Master** em `/master` (MVP): cadastrar escolas e liberar módulos. Planos/cobrança SaaS ficam para fase seguinte.
+Há um **Painel Master** em `/master`: escolas, planos (com valor mensal) e **Assinaturas** (cobrança SaaS via PIX da conta CTI).
 
 ```
 Painel Master (/master) — e-mails em MASTER_EMAILS (.env)
@@ -116,6 +116,12 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
   - SQL: `database/escola_integracoes_mercadopago.sql`
   - Sem MP ativo: matrícula só oferece **Carnê Simples**
   - Interface `PixGatewayInterface` para próximos bancos
+- Desconto pontualidade: só no **Carnê Simples** (desativado com PIX)
+
+### 5.2b Configurações da escola (Diretor)
+- `/painel/config/escola` — edita telefone, e-mail, site, endereço, logo, modelo cert, redes
+- Bloqueado no Diretor (só Master): nome, CNPJ, ativo, plano/módulos
+- Menu reorganizado: Campanhas no topo (junto ao WA); Config = Dados / Comunicação / Pagamentos / Contrato; Financeiro começa em Carnês
 
 ### 5.3 CRM
 - `crm_leads` Kanban, funis, histórico, importação planilha
@@ -413,14 +419,37 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | WA a partir de aluno/resp/lead + observações aluno + campanhas grupo recorrentes | Feito (Fase B) |
 | Modelo de contrato por escola + frase certificado | Feito (Fase C) — SQL `database/escolas_modelo_contrato.sql` |
 | Carnê PIX Mercado Pago (credenciais escola + webhook + carnê simples/PIX) | Feito (Fase D–E base) — SQL `database/escola_integracoes_mercadopago.sql` |
+| Dados da escola (Diretor) + menu reorganizado | Feito |
+| Webhook MP: validação `x-signature` quando secret configurado | Feito |
+| CRM: mensagem WA automática ao mudar status (novo / em atendimento / matriculado) | Feito (Fase 5 enxuta) |
+| **Master fase 2 — cobrança SaaS** (PIX conta CTI, faturas, webhook, worker, grace 5 dias) | Feito (MVP) — SQL `database/saas_assinatura.sql` |
+
+### Master fase 2 — Assinaturas SaaS
+- **UI:** `/master/assinaturas` — listar faturas, gerar mês / 1 escola, PIX, marcar paga, rodar worker
+- **Preço:** `planos_assinatura.valor_mensal` (editável em Planos)
+- **Escola:** `dia_vencimento_assinatura` (1–28), `assinatura_status`, `assinatura_proximo_vencimento`
+- **Tabela:** `saas_faturas` (competência YYYY-MM, valor, vencimento, status, mp_payment_id, pix)
+- **Credenciais CTI (.env):** `MP_CTI_ACCESS_TOKEN`, opcional `MP_CTI_WEBHOOK_SECRET`, `MP_CTI_WEBHOOK_TOKEN`, `MP_CTI_PAYER_EMAIL`
+- **Webhook:** `POST /webhook/mercadopago/saas/{token}` (conta CTI — distinto do webhook por escola)
+- **Worker:** `php worker/saas.php` — gera fatura do mês + suspende (`ativo=n`) após 5 dias do vencimento
+- **Fluxo:** plano com preço → gerar fatura → PIX CTI → pagamento (webhook ou manual) → escola ativa; inadimplência → inativa
+
+### Checklist deploy (produção)
+1. Subir código; rodar SQLs pendentes (`escolas_modelo_contrato.sql`, `escola_integracoes_mercadopago.sql`, `saas_assinatura.sql`, etc.)
+2. Liberar no plano: `pagamentos`, `contratos`, `dados_escola` (ou “Todos os módulos”)
+3. HTTPS no site; configurar webhook MP escola + webhook SaaS CTI (`/webhook/mercadopago/saas/...`)
+4. `.env` produção: `MP_CTI_ACCESS_TOKEN` (+ secret/token); cron `worker/saas.php` 1x/dia
+5. Master: definir valor mensal nos planos → Assinaturas → Gerar mês
+6. Diretor: Pagamentos (token) → Dados da escola → Comunicação/WA
+7. Smoke: matrícula Carnê com Pix → pagar → baixa; carnê simples + desconto; CRM drag status com WA conectado; pagar fatura SaaS → escola permanece ativa
 
 ### Próximo (ordem recomendada)
 | Fase | Escopo | Notas |
 |------|--------|-------|
 | **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
-| **Fase 5** | Automações CRM (mensagem ao mudar status do lead) | |
-| **Painel Master (fase 2)** | Planos comerciais, cobrança de assinatura, dashboard SaaS | |
+| **Fase 5+** | Templates editáveis de automação CRM por escola | Base já envia textos fixos |
+| **Master fase 2+** | Dashboard SaaS, e-mail de cobrança da assinatura, trial | MVP PIX já feito |
 
 ### Decisões de produto já alinhadas
 - Cada escola configura **SMTP próprio** (Gmail/corporativo); sistema tem fallback `no-reply@...` no `.env`
