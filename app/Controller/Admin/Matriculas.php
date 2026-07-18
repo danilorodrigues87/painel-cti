@@ -333,9 +333,14 @@ $form = '<form id="form" method="post">
 <label>Primeira Parcela</label>
 <div class="row">
 <div class="col-4">
-<div class="form-group form-check">
-<input type="checkbox" value="1" name="pontualidade" id="pontualidade" onclick="checkPontualidade()" class="form-check-input" ' . (isset($dados['desconto_pontualidade']) && $dados['desconto_pontualidade'] ? 'checked' : '') . '>
-<label class="form-check-label" for="pontualidade">Desconto</label>
+<div class="form-group form-check" id="wrap-desconto-pontualidade">
+<input type="checkbox" value="1" name="pontualidade" id="pontualidade" onclick="checkPontualidade()" class="form-check-input" ' . (
+	(isset($dados['tipo_parcelamento']) && $dados['tipo_parcelamento'] === 'Carnê com Pix')
+		? 'disabled'
+		: ((isset($dados['desconto_pontualidade']) && $dados['desconto_pontualidade']) ? 'checked' : '')
+) . '>
+<label class="form-check-label" for="pontualidade">Desconto pontualidade</label>
+<div class="form-text" id="hint-desconto-pontualidade">Somente no Carnê Simples (10% até o vencimento).</div>
 </div>
 </div>
 
@@ -374,13 +379,13 @@ $form = '<form id="form" method="post">
 </div>
 <div class="form-group col-md-4">
 <label>Tipo Parcelamento</label>
-<select class="form-control" name="tipo_parcelamento">
-<option ' . (isset($dados['tipo_parcelamento']) && $dados['tipo_parcelamento'] == 'Carnê Simples' ? 'selected' : '') . ' value="Carnê Simples">Carnê Simples</option>
+<select class="form-control" name="tipo_parcelamento" id="tipo_parcelamento" onchange="syncDescontoComTipoParcelamento()">
+<option ' . ((!isset($dados['tipo_parcelamento']) || $dados['tipo_parcelamento'] == 'Carnê Simples') ? 'selected' : '') . ' value="Carnê Simples">Carnê Simples</option>
 '.(\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin) ? '
 <option ' . (isset($dados['tipo_parcelamento']) && $dados['tipo_parcelamento'] == 'Carnê com Pix' ? 'selected' : '') . ' value="Carnê com Pix">Carnê com Pix (Mercado Pago)</option>
 ' : '').'
 </select>
-'.(!\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin) ? '<div class="form-text">PIX indisponível: configure em Configurações → Pagamentos.</div>' : '').'
+'.(!\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin) ? '<div class="form-text">PIX indisponível: configure em Configurações → Pagamentos.</div>' : '<div class="form-text">Com Mercado Pago o desconto de pontualidade fica desativado.</div>').'
 </div>
 </div>
 
@@ -390,7 +395,8 @@ $form = '<form id="form" method="post">
 <button type="button" id="btn-fechar" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
 <button type="submit" class="btn btn-primary">Salvar</button>
 </div>
-</form> 
+</form>
+<script>if (typeof syncDescontoComTipoParcelamento === "function") { syncDescontoComTipoParcelamento(); }</script>
 
 ';
 
@@ -421,7 +427,7 @@ public static function setNovaMatricula($request) {
 
  $inicio = $postVars['inicio'] ?? '';
  $fim = $postVars['final'] ?? '';
- $pontualidade = $postVars['pontualidade'] ?? false;
+ $pontualidade = !empty($postVars['pontualidade']) ? 1 : 0;
 
 $resposta = [
         "filtro" => null
@@ -442,8 +448,11 @@ $resposta = [
  $primeiro_mes = filter_var($postVars['primeiromes'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $primeiro_ano = filter_var($postVars['primeiroano'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $tipo_parcelamento = trim(strip_tags((string)($postVars['tipo_parcelamento'] ?? 'Carnê Simples')));
- if ($tipo_parcelamento !== 'Carnê com Pix'
- 	|| !\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin)) {
+ if ($tipo_parcelamento === 'Carnê com Pix'
+ 	&& \App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin)) {
+   // Gateway: sem desconto de pontualidade
+   $pontualidade = 0;
+ } else {
    $tipo_parcelamento = 'Carnê Simples';
  }
 

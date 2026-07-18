@@ -1,10 +1,45 @@
 
 
+// Desconto pontualidade só no Carnê Simples (não no Mercado Pago / PIX)
+function syncDescontoComTipoParcelamento() {
+  var tipo = document.getElementById('tipo_parcelamento');
+  var checkbox = document.getElementById('pontualidade');
+  var hint = document.getElementById('hint-desconto-pontualidade');
+  var valor1 = document.getElementById('valor');
+  if (!tipo || !checkbox) {
+    return;
+  }
+  var comGateway = (tipo.value === 'Carnê com Pix');
+  if (comGateway) {
+    checkbox.checked = false;
+    checkbox.disabled = true;
+    if (hint) {
+      hint.textContent = 'Indisponível com Carnê com Pix (Mercado Pago).';
+    }
+    if (typeof jQuery !== 'undefined') {
+      $('#obs').text('');
+    }
+    if (valor1) {
+      valor1.removeAttribute('readonly');
+    }
+  } else {
+    checkbox.disabled = false;
+    if (hint) {
+      hint.textContent = 'Somente no Carnê Simples (10% até o vencimento).';
+    }
+    if (typeof checkPontualidade === 'function') {
+      checkPontualidade();
+    }
+  }
+}
 
 // FUNÇÃO PARA DESCONTO PONTUALIDADE
 function checkPontualidade() {
   let checkbox = document.getElementById("pontualidade");
   let valor1 = document.getElementById("valor");
+  if (!checkbox || !valor1 || checkbox.disabled) {
+    return;
+  }
   let valor = parseFloat(valor1.value);
 
   let valor3 = valor * 90 / 100;

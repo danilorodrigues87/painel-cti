@@ -686,7 +686,6 @@ $valor_pagar = floatval($valor_pagar);
         $qrCode = '<tr>
         <td rowspan="4">
         <img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data='.$pixPayload.'" alt="PIX">
-        <div style="font-size:7px;max-width:130px;word-break:break-all;margin-top:2px;">'.htmlspecialchars((string)$obCaixa->pix_copia_cola, ENT_QUOTES, 'UTF-8').'</div>
         </td>
         </tr>';
       }
