@@ -55,12 +55,19 @@ class Router{
 		//VARIAVEIS DA ROTA
 		$params['variables'] = [];
 
+		// {nome+} captura um ou mais segmentos (ex.: auth/login)
+		$patternPlus = '/\{([a-zA-Z_][a-zA-Z0-9_]*)\+\}/';
+		if (preg_match_all($patternPlus, $route, $matchesPlus)) {
+			$route = preg_replace($patternPlus, '(.+)', $route);
+			$params['variables'] = array_merge($params['variables'], $matchesPlus[1]);
+		}
+
 		//PADRÃO DE VALIDAÇÃO DAS VARIAVEIS DAS ROTAS
 		// ([^/]+) = um segmento; evita /courses/{id} capturar /courses/2/lessons/2
-		$patternVariable = '/{(.*?)}/';
-		if(preg_match_all($patternVariable,$route,$matches)){
-			$route = preg_replace($patternVariable, '([^/]+)',$route);
-			$params['variables'] = $matches[1];
+		$patternVariable = '/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/';
+		if (preg_match_all($patternVariable, $route, $matches)) {
+			$route = preg_replace($patternVariable, '([^/]+)', $route);
+			$params['variables'] = array_merge($params['variables'], $matches[1]);
 		}
 
 		//REMOVE BARRA NO FINAL DA ROTA

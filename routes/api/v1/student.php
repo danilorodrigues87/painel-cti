@@ -32,8 +32,8 @@ $obRouter->post('/api/v1/student/auth/first-access', [
 	}
 ]);
 
-// Preflight CORS (Router::options + middleware CorsStudent)
-$obRouter->options('/api/v1/student/{path}', [
+// Preflight CORS — {path+} cobre /auth/login, /courses/1/lessons/2, etc.
+$obRouter->options('/api/v1/student/{path+}', [
 	'middlewares' => ['cors-student'],
 	function () {
 		return new Response(204, '', 'application/json');
