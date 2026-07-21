@@ -56,9 +56,10 @@ class Router{
 		$params['variables'] = [];
 
 		//PADRÃO DE VALIDAÇÃO DAS VARIAVEIS DAS ROTAS
+		// ([^/]+) = um segmento; evita /courses/{id} capturar /courses/2/lessons/2
 		$patternVariable = '/{(.*?)}/';
 		if(preg_match_all($patternVariable,$route,$matches)){
-			$route = preg_replace($patternVariable, '(.*?)',$route);
+			$route = preg_replace($patternVariable, '([^/]+)',$route);
 			$params['variables'] = $matches[1];
 		}
 
@@ -92,6 +93,11 @@ class Router{
 		return $this->addRoute('DELETE',$route,$params);
 	}
 
+	// CORS preflight (portal aluno / APIs)
+	public function options($route,$params = []){
+		return $this->addRoute('OPTIONS',$route,$params);
+	}
+
 	public function getUri(){
 		//URI DA REQUEST
 		$uri = $this->request->getUri();
@@ -109,33 +115,39 @@ class Router{
 		
 		//METHOD
 		$httpMethod = $this->request->getHttpMethod();
+
+		// URI bateu em algum padrão (ex.: OPTIONS catch-all), mas sem o método atual
+		$uriMatched = false;
 		
 		//VALIDA AS ROTAS 
 		foreach($this->routes as $patternRoute=>$methods){
 
 			//VERIFICA SE A URI BATE O PADRÃO
 			if(preg_match($patternRoute,$uri,$matches)){
+				$uriMatched = true;
 
-				//VERIFICA O METHOD
-				if(isset($methods[$httpMethod])){
-
-					//REMOVE A PRIMEIRA POSIÇÃO
-					unset($matches[0]);
-
-					//VARIAVEIS PROCESSADAS 
-					$keys = $methods[$httpMethod]['variables'];
-					$methods[$httpMethod]['variables'] = array_combine($keys, $matches);
-					$methods[$httpMethod]['variables']['request'] = $this->request; 
-
-
-					//RETORNA OS PARAMETROS DA ROTA
-					return $methods[$httpMethod];
+				//VERIFICA O METHOD — se não tiver, tenta o próximo padrão
+				// (evita 405 quando OPTIONS /{path} casa antes de GET /courses)
+				if(!isset($methods[$httpMethod])){
+					continue;
 				}
 
-				//MÉTODO NÃO PERMITIDO
-				throw new Exception(View::render('erros/405',[]), 405);
+				//REMOVE A PRIMEIRA POSIÇÃO
+				unset($matches[0]);
 
+				//VARIAVEIS PROCESSADAS 
+				$keys = $methods[$httpMethod]['variables'];
+				$methods[$httpMethod]['variables'] = array_combine($keys, $matches);
+				$methods[$httpMethod]['variables']['request'] = $this->request; 
+
+
+				//RETORNA OS PARAMETROS DA ROTA
+				return $methods[$httpMethod];
 			}
+		}
+
+		if($uriMatched){
+			throw new Exception(View::render('erros/405',[]), 405);
 		}
 
 		//URL NÃO ENCONTRADA

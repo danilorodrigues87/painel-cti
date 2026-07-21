@@ -19,6 +19,7 @@ class SystemModules {
 		'vouchers'        => 'Vouchers',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
+		'ead'             => 'Cursos Online',
 		'certificacoes'   => 'Certificações',
 		'alunos'          => 'Alunos',
 		'matriculas'      => 'Matriculas',
@@ -66,6 +67,19 @@ class SystemModules {
 		}
 		$slug = array_search($label, self::$catalog, true);
 		return $slug !== false ? $slug : null;
+	}
+
+	/**
+	 * Nome seguro de campo HTML/POST para permissão (slug).
+	 * Evita espaços: PHP converte "cursos Online" em "cursos_Online" e o save falhava.
+	 */
+	public static function campoPermissao(?string $label): string {
+		$slug = self::labelParaSlug((string)$label);
+		if ($slug !== null) {
+			return 'perm_'.$slug;
+		}
+		$safe = preg_replace('/[^a-z0-9_]+/i', '_', (string)$label);
+		return 'perm_'.strtolower((string)$safe);
 	}
 
 	public static function normalizarLabel(?string $label): ?string {
@@ -147,6 +161,10 @@ class SystemModules {
 					[
 						'label' => 'Trilhas',
 						'link' => URL.'/painel/trilhas'
+					],
+					[
+						'label' => 'Cursos Online',
+						'link' => URL.'/painel/ead'
 					],
 					[
 						'label' => 'Categorias',
@@ -261,6 +279,10 @@ class SystemModules {
 					[
 						'label' => 'Pagamentos',
 						'link' => URL.'/painel/config/pagamentos'
+					],
+					[
+						'label' => 'IA Pedagógica',
+						'link' => URL.'/painel/config/ia'
 					],
 					[
 						'label' => 'Modelo de contrato',

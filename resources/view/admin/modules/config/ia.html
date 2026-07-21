@@ -1,0 +1,47 @@
+<h1 class="mt-4">IA Pedagógica</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Chave de API para role play e tutor no portal do aluno</li>
+</ol>
+
+<div id="alert-sql-ia" class="alert alert-warning d-none">
+	Execute o SQL <code>database/lms_ead.sql</code> no phpMyAdmin.
+</div>
+
+<div class="card mb-4">
+	<div class="card-header d-flex justify-content-between">
+		<span><i class="fa-solid fa-robot me-1"></i> Provedor de IA da escola</span>
+		<span id="badge-ia-status" class="badge bg-secondary">—</span>
+	</div>
+	<div class="card-body">
+		<p class="text-muted small">
+			A chave fica criptografada e <strong>nunca</strong> é enviada ao portal do aluno.
+			Sem chave, role play e tutor usam respostas stub até você configurar.
+		</p>
+		<div class="form-check form-switch mb-3">
+			<input class="form-check-input" type="checkbox" id="ai_ativo">
+			<label class="form-check-label" for="ai_ativo">Ativar IA nesta escola</label>
+		</div>
+		<div class="mb-3">
+			<label class="form-label" for="ai_provider">Provedor</label>
+			<select class="form-select" id="ai_provider">
+				<option value="">—</option>
+				<option value="openai">OpenAI (ChatGPT)</option>
+				<option value="gemini">Google Gemini</option>
+				<option value="outro">Outro (compatível OpenAI)</option>
+			</select>
+		</div>
+		<div class="mb-3">
+			<label class="form-label" for="ai_model">Modelo</label>
+			<input type="text" class="form-control" id="ai_model" placeholder="ex: gpt-4o-mini, gemini-2.0-flash">
+			<div class="form-text">Gemini: prefira <code>gemini-2.0-flash</code> (modelos 1.5 podem falhar).</div>
+		</div>
+		<div class="mb-3">
+			<label class="form-label" for="ai_api_key">API Key</label>
+			<input type="password" class="form-control" id="ai_api_key" autocomplete="new-password" placeholder="Cole a chave">
+			<div class="form-text" id="ai_key_hint">Deixe em branco para manter a chave já salva.</div>
+		</div>
+		<button type="button" class="btn btn-primary" id="btn-salvar-ia">Salvar</button>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/config-ia.js?v=20260720a"></script>

@@ -58,6 +58,10 @@ class EscolaIntegracoes {
 	public $mp_access_token;
 	public $mp_webhook_secret;
 	public $mp_webhook_token;
+	public $ai_ativo = 0;
+	public $ai_provider;
+	public $ai_api_key;
+	public $ai_model;
 	public $updated_at;
 
 	public static function temColunasCobranca(): bool {
@@ -200,6 +204,26 @@ class EscolaIntegracoes {
 		return $cache;
 	}
 
+	public static function temColunasAi(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'ai_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
 	public static function tabelaExiste(): bool {
 		try {
 			$host = getenv('DB_HOST');
@@ -328,6 +352,59 @@ class EscolaIntegracoes {
 		}
 		$db->insert($dados);
 		return true;
+	}
+
+	/**
+	 * Atualiza só campos de IA pedagógica.
+	 * @param ?string $apiKeyNova null = manter; string = criptografar
+	 */
+	public function salvarAi(?string $apiKeyNova): bool {
+		self::$ultimoErro = null;
+		if (!self::temColunasAi()) {
+			self::$ultimoErro = 'Colunas de IA ausentes. Execute database/lms_ead.sql.';
+			return false;
+		}
+
+		$dados = [
+			'ai_ativo' => (int)$this->ai_ativo,
+			'ai_provider' => $this->ai_provider ?: null,
+			'ai_model' => $this->ai_model ?: null,
+		];
+
+		if ($apiKeyNova !== null && $apiKeyNova !== '') {
+			$cript = CryptoHelper::encrypt($apiKeyNova);
+			if ($cript === null) {
+				self::$ultimoErro = 'Não foi possível criptografar a API key.';
+				return false;
+			}
+			$dados['ai_api_key'] = $cript;
+		}
+
+		$existente = self::getByIdAdmin((int)$this->id_admin);
+		$db = new Database('escola_integracoes');
+
+		if ($existente instanceof self) {
+			$db->update('id_admin = '.(int)$this->id_admin, $dados);
+			return true;
+		}
+
+		$dados['id_admin'] = (int)$this->id_admin;
+		$dados['smtp_pass'] = null;
+		$dados['smtp_port'] = 587;
+		$dados['smtp_encryption'] = 'tls';
+		$dados['smtp_ativo'] = 0;
+		$db->insert($dados);
+		return true;
+	}
+
+	public function getAiApiKeyDescriptografada(): ?string {
+		return CryptoHelper::decrypt($this->ai_api_key ?? null);
+	}
+
+	public function temAiAtivo(): bool {
+		return self::temColunasAi()
+			&& (int)$this->ai_ativo === 1
+			&& !empty($this->getAiApiKeyDescriptografada());
 	}
 
 	public function salvar(): bool {

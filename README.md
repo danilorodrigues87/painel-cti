@@ -3,7 +3,10 @@
 Sistema de gestão escolar multi-tenant (PHP MVC) para escolas de informática / educação tecnológica.
 
 **Ambiente:** XAMPP (local) e Linux (produção)  
-**Stack:** PHP 8.x · MySQL · Bootstrap 5 · jQuery · PHPMailer · Composer
+**Stack:** PHP 8.x · MySQL · Bootstrap 5 · jQuery · PHPMailer · Composer  
+**DB local típico:** `cti_admin` (ver `.env`)
+
+Documentação completa (módulos, SQL, roadmap, handoff para IA): **[`ARCHITECTURE.md`](ARCHITECTURE.md)**
 
 ---
 
@@ -11,12 +14,13 @@ Sistema de gestão escolar multi-tenant (PHP MVC) para escolas de informática /
 
 | Área | Funcionalidades |
 |------|-----------------|
-| **Pedagógico** | Alunos, responsáveis, trilhas/cursos, matrículas, certificados |
-| **Financeiro** | Entrada/saída de caixa, carnês, carrinho de pagamento, relatórios, PIX Mercado Pago |
-| **CRM** | Leads (Kanban), funis, tarefas (Trello-like), histórico |
-| **Agenda** | Laboratórios, horários, agendamentos, diário de presença |
-| **Comunicação** | SMTP por escola, campanhas de e-mail, cobrança automática de mensalidades |
-| **Acesso** | Multi-escola (`id_admin`), permissões por usuário ∩ módulos liberados da escola |
+| **Master** | `/master` — escolas, planos (valor mensal), assinaturas SaaS (PIX conta CTI) |
+| **Pedagógico** | Alunos, responsáveis, trilhas/cursos, **Cursos Online (EAD)**, matrículas, certificados, modelo de contrato |
+| **Financeiro** | Caixa, carnês (simples / PIX MP da escola), relatórios, **Assinatura** do painel (PIX CTI) |
+| **CRM** | Leads (Kanban), tarefas, histórico, WA automático em mudança de status |
+| **Agenda** | Laboratórios, horários, agendamentos, diário |
+| **Comunicação** | SMTP por escola, campanhas e-mail, cobrança mensalidade alunos, WhatsApp (Evolution) |
+| **Acesso** | Multi-escola (`id_admin`), permissões usuário ∩ módulos do plano/escola |
 
 ---
 
@@ -32,13 +36,10 @@ Sistema de gestão escolar multi-tenant (PHP MVC) para escolas de informática /
 ## Instalação rápida (local)
 
 1. Clone / copie o projeto para `htdocs` (ex.: `C:\xampp\htdocs\pjt\painel-cti`)
-2. Instale dependências:
-   ```bash
-   composer install
-   ```
-3. Crie o arquivo `.env` na raiz (baseado nas variáveis abaixo)
-4. Configure o virtual host ou acesse via subpasta (ex.: `http://localhost/pjt/painel-cti/painel`)
-5. Rode no phpMyAdmin os SQLs pendentes descritos em [`ARCHITECTURE.md`](ARCHITECTURE.md) (seção SQL / migrações)
+2. `composer install`
+3. Copie `.env.example` → `.env` e preencha
+4. Acesse (ex.: `http://localhost/pjt/painel-cti/painel`)
+5. Rode no phpMyAdmin os SQLs em `database/` (ver `ARCHITECTURE.md`)
 
 ### Variáveis `.env` essenciais
 
@@ -47,25 +48,53 @@ URL=http://localhost/pjt/painel-cti
 SITE=Painel CTI
 TIMEZONE=America/Sao_Paulo
 SYSTEM_TOKEN=token-secreto-do-sistema
-APP_KEY=chave-longa-para-criptografia-smtp
+APP_KEY=chave-longa-para-criptografia
 
 DB_HOST=localhost
-DB_NAME=seu_banco
+DB_NAME=cti_admin
 DB_USER=root
 DB_PASS=
 
-# E-mail padrão do SISTEMA (recuperação de senha / fallback)
-SMTP_HOST=smtp.exemplo.com
+# E-mail padrão do SISTEMA (recuperação / fallback)
+SMTP_HOST=
 SMTP_PORT=587
-SMTP_USER=no-reply@ctieducacional.com.br
+SMTP_USER=
 SMTP_PASS=
-SMTP_CHARSET=UTF-8
-SMTP_FROM_EMAIL=no-reply@ctieducacional.com.br
-SMTP_FROM_NAME=CTI Educacional
+SMTP_FROM_EMAIL=
+SMTP_FROM_NAME=
 SMTP_ENCRYPTION=tls
+
+# Quem acessa /master (vírgula)
+MASTER_EMAILS=seu@email.com
+
+# Evolution (WhatsApp) — global
+EVOLUTION_URL=
+EVOLUTION_API_KEY=
+EVOLUTION_WEBHOOK_SECRET=
+
+# Mercado Pago CTI — cobrança SaaS das escolas (não é o token do carnê do aluno)
+MP_CTI_ACCESS_TOKEN=
+MP_CTI_WEBHOOK_SECRET=
+MP_CTI_WEBHOOK_TOKEN=
+MP_CTI_PAYER_EMAIL=
 ```
 
-> Cada escola também pode configurar SMTP próprio em **Configurações → Comunicação**.
+> SMTP da escola: **Configurações → Comunicação**.  
+> PIX dos alunos: **Configurações → Pagamentos** (token da escola).  
+> PIX da assinatura CTI: credenciais `MP_CTI_*` no `.env`.
+
+---
+
+## Assinatura SaaS (resumo)
+
+1. Master → Planos: definir **valor mensal**
+2. Master → Escolas: vincular plano + dia de vencimento
+3. Master → Assinaturas: **Gerar mês** (ou cron `worker/saas.php`)
+4. Diretor → Financeiro → **Assinatura**: pagar PIX (QR + copia e cola)
+5. Webhook CTI ou botão “Já paguei” / Master “marcar paga”
+6. Após 5 dias do vencimento sem pagamento → escola `ativo=n` (login bloqueado)
+
+SQL: `database/saas_assinatura.sql` e, se preciso, `database/saas_faturas_pix_qr.sql`.
 
 ---
 
@@ -74,18 +103,18 @@ SMTP_ENCRYPTION=tls
 ```
 painel-cti/
 ├── app/
-│   ├── Common/          # Helpers, Email, workers helpers, SystemModules
-│   ├── Controller/      # Admin, Autentication, Api
-│   ├── Model/Entity/    # Entities + Database
-│   ├── Http/            # Router, Request, Response, Middlewares
-│   └── Session/         # Login / sessão
-├── includes/app.php     # Bootstrap (env, URL, middlewares)
-├── resources/           # Views HTML, JS, CSS, assets
-├── routes/              # Rotas admin + API
-├── worker/              # CLI: campanhas.php, cobranca.php
-├── index.php
+│   ├── Common/          # Helpers, Gateways MP, SystemModules, SaasAssinaturaService
+│   ├── Controller/      # Admin, Master, Webhook, Autentication, Api
+│   ├── Model/Entity/
+│   ├── Http/
+│   └── Session/
+├── database/            # Scripts SQL para phpMyAdmin
+├── includes/app.php
+├── resources/           # Views, JS, CSS
+├── routes/              # admin + master + api
+├── worker/              # campanhas.php, cobranca.php, saas.php
 ├── README.md
-└── ARCHITECTURE.md      # Documento completo para humanos e IAs
+└── ARCHITECTURE.md
 ```
 
 ---
@@ -93,32 +122,24 @@ painel-cti/
 ## Workers (cron)
 
 ```bash
-# Diagnóstico (não envia e-mail)
-php worker/status-email.php
-php worker/status-email.php 1
-
-# Campanhas de e-mail em fila (a cada 1 min em produção)
-php worker/campanhas.php
-
-# Cobrança automática de mensalidades (1x/dia, ex.: 08:00)
-php worker/cobranca.php
+php worker/campanhas.php          # fila e-mail (a cada 1 min)
+php worker/cobranca.php           # mensalidades alunos (1x/dia)
+php worker/saas.php               # assinatura SaaS escolas (1x/dia)
+php worker/status-email.php       # diagnóstico (não envia)
 ```
-
-Checklist completo de produção (cron Windows/Linux, testes seguros, critérios de pronto): **[`docs/OPERACAO_EMAIL.md`](docs/OPERACAO_EMAIL.md)**
-
-No XAMPP, também há botões **Processar fila agora** / **Enviar agora** / **Simular hoje** nas telas do painel.
 
 ---
 
 ## Convenções importantes
 
-- Tenant = `id_admin` (escola em `escolas_assinantes`)
-- SQL novo: preferir colar no **phpMyAdmin** (não criar `.sql` no repo sem necessidade)
-- Commits Git: só quando o usuário pedir
-- AJAX sempre com `url_base + rota` (`resources/js/url-base.js`)
-- Controllers e Entities com o mesmo nome: usar alias `EntityX` no controller
+- Tenant = `id_admin` (`escolas_assinantes`)
+- AJAX: sempre `url_base + rota` (`resources/js/url-base.js`)
+- SQL novo: script em `database/` + usuário cola no phpMyAdmin
+- Commits / push: só quando o usuário pedir
+- Controllers/Entities com mesmo nome: usar alias
+- `Response` + `application/json`: se o body já for string JSON, não re-encodar
 
-Documentação detalhada de arquitetura, módulos, SQLs e roadmap: **[`ARCHITECTURE.md`](ARCHITECTURE.md)**
+Para agentes de IA: leia **`ARCHITECTURE.md` seção 8–12** (roadmap, armadilhas, handoff).
 
 ---
 

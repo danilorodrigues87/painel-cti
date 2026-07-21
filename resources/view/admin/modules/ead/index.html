@@ -1,0 +1,40 @@
+<h1 class="mt-4">Pedagógico</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Cursos Online (EAD)</li>
+</ol>
+
+<div id="alert-sql-ead" class="alert alert-warning d-none">
+	Execute o SQL <code>database/lms_ead.sql</code> no phpMyAdmin antes de usar este módulo.
+</div>
+
+<p class="text-muted">
+	Conteúdo do portal do aluno ligado às suas <strong>Trilhas</strong> (matrícula/contrato não mudam).
+	Cada aula pode ter vários vídeos, PDFs/links, atividades e role play — ou só um material.
+</p>
+
+<div class="card shadow mb-4">
+	<div class="card-header d-flex justify-content-between align-items-center">
+		<span><i class="fa-solid fa-laptop-code me-1"></i> Trilhas × conteúdo EAD</span>
+		<a href="{{URL}}/painel/trilhas" class="btn btn-sm btn-outline-secondary">Gerenciar Trilhas</a>
+	</div>
+	<div class="card-body">
+		<div class="table-responsive">
+			<table class="table table-striped align-middle" id="tabela-ead">
+				<thead>
+					<tr>
+						<th>Trilha</th>
+						<th>Carga h</th>
+						<th>Aulas</th>
+						<th>Status</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody id="ead-tbody">
+					<tr><td colspan="5" class="text-muted">Carregando…</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/ead-cursos.js?v=20260720a"></script>

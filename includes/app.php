@@ -60,6 +60,8 @@ MiddlewareQueue::setMap([
 	'api' => \App\Http\Middleware\Api::class,
 	'user-basic-auth' => \App\Http\Middleware\UserBasicAuth::class,
 	'jwt-auth' => \App\Http\Middleware\JWTAuth::class,
+	'student-jwt' => \App\Http\Middleware\StudentJwtAuth::class,
+	'cors-student' => \App\Http\Middleware\CorsStudent::class,
 	'cache' => \App\Http\Middleware\Cache::class
 ]);
 

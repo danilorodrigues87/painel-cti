@@ -3,8 +3,9 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-18  
+**Última atualização:** 2026-07-21 (LMS Fase 1 — editor admin + checklist produção)  
 **Repo:** `painel-cti`  
+**DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
 **Estilo:** segurança e performance · Migração de upload manual → Git em andamento
 
@@ -13,7 +14,8 @@
 ## 1. Visão geral do produto
 
 Painel administrativo multi-tenant para **escolas** (assinantes). Cada escola é isolada por `id_admin`.  
-Há um **Painel Master** em `/master`: escolas, planos (com valor mensal) e **Assinaturas** (cobrança SaaS via PIX da conta CTI).
+Há um **Painel Master** em `/master`: escolas, planos (com valor mensal) e **Assinaturas** (cobrança SaaS via PIX da conta CTI).  
+O Diretor da escola paga a mensalidade do painel em **Financeiro → Assinatura** (`/painel/assinatura`).
 
 ```
 Painel Master (/master) — e-mails em MASTER_EMAILS (.env)
@@ -180,6 +182,37 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 - `EmailValidator` aplicado em: Alunos, Responsáveis, Funcionários, Perfil, Leads (form + planilha), Register
 - Funcionários/perfil/register: e-mail **obrigatório** e válido
 - Alunos/responsáveis/leads: e-mail **opcional**; se preenchido, não pode ser fake (`sem@email.com`, etc.)
+
+### 5.8 LMS / Cursos Online (EAD) + portal aluno
+Camada **paralela** às Trilhas — **não** altera contratos/`matriculas.modulos` (texto livre do contrato).
+
+```
+trilhas (comercial) → lms_cursos (1:1 por tenant)
+  → lms_modulos (agrupamento opcional; painel pode usar 1 módulo "Conteúdo")
+    → lms_aulas (container flexível)
+         → lms_videos (0..N) — YouTube: aceitar URL completo; API normaliza para /embed/{id}
+         → lms_materiais (0..N PDF/link/arquivo)
+         → lms_atividades / lms_questoes (0..N) — aparecem no curriculum após a aula
+         → lms_roleplay_cenarios (0..N) — idem
+  → lms_xp_ledger (XP por escola / id_admin)
+```
+
+- **Entitlement:** matrícula ativa (`matriculas.status=0` + datas) + `lms_cursos.publicado=1` + mesmo `id_admin`
+- **Painel:** slug `ead` → **Cursos Online** (`/painel/ead`); Config IA `/painel/config/ia`
+- **Editor admin (Fase 1):** criar/editar/excluir vídeo, material, atividade (`tentativas_max`, duração), questão, roleplay; botões **Preview** (visão do aluno, sem gabarito/prompt secreto). JS: `resources/js/ead-editor.js`
+- **SQL (ordem):** `lms_ead.sql` → `lms_xp.sql` → `lms_atividade_tentativas_status.sql` → `lms_ciclo_avaliacao.sql` — ver `database/LMS_CHECKLIST_PRODUCAO.md`
+- **API aluno:** `/api/v1/student/*` (JWT Cliente; CORS; mapper Ascend). **Não** usar API legada `/api/v1/trilhas`
+- **Portal:** `ascend-academy` — marca **CTI Educacional** (`public/brand/cti-logo.png`); build com `VITE_API_BASE_URL` apontando para a API
+- **Player (estilo Udemy):** ao abrir `/courses/{id}` redireciona ao 1º item; sidebar com currículo (aulas+atividades+roleplay) + aba Assistente IA; abas sob o vídeo (visão geral / materiais / anotações / comentários)
+- **Menu global:** sem Avaliações/Roleplay/IA isolados — ficam no currículo do curso; Ranking da escola via `GET /ranking`
+- **Fluxo de atividade (sequencial):** `POST .../assessments/{id}/start` → `answer` (1 questão, trava) → `finalize`. V/F = botões true/false. Abertas corrigidas por IA (`LmsAiService::gradeEssay`). **N tentativas por ciclo** (`tentativas_max`, padrão 3). Média da unidade = atividades + roleplay (≥70% aprova). Se reprovar: `precisa_revisar` → reassistir aula → novo ciclo (+N)
+- **Roleplay:** chat embutido no player; timer = `estimated_minutes`; `sendMessage`/`finish` bloqueiam sessão encerrada/tempo esgotado; `base_prompt` **nunca** no GET aluno
+- **Assistente IA:** contexto = título/descrição da aula + labels dos materiais; guardrails; máx. ~40 msgs/conversa; modelo padrão Gemini `gemini-2.0-flash`
+- **XP:** aula `10+min(dur,30)`; atividade aprovada `30+40*nota/100`; roleplay `40+score*0.3`; streak diário `5`; ranking **sempre** por `id_admin`
+- **Hard rules:** não misturar com `agenda_*`; gabarito nunca no GET; chave AI com `CryptoHelper`
+- **Futuro L6+:** vitrine entre escolas + royalties (CTI %) — **não** implementar agora
+
+Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates.
 
 ---
 
@@ -424,33 +457,65 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | CRM: mensagem WA automática ao mudar status (novo / em atendimento / matriculado) | Feito (Fase 5 enxuta) |
 | **Master fase 2 — cobrança SaaS** (PIX conta CTI, faturas, webhook, worker, grace 5 dias) | Feito (MVP) — SQL `database/saas_assinatura.sql` |
 
-### Master fase 2 — Assinaturas SaaS
-- **UI Master:** `/master/assinaturas` — listar faturas, gerar mês / 1 escola, PIX, marcar paga, rodar worker
-- **UI Escola (Diretor):** `/painel/assinatura` (menu Financeiro → Assinatura) — fatura aberta, PIX copia e cola, atualizar PIX, verificar pagamento, histórico
-- **Preço:** `planos_assinatura.valor_mensal` (editável em Planos)
-- **Escola:** `dia_vencimento_assinatura` (1–28), `assinatura_status`, `assinatura_proximo_vencimento`
-- **Tabela:** `saas_faturas` (competência YYYY-MM, valor, vencimento, status, mp_payment_id, pix)
-- **Credenciais CTI (.env):** `MP_CTI_ACCESS_TOKEN`, opcional `MP_CTI_WEBHOOK_SECRET`, `MP_CTI_WEBHOOK_TOKEN`, `MP_CTI_PAYER_EMAIL`
-- **Webhook:** `POST /webhook/mercadopago/saas/{token}` (conta CTI — distinto do webhook por escola)
-- **Worker:** `php worker/saas.php` — gera fatura do mês + suspende (`ativo=n`) após 5 dias do vencimento
-- **Fluxo:** plano com preço → gerar fatura → PIX CTI → Diretor paga em `/painel/assinatura` (ou Master envia PIX) → webhook/verificar → escola ativa; inadimplência → inativa (login bloqueado — regularizar via Master/suporte)
+### Master fase 2 — Assinaturas SaaS (FEITO — MVP operacional)
+Dois Mercado Pago distintos:
+1. **Escola** — carnê de alunos (`escola_integracoes.mp_*`, webhook `/webhook/mercadopago/{idAdmin}/{token}`)
+2. **CTI** — assinatura SaaS (`.env` `MP_CTI_*`, webhook `/webhook/mercadopago/saas/{token}`)
+
+| Peça | Onde |
+|------|------|
+| SQL | `database/saas_assinatura.sql` + `database/saas_faturas_pix_qr.sql` (coluna QR se tabela já existia) |
+| Service | `app/Common/Helpers/SaasAssinaturaService.php` |
+| MP CTI | `app/Common/Helpers/MercadoPagoCtiHelper.php` |
+| Entity | `app/Model/Entity/SaasFatura.php` |
+| Master UI | `/master/assinaturas` — Gerar mês / Gerar 1 escola / Rodar worker; PIX + QR; marcar paga |
+| Escola UI | `/painel/assinatura` (só Diretor) — fatura aberta, QR + copia-e-cola, atualizar PIX, verificar pagamento |
+| Planos | `planos_assinatura.valor_mensal` (Master → Planos) |
+| Escola | `dia_vencimento_assinatura` (1–28), `assinatura_status`, `assinatura_proximo_vencimento` |
+| Worker | `php worker/saas.php` — fatura do mês atual + suspende após **5 dias** de grace |
+| QR PIX | Prefere `pix_qr_base64` (MP); fallback `api.qrserver.com` a partir do copia-e-cola |
+
+**Regras de cobrança:**
+- Só gera fatura se a escola tem `plan_id` e o plano tem `valor_mensal > 0`
+- **Plano personalizado** (`plan_id` vazio) **não é cobrado** automaticamente
+- Escola inativa (`ativo=n`) **não faz login** no painel — após suspensão, regularizar via Master (marcar paga) ou suporte
+
+**Botões Master:**
+| Botão | Competência | Escopo | Suspende? |
+|-------|-------------|---------|-----------|
+| Gerar mês | filtro | todas elegíveis | não |
+| Gerar 1 escola | filtro | 1 escola (filtro) | não |
+| Rodar worker | mês de hoje | filtro ou todas | sim (grace 5d) |
+
+**Armadilha Response JSON:** `App\Http\Response` com `application/json` **não** deve re-encodar string já JSON (corrigido: se `is_string`, echo direto). Controllers Master/Admin costumam já devolver `json_encode(...)`.
 
 ### Checklist deploy (produção)
-1. Subir código; rodar SQLs pendentes (`escolas_modelo_contrato.sql`, `escola_integracoes_mercadopago.sql`, `saas_assinatura.sql`, etc.)
-2. Liberar no plano: `pagamentos`, `contratos`, `dados_escola` (ou “Todos os módulos”)
-3. HTTPS no site; configurar webhook MP escola + webhook SaaS CTI (`/webhook/mercadopago/saas/...`)
-4. `.env` produção: `MP_CTI_ACCESS_TOKEN` (+ secret/token); cron `worker/saas.php` 1x/dia
-5. Master: definir valor mensal nos planos → Assinaturas → Gerar mês
-6. Diretor: Pagamentos (token) → Dados da escola → Comunicação/WA
-7. Smoke: matrícula Carnê com Pix → pagar → baixa; carnê simples + desconto; CRM drag status com WA conectado; pagar fatura SaaS → escola permanece ativa
+1. Subir código; rodar SQLs: `escolas_modelo_contrato.sql`, `escola_integracoes_mercadopago.sql`, `saas_assinatura.sql`, `saas_faturas_pix_qr.sql` (se necessário)
+2. Liberar no plano: `pagamentos`, `contratos`, `dados_escola`, `ead` (ou “Todos os módulos”)
+3. HTTPS; webhook MP escola + webhook SaaS CTI
+4. `.env`: `MP_CTI_ACCESS_TOKEN`, opcional secret/token/payer email; cron `worker/saas.php` 1x/dia
+5. Master: valor mensal nos planos → Assinaturas → Gerar mês
+6. Diretor: Pagamentos (token alunos) → Assinatura (pagar CTI) → Dados / Comunicação/WA
+7. Smoke: carnê PIX aluno; fatura SaaS + QR; pagamento → escola ativa
+
+### Checklist deploy LMS / portal aluno
+Detalhe: `database/LMS_CHECKLIST_PRODUCAO.md`
+
+1. SQL na ordem: `lms_ead.sql` → `lms_xp.sql` → `lms_atividade_tentativas_status.sql` → `lms_ciclo_avaliacao.sql`
+2. Config IA (chave + modelo `gemini-2.0-flash` ou OpenAI)
+3. Curso publicado + matrícula ativa do aluno
+4. Ascend: `VITE_API_BASE_URL=https://…/api/v1/student` → `npm run build` → publicar `dist`
+5. Smoke: login → player → atividade → roleplay → IA → ranking; admin editar/preview
 
 ### Próximo (ordem recomendada)
 | Fase | Escopo | Notas |
 |------|--------|-------|
-| **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | |
+| **LMS L0–L5 + Fase 1** | Cursos Online + API + Ascend + editor admin + checklist prod | Feito — ver §5.8 + `LMS_CHECKLIST_PRODUCAO.md` |
+| **LMS L6+** | Vitrine EAD entre escolas + royalties (CTI %) + aula demo | Futuro — não abrir sem pedido |
+| **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | Adiado |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 5+** | Templates editáveis de automação CRM por escola | Base já envia textos fixos |
-| **Master fase 2+** | Dashboard SaaS, e-mail de cobrança da assinatura, trial | MVP PIX já feito |
+| **Master fase 2+** | Dashboard SaaS, e-mail cobrança assinatura, trial, valor por escola (personalizado), login restrito só Assinatura quando inativa | Adiado (MVP PIX feito) |
 
 ### Decisões de produto já alinhadas
 - Cada escola configura **SMTP próprio** (Gmail/corporativo); sistema tem fallback `no-reply@...` no `.env`
@@ -488,14 +553,22 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 # Fila de campanhas (produção: cron * * * * *)
 php worker/campanhas.php [id_admin] [limite]
 
-# Cobrança diária (produção: 0 8 * * *)
+# Cobrança diária mensalidades alunos (produção: 0 8 * * *)
 php worker/cobranca.php [id_admin]
+
+# Assinatura SaaS escolas → CTI (produção: 0 7 * * *)
+php worker/saas.php [id_admin]
 ```
 
 Painel (Diretor):
-- `/painel/config/comunicacao` — SMTP, cobrança, aniversário, WhatsApp (Evolution)
-- `/painel/config/contrato` — modelo HTML do contrato + frase do certificado (`NULL` = padrão CTI/escola 1)
+- `/painel/assinatura` — pagar mensalidade do Painel CTI (PIX)
+- `/painel/config/comunicacao` — SMTP, cobrança alunos, aniversário, WhatsApp (Evolution)
+- `/painel/config/pagamentos` — Mercado Pago da escola (carnê alunos)
+- `/painel/config/contrato` — modelo HTML do contrato + frase do certificado
 - `/painel/campanhas` — campanhas manuais + processar fila
+
+Master:
+- `/master/escolas`, `/master/planos`, `/master/assinaturas`
 
 Helper: `ContratoTemplateHelper` — placeholders `{{contratada}}`, `{{contratante}}`, `{{curso}}`, `{{parte1}}`, `{{clausulaExtra}}`, `{{data_contrato}}`, `{{URL}}`
 
@@ -513,9 +586,18 @@ Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 ---
 
-## 12. Contato do contexto histórico
+## 12. Handoff para agente / contexto recente (jul/2026)
 
-Trabalho recente (jul/2026) cobriu: Agenda v2, ModuleGate, rename escolas, comunicação e-mail completa (SMTP, campanhas, cobrança, validador).  
-Transcript longo da sessão Cursor pode existir no ambiente do desenvolvedor; este arquivo deve ser a **fonte estável** daqui pra frente.
+**Leia primeiro:** este arquivo + `.cursorrules` + `README.md` + `.env.example`.
+
+**Concluído recentemente:** Master fase 2 SaaS. Carnê PIX escola. CRM WA automático.
+
+**MVP + Fase 1 entregues:** LMS EAD (§5.8) — painel Cursos Online (editor com editar/preview) + API `/api/v1/student` + Ascend. SQL: ordem em `database/LMS_CHECKLIST_PRODUCAO.md`. Trilha = comercial; `lms_*` = portal. Aula flexível (0..N vídeos/materiais/atividades/roleplay).
+
+**NÃO reabrir** carnê MP aluno / Evolution / Master SaaS 2+ / vitrine royalties sem pedido.
+
+**SQL a colar:** `database/lms_ead.sql` + `database/lms_xp.sql` + `database/lms_atividade_tentativas_status.sql`.
+
+**Workspace multi-root:** `painel-cti` + `ascend-academy` — integração via API aluno (não compartilhar sessão admin).
 
 **Fim do documento.** Atualize este `ARCHITECTURE.md` sempre que concluir uma fase do roadmap.

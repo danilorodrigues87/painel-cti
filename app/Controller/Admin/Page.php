@@ -202,6 +202,10 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('pagamentos', $slugsEscola, true)) {
 				$allPermittedModules[] = 'Pagamentos';
 			}
+			// Config IA: Diretor acessa se tiver Cursos Online no plano (ou todos)
+			if (in_array('ead', $slugsEscola, true)) {
+				$allPermittedModules[] = 'IA Pedagógica';
+			}
 		}
 
 		$temAcesso = in_array($currentModule, $allPermittedModules);

@@ -137,13 +137,12 @@ class User extends Page{
 	$permissioes = ''; // Inicializando a variável
 
 	foreach ($permissions as $permission){
-		// Remove acentos e transforma a primeira letra em minúscula
-		$permissionName = lcfirst(iconv('UTF-8', 'ASCII//TRANSLIT', $permission));
-		
+		$permissionName = \App\Common\SystemModules::campoPermissao($permission);
+		$checked = in_array($permission, $acesso, true) ? 'checked' : '';
 		$permissioes .= 
 		'<div class="form-group col-auto form-check">
-		<input type="checkbox" ' . (in_array($permission, $acesso) ? 'checked' : '') . ' name="' . $permissionName . '" value="' . $permission . '" class="form-check-input">
-		<label class="form-check-label">' . $permission . '</label>
+		<input type="checkbox" ' . $checked . ' name="' . htmlspecialchars($permissionName, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars($permission, ENT_QUOTES, 'UTF-8') . '" class="form-check-input">
+		<label class="form-check-label">' . htmlspecialchars($permission, ENT_QUOTES, 'UTF-8') . '</label>
 		</div>';
 	}
 
@@ -339,9 +338,13 @@ public static function setNewUser($request) {
     // Lista de permissões (apenas módulos liberados para a escola)
 	$permissionsList = [];
 	foreach ($modulosDisponiveis as $permission) {
-		$permissionName = lcfirst(iconv('UTF-8', 'ASCII//TRANSLIT', $permission));
+		$permissionName = \App\Common\SystemModules::campoPermissao($permission);
+		// Compat: nomes antigos com espaço (PHP virava underscore) e slug novo
+		$legacy = str_replace(' ', '_', lcfirst((string)@iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $permission)));
 		if (isset($postVars[$permissionName])) {
-			$permissionsList[] = $postVars[$permissionName];
+			$permissionsList[] = $permission;
+		} elseif ($legacy !== '' && isset($postVars[$legacy])) {
+			$permissionsList[] = $permission;
 		}
 	}
 
