@@ -211,3 +211,116 @@ $(document).on("submit", "#form", function(event) {
         }
     });
 });
+
+// ——— Reposição / avulso ———
+function abrirAvulso() {
+  $.ajax({
+    url: url_base + 'painel/agenda/laboratorio/avulso/form',
+    method: 'post',
+    dataType: 'text',
+    success: function (html) {
+      $('#listar-dados').html(html);
+      $('#formModal').modal('show');
+      setTimeout(function () {
+        carregarHorariosAvulso();
+        listarAvulsosHoje();
+      }, 200);
+    }
+  });
+}
+
+function infoAlunoAvulso() {
+  var id_aluno = $('#av_id_aluno').val();
+  if (!id_aluno || id_aluno == 0) return;
+  $.ajax({
+    url: url_base + 'painel/agenda/laboratorio/aluno',
+    method: 'post',
+    data: { id_aluno },
+    dataType: 'json',
+    success: function (info) {
+      if (info.id_trilha) $('#av_id_trilha').val(info.id_trilha);
+    }
+  });
+}
+
+function carregarHorariosAvulso() {
+  var data = $('#av_data').val();
+  if (!data) return;
+  var d = new Date(data + 'T12:00:00');
+  var dia = d.getDay();
+  if (dia === 0) dia = 1;
+  $('#av_dia_semana').val(dia);
+  var laboratorio_id = $('#av_laboratorio_id').val() || 0;
+  $.ajax({
+    type: 'POST',
+    url: url_base + 'painel/agenda/laboratorio/horarios',
+    data: { dia_semana: dia, laboratorio_id: laboratorio_id },
+    success: function (e) {
+      $('#av_horarios').html(e);
+    }
+  });
+}
+
+function listarAvulsosHoje() {
+  var data = $('#av_data').val() || '';
+  if (!$('#lista-avulsos-wrap').length) {
+    $('#form-avulso .modal-body').append('<hr><h6 class="mt-2">Repos nesta data</h6><div id="lista-avulsos-wrap"></div>');
+  }
+  $.ajax({
+    url: url_base + 'painel/agenda/laboratorio/avulso/listar',
+    method: 'post',
+    data: { data },
+    dataType: 'json',
+    success: function (res) {
+      $('#lista-avulsos-wrap').html(res.html || '');
+    }
+  });
+}
+
+$(document).on('change', '#av_data', function () {
+  carregarHorariosAvulso();
+  listarAvulsosHoje();
+});
+
+$(document).on('submit', '#form-avulso', function (event) {
+  event.preventDefault();
+  $.ajax({
+    url: url_base + 'painel/agenda/laboratorio/avulso/salvar',
+    type: 'POST',
+    dataType: 'text',
+    data: $(this).serialize(),
+    success: function (response) {
+      if (response.trim() !== 'salvo') {
+        $('#response-avulso').html('<div class="alert alert-danger">' + response + '</div>');
+      } else {
+        Swal.fire({ title: 'Ótimo!', text: 'Reposição agendada.', icon: 'success' });
+        listarAvulsosHoje();
+        $('#form-avulso')[0].reset();
+        $('#av_data').val(new Date().toISOString().slice(0, 10));
+        carregarHorariosAvulso();
+      }
+    },
+    error: function () {
+      $('#response-avulso').html('<div class="alert alert-danger">Erro ao salvar.</div>');
+    }
+  });
+});
+
+function excluirAvulso(id) {
+  Swal.fire({
+    title: 'Remover esta reposição?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Sim, remover'
+  }).then(function (r) {
+    if (!r.isConfirmed) return;
+    $.ajax({
+      url: url_base + 'painel/agenda/laboratorio/avulso/excluir',
+      method: 'post',
+      data: { id },
+      success: function () {
+        listarAvulsosHoje();
+      }
+    });
+  });
+}

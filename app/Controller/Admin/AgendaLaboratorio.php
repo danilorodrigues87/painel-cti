@@ -344,4 +344,169 @@ class AgendaLaboratorio extends Page {
 		AgendaHelper::recalcularVagasHorario((int)$plano->id_horario);
 		return true;
 	}
+
+	/** Modal: agendar reposição (avulso) */
+	public static function formAvulso($request) {
+		$id_admin = parent::getIdAdminInt();
+		$hoje = date('Y-m-d');
+
+		$innerJoin = 'INNER JOIN usuarios ON matriculas.id_aluno = usuarios.id';
+		$fields = 'DISTINCT usuarios.id, usuarios.nome AS aluno';
+		$resultsUser = EntityMatri::getMatriculas(
+			'matriculas.status = 0 AND matriculas.id_admin = '.$id_admin,
+			'aluno ASC', null, $fields, $innerJoin
+		);
+		$optUsers = '<select class="form-control" name="id_aluno" id="av_id_aluno" onchange="infoAlunoAvulso()" required>
+			<option value="0">Selecione um aluno</option>';
+		while ($row = $resultsUser->fetch(PDO::FETCH_ASSOC)) {
+			$optUsers .= '<option value="'.(int)$row['id'].'">'.htmlspecialchars($row['aluno']).'</option>';
+		}
+		$optUsers .= '</select>';
+
+		$optTrilhas = '<select class="form-control" name="id_trilha" id="av_id_trilha" required>
+			<option value="0">Selecione a trilha</option>';
+		$resultsTrilhas = EntityTrilhas::getTrilha('id_admin = '.$id_admin, 'nome ASC');
+		while ($t = $resultsTrilhas->fetchObject(EntityTrilhas::class)) {
+			$optTrilhas .= '<option value="'.(int)$t->id.'">'.htmlspecialchars($t->nome).'</option>';
+		}
+		$optTrilhas .= '</select>';
+
+		$diaW = (int)date('w');
+		if ($diaW === 0) {
+			$diaW = 1;
+		}
+
+		$form = '<form id="form-avulso" method="POST">
+		<div class="modal-header"><h5 class="modal-title">Agendar reposição (avulso)</h5>
+		<button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+		<div class="modal-body">
+			<div id="response-avulso"></div>
+			<p class="small text-muted">Libera a cota de aulas no portal LMS <strong>somente nesta data e horário</strong> (não altera o plano semanal).</p>
+			<div class="mb-3"><label>Aluno</label>'.$optUsers.'</div>
+			<div class="mb-3"><label>Trilha</label>'.$optTrilhas.'</div>
+			<div class="mb-3"><label>Data</label>
+				<input type="date" class="form-control" name="data" id="av_data" value="'.$hoje.'" required onchange="carregarHorariosAvulso()">
+			</div>
+			<div class="mb-3"><label>Laboratório</label>'.str_replace('id="laboratorio_id"', 'id="av_laboratorio_id" onchange="carregarHorariosAvulso()"', self::selectLabs($id_admin)).'</div>
+			<input type="hidden" name="dia_semana" id="av_dia_semana" value="'.$diaW.'">
+			<div class="mb-3"><label>Horário</label><div id="av_horarios"></div></div>
+			<div class="mb-3"><label>Aulas liberadas nesta sessão</label>
+				<input type="number" class="form-control" name="aulas_cota" min="1" max="10" value="2">
+			</div>
+			<div class="mb-3"><label>Motivo (opcional)</label>
+				<input type="text" class="form-control" name="motivo" maxlength="255" placeholder="Ex.: reposição de falta">
+			</div>
+		</div>
+		<div class="modal-footer">
+			<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+			<button type="submit" class="btn btn-warning">Salvar reposição</button>
+		</div></form>';
+
+		return $form;
+	}
+
+	public static function listarHorariosAvulso($request) {
+		// Reusa listarHorarios — mesmo formato
+		return self::listarHorarios($request);
+	}
+
+	public static function salvarAvulso($request) {
+		$id_admin = parent::getIdAdminInt();
+		$post = $request->getPostVars();
+		$user = parent::getIdAdmin();
+		$criadoPor = (int)($user['usuario']['id'] ?? 0) ?: null;
+
+		$idAluno = (int)($post['id_aluno'] ?? 0);
+		$idTrilha = (int)($post['id_trilha'] ?? 0);
+		$idHorario = (int)($post['id_horario'] ?? 0);
+		$data = trim((string)($post['data'] ?? ''));
+		$cota = max(1, min(10, (int)($post['aulas_cota'] ?? 2)));
+		$motivo = trim((string)($post['motivo'] ?? ''));
+
+		if ($idAluno <= 0 || $idTrilha <= 0 || $idHorario <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $data)) {
+			echo 'Preencha aluno, trilha, data e horário.';
+			return;
+		}
+		if (!TenantHelper::pertence('horarios', $idHorario, $id_admin)) {
+			echo 'Horário inválido.';
+			return;
+		}
+		$matricula = AgendaHelper::getMatriculaAtivaAluno($idAluno, $id_admin);
+		if (!$matricula) {
+			echo 'Aluno sem matrícula ativa.';
+			return;
+		}
+
+		$ob = new \App\Model\Entity\AgendaAvulso();
+		$ob->id_admin = $id_admin;
+		$ob->id_aluno = $idAluno;
+		$ob->matricula_id = (int)$matricula['id'];
+		$ob->id_trilha = $idTrilha;
+		$ob->id_horario = $idHorario;
+		$ob->data = $data;
+		$ob->aulas_cota = $cota;
+		$ob->motivo = $motivo !== '' ? $motivo : null;
+		$ob->ativo = 1;
+		$ob->criado_por = $criadoPor;
+		$ob->cadastrar();
+		echo 'salvo';
+	}
+
+	public static function listarAvulsos($request) {
+		$id_admin = parent::getIdAdminInt();
+		$post = $request->getPostVars();
+		$data = trim((string)($post['data'] ?? date('Y-m-d')));
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $data)) {
+			$data = date('Y-m-d');
+		}
+
+		if (!\App\Common\Helpers\LmsAgendaAcessoHelper::tabelasExistem()) {
+			return json_encode([
+				'html' => '<p class="text-danger small mb-0">Tabelas de reposição ainda não existem. Rode o SQL <code>database/lms_agenda_acesso.sql</code> no phpMyAdmin.</p>'
+			]);
+		}
+
+		$rows = \App\Model\Entity\AgendaAvulso::getAll(
+			'agenda_avulso.id_admin = '.(int)$id_admin.' AND agenda_avulso.ativo = 1 AND agenda_avulso.data = "'.addslashes($data).'"',
+			'horarios.inicio ASC',
+			null,
+			'agenda_avulso.*, usuarios.nome AS aluno, trilhas.nome AS trilha, horarios.inicio, horarios.final, laboratorios.nome AS lab',
+			'INNER JOIN usuarios ON usuarios.id = agenda_avulso.id_aluno
+			 INNER JOIN trilhas ON trilhas.id = agenda_avulso.id_trilha
+			 INNER JOIN horarios ON horarios.id = agenda_avulso.id_horario
+			 LEFT JOIN laboratorios ON laboratorios.id = horarios.laboratorio_id'
+		);
+
+		$html = '<div class="table-responsive"><table class="table table-sm table-striped"><thead><tr>
+			<th>Aluno</th><th>Trilha</th><th>Horário</th><th>Cota</th><th>Motivo</th><th></th>
+			</tr></thead><tbody>';
+		$n = 0;
+		while ($r = $rows->fetch(\PDO::FETCH_ASSOC)) {
+			$n++;
+			$html .= '<tr>
+				<td>'.htmlspecialchars($r['aluno']).'</td>
+				<td>'.htmlspecialchars($r['trilha']).'</td>
+				<td>'.htmlspecialchars(substr($r['inicio'], 0, 5).'–'.substr($r['final'], 0, 5)).($r['lab'] ? ' · '.htmlspecialchars($r['lab']) : '').'</td>
+				<td>'.(int)$r['aulas_cota'].'</td>
+				<td>'.htmlspecialchars((string)($r['motivo'] ?? '—')).'</td>
+				<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirAvulso('.(int)$r['id'].')">Remover</button></td>
+			</tr>';
+		}
+		if ($n === 0) {
+			$html .= '<tr><td colspan="6" class="text-muted text-center">Nenhuma reposição nesta data.</td></tr>';
+		}
+		$html .= '</tbody></table></div>';
+		return json_encode(['html' => $html, 'data' => $data]);
+	}
+
+	public static function excluirAvulso($request) {
+		$id = (int)($request->getPostVars()['id'] ?? 0);
+		$id_admin = parent::getIdAdminInt();
+		$ob = \App\Model\Entity\AgendaAvulso::getById($id, $id_admin);
+		if (!$ob) {
+			return 'Registro não encontrado.';
+		}
+		$ob->inativar();
+		return true;
+	}
 }

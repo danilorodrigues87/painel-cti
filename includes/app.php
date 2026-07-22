@@ -41,7 +41,8 @@ define('URL', $appUrl);
 define('SITE', getenv('SITE'));
 define('TIMEZONE', getenv('TIMEZONE'));
 date_default_timezone_set(TIMEZONE);
-header('Content-Type: text/html; charset=utf-8');
+// Não forçar text/html aqui: a API aluno precisa de application/json.
+// Páginas HTML definem o Content-Type no Response.
 
 //DEFINE A CONSTANTE DE URL
 define('SYSTEM_TOKEN', getenv('SYSTEM_TOKEN'));

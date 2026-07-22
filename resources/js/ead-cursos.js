@@ -23,6 +23,11 @@ function carregarListaEad() {
 			return;
 		}
 		$('#alert-sql-ead').addClass('d-none');
+		if (res.xp_ok === false) {
+			$('#alert-sql-xp').removeClass('d-none');
+		} else {
+			$('#alert-sql-xp').addClass('d-none');
+		}
 		if (!res.itens || !res.itens.length) {
 			$('#ead-tbody').html('<tr><td colspan="5" class="text-muted">Nenhuma trilha cadastrada. Crie em Pedagógico → Trilhas.</td></tr>');
 			return;

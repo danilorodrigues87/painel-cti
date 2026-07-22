@@ -12,14 +12,13 @@ class SystemModules {
 		'responsaveis'    => 'Responsáveis',
 		'leads'           => 'Leads',
 		'tarefas'         => 'Tarefas',
-		'comunicacao'     => 'Comunicação',
 		'campanhas'       => 'Campanhas',
 		'whatsapp'        => 'WhatsApp',
 		'dados_escola'    => 'Dados da escola',
-		'vouchers'        => 'Vouchers',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
 		'ead'             => 'Cursos Online',
+		'conquistas_ead'  => 'Conquistas EAD',
 		'certificacoes'   => 'Certificações',
 		'alunos'          => 'Alunos',
 		'matriculas'      => 'Matriculas',
@@ -28,10 +27,7 @@ class SystemModules {
 		'saida'           => 'Saída',
 		'carnes'          => 'Carnês',
 		'pagamentos'      => 'Pagamentos',
-		'vendas'          => 'Vendas',
-		'recorrente'      => 'Recorrente',
 		'relatorios'      => 'Relatórios',
-		'escolas'         => 'Escolas',
 		'agendamentos'    => 'Agendamentos',
 		'laboratorios'    => 'Laboratórios',
 		'horarios'        => 'Horários',
@@ -165,6 +161,14 @@ class SystemModules {
 					[
 						'label' => 'Cursos Online',
 						'link' => URL.'/painel/ead'
+					],
+					[
+						'label' => 'Progresso EAD',
+						'link' => URL.'/painel/ead/progresso'
+					],
+					[
+						'label' => 'Conquistas EAD',
+						'link' => URL.'/painel/ead/conquistas'
 					],
 					[
 						'label' => 'Categorias',

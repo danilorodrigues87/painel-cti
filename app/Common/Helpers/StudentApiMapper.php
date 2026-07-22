@@ -16,6 +16,9 @@ use App\Model\Entity\LmsAtividadeTentativa;
 use App\Model\Entity\LmsRoleplaySessao;
 use App\Model\Entity\CategoryCourses;
 use App\Model\Entity\Trilhas;
+use App\Model\Entity\EstadoCidades;
+use App\Model\Entity\LmsCursoAvaliacao;
+use App\Common\Helpers\UserFotoHelper;
 
 /**
  * Converte rows LMS → shapes Ascend (camelCase).
@@ -27,25 +30,66 @@ class StudentApiMapper {
 		$idAluno = (int)$u->id;
 		$xp = LmsXpHelper::totalAluno($idAluno, $idAdmin);
 		$level = LmsXpHelper::levelFromXp($xp);
-		LmsXpHelper::creditDailyStreak($idAdmin, $idAluno);
-		$xp = LmsXpHelper::totalAluno($idAluno, $idAdmin);
-		$level = LmsXpHelper::levelFromXp($xp);
+		try {
+			LmsStreakHelper::creditXpSeSessaoHoje($idAdmin, $idAluno);
+			$xp = LmsXpHelper::totalAluno($idAluno, $idAdmin);
+			$level = LmsXpHelper::levelFromXp($xp);
+			$streak = LmsStreakHelper::streakDays($idAluno, $idAdmin);
+		} catch (\Throwable $e) {
+			$streak = 0;
+		}
 		return [
 			'id' => (string)$u->id,
 			'name' => (string)$u->nome,
 			'email' => (string)$u->email,
 			'phone' => $u->whatsapp ?? null,
-			'city' => $u->cidade ?? null,
-			'avatarUrl' => null,
+			'city' => self::cidadeLabel($u->cidade ?? null, $u->uf ?? null),
+			'avatarUrl' => self::avatarUrl($u),
 			'role' => 'student',
 			'xp' => $xp,
 			'level' => $level,
 			'nextLevelXp' => LmsXpHelper::xpForNextLevel($level),
-			'streakDays' => 0,
-			'totalStudyMinutes' => 0,
+			'streakDays' => $streak,
+			'totalStudyMinutes' => LmsEstudoHelper::minutosAluno($idAluno, $idAdmin),
 			'createdAt' => date('c'),
-			'firstAccess' => false,
 		];
+	}
+
+	/** Nome da cidade (+ UF) a partir dos IDs em usuarios.cidade / usuarios.uf. */
+	public static function cidadeLabel($cidadeId, $ufId = null): ?string {
+		$cidadeId = (int)$cidadeId;
+		if ($cidadeId <= 0) {
+			return null;
+		}
+		$cidade = EstadoCidades::getCidades('id = '.$cidadeId)->fetchObject();
+		if (!is_object($cidade)) {
+			return null;
+		}
+		$nome = trim((string)($cidade->nome ?? ''));
+		if ($nome === '') {
+			return null;
+		}
+		$estadoId = (int)($ufId ?: ($cidade->estados_id ?? 0));
+		$sigla = '';
+		if ($estadoId > 0) {
+			$est = EstadoCidades::getEstados('id = '.$estadoId)->fetchObject();
+			if (is_object($est)) {
+				$sigla = trim((string)($est->sigla ?? ''));
+			}
+		}
+		return $sigla !== '' ? $nome.'/'.$sigla : $nome;
+	}
+
+	/** URL pública da foto; null = portal mostra iniciais. */
+	public static function avatarUrl(User $u): ?string {
+		if (!User::temColunaFoto()) {
+			return null;
+		}
+		$foto = trim((string)($u->foto ?? ''));
+		if ($foto === '' || strpos($foto, '..') !== false || strpos($foto, '/') !== false) {
+			return null;
+		}
+		return UserFotoHelper::urlPublica($foto);
 	}
 
 	public static function tokens(string $accessToken, int $expiresIn = 86400): array {
@@ -89,6 +133,25 @@ class StudentApiMapper {
 		$assessmentDone = self::assessmentDoneMap($idAluno);
 		$roleplayDone = self::roleplayDoneMap($idAluno, $idAdmin);
 
+		$idTrilha = (int)$curso->id_trilha;
+		$idsIncompletas = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, $idAluno, $idAdmin);
+		$janela = LmsAgendaAcessoHelper::janelaAtiva($idAluno, $idAdmin, $idTrilha);
+		$consumidas = LmsAgendaAcessoHelper::aulasConsumidasHoje($idAluno, $idAdmin);
+		$cotaMax = $janela ? (int)$janela['aulas_cota'] : 0;
+		$slots = $janela ? max(0, $cotaMax - count($consumidas)) : 0;
+		$aulasAgendaOk = [];
+		foreach ($idsIncompletas as $idInc) {
+			if (in_array($idInc, $consumidas, true)) {
+				$aulasAgendaOk[$idInc] = true;
+				continue;
+			}
+			if ($slots > 0) {
+				$aulasAgendaOk[$idInc] = true;
+				$slots--;
+			}
+		}
+		$accessWindow = LmsAgendaAcessoHelper::accessWindow($idAluno, $idAdmin, $idTrilha);
+
 		$prevUnidadeOk = true; // 1ª aula do módulo libera se não bloqueada no admin
 
 		foreach (LmsModulo::listByCurso((int)$curso->id, $idAdmin) as $mod) {
@@ -106,6 +169,24 @@ class StudentApiMapper {
 				$adminLocked = ((int)($aula->bloqueado ?? 0) === 1);
 				$lessonLocked = $adminLocked || !$prevUnidadeOk;
 				$completed = $unidadeOk || ($assistida && count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idAdmin)) === 0);
+				$revisaoLivre = $completed || $precisaRevisar;
+				$lockReason = null;
+				$lockMessage = null;
+				if (!$revisaoLivre && !$adminLocked) {
+					if (empty($aulasAgendaOk[(int)$aula->id])) {
+						$lessonLocked = true;
+						if (!$janela) {
+							$lockReason = 'fora_horario';
+							$lockMessage = $accessWindow['message'] ?? 'Fora do horário agendado.';
+						} else {
+							$lockReason = 'cota_esgotada';
+							$lockMessage = 'Cota de aulas desta sessão esgotada.';
+						}
+					}
+				} elseif (!$revisaoLivre && $lessonLocked && !$adminLocked) {
+					$lockReason = 'sequencia';
+					$lockMessage = 'Conclua a unidade anterior para liberar.';
+				}
 				if ($completed) {
 					$completedCount++;
 				}
@@ -114,6 +195,8 @@ class StudentApiMapper {
 				$lessonPayload['unitScore'] = $prog && $prog->nota_unidade !== null ? (float)$prog->nota_unidade : null;
 				$lessonPayload['unitPassed'] = $unidadeOk;
 				$lessonPayload['cycle'] = $ciclo;
+				$lessonPayload['lockReason'] = $lockReason;
+				$lessonPayload['lockMessage'] = $lockMessage;
 				$lessons[] = $lessonPayload;
 
 				$aulaCurriculum = [];
@@ -129,6 +212,8 @@ class StudentApiMapper {
 					'unitScore' => $lessonPayload['unitScore'],
 					'unitPassed' => $unidadeOk,
 					'cycle' => $ciclo,
+					'lockReason' => $lockReason,
+					'lockMessage' => $lockMessage,
 				];
 
 				foreach (LmsAtividade::listByAula((int)$aula->id, $idAdmin) as $at) {
@@ -218,6 +303,9 @@ class StudentApiMapper {
 		$progressPercent = $lessonsCount > 0 ? (int)round(($completedCount / $lessonsCount) * 100) : 0;
 		$desc = $trilha->descricao ?? ($curso->short_description ?? '');
 
+		$rating = LmsCursoAvaliacao::mediaCurso((int)$curso->id, $idAdmin);
+		$myRating = LmsCursoAvaliacao::getByAlunoCurso($idAluno, (int)$curso->id);
+
 		return [
 			'id' => (string)$curso->id,
 			'slug' => (string)$curso->slug,
@@ -237,14 +325,16 @@ class StudentApiMapper {
 			'level' => (string)($curso->level ?: 'Iniciante'),
 			'workloadHours' => $carga,
 			'estimatedMinutes' => $carga * 60,
-			'rating' => 0,
-			'ratingCount' => 0,
+			'rating' => $rating['avg'],
+			'ratingCount' => $rating['count'],
+			'myRating' => $myRating ? (int)$myRating->nota : null,
 			'progressPercent' => $progressPercent,
 			'objectives' => $objectives,
 			'modulesCount' => count($modules),
 			'lessonsCount' => $lessonsCount,
 			'curriculumCount' => $curriculumCount,
 			'curriculumCompleted' => $curriculumDone,
+			'accessWindow' => $accessWindow,
 			'modules' => $withModules ? $modules : [],
 			'enrolled' => true,
 			'lastAccessedLessonId' => $lastAccessed['id'] ?? null,

@@ -19,7 +19,9 @@ class ConfigIa extends Page {
 			return false;
 		}
 		$idAdmin = (int)($user['usuario']['id_admin'] ?? 0);
-		if (!in_array('ead', ModuleGateHelper::getSlugsEscola($idAdmin), true)) {
+		$mods = ModuleGateHelper::getModulosEfetivos($idAdmin, $user['usuario']['acesso'] ?? []);
+		if (!in_array('ead', ModuleGateHelper::getSlugsEscola($idAdmin), true)
+			|| !in_array('Cursos Online', $mods, true)) {
 			if (!$api) {
 				$request->getRouter()->redirect('/painel');
 			}

@@ -231,7 +231,7 @@ class Roleplay {
 		$started = $s->started_at ? strtotime($s->started_at) : time();
 		$s->duration_seconds = max(0, time() - $started);
 		$s->salvar();
-		\App\Common\Helpers\LmsXpHelper::creditRoleplay(
+		$xp = \App\Common\Helpers\LmsXpHelper::creditRoleplay(
 			(int)$u->id_admin,
 			(int)$u->id,
 			(int)$s->id,
@@ -248,10 +248,29 @@ class Roleplay {
 		$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
 		$title = $curso ? StudentEntitlement::nomeTrilha((int)$curso->id_trilha) : '';
 		$payload = self::mapSessao($s, $rp, $title);
+		$payload['xpEarned'] = $xp;
 		$payload['unitScore'] = $unit['average'] ?? null;
 		$payload['unitPassed'] = $unit['passed'] ?? null;
 		$payload['needsRewatch'] = !empty($unit['precisaRevisar']);
 		$payload['unitDetails'] = $unit['details'] ?? [];
+		if ($curso) {
+			$cert = \App\Common\Helpers\LmsCertificadoHelper::emitirSeCursoCompleto(
+				(int)$u->id,
+				(int)$u->id_admin,
+				$curso
+			);
+			$payload['certificateIssued'] = $cert ? (string)$cert->id : null;
+		}
+		\App\Common\Helpers\LmsNotificacaoHelper::criar(
+			(int)$u->id_admin,
+			(int)$u->id,
+			'course',
+			'Roleplay concluído',
+			((string)($rp->titulo ?? 'Roleplay')).($xp > 0 ? ' (+'.$xp.' XP)' : ''),
+			!empty($rp->id_curso) ? '/courses/'.(int)$rp->id_curso : null,
+			'rp:'.(int)$s->id
+		);
+		\App\Common\Helpers\LmsConquistaHelper::recalcular((int)$u->id_admin, (int)$u->id);
 		return self::ok($payload);
 	}
 

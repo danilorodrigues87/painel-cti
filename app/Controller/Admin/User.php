@@ -170,6 +170,7 @@ private static function getForm($request) {
 	$modulosDisponiveis = ModuleGateHelper::getModulosDisponiveisParaEscola($id_admin);
 	$avisoPlano = ModuleGateHelper::escolaTemTodosModulos($id_admin) ? '' :
 		'<p class="text-muted small mb-2">Somente módulos liberados para esta escola.</p>';
+	$avisoEad = '<p class="text-muted small mb-2"><strong>Cursos Online</strong> e <strong>Conquistas EAD</strong> são permissões separadas. Sem marcar, somem do menu (vale também para Diretor).</p>';
 
     // Obtém as permissões formatadas
 	$permissoes = self::getAcessos($modulosDisponiveis, $acesso);
@@ -284,6 +285,7 @@ private static function getForm($request) {
 	<div class="pl-4 col-md-9 col-sm-6">
 	<label>Permissões de acesso</label>
 	'.$avisoPlano.'
+	'.$avisoEad.'
 	<div class="row">
 	' . $permissoes . '
 	</div>

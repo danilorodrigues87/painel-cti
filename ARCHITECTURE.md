@@ -1,9 +1,9 @@
-# ARCHITECTURE.md — Contexto completo do Painel CTI
+﻿# ARCHITECTURE.md — Contexto completo do Painel CTI
 
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-21 (LMS Fase 1 — editor admin + checklist produção)  
+**Última atualização:** 2026-07-22 (LMS certificados + conquistas SQL aplicados localmente)  
 **Repo:** `painel-cti`  
 **DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
@@ -65,7 +65,8 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 
 ### Níveis de usuário
 - Exemplos: `Diretor`, `Financeiro`, `Cliente` (aluno), etc.
-- Telas **Comunicação** e **Campanhas**: acesso automático para `Diretor` em `Page::getPanel`
+- Telas **Comunicação** e **Campanhas**: acesso automático para `Diretor` em `Page::getPanel` (Comunicação não entra mais no checklist de funcionários — só Diretor).
+- Catálogo de permissões: removidos mortos `Vouchers`, `Vendas`, `Recorrente`, `Escolas` e `Comunicação` (checklist). Slug `ead` → **Cursos Online**; slug `conquistas_ead` → **Conquistas EAD** (checkbox separado quando o plano tem `ead`). Menu EAD respeita `usuarios.acesso` para todos os níveis (incluindo Diretor). Progresso EAD (tela auxiliar) e IA Pedagógica (só Diretor) acompanham **Cursos Online**. Diretor ainda recebe automático: Comunicação, Campanhas, WhatsApp, Assinatura, Dados da escola (+ Modelo de contrato / Pagamentos se o plano liberar).
 
 ### Preferências do produto (não quebrar)
 - Diretor da escola **não** deve conseguir marcar permissões de módulos que a escola não contratou
@@ -200,19 +201,31 @@ trilhas (comercial) → lms_cursos (1:1 por tenant)
 - **Entitlement:** matrícula ativa (`matriculas.status=0` + datas) + `lms_cursos.publicado=1` + mesmo `id_admin`
 - **Painel:** slug `ead` → **Cursos Online** (`/painel/ead`); Config IA `/painel/config/ia`
 - **Editor admin (Fase 1):** criar/editar/excluir vídeo, material, atividade (`tentativas_max`, duração), questão, roleplay; botões **Preview** (visão do aluno, sem gabarito/prompt secreto). JS: `resources/js/ead-editor.js`
-- **SQL (ordem):** `lms_ead.sql` → `lms_xp.sql` → `lms_atividade_tentativas_status.sql` → `lms_ciclo_avaliacao.sql` — ver `database/LMS_CHECKLIST_PRODUCAO.md`
+- **SQL (ordem):** `lms_ead.sql` → `lms_xp.sql` → `lms_atividade_tentativas_status.sql` → `lms_ciclo_avaliacao.sql` → `lms_agenda_acesso.sql` → `lms_curso_avaliacoes.sql` → `lms_certificados.sql` → `lms_conquistas.sql` → `lms_conquistas_v2.sql` → `lms_notificacoes.sql` → `lms_estudo_sessao.sql` → `lms_aula_comentarios.sql` — ver `database/LMS_CHECKLIST_PRODUCAO.md`
 - **API aluno:** `/api/v1/student/*` (JWT Cliente; CORS; mapper Ascend). **Não** usar API legada `/api/v1/trilhas`
 - **Portal:** `ascend-academy` — marca **CTI Educacional** (`public/brand/cti-logo.png`); build com `VITE_API_BASE_URL` apontando para a API
 - **Player (estilo Udemy):** ao abrir `/courses/{id}` redireciona ao 1º item; sidebar com currículo (aulas+atividades+roleplay) + aba Assistente IA; abas sob o vídeo (visão geral / materiais / anotações / comentários)
-- **Menu global:** sem Avaliações/Roleplay/IA isolados — ficam no currículo do curso; Ranking da escola via `GET /ranking`
+- **Menu global:** sem Avaliações/Roleplay/IA isolados — ficam no currículo do curso; Ranking via `GET /ranking?scope=school|global`
+- **Auth aluno:** login + forgot/reset password; **alterar senha logado** `POST /me/password`; preferências de notificação no portal (localStorage, Configurações).
+- **Admin Progresso EAD:** `/painel/ead/progresso` (turma: filtros por curso/status/%, totais, CSV) + `/painel/ead/aluno/{id}` (histórico + Liberar próxima aula; atalho em Alunos). Requer permissão **Cursos Online**.
 - **Fluxo de atividade (sequencial):** `POST .../assessments/{id}/start` → `answer` (1 questão, trava) → `finalize`. V/F = botões true/false. Abertas corrigidas por IA (`LmsAiService::gradeEssay`). **N tentativas por ciclo** (`tentativas_max`, padrão 3). Média da unidade = atividades + roleplay (≥70% aprova). Se reprovar: `precisa_revisar` → reassistir aula → novo ciclo (+N)
 - **Roleplay:** chat embutido no player; timer = `estimated_minutes`; `sendMessage`/`finish` bloqueiam sessão encerrada/tempo esgotado; `base_prompt` **nunca** no GET aluno
 - **Assistente IA:** contexto = título/descrição da aula + labels dos materiais; guardrails; máx. ~40 msgs/conversa; modelo padrão Gemini `gemini-2.0-flash`
-- **XP:** aula `10+min(dur,30)`; atividade aprovada `30+40*nota/100`; roleplay `40+score*0.3`; streak diário `5`; ranking **sempre** por `id_admin`
-- **Hard rules:** não misturar com `agenda_*`; gabarito nunca no GET; chave AI com `CryptoHelper`
+- **XP:** aula `5+min(dur,15)` (5–20); atividade aprovada `15+20*nota/100` (15–35); tentativa `2`; roleplay `20+score*0.15`; streak diário `3`. Nível: `floor(√(XP/50))+1` (curva inalterada — só créditos futuros mudam). Ranking **escola** = XP total; ranking **global** = XP dos **últimos 30 dias** (`periodDays`) para equilibrar escolas com catálogos de tamanhos diferentes. Admin avisa se `lms_xp_ledger` ausente.
+- **Acesso por agenda (Fase B):** novas aulas só no horário do `agenda_plano` (dia/hora) ou `agenda_avulso` (reposição). Cota padrão **2 aulas/sessão** (`lms_sessao_cota`). Fora do horário: portal + revisão do já concluído. Admin: Agenda → **Reposição / avulso**. SQL: `database/lms_agenda_acesso.sql`
+- **Polish portal (Fase C):** após finalizar atividade (sem `needsRewatch`), auto-avança ao próximo item do currículo (~1,8s) + botão Próximo; roleplay mostra XP e botão Próximo
+- **Portal polish (Fase 2):** branding CTI; banner/badge “Reassistir” + média da unidade; certificado **EAD simbólico** em `lms_certificados` (nome da escola, sem QR) — emissão **automática** em 100% (e **backfill** ao listar `/certificates` se já estava 100% antes da feature); se a escola editar o curso e o progresso cair, status `outdated` até reconcluir (aí o snapshot atualiza, `codigo` permanece); `GET /certificates` + `GET /certificates/{id}/html` (403 se desatualizado). Certificado **comercial** (painel) continua em `certificados`; QR usa `escolas_assinantes.site`.
+- **Streak / rating (Fase A gamificação):** `streakDays` = sessões de **agenda** consecutivas; XP `streak_daily` nesses dias. Avaliação de curso: `lms_curso_avaliacoes`.
+- **Conquistas:** ~100 metas em `lms_conquistas_def` (subtitulo/como/raridade/badge_url); progresso em `lms_conquistas_aluno` (`origem` auto|manual); Master CRUD `/master/conquistas`; portal `GET /achievements` + página `/achievements`; dashboard top 6. Prep futuro: `lms_escola_conquistas` + liberação manual.
+- **Tempo de estudo:** `LmsEstudoHelper::minutosAluno` = `GREATEST(proxy aulas concluídas, minutos reais do heartbeat)`; tabela `lms_estudo_sessao`; `POST /study/heartbeat` a cada ~30s no player; alimenta `user.totalStudyMinutes`, dashboard e conquistas `estudo_min`.
+- **Esqueci senha:** `POST /auth/forgot-password` envia e-mail (SMTP escola/sistema) com JWT `purpose=pwd_reset`; `POST /auth/reset-password`; Ascend `/reset-password`. Requer `ASCEND_URL` no `.env`.
+- **Comentários de aula:** `lms_aula_comentarios`; `GET/POST .../lessons/{id}/comments` (+ delete); UI na aba Comentários do player.
+- **Conquistas escola:** Admin `/painel/ead/conquistas` — toggle `lms_escola_conquistas` + liberação manual (`origem=manual`); Master upload/remover badge.
+- **Notificações in-app:** tabela `lms_notificacoes`; `GET/POST /notifications`; eventos em aula, atividade, roleplay, certificado e conquista.
+- **Hard rules:** não misturar com `agenda_*` no sentido de reescrever o diário; só **consumir** plano/avulso no LMS; gabarito nunca no GET; chave AI com `CryptoHelper`
 - **Futuro L6+:** vitrine entre escolas + royalties (CTI %) — **não** implementar agora
 
-Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates.
+Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD.
 
 ---
 
@@ -590,7 +603,7 @@ Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 **Leia primeiro:** este arquivo + `.cursorrules` + `README.md` + `.env.example`.
 
-**Concluído recentemente:** Master fase 2 SaaS. Carnê PIX escola. CRM WA automático.
+**Concluído recentemente:** Master fase 2 SaaS. Carnê PIX escola. CRM WA automático. Progresso EAD turma (`/painel/ead/progresso` + CSV). Permissões EAD respeitam checklist. Polish Ascend (EmptyState).
 
 **MVP + Fase 1 entregues:** LMS EAD (§5.8) — painel Cursos Online (editor com editar/preview) + API `/api/v1/student` + Ascend. SQL: ordem em `database/LMS_CHECKLIST_PRODUCAO.md`. Trilha = comercial; `lms_*` = portal. Aula flexível (0..N vídeos/materiais/atividades/roleplay).
 

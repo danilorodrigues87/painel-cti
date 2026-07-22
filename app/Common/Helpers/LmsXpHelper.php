@@ -4,6 +4,7 @@ namespace App\Common\Helpers;
 
 use App\Model\Entity\LmsXpLedger;
 use App\Model\Entity\User;
+use App\Common\Helpers\UserFotoHelper;
 
 /**
  * XP / níveis / ranking por escola (id_admin).
@@ -16,13 +17,8 @@ class LmsXpHelper {
 			return $ok;
 		}
 		try {
-			$pdo = new \PDO(
-				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
-				getenv('DB_USER'),
-				getenv('DB_PASS') ?: '',
-				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-			);
-			$stmt = $pdo->query("SHOW TABLES LIKE 'lms_xp_ledger'");
+			$db = new \App\Model\Db\Database();
+			$stmt = $db->execute("SHOW TABLES LIKE 'lms_xp_ledger'");
 			$ok = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$ok = false;
@@ -66,47 +62,82 @@ class LmsXpHelper {
 	}
 
 	public static function creditLessonComplete(int $idAdmin, int $idAluno, int $idAula, int $duracaoMin): int {
-		$xp = 10 + min(max(0, $duracaoMin), 30);
+		// 5–20 XP (antes 10–40)
+		$xp = 5 + min(max(0, $duracaoMin), 15);
 		return self::credit($idAdmin, $idAluno, 'lesson_complete', (string)$idAula, $xp);
 	}
 
 	public static function creditAssessment(int $idAdmin, int $idAluno, int $idAtividade, float $score, bool $passed): int {
 		if ($passed) {
-			$xp = 30 + (int)round(40 * ($score / 100));
+			// 15–35 XP (antes 30–70)
+			$xp = 15 + (int)round(20 * ($score / 100));
 			return self::credit($idAdmin, $idAluno, 'assessment_pass', (string)$idAtividade, $xp);
 		}
-		return self::credit($idAdmin, $idAluno, 'assessment_attempt', (string)$idAtividade, 5);
+		return self::credit($idAdmin, $idAluno, 'assessment_attempt', (string)$idAtividade, 2);
 	}
 
 	public static function creditRoleplay(int $idAdmin, int $idAluno, int $idSessao, float $score): int {
-		$xp = 40 + (int)round($score * 0.3);
+		// ~20–35 XP (antes ~40–70)
+		$xp = 20 + (int)round($score * 0.15);
 		return self::credit($idAdmin, $idAluno, 'roleplay_complete', (string)$idSessao, $xp);
 	}
 
 	public static function creditDailyStreak(int $idAdmin, int $idAluno): int {
 		$ref = date('Y-m-d');
-		return self::credit($idAdmin, $idAluno, 'streak_daily', $ref, 5);
+		return self::credit($idAdmin, $idAluno, 'streak_daily', $ref, 3);
 	}
 
 	/** Ranking da escola: top N + posição do aluno. */
 	public static function rankingEscola(int $idAdmin, int $idAluno, int $limit = 20): array {
 		if (!self::tabelasExistem()) {
-			return ['entries' => [], 'me' => null];
+			return ['entries' => [], 'me' => null, 'scope' => 'school'];
 		}
-		$rows = LmsXpLedger::rankingByAdmin($idAdmin, 500);
+		return self::montarRanking(LmsXpLedger::rankingByAdmin($idAdmin, 500), $idAluno, $limit, 'school');
+	}
+
+	/**
+	 * Ranking global: XP dos últimos 30 dias (evita vantagem de escolas com mais conteúdo).
+	 */
+	public static function rankingGlobal(int $idAluno, int $limit = 50): array {
+		if (!self::tabelasExistem()) {
+			return ['entries' => [], 'me' => null, 'scope' => 'global', 'periodDays' => 30];
+		}
+		$data = self::montarRanking(LmsXpLedger::rankingGlobalPeriodo(30, 500), $idAluno, $limit, 'global');
+		$data['periodDays'] = 30;
+		return $data;
+	}
+
+	/**
+	 * @param array<int,array{id_aluno:mixed,xp_total:mixed}> $rows
+	 */
+	private static function montarRanking(array $rows, int $idAluno, int $limit, string $scope): array {
 		$entries = [];
 		$me = null;
 		$pos = 0;
 		foreach ($rows as $r) {
 			$pos++;
 			$user = User::getUserById((int)$r['id_aluno']);
+			$foto = ($user && User::temColunaFoto()) ? trim((string)($user->foto ?? '')) : '';
+			$avatar = ($foto !== '' && strpos($foto, '..') === false && strpos($foto, '/') === false)
+				? UserFotoHelper::urlPublica($foto)
+				: null;
+			$city = $user ? StudentApiMapper::cidadeLabel($user->cidade ?? null, $user->uf ?? null) : null;
+			$xpRank = (int)$r['xp_total'];
+			// Global usa XP da janela; nível exibido continua o da carreira (XP total)
+			if ($scope === 'global' && $user) {
+				$level = self::levelFromXp(self::totalAluno((int)$r['id_aluno'], (int)$user->id_admin));
+			} else {
+				$level = self::levelFromXp($xpRank);
+			}
 			$entry = [
 				'id' => (string)$r['id_aluno'],
 				'name' => $user ? (string)$user->nome : 'Aluno',
-				'avatarUrl' => null,
-				'xp' => (int)$r['xp_total'],
-				'level' => self::levelFromXp((int)$r['xp_total']),
+				'avatarUrl' => $avatar,
+				'city' => $city,
+				'xp' => $xpRank,
+				'level' => $level,
 				'position' => $pos,
+				'isCurrentUser' => ((int)$r['id_aluno'] === $idAluno),
 			];
 			if ((int)$r['id_aluno'] === $idAluno) {
 				$me = $entry;
@@ -115,6 +146,6 @@ class LmsXpHelper {
 				$entries[] = $entry;
 			}
 		}
-		return ['entries' => $entries, 'me' => $me];
+		return ['entries' => $entries, 'me' => $me, 'scope' => $scope];
 	}
 }

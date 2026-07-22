@@ -11,7 +11,7 @@ class ModuleGateHelper {
 
 	public static function getSlugsEscola(int $idAdmin): array {
 		if ($idAdmin <= 0) {
-			return SystemModules::getSlugs();
+			return self::expandirSlugsDependentes(SystemModules::getSlugs());
 		}
 
 		if (isset(self::$cacheEscola[$idAdmin])) {
@@ -20,20 +20,20 @@ class ModuleGateHelper {
 
 		$escola = EscolasAssinantes::getEscolaById($idAdmin);
 		if (!$escola) {
-			self::$cacheEscola[$idAdmin] = SystemModules::getSlugs();
+			self::$cacheEscola[$idAdmin] = self::expandirSlugsDependentes(SystemModules::getSlugs());
 			return self::$cacheEscola[$idAdmin];
 		}
 
 		$raw = $escola->modulos_liberados ?? null;
 
 		if ($raw === null || $raw === '') {
-			self::$cacheEscola[$idAdmin] = SystemModules::getSlugs();
+			self::$cacheEscola[$idAdmin] = self::expandirSlugsDependentes(SystemModules::getSlugs());
 			return self::$cacheEscola[$idAdmin];
 		}
 
 		$decoded = json_decode($raw, true);
 		if (!is_array($decoded) || empty($decoded)) {
-			self::$cacheEscola[$idAdmin] = SystemModules::getSlugs();
+			self::$cacheEscola[$idAdmin] = self::expandirSlugsDependentes(SystemModules::getSlugs());
 			return self::$cacheEscola[$idAdmin];
 		}
 
@@ -49,15 +49,36 @@ class ModuleGateHelper {
 		}
 
 		self::$cacheEscola[$idAdmin] = !empty($filtrados) ? $filtrados : SystemModules::getSlugs();
+		self::$cacheEscola[$idAdmin] = self::expandirSlugsDependentes(self::$cacheEscola[$idAdmin]);
 		return self::$cacheEscola[$idAdmin];
+	}
+
+	/**
+	 * Plano com `ead` também libera o submódulo `conquistas_ead` (checkbox separado).
+	 * @param string[] $slugs
+	 * @return string[]
+	 */
+	private static function expandirSlugsDependentes(array $slugs): array {
+		if (in_array('ead', $slugs, true) && !in_array('conquistas_ead', $slugs, true)) {
+			$slugs[] = 'conquistas_ead';
+		}
+		return array_values(array_unique($slugs));
 	}
 
 	public static function getModulosEscola(int $idAdmin): array {
 		return SystemModules::slugsParaLabels(self::getSlugsEscola($idAdmin));
 	}
 
+	/**
+	 * Labels exibidos no checklist de funcionários.
+	 * Exclui itens que só o Diretor usa via menu automático (não fazem sentido para equipe).
+	 */
 	public static function getModulosDisponiveisParaEscola(int $idAdmin): array {
-		return self::getModulosEscola($idAdmin);
+		$labels = self::getModulosEscola($idAdmin);
+		$somenteDiretor = ['Dados da escola', 'Assinatura'];
+		return array_values(array_filter($labels, static function ($l) use ($somenteDiretor) {
+			return !in_array($l, $somenteDiretor, true);
+		}));
 	}
 
 	public static function normalizarAcessoUsuario(array $acessoUsuario): array {

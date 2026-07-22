@@ -52,6 +52,20 @@ $obRouter->post('/master/assinaturas', [
 	}
 ]);
 
+$obRouter->get('/master/conquistas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Conquistas::index($request));
+	}
+]);
+
+$obRouter->post('/master/conquistas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Conquistas::getInfo($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/perfil', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

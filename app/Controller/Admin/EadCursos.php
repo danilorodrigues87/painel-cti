@@ -98,7 +98,12 @@ class EadCursos extends Page {
 				'id_curso' => $curso instanceof LmsCurso ? (int)$curso->id : null,
 			];
 		}
-		return self::json(['success' => true, 'sql_ok' => true, 'itens' => $itens]);
+		return self::json([
+			'success' => true,
+			'sql_ok' => true,
+			'xp_ok' => \App\Common\Helpers\LmsXpHelper::tabelasExistem(),
+			'itens' => $itens,
+		]);
 	}
 
 	private static function carregarCurso(array $post): string {

@@ -92,8 +92,13 @@ class CertificadoPdf extends Page {
         $horaJs = json_encode((string)$hora, JSON_UNESCAPED_UNICODE);
         $codigoJs = json_encode((string)$codigo, JSON_UNESCAPED_UNICODE);
 
-        // URL para a API de QR Code
-        $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='.SITE.'/certificado?crt='.$codigo; 
+        // QR aponta para o site da escola (perfil), não SITE do .env
+        try {
+            $verifyUrl = \App\Common\Helpers\LmsCertificadoHelper::urlVerificacaoComercial($idAdminCert, (string)$codigo);
+        } catch (\Throwable $e) {
+            throw new \Exception($e->getMessage());
+        }
+        $qrCodeUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='.rawurlencode($verifyUrl);
 
         // --- LÓGICA DE CAMINHOS FÍSICOS (SISTEMA) ---
         $caminhoProjeto = realpath(__DIR__ . '/../../../'); 

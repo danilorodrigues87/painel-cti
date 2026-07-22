@@ -19,7 +19,13 @@ class Response{
 	//ALTERA O CONTEN TYPE DO RESPONSE
 	public function setContentType($contentType){
 		$this->contentType = $contentType;
-		$this->addHeader('Content-Type',$contentType);
+		if ($contentType === 'text/html') {
+			$this->addHeader('Content-Type', 'text/html; charset=utf-8');
+		} elseif ($contentType === 'application/json') {
+			$this->addHeader('Content-Type', 'application/json; charset=utf-8');
+		} else {
+			$this->addHeader('Content-Type', $contentType);
+		}
 	}
 
 	//ADICIONA UM REGISTRO NO CABEÇALHO DO RESPONSE

@@ -9,7 +9,7 @@ class Maintenance{
 
 		//VERIFICA O ESTADO DE MANUTENÇÃO DA PÁGINA
 		if(getenv('MAINTENANCE') == 'true'){
-			throw new \Exception('Página em manutenção, tem outra vez mais tarde.', 200);
+			throw new \Exception('Página em manutenção, tente outra vez mais tarde.', 503);
 		}
 
 		//EXECUTA O PROXIMO NIVEL DO MIDDLEWARE

@@ -25,6 +25,7 @@ class Page {
 			'current_escolas'      => $menuAtivo === 'escolas' ? 'active' : '',
 			'current_planos'       => $menuAtivo === 'planos' ? 'active' : '',
 			'current_assinaturas'  => $menuAtivo === 'assinaturas' ? 'active' : '',
+			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',
 			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',
 		]);
 

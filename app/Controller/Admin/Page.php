@@ -202,10 +202,17 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('pagamentos', $slugsEscola, true)) {
 				$allPermittedModules[] = 'Pagamentos';
 			}
-			// Config IA: Diretor acessa se tiver Cursos Online no plano (ou todos)
-			if (in_array('ead', $slugsEscola, true)) {
+			// IA Pedagógica: só Diretor + Cursos Online (respeita checklist; não força EAD)
+			if (in_array('ead', $slugsEscola, true)
+				&& in_array('Cursos Online', $allPermittedModules, true)) {
 				$allPermittedModules[] = 'IA Pedagógica';
 			}
+		}
+
+		// Progresso EAD não é checkbox: tela auxiliar de Alunos, liberada só com Cursos Online
+		if (in_array('Cursos Online', $allPermittedModules, true)
+			&& !in_array('Progresso EAD', $allPermittedModules, true)) {
+			$allPermittedModules[] = 'Progresso EAD';
 		}
 
 		$temAcesso = in_array($currentModule, $allPermittedModules);

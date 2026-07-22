@@ -43,6 +43,29 @@ class LmsXpLedger {
 		return $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
 	}
 
+	public static function rankingGlobal(int $limit = 500): array {
+		$sql = 'SELECT id_aluno, SUM(xp) AS xp_total
+			FROM lms_xp_ledger
+			GROUP BY id_aluno
+			ORDER BY xp_total DESC
+			LIMIT '.(int)$limit;
+		$stmt = (new Database('lms_xp_ledger'))->execute($sql);
+		return $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
+	}
+
+	/** Ranking global por XP na janela rolling (padrão 30 dias). */
+	public static function rankingGlobalPeriodo(int $dias = 30, int $limit = 500): array {
+		$dias = max(1, min(365, $dias));
+		$sql = 'SELECT id_aluno, SUM(xp) AS xp_total
+			FROM lms_xp_ledger
+			WHERE created_at >= DATE_SUB(NOW(), INTERVAL '.(int)$dias.' DAY)
+			GROUP BY id_aluno
+			ORDER BY xp_total DESC
+			LIMIT '.(int)$limit;
+		$stmt = (new Database('lms_xp_ledger'))->execute($sql);
+		return $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
+	}
+
 	public function salvar(): int {
 		$db = new Database('lms_xp_ledger');
 		$this->id = $db->insert([

@@ -30,6 +30,14 @@ class Certificados extends Page{
     // Dados do Admin
   $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 
+  $siteBase = '';
+  try {
+    $siteBase = \App\Common\Helpers\LmsCertificadoHelper::urlSiteEscolaParaCertificado((int)$id_admin);
+  } catch (\Throwable $e) {
+    $siteBase = '';
+  }
+  $siteBaseJs = json_encode($siteBase, JSON_UNESCAPED_SLASHES);
+
     // Página Atual
   $postVars = $request->getPostVars();
   $paginaAtual = $postVars['page'] ?? 1;
@@ -138,11 +146,20 @@ class Certificados extends Page{
 
  <script>
  function copiar(codigo) {
-    let link = "https://ctieducacional.com.br/certificado?crt=" + codigo;
+    const siteBase = ' . $siteBaseJs . ';
+    if (!siteBase) {
+      Swal.fire({
+        title: "Site não cadastrado",
+        text: "Cadastre o site da escola em Configurações → Dados da escola para copiar o link de verificação.",
+        icon: "warning"
+      });
+      return;
+    }
+    let link = siteBase + "/certificado?crt=" + codigo;
     navigator.clipboard.writeText(link).then(function() {
       Swal.fire({
        title: "É isso ai!",
-       text: "O códico foi copiado com sucesso.",
+       text: "O código foi copiado com sucesso.",
        icon: "success"
        });
        }, function(err) {

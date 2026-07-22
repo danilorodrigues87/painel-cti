@@ -18,13 +18,8 @@ class LmsHelper {
 			return $ok;
 		}
 		try {
-			$pdo = new \PDO(
-				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
-				getenv('DB_USER'),
-				getenv('DB_PASS'),
-				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
-			);
-			$stmt = $pdo->query("SHOW TABLES LIKE 'lms_cursos'");
+			$db = new Database();
+			$stmt = $db->execute("SHOW TABLES LIKE 'lms_cursos'");
 			$ok = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$ok = false;

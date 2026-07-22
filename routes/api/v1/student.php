@@ -7,7 +7,8 @@ $studentMw = ['api', 'cors-student'];
 $studentAuth = ['api', 'cors-student', 'student-jwt'];
 
 $respond = static function (array $res) {
-	return new Response($res['code'] ?? 200, $res['json'] ?? '{}', 'application/json');
+	$contentType = $res['contentType'] ?? 'application/json';
+	return new Response($res['code'] ?? 200, $res['json'] ?? '{}', $contentType);
 };
 
 // Auth (sem JWT)
@@ -25,10 +26,10 @@ $obRouter->post('/api/v1/student/auth/forgot-password', [
 	}
 ]);
 
-$obRouter->post('/api/v1/student/auth/first-access', [
+$obRouter->post('/api/v1/student/auth/reset-password', [
 	'middlewares' => $studentMw,
 	function ($request) use ($respond) {
-		return $respond(Student\Auth::firstAccess($request));
+		return $respond(Student\Auth::resetPassword($request));
 	}
 ]);
 
@@ -48,6 +49,27 @@ $obRouter->get('/api/v1/student/me', [
 	}
 ]);
 
+$obRouter->post('/api/v1/student/me/avatar', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Portal::updateAvatar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/student/me/password', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Portal::changePassword($request));
+	}
+]);
+
+$obRouter->get('/api/v1/student/me/access-window', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Portal::accessWindow($request));
+	}
+]);
+
 $obRouter->get('/api/v1/student/dashboard', [
 	'middlewares' => $studentAuth,
 	function ($request) use ($respond) {
@@ -59,6 +81,34 @@ $obRouter->get('/api/v1/student/ranking', [
 	'middlewares' => $studentAuth,
 	function ($request) use ($respond) {
 		return $respond(Student\Portal::ranking($request));
+	}
+]);
+
+$obRouter->get('/api/v1/student/achievements', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Portal::achievements($request));
+	}
+]);
+
+$obRouter->get('/api/v1/student/notifications', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Notifications::list($request));
+	}
+]);
+
+$obRouter->post('/api/v1/student/notifications/mark-all-read', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Notifications::markAllRead($request));
+	}
+]);
+
+$obRouter->post('/api/v1/student/notifications/{id}/read', [
+	'middlewares' => $studentAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(Student\Notifications::markRead($request, $id));
 	}
 ]);
 
@@ -76,6 +126,13 @@ $obRouter->get('/api/v1/student/courses/{id}', [
 	}
 ]);
 
+$obRouter->post('/api/v1/student/courses/{id}/rating', [
+	'middlewares' => $studentAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(Student\Portal::rateCourse($request, $id));
+	}
+]);
+
 $obRouter->get('/api/v1/student/courses/{courseId}/lessons/{lessonId}', [
 	'middlewares' => $studentAuth,
 	function ($request, $courseId, $lessonId) use ($respond) {
@@ -87,6 +144,34 @@ $obRouter->post('/api/v1/student/courses/{courseId}/lessons/{lessonId}/complete'
 	'middlewares' => $studentAuth,
 	function ($request, $courseId, $lessonId) use ($respond) {
 		return $respond(Student\Portal::completeLesson($request, $courseId, $lessonId));
+	}
+]);
+
+$obRouter->post('/api/v1/student/study/heartbeat', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Portal::studyHeartbeat($request));
+	}
+]);
+
+$obRouter->get('/api/v1/student/courses/{courseId}/lessons/{lessonId}/comments', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId) use ($respond) {
+		return $respond(Student\Portal::listComments($request, $courseId, $lessonId));
+	}
+]);
+
+$obRouter->post('/api/v1/student/courses/{courseId}/lessons/{lessonId}/comments', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId) use ($respond) {
+		return $respond(Student\Portal::postComment($request, $courseId, $lessonId));
+	}
+]);
+
+$obRouter->post('/api/v1/student/courses/{courseId}/lessons/{lessonId}/comments/{commentId}/delete', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId, $commentId) use ($respond) {
+		return $respond(Student\Portal::deleteComment($request, $courseId, $lessonId, $commentId));
 	}
 ]);
 
@@ -210,5 +295,12 @@ $obRouter->get('/api/v1/student/certificates', [
 	'middlewares' => $studentAuth,
 	function ($request) use ($respond) {
 		return $respond(Student\Certificates::list($request));
+	}
+]);
+
+$obRouter->get('/api/v1/student/certificates/{id}/html', [
+	'middlewares' => $studentAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(Student\Certificates::html($request, $id));
 	}
 ]);

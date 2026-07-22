@@ -13,6 +13,7 @@ class BrandingHelper {
 	public const ICONE_CTI = 'resources/assets/img/icons/icone.png';
 	public const DIR_ESCOLAS = '/img/escolas/';
 	public const DIR_MODELO_CERT = '/img/certificado/modelos/';
+	public const DIR_CONQUISTAS = '/img/conquistas/';
 	public const MODELO_CERT_PADRAO = 'uploads/img/certificado/modelo_cert.png';
 
 	public static function urlBase(): string {
@@ -95,6 +96,28 @@ class BrandingHelper {
 	 */
 	public static function processarUploadModeloCertificado(?array $file, ?string $atual = null): ?string {
 		return self::processarUploadImagem($file, self::DIR_MODELO_CERT, $atual, 8 * 1024 * 1024);
+	}
+
+	/** Upload de figurinha/medalha de conquista (PNG/JPG/WebP, até 2 MB). */
+	public static function processarUploadBadgeConquista(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_CONQUISTAS, $atual, 2 * 1024 * 1024);
+	}
+
+	/** URL pública do badge; null se inválido/ausente. */
+	public static function urlBadgeConquista(?string $arquivo): ?string {
+		$arquivo = trim((string)$arquivo);
+		if ($arquivo === '' || strpos($arquivo, '..') !== false || strpos($arquivo, '/') !== false || strpos($arquivo, '\\') !== false) {
+			return null;
+		}
+		$raiz = realpath(__DIR__.'/../../../');
+		if ($raiz === false) {
+			return null;
+		}
+		$fs = $raiz.DIRECTORY_SEPARATOR.'uploads'.str_replace('/', DIRECTORY_SEPARATOR, self::DIR_CONQUISTAS).$arquivo;
+		if (!is_file($fs)) {
+			return null;
+		}
+		return self::urlBase().'/uploads'.self::DIR_CONQUISTAS.$arquivo;
 	}
 
 	private static function processarUploadImagem(?array $file, string $dirRelativo, ?string $atual, int $maxBytes): ?string {

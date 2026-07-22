@@ -5,12 +5,15 @@ use \App\Common\Environment;
 use \PDO;
 use \PDOException;
 
-Environment::load(__DIR__);
+// Raiz do projeto: app/Model/Db → ../../../
+Environment::load(dirname(__DIR__, 3));
 
-define('DB_HOST', getenv('DB_HOST'));
-define('DB_NAME', getenv('DB_NAME'));
-define('DB_USER', getenv('DB_USER'));
-define('DB_PASS', getenv('DB_PASS'));
+if (!defined('DB_HOST')) {
+	define('DB_HOST', (string)Environment::get('DB_HOST', 'localhost'));
+	define('DB_NAME', (string)Environment::get('DB_NAME', ''));
+	define('DB_USER', (string)Environment::get('DB_USER', ''));
+	define('DB_PASS', (string)Environment::get('DB_PASS', ''));
+}
 
 class Database{
 
@@ -29,13 +32,18 @@ class Database{
 
      private function setConnection(){
     try{
+        if (self::USER === '' || self::NAME === '') {
+            throw new PDOException(
+                'Credenciais DB vazias (DB_USER/DB_NAME). Verifique o arquivo .env na raiz do painel.'
+            );
+        }
         $this->connection = new PDO(
-            'mysql:host='.self::HOST.';dbname='.self::NAME.';charset=utf8mb4',  // Incluindo o charset na string de conexão
+            'mysql:host='.self::HOST.';dbname='.self::NAME.';charset=utf8mb4',
             self::USER,
             self::PASS
         );
         $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $this->connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC); // Configuração opcional para o modo de busca padrão
+        $this->connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     }catch(PDOException $e){
         //SUBSTITUIR POR MENSAGEM AMIGÁVEL
         die('ERROR: '.$e->getMessage());

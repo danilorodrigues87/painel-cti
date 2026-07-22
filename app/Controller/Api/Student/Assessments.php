@@ -382,6 +382,29 @@ class Assessments {
 			$unit = LmsUnidadeAvaliacaoHelper::sincronizarUnidade((int)$u->id, $idAula, (int)$u->id_admin);
 		}
 
+		$certId = null;
+		$curso = LmsCurso::getByIdAdmin((int)$at->id_curso, (int)$u->id_admin);
+		if ($curso) {
+			$cert = \App\Common\Helpers\LmsCertificadoHelper::emitirSeCursoCompleto(
+				(int)$u->id,
+				(int)$u->id_admin,
+				$curso
+			);
+			$certId = $cert ? (string)$cert->id : null;
+		}
+
+		\App\Common\Helpers\LmsNotificacaoHelper::criar(
+			(int)$u->id_admin,
+			(int)$u->id,
+			'course',
+			'Atividade finalizada',
+			((string)($at->titulo ?? 'Atividade')).' — nota '.$score.'%'.($xp > 0 ? ' (+'.$xp.' XP)' : ''),
+			!empty($at->id_curso) ? '/courses/'.(int)$at->id_curso : null,
+			'asm:'.(int)$tent->id
+		);
+
+		\App\Common\Helpers\LmsConquistaHelper::recalcular((int)$u->id_admin, (int)$u->id);
+
 		return self::ok([
 			'id' => (string)$tent->id,
 			'assessmentId' => (string)$at->id,
@@ -397,6 +420,7 @@ class Assessments {
 			'unitPassed' => $unit['passed'] ?? null,
 			'needsRewatch' => !empty($unit['precisaRevisar']),
 			'unitDetails' => $unit['details'] ?? [],
+			'certificateIssued' => $certId,
 		]);
 	}
 
@@ -474,6 +498,8 @@ class Assessments {
 			(float)$score,
 			$score >= 70
 		);
+
+		\App\Common\Helpers\LmsConquistaHelper::recalcular((int)$u->id_admin, (int)$u->id);
 
 		return self::ok([
 			'id' => (string)$tentId,

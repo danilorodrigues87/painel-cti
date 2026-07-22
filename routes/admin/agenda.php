@@ -60,6 +60,34 @@ $obRouter->post('/painel/agenda/laboratorio/salvar',[
 	}
 ]);
 
+$obRouter->post('/painel/agenda/laboratorio/avulso/form',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaLaboratorio::formAvulso($request));
+	}
+]);
+
+$obRouter->post('/painel/agenda/laboratorio/avulso/salvar',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaLaboratorio::salvarAvulso($request));
+	}
+]);
+
+$obRouter->post('/painel/agenda/laboratorio/avulso/listar',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaLaboratorio::listarAvulsos($request));
+	}
+]);
+
+$obRouter->post('/painel/agenda/laboratorio/avulso/excluir',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaLaboratorio::excluirAvulso($request));
+	}
+]);
+
 // LABORATÓRIOS — CRUD
 $obRouter->get('/painel/agenda/laboratorios',[
 	'middlewares' => ['required-admin-login'],
