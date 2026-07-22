@@ -75,9 +75,7 @@ class Login{
 
 		$isMaster = MasterGateHelper::isMasterEmail($obUser->email ?? '');
 		$escola = EscolasAssinantes::getEscolaById((int)$obUser->id_admin);
-		if ($escola instanceof EscolasAssinantes && !$escola->isAtiva() && !$isMaster) {
-			return self::getLogin($request, 'Esta escola está inativa. Contate o suporte.');
-		}
+		$bloqueada = ($escola instanceof EscolasAssinantes && !$escola->isAtiva() && !$isMaster);
 
 		//CRIA A SESSÃO DE LOGIN
 		SessionUserLogin::login($obUser);
@@ -85,6 +83,11 @@ class Login{
 		if ($isMaster) {
 			$_SESSION['usuario-mvc-1']['is_master'] = true;
 			$request->getRouter()->redirect('/master');
+		}
+
+		if ($bloqueada) {
+			$_SESSION['usuario-mvc-1']['assinatura_bloqueada'] = true;
+			$request->getRouter()->redirect('/painel/assinatura');
 		}
 
 		//REDIRECIONA O USUÁRIO PARA A HOME DO ADMIN

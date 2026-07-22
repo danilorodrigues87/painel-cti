@@ -94,12 +94,9 @@ class Login {
 
         $isMaster = MasterGateHelper::isMasterEmail($obUser->email ?? '');
 
-        // Escola inativa bloqueia painel da escola (master continua para /master)
+        // Escola inativa: mantém sessão, mas marca acesso restrito à Assinatura
         $escola = EscolasAssinantes::getEscolaById((int)$obUser->id_admin);
-        if ($escola instanceof EscolasAssinantes && !$escola->isAtiva() && !$isMaster) {
-            unset($_SESSION['usuario-mvc-1']);
-            return false;
-        }
+        $bloqueada = ($escola instanceof EscolasAssinantes && !$escola->isAtiva() && !$isMaster && !self::isImpersonating());
 
         $_SESSION['usuario-mvc-1']['nome']       = $obUser->nome;
         $_SESSION['usuario-mvc-1']['email']      = $obUser->email;
@@ -107,18 +104,42 @@ class Login {
         $_SESSION['usuario-mvc-1']['id_admin']   = $obUser->id_admin;
         $_SESSION['usuario-mvc-1']['termos_uso'] = (int)$obUser->termos_uso;
         $_SESSION['usuario-mvc-1']['acesso']     = json_decode($obUser->acesso, true) ?? [];
+        $_SESSION['usuario-mvc-1']['assinatura_bloqueada'] = $bloqueada;
 
         // Em impersonate, mantém flag e não promove a master pelo e-mail do diretor
         if (self::isImpersonating()) {
             $_SESSION['usuario-mvc-1']['is_master'] = false;
             $_SESSION['usuario-mvc-1']['impersonate'] = true;
             $_SESSION['usuario-mvc-1']['termos_uso'] = 1;
+            $_SESSION['usuario-mvc-1']['assinatura_bloqueada'] = false;
         } else {
             $_SESSION['usuario-mvc-1']['is_master'] = $isMaster;
             unset($_SESSION['usuario-mvc-1']['impersonate']);
         }
 
         return true;
+    }
+
+    /** Escola suspensa: só Assinatura (e logout). */
+    public static function isAssinaturaBloqueada(): bool {
+        self::init();
+        return !empty($_SESSION['usuario-mvc-1']['assinatura_bloqueada']);
+    }
+
+    public static function uriPermitidaQuandoBloqueada(string $uri): bool {
+        $path = parse_url($uri, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            $path = $uri;
+        }
+        $path = strtolower(rtrim($path, '/'));
+        if ($path === '' || substr($path, -7) === '/logout' || $path === '/logout') {
+            return true;
+        }
+        // /painel/assinatura e subpaths (POST na mesma rota)
+        if (preg_match('#/(painel/assinatura)$#', $path) || preg_match('#/painel/assinatura/#', $path.'/')) {
+            return true;
+        }
+        return false;
     }
 
     // VERIFICA SE O USUÁRIO ESTÁ LOGADO E SE É UM ADMIN

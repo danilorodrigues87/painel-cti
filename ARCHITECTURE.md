@@ -3,7 +3,7 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-22 (LMS certificados + conquistas SQL aplicados localmente)  
+**Última atualização:** 2026-07-22 (Master SaaS 2+)  
 **Repo:** `painel-cti`  
 **DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
@@ -112,6 +112,9 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 ### 5.2 Financeiro
 - `caixa` — títulos de entrada/saída; carnê gera parcelas com `status` `Em aberto` / pago (`0`/`1` misturado no legado — tratar ambos)
 - Carnês ligados a `matriculas` via `caixa.id_ref`
+- **Extrato consolidado do aluno:** `/painel/alunos/{id}/extrato` (atalho em Alunos) — todas as matrículas + acordos; PDF via html2pdf; SQL `database/financeiro_acordos.sql`
+- **Renegociação:** marca títulos abertos como `tipo_pagamento=Renegociação` (histórico) e cria `financeiro_acordos` + novas parcelas (`caixa.id_acordo`, `id_ref=0`) sem liberar EAD
+- Portal aluno: `GET /api/v1/student/finance` + página `/finance` (só leitura, menu se houver títulos)
 - Carrinho de pagamento + recibos (baixa manual dinheiro/cartão)
 - Gateway **Mercado Pago** (PIX QR no carnê) em `app/Common/Gateways/MercadoPago/`
   - Credenciais por escola: `escola_integracoes` (`mp_*`) + tela `/painel/config/pagamentos`
@@ -120,6 +123,11 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
   - Sem MP ativo: matrícula só oferece **Carnê Simples**
   - Interface `PixGatewayInterface` para próximos bancos
 - Desconto pontualidade: só no **Carnê Simples** (desativado com PIX)
+- **Estoque + PDV (MVP):** SQL `database/estoque_vendas.sql`
+  - Menu Financeiro → **Estoque** (`/painel/estoque`) e **PDV** (`/painel/estoque/pdv`)
+  - Slugs: `estoque`, `vendas` (label PDV); Diretor ganha automático se o plano liberar
+  - Produtos/categorias/movimentações (`stq_*`); venda baixa estoque + Entrada paga no `caixa` (`referencia=venda_stq`)
+  - Fora do MVP: imagens, fornecedores UI, estorno, PIX MP na venda, loja no Ascend
 
 ### 5.2b Configurações da escola (Diretor)
 - `/painel/config/escola` — edita telefone, e-mail, site, endereço, logo, modelo cert, redes
@@ -489,21 +497,27 @@ Dois Mercado Pago distintos:
 | QR PIX | Prefere `pix_qr_base64` (MP); fallback `api.qrserver.com` a partir do copia-e-cola |
 
 **Regras de cobrança:**
-- Só gera fatura se a escola tem `plan_id` e o plano tem `valor_mensal > 0`
-- **Plano personalizado** (`plan_id` vazio) **não é cobrado** automaticamente
-- Escola inativa (`ativo=n`) **não faz login** no painel — após suspensão, regularizar via Master (marcar paga) ou suporte
+- Gera fatura se houver **valor efetivo > 0**: `valor_mensal_custom` da escola **ou** `planos_assinatura.valor_mensal`
+- **Personalizado** (`plan_id` vazio) **só é cobrado** se `valor_mensal_custom > 0`
+- **Trial** (padrão 14 dias): `assinatura_status=trial` + `trial_ate` — worker não cobra até expirar
+- Escola inativa (`ativo=n`): login **permitido**, mas acesso **só** a `/painel/assinatura` (Diretor paga PIX e reativa)
+- E-mail de cobrança: SMTP sistema (`Email::sistema`) 1× por fatura (`email_enviado_em`); Master pode reenviar
+
+**SQL fase 2+:** `database/saas_fase2plus.sql` (`valor_mensal_custom`, `trial_ate`, `email_enviado_em`)
+
+**Dashboard Master:** cards Ativas / Trial / Suspensas / Abertas / Vencidas / Receita do mês em `/master/assinaturas`
 
 **Botões Master:**
 | Botão | Competência | Escopo | Suspende? |
 |-------|-------------|---------|-----------|
-| Gerar mês | filtro | todas elegíveis | não |
+| Gerar mês | filtro | elegíveis (não trial, com valor) | não |
 | Gerar 1 escola | filtro | 1 escola (filtro) | não |
 | Rodar worker | mês de hoje | filtro ou todas | sim (grace 5d) |
 
 **Armadilha Response JSON:** `App\Http\Response` com `application/json` **não** deve re-encodar string já JSON (corrigido: se `is_string`, echo direto). Controllers Master/Admin costumam já devolver `json_encode(...)`.
 
 ### Checklist deploy (produção)
-1. Subir código; rodar SQLs: `escolas_modelo_contrato.sql`, `escola_integracoes_mercadopago.sql`, `saas_assinatura.sql`, `saas_faturas_pix_qr.sql` (se necessário)
+1. Subir código; rodar SQLs: `escolas_modelo_contrato.sql`, `escola_integracoes_mercadopago.sql`, `saas_assinatura.sql`, `saas_faturas_pix_qr.sql`, **`saas_fase2plus.sql`**
 2. Liberar no plano: `pagamentos`, `contratos`, `dados_escola`, `ead` (ou “Todos os módulos”)
 3. HTTPS; webhook MP escola + webhook SaaS CTI
 4. `.env`: `MP_CTI_ACCESS_TOKEN`, opcional secret/token/payer email; cron `worker/saas.php` 1x/dia
@@ -524,11 +538,12 @@ Detalhe: `database/LMS_CHECKLIST_PRODUCAO.md`
 | Fase | Escopo | Notas |
 |------|--------|-------|
 | **LMS L0–L5 + Fase 1** | Cursos Online + API + Ascend + editor admin + checklist prod | Feito — ver §5.8 + `LMS_CHECKLIST_PRODUCAO.md` |
+| **Estoque + PDV** | Produtos, categorias, movimentações, PDV → caixa | Feito (MVP) — `database/estoque_vendas.sql` |
 | **LMS L6+** | Vitrine EAD entre escolas + royalties (CTI %) + aula demo | Futuro — não abrir sem pedido |
 | **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | Adiado |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 5+** | Templates editáveis de automação CRM por escola | Base já envia textos fixos |
-| **Master fase 2+** | Dashboard SaaS, e-mail cobrança assinatura, trial, valor por escola (personalizado), login restrito só Assinatura quando inativa | Adiado (MVP PIX feito) |
+| **Master fase 2+** | Dashboard SaaS, e-mail cobrança, trial 14d, valor por escola, login só Assinatura se inativa | Feito — `database/saas_fase2plus.sql` |
 
 ### Decisões de produto já alinhadas
 - Cada escola configura **SMTP próprio** (Gmail/corporativo); sistema tem fallback `no-reply@...` no `.env`
@@ -603,11 +618,11 @@ Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 **Leia primeiro:** este arquivo + `.cursorrules` + `README.md` + `.env.example`.
 
-**Concluído recentemente:** Master fase 2 SaaS. Carnê PIX escola. CRM WA automático. Progresso EAD turma (`/painel/ead/progresso` + CSV). Permissões EAD respeitam checklist. Polish Ascend (EmptyState).
+**Concluído recentemente:** Master SaaS 2+ (dashboard, e-mail, trial, valor custom, login restrito Assinatura). Estoque + PDV. Extrato/renegociação.
 
 **MVP + Fase 1 entregues:** LMS EAD (§5.8) — painel Cursos Online (editor com editar/preview) + API `/api/v1/student` + Ascend. SQL: ordem em `database/LMS_CHECKLIST_PRODUCAO.md`. Trilha = comercial; `lms_*` = portal. Aula flexível (0..N vídeos/materiais/atividades/roleplay).
 
-**NÃO reabrir** carnê MP aluno / Evolution / Master SaaS 2+ / vitrine royalties sem pedido.
+**NÃO reabrir** carnê MP aluno / Evolution / vitrine royalties sem pedido.
 
 **SQL a colar:** `database/lms_ead.sql` + `database/lms_xp.sql` + `database/lms_atividade_tentativas_status.sql`.
 

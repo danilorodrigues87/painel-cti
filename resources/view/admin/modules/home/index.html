@@ -1,327 +1,434 @@
 <h1 class="mt-4">Dashboard</h1>
 <ol class="breadcrumb mb-4">
-  <li class="breadcrumb-item active">Dashboard</li>
+  <li class="breadcrumb-item active">Visão geral da escola</li>
 </ol>
 
-<div class="row">
+<div class="dash-section {{visible-hoje}}">
+  <div class="dash-section-title">
+    <h5 class="mb-0"><i class="fa-regular fa-clock me-1"></i> Hoje</h5>
+  </div>
+  <div class="row g-3 mb-4">
 
-  <div class="col-xl-4 col-md-6 mb-4">
-    <a href="{{URL}}/painel/clientes" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2">
-        <div class="card-body">
-          <div class="row no-gutters align-items-center">
-            <div class="col mr-2">
-              <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Clientes Cadastrados</div>
-              <div class="h5 mb-0 font-weight-bold text-gray-800">{{clientes-cadastrados}}</div>
-            </div>
-            <div class="col-auto">
-              <i class="fa-regular fa-user fa-3x" style="color: #FFD43B;"></i>
-            </div>
+    <div class="col-6 col-md-3 {{visible-agenda}}">
+      <a href="{{URL}}/painel/agenda/laboratorio" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-agenda">
+          <div class="card-body">
+            <div class="dash-label">Aulas hoje</div>
+            <div class="dash-value">{{agenda-hoje}}</div>
+            <div class="dash-sub text-muted">Agenda laboratório</div>
           </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-4 col-md-6 mb-4">
-    <a href="{{URL}}/painel/matriculas" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2">
-        <div class="card-body">
-          <div class="row no-gutters align-items-center">
-            <div class="col mr-2">
-              <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Clientes Ativos</div>
-              <div class="h5 mb-0 font-weight-bold text-gray-800">{{qtt-clientes}}</div>
-            </div>
-            <div class="col-auto">
-              <i class="fa-regular fa-face-smile fa-3x" style="color: #FFD43B;"></i>
-            </div>
+    <div class="col-6 col-md-3 {{visible-whatsapp}}">
+      <a href="{{URL}}/painel/whatsapp" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-wa">
+          <div class="card-body">
+            <div class="dash-label">WhatsApp</div>
+            <div class="dash-value">{{wa-nao-lidas}}</div>
+            <div class="dash-sub text-muted">não lidas · fila {{wa-fila}} · abertas {{wa-abertas}}</div>
           </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-4 col-md-6 mb-4 {{visible}}">
-    <a href="{{URL}}/painel/caixa" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2">
-        <div class="card-body">
-          <div class="row no-gutters align-items-center">
-            <div class="col mr-2">
-              <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Recebido Hoje</div>
-              <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{recebido-hoje}}</div>
-            </div>
-            <div class="col-auto">
-              <i class="fa-regular fa-money-bill-1 fa-3x" style="color: #FFD43B;"></i>
-            </div>
+    <div class="col-6 col-md-3 {{visible-pdv}}">
+      <a href="{{URL}}/painel/estoque/pdv" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-pdv">
+          <div class="card-body">
+            <div class="dash-label">PDV hoje</div>
+            <div class="dash-value">R$ {{pdv-hoje-total}}</div>
+            <div class="dash-sub text-muted">{{pdv-hoje-qtd}} venda(s)</div>
           </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-4 col-md-6 mb-4">
-    <a href="{{URL}}/painel/caixa" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2">
-        <div class="card-body">
-          <div class="row no-gutters align-items-center">
-            <div class="col mr-2">
-              <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Dinheiro em caixa</div>
-              <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{balanco}}</div>
-            </div>
-            <div class="col-auto">
-              <i class="fa-solid fa-cash-register fa-3x" style="color: #FFD43B;"></i>
-            </div>
+    <div class="col-6 col-md-3 {{visible-estoque}}">
+      <a href="{{URL}}/painel/estoque" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-estoque">
+          <div class="card-body">
+            <div class="dash-label">Estoque baixo</div>
+            <div class="dash-value">{{estoque-baixo}}</div>
+            <div class="dash-sub text-muted">produtos com qtd ≤ 3</div>
           </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-4 col-md-6 mb-4 {{visible}}">
-    <a href="{{URL}}/painel/caixa" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2">
-        <div class="card-body">
-          <div class="row no-gutters align-items-center">
-            <div class="col mr-2">
-              <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">A Receber na Semana</div>
-              <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{receber-semana}}</div>
-            </div>
-            <div class="col-auto">
-              <i class="fa-solid fa-money-bill-trend-up fa-3x" style="color: #FFD43B;"></i>
-            </div>
-          </div>
-        </div>
-      </div>
-    </a>
-  </div>
-
-  <div class="col-xl-4 col-md-6 mb-4 {{visible}}">
-    <a href="{{URL}}/painel/caixa" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-danger">
-        <div class="card-body">
-          <div class="row no-gutters align-items-center">
-            <div class="col mr-2">
-              <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Inadimplentes esse mês</div>
-              <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{inadimplentesDoMes}}</div>
-            </div>
-            <div class="col-auto">
-              <i class="fa-regular fa-calendar-xmark fa-3x" style="color: #dc3545;"></i>
-            </div>
-          </div>
-        </div>
-      </div>
-    </a>
-  </div>
-
-</div>
-
-<div class="row mb-2 {{visible-crm}}">
-  <div class="col-12">
-    <h5 class="text-muted mb-0"><i class="fa-solid fa-filter me-1"></i> CRM — Leads</h5>
   </div>
 </div>
 
-<div class="row {{visible-crm}}">
-
-  <div class="col-xl-2 col-md-4 col-6 mb-4">
-    <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-primary">
-        <div class="card-body py-3">
-          <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Novos</div>
-          <div class="h5 mb-0 font-weight-bold text-gray-800">{{crm-novo}}</div>
-        </div>
-      </div>
-    </a>
+<div class="dash-section">
+  <div class="dash-section-title">
+    <h5 class="mb-0"><i class="fa-solid fa-coins me-1"></i> Financeiro</h5>
   </div>
+  <div class="row g-3 mb-4">
 
-  <div class="col-xl-2 col-md-4 col-6 mb-4">
-    <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-warning">
-        <div class="card-body py-3">
-          <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Em atendimento</div>
-          <div class="h5 mb-0 font-weight-bold text-gray-800">{{crm-atendimento}}</div>
+    <div class="col-6 col-lg-3 {{visible}}">
+      <a href="{{URL}}/painel/caixa/entrada" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-fin">
+          <div class="card-body">
+            <div class="dash-label">Recebido hoje</div>
+            <div class="dash-value">R$ {{recebido-hoje}}</div>
+          </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-2 col-md-4 col-6 mb-4">
-    <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-success">
-        <div class="card-body py-3">
-          <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Matriculados</div>
-          <div class="h5 mb-0 font-weight-bold text-gray-800">{{crm-matriculado}}</div>
+    <div class="col-6 col-lg-3">
+      <a href="{{URL}}/painel/caixa/entrada" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-fin">
+          <div class="card-body">
+            <div class="dash-label">Dinheiro em caixa</div>
+            <div class="dash-value">R$ {{balanco}}</div>
+          </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-2 col-md-4 col-6 mb-4">
-    <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-secondary">
-        <div class="card-body py-3">
-          <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Perdidos</div>
-          <div class="h5 mb-0 font-weight-bold text-gray-800">{{crm-perdido}}</div>
+    <div class="col-6 col-lg-3 {{visible}}">
+      <a href="{{URL}}/painel/caixa/entrada" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-fin">
+          <div class="card-body">
+            <div class="dash-label">A receber na semana</div>
+            <div class="dash-value">R$ {{receber-semana}}</div>
+          </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-2 col-md-4 col-6 mb-4">
-    <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-danger">
-        <div class="card-body py-3">
-          <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Esquecidos (+48h)</div>
-          <div class="h5 mb-0 font-weight-bold text-gray-800">{{crm-esquecidos}}</div>
+    <div class="col-6 col-lg-3 {{visible}}">
+      <a href="{{URL}}/painel/caixa/entrada" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-danger">
+          <div class="card-body">
+            <div class="dash-label text-danger">Inadimplentes do mês</div>
+            <div class="dash-value">R$ {{inadimplentesDoMes}}</div>
+          </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
-  <div class="col-xl-2 col-md-4 col-6 mb-4">
-    <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
-      <div class="card shadow h-100 py-2 border-left-info">
-        <div class="card-body py-3">
-          <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Conversão</div>
-          <div class="h5 mb-0 font-weight-bold text-gray-800">{{crm-conversao}}</div>
+    <div class="col-6 col-lg-3 {{visible-acordos}}">
+      <a href="{{URL}}/painel/clientes" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-fin">
+          <div class="card-body">
+            <div class="dash-label">Acordos ativos</div>
+            <div class="dash-value">{{acordos-ativos}}</div>
+            <div class="dash-sub text-muted">renegociações</div>
+          </div>
         </div>
-      </div>
-    </a>
-  </div>
+      </a>
+    </div>
 
+    <div class="col-6 col-lg-3 {{visible-assinatura}}">
+      <a href="{{URL}}/painel/assinatura" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-saas">
+          <div class="card-body">
+            <div class="dash-label">Assinatura Painel CTI</div>
+            <div class="dash-value {{assinatura-class}}">{{assinatura-label}}</div>
+            <div class="dash-sub text-muted">{{assinatura-sub}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+  </div>
 </div>
 
-<div class="row mb-4">
+<div class="dash-section">
+  <div class="dash-section-title">
+    <h5 class="mb-0"><i class="fa-solid fa-graduation-cap me-1"></i> Pedagógico</h5>
+  </div>
+  <div class="row g-3 mb-4">
 
-  <div class="col-xl-6 col-md-6 mb-4">
-    <div class="card shadow h-100 py-2">
+    <div class="col-6 col-lg-3">
+      <a href="{{URL}}/painel/clientes" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-ped">
+          <div class="card-body">
+            <div class="dash-label">Alunos cadastrados</div>
+            <div class="dash-value">{{clientes-cadastrados}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <a href="{{URL}}/painel/matriculas" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-ped">
+          <div class="card-body">
+            <div class="dash-label">Matrículas ativas</div>
+            <div class="dash-value">{{qtt-clientes}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-12 col-lg-6 {{visible-ead}}">
+      <a href="{{URL}}/painel/ead/progresso" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-ead">
+          <div class="card-body">
+            <div class="dash-label">Progresso EAD</div>
+            <div class="d-flex flex-wrap gap-3 align-items-end mt-1">
+              <div>
+                <div class="dash-value text-success">{{ead-concluidos}}</div>
+                <div class="dash-sub text-muted">concluídos</div>
+              </div>
+              <div>
+                <div class="dash-value text-warning">{{ead-andamento}}</div>
+                <div class="dash-sub text-muted">em andamento</div>
+              </div>
+              <div>
+                <div class="dash-value text-secondary">{{ead-nao-iniciados}}</div>
+                <div class="dash-sub text-muted">não iniciados</div>
+              </div>
+              <div class="ms-auto dash-sub text-muted align-self-center">{{ead-alunos}} aluno(s)</div>
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<div class="dash-section {{visible-crm}}">
+  <div class="dash-section-title">
+    <h5 class="mb-0"><i class="fa-solid fa-filter me-1"></i> Comercial — CRM</h5>
+  </div>
+  <div class="row g-3 mb-4">
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-primary">
+          <div class="card-body py-3">
+            <div class="dash-label text-primary">Novos</div>
+            <div class="dash-value">{{crm-novo}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-warning">
+          <div class="card-body py-3">
+            <div class="dash-label text-warning">Em atendimento</div>
+            <div class="dash-value">{{crm-atendimento}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-success">
+          <div class="card-body py-3">
+            <div class="dash-label text-success">Matriculados</div>
+            <div class="dash-value">{{crm-matriculado}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-secondary">
+          <div class="card-body py-3">
+            <div class="dash-label text-secondary">Perdidos</div>
+            <div class="dash-value">{{crm-perdido}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-danger">
+          <div class="card-body py-3">
+            <div class="dash-label text-danger">Esquecidos (+48h)</div>
+            <div class="dash-value">{{crm-esquecidos}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-info">
+          <div class="card-body py-3">
+            <div class="dash-label text-info">Conversão</div>
+            <div class="dash-value">{{crm-conversao}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card dash-card border-0 shadow-sm h-100">
       <div class="card-body">
-        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Matrículas este mês</div>
-        <div class="h5 mb-0 font-weight-bold text-gray-800">{{comp-matriculas}}</div>
+        <div class="dash-label">Matrículas este mês</div>
+        <div class="dash-value fs-5">{{comp-matriculas}}</div>
       </div>
     </div>
   </div>
-
-  <div class="col-xl-6 col-md-6 mb-4 {{visible}}">
-    <div class="card shadow h-100 py-2">
+  <div class="col-md-6 {{visible}}">
+    <div class="card dash-card border-0 shadow-sm h-100">
       <div class="card-body">
-        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Receita este mês</div>
-        <div class="h5 mb-0 font-weight-bold text-gray-800">{{comp-receita}}</div>
+        <div class="dash-label">Receita este mês</div>
+        <div class="dash-value fs-5">{{comp-receita}}</div>
       </div>
     </div>
   </div>
-
 </div>
 
-<div class="row align-items-center mb-3">
-  <div class="col">
-    <h5 class="text-muted mb-0"><i class="fas fa-chart-line me-1"></i> Indicadores</h5>
-  </div>
-  <div class="col-auto">
+<div class="dash-section">
+  <div class="dash-section-title d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <h5 class="mb-0"><i class="fas fa-chart-line me-1"></i> Indicadores</h5>
     <select id="filtro-periodo-dashboard" class="form-select form-select-sm" style="min-width: 180px;">
       <option value="mes">Este mês</option>
       <option value="trimestre">Últimos 3 meses</option>
       <option value="ano" selected>Últimos 12 meses</option>
     </select>
   </div>
-</div>
 
-<div class="row">
+  <div class="row g-3">
 
-  <div class="col-md-6 col-xl-6">
-    <div class="card mb-4 shadow">
-      <div class="card-header">
-        <i class="fas fa-chart-area me-1"></i>
-        Nossas vendas
-      </div>
-      <div class="card-body">
-        <canvas id="graficoVendas" width="100%" height="40"></canvas>
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fas fa-chart-area me-1"></i> Matrículas
+        </div>
+        <div class="card-body">
+          <canvas id="graficoVendas" width="100%" height="40"></canvas>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="col-md-6 col-xl-6 {{visible}}">
-    <div class="card mb-4 shadow">
-      <div class="card-header">
-        <i class="fa-solid fa-coins me-1"></i>
-        Financeiro
-      </div>
-      <div class="card-body">
-        <canvas id="graficoFinanceiro" width="100%" height="40"></canvas>
+    <div class="col-md-6 {{visible}}">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-coins me-1"></i> Financeiro
+        </div>
+        <div class="card-body">
+          <canvas id="graficoFinanceiro" width="100%" height="40"></canvas>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="col-md-6 col-xl-6">
-    <div class="card mb-4 shadow">
-      <div class="card-header">
-        <i class="fa-solid fa-chart-pie me-1"></i>
-        Cursos Mais Vendidos
-      </div>
-      <div class="card-body">
-        <canvas id="myPieChart" width="100%" height="40"></canvas>
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-chart-pie me-1"></i> Cursos mais matriculados
+        </div>
+        <div class="card-body">
+          <canvas id="myPieChart" width="100%" height="40"></canvas>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="col-md-6 col-xl-6 {{visible-crm}}">
-    <div class="card mb-4 shadow">
-      <div class="card-header">
-        <i class="fa-solid fa-chart-bar me-1"></i>
-        Leads por status
-      </div>
-      <div class="card-body">
-        <canvas id="graficoCrmStatus" width="100%" height="40"></canvas>
+    <div class="col-md-6 {{visible-crm}}">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-chart-bar me-1"></i> Leads por status
+        </div>
+        <div class="card-body">
+          <canvas id="graficoCrmStatus" width="100%" height="40"></canvas>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="col-md-6 col-xl-6 {{visible-crm}}">
-    <div class="card mb-4 shadow">
-      <div class="card-header">
-        <i class="fa-solid fa-bullhorn me-1"></i>
-        Leads por origem
-      </div>
-      <div class="card-body">
-        <canvas id="graficoCrmOrigem" width="100%" height="40"></canvas>
+    <div class="col-md-6 {{visible-crm}}">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-bullhorn me-1"></i> Leads por origem
+        </div>
+        <div class="card-body">
+          <canvas id="graficoCrmOrigem" width="100%" height="40"></canvas>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="col-md-6 col-xl-6 {{visible-crm}}">
-    <div class="card mb-4 shadow">
-      <div class="card-header">
-        <i class="fa-solid fa-ranking-star me-1"></i>
-        Top 3 vendedores (matrículas CRM — mês atual)
-      </div>
-      <div class="card-body p-0">
-        <table class="table align-middle bg-white mb-0">
-          <tbody id="top-vendedores-tbody">
-            <tr>
-              <td colspan="2" class="text-muted text-center py-4">Carregando...</td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="col-md-6 {{visible-crm}}">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fa-solid fa-ranking-star me-1"></i> Top 3 vendedores (CRM — mês)
+        </div>
+        <div class="card-body p-0">
+          <table class="table align-middle bg-white mb-0">
+            <tbody id="top-vendedores-tbody">
+              <tr>
+                <td colspan="2" class="text-muted text-center py-4">Carregando...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
 
+  </div>
 </div>
 
 <style>
+  .dash-section-title {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+  }
+  .dash-section-title h5 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #495057;
+  }
+  .dash-card {
+    border-radius: 0.65rem;
+    border-left: 3px solid transparent;
+  }
+  .dash-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+  }
+  .dash-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.2;
+  }
+  .dash-sub {
+    font-size: 0.75rem;
+    margin-top: 0.2rem;
+  }
+  .accent-agenda { border-left-color: #0d6efd !important; }
+  .accent-wa { border-left-color: #25d366 !important; }
+  .accent-pdv { border-left-color: #198754 !important; }
+  .accent-estoque { border-left-color: #fd7e14 !important; }
+  .accent-fin { border-left-color: #6f42c1 !important; }
+  .accent-danger { border-left-color: #dc3545 !important; }
+  .accent-saas { border-left-color: #0dcaf0 !important; }
+  .accent-ped { border-left-color: #20c997 !important; }
+  .accent-ead { border-left-color: #6610f2 !important; }
   .card-dashboard-link .card {
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .card-dashboard-link:hover .card {
     transform: translateY(-2px);
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12) !important;
   }
-  .border-left-primary { border-left: 4px solid #0d6efd !important; }
-  .border-left-success { border-left: 4px solid #198754 !important; }
-  .border-left-warning { border-left: 4px solid #ffc107 !important; }
-  .border-left-danger  { border-left: 4px solid #dc3545 !important; }
-  .border-left-secondary { border-left: 4px solid #6c757d !important; }
-  .border-left-info { border-left: 4px solid #0dcaf0 !important; }
+  .border-left-primary { border-left: 3px solid #0d6efd !important; }
+  .border-left-success { border-left: 3px solid #198754 !important; }
+  .border-left-warning { border-left: 3px solid #ffc107 !important; }
+  .border-left-danger  { border-left: 3px solid #dc3545 !important; }
+  .border-left-secondary { border-left: 3px solid #6c757d !important; }
+  .border-left-info { border-left: 3px solid #0dcaf0 !important; }
 </style>
 
 <script>
@@ -329,4 +436,4 @@
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.js" crossorigin="anonymous"></script>
-<script src="{{URL}}/resources/js/graficos.js?v=20260714d"></script>
+<script src="{{URL}}/resources/js/graficos.js?v=20260722f"></script>

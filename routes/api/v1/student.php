@@ -98,6 +98,13 @@ $obRouter->get('/api/v1/student/notifications', [
 	}
 ]);
 
+$obRouter->get('/api/v1/student/finance', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Finance::summary($request));
+	}
+]);
+
 $obRouter->post('/api/v1/student/notifications/mark-all-read', [
 	'middlewares' => $studentAuth,
 	function ($request) use ($respond) {

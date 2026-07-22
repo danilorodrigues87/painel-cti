@@ -26,6 +26,8 @@ class SystemModules {
 		'entrada'         => 'Entrada',
 		'saida'           => 'Saída',
 		'carnes'          => 'Carnês',
+		'estoque'         => 'Estoque',
+		'vendas'          => 'PDV',
 		'pagamentos'      => 'Pagamentos',
 		'relatorios'      => 'Relatórios',
 		'agendamentos'    => 'Agendamentos',
@@ -231,6 +233,14 @@ class SystemModules {
 					[
 						'label' => 'Saída',
 						'link' => URL.'/painel/caixa/saida'
+					],
+					[
+						'label' => 'Estoque',
+						'link' => URL.'/painel/estoque'
+					],
+					[
+						'label' => 'PDV',
+						'link' => URL.'/painel/estoque/pdv'
 					],
 					[
 						'label' => 'Relatórios',

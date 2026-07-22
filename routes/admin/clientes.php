@@ -74,6 +74,21 @@ $obRouter->post('/painel/clientes/anotacoes',[
 	}
 ]);
 
+// Extrato financeiro consolidado do aluno
+$obRouter->get('/painel/alunos/{idAluno}/extrato', [
+	'middlewares' => ['required-admin-login'],
+	function ($request, $idAluno) {
+		return new Response(200, Admin\AlunoExtrato::index($request, $idAluno));
+	}
+]);
+
+$obRouter->post('/painel/alunos/{idAluno}/extrato', [
+	'middlewares' => ['required-admin-login'],
+	function ($request, $idAluno) {
+		return new Response(200, Admin\AlunoExtrato::getInfo($request, $idAluno));
+	}
+]);
+
 
 
 

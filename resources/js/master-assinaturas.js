@@ -42,6 +42,7 @@ function renderLista(faturas){
 		}
 		if(f.status !== 'pago'){
 			acoes.push('<button type="button" class="btn btn-sm btn-outline-primary me-1 btn-reenviar-pix" data-id="'+f.id+'" title="Gerar/atualizar PIX"><i class="fas fa-sync"></i></button>');
+			acoes.push('<button type="button" class="btn btn-sm btn-outline-secondary me-1 btn-reenviar-email" data-id="'+f.id+'" title="Reenviar e-mail"><i class="fas fa-envelope"></i></button>');
 			acoes.push('<button type="button" class="btn btn-sm btn-outline-dark btn-marcar-paga" data-id="'+f.id+'" title="Marcar paga manual"><i class="fas fa-check"></i></button>');
 		}
 		$tb.append(
@@ -57,6 +58,16 @@ function renderLista(faturas){
 	});
 }
 
+function renderDashboard(d){
+	d = d || {};
+	$('#dash-ativas').text(d.escolas_ativas != null ? d.escolas_ativas : '—');
+	$('#dash-trial').text(d.escolas_trial != null ? d.escolas_trial : '—');
+	$('#dash-suspensas').text(d.escolas_suspensas != null ? d.escolas_suspensas : '—');
+	$('#dash-abertas').text(d.faturas_abertas != null ? d.faturas_abertas : '—');
+	$('#dash-vencidas').text(d.faturas_vencidas != null ? d.faturas_vencidas : '—');
+	$('#dash-receita').text(d.receita_mes_br != null ? ('R$ '+d.receita_mes_br) : '—');
+}
+
 function carregar(){
 	$.post(url_base + MASTER_ASSINATURAS_URL, {
 		acao: 'listar',
@@ -68,6 +79,7 @@ function carregar(){
 			Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
 			return;
 		}
+		renderDashboard(res.dashboard);
 		renderLista(res.faturas || []);
 	}, 'json');
 }
@@ -76,7 +88,7 @@ function gerarMes(){
 	const comp = $('#filtro_competencia').val() || '';
 	Swal.fire({
 		title: 'Gerar faturas?',
-		text: 'Competência '+comp+' para escolas com plano e preço.',
+		text: 'Competência '+comp+' para escolas cobráveis (com valor; fora de trial).',
 		icon: 'question',
 		showCancelButton: true,
 		confirmButtonText: 'Gerar'
@@ -129,7 +141,10 @@ function processar(){
 		const r = res.resumo || {};
 		Swal.fire({
 			title: 'Worker',
-			html: 'Geradas/atualizadas: '+(r.geradas||0)+'<br>Suspensas: '+(r.suspensas||0)
+			html: 'Geradas/atualizadas: '+(r.geradas||0)
+				+'<br>E-mails: '+(r.emails||0)
+				+'<br>Em trial (puladas): '+(r.trials||0)
+				+'<br>Suspensas: '+(r.suspensas||0)
 				+(r.mp_ok ? '' : '<br><span class="text-danger">MP CTI não configurado</span>'),
 			icon: 'info'
 		});
@@ -173,6 +188,17 @@ $(function(){
 	$(document).on('click', '.btn-reenviar-pix', function(){
 		const id = $(this).data('id');
 		$.post(url_base + MASTER_ASSINATURAS_URL, { acao: 'reenviar_pix', id: id }, function(res){
+			if(!res || !res.success){
+				Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
+				return;
+			}
+			Swal.fire('OK', res.message, 'success');
+			carregar();
+		}, 'json');
+	});
+	$(document).on('click', '.btn-reenviar-email', function(){
+		const id = $(this).data('id');
+		$.post(url_base + MASTER_ASSINATURAS_URL, { acao: 'reenviar_email', id: id }, function(res){
 			if(!res || !res.success){
 				Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
 				return;

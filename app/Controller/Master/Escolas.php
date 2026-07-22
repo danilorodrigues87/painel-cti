@@ -11,6 +11,7 @@ use App\Model\Entity\PlanosAssinatura;
 use App\Model\Entity\User as EntityUser;
 use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\BrandingHelper;
+use App\Common\Helpers\SaasAssinaturaService;
 
 class Escolas extends Page {
 
@@ -136,6 +137,15 @@ class Escolas extends Page {
 
 			$ob = new EscolasAssinantes;
 			self::preencherDadosEscola($ob, $post, $nome, $email !== '' ? $email : $diretorEmail, $telefone, $cpfCnpj, $ativo, $modulosJson, $planIdSalvar);
+			// Nova escola: trial 14 dias por padrão (salvo se Master desmarcar)
+			if (empty($post['sem_trial']) && EscolasAssinantes::temColunasAssinatura()) {
+				if (empty($post['assinatura_status']) || ($post['assinatura_status'] ?? '') === 'trial') {
+					SaasAssinaturaService::aplicarTrialPadrao(
+						$ob,
+						!empty($post['trial_ate']) ? (string)$post['trial_ate'] : null
+					);
+				}
+			}
 			$ob->logo = BrandingHelper::processarUploadLogo($files['logo'] ?? null, null) ?: '';
 			if (EscolasAssinantes::temColunaModeloCertificado()) {
 				$ob->modelo_certificado = BrandingHelper::processarUploadModeloCertificado(
@@ -225,6 +235,27 @@ class Escolas extends Page {
 		if (EscolasAssinantes::temColunasAssinatura()) {
 			$dia = (int)($post['dia_vencimento_assinatura'] ?? $ob->dia_vencimento_assinatura ?? 10);
 			$ob->dia_vencimento_assinatura = max(1, min(28, $dia ?: 10));
+		}
+		if (EscolasAssinantes::temColunaValorMensalCustom()) {
+			$raw = trim(str_replace(',', '.', (string)($post['valor_mensal_custom'] ?? '')));
+			$ob->valor_mensal_custom = ($raw !== '' && (float)$raw > 0) ? round((float)$raw, 2) : null;
+		}
+		if (EscolasAssinantes::temColunasAssinatura()) {
+			$status = trim((string)($post['assinatura_status'] ?? $ob->assinatura_status ?? 'ativa'));
+			if (!in_array($status, ['ativa', 'suspensa', 'trial'], true)) {
+				$status = 'ativa';
+			}
+			$ob->assinatura_status = $status;
+		}
+		if (EscolasAssinantes::temColunaTrialAte()) {
+			$trialAte = trim((string)($post['trial_ate'] ?? ''));
+			if ($trialAte !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $trialAte)) {
+				$ob->trial_ate = $trialAte;
+			} elseif (!empty($post['iniciar_trial'])) {
+				SaasAssinaturaService::aplicarTrialPadrao($ob);
+			} elseif ($trialAte === '' && ($ob->assinatura_status ?? '') !== 'trial') {
+				$ob->trial_ate = null;
+			}
 		}
 	}
 
@@ -440,6 +471,16 @@ class Escolas extends Page {
 			'assinatura_proximo_vencimento' => EscolasAssinantes::temColunasAssinatura()
 				? ($e->assinatura_proximo_vencimento ?? null)
 				: null,
+			'valor_mensal_custom' => EscolasAssinantes::temColunaValorMensalCustom()
+				? (($e->valor_mensal_custom !== null && (float)$e->valor_mensal_custom > 0)
+					? round((float)$e->valor_mensal_custom, 2)
+					: null)
+				: null,
+			'trial_ate' => EscolasAssinantes::temColunaTrialAte()
+				? ($e->trial_ate ?? null)
+				: null,
+			'em_trial' => SaasAssinaturaService::emTrialAtivo($e) ? 1 : 0,
+			'valor_efetivo' => SaasAssinaturaService::resolverValorMensal($e),
 		];
 
 		if ($completo) {

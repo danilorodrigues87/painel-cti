@@ -116,6 +116,10 @@ function limparForm(){
 	$('#diretor_nome, #diretor_email').val('');
 	$('#escola_ativo').val('1');
 	$('#escola_dia_venc').val('10');
+	$('#escola_valor_custom').val('');
+	$('#escola_assinatura_status').val('trial');
+	$('#escola_trial_ate').val('');
+	$('#escola_sem_trial').prop('checked', false);
 	$('#escola_logo').val('');
 	$('#preview-escola-logo').attr('src', LOGO_CTI_PADRAO);
 	$('#escola_modelo_certificado').val('');
@@ -212,6 +216,10 @@ function abrirEdicao(id){
 		$('#escola_bairro').val(e.bairro || '');
 		$('#escola_ativo').val(e.ativo ? '1' : '0');
 		$('#escola_dia_venc').val(e.dia_vencimento_assinatura || 10);
+		$('#escola_valor_custom').val(e.valor_mensal_custom != null ? e.valor_mensal_custom : '');
+		$('#escola_assinatura_status').val(e.assinatura_status || 'ativa');
+		$('#escola_trial_ate').val(e.trial_ate || '');
+		$('#escola_sem_trial').prop('checked', false);
 		$('#escola_logo').val('');
 		$('#preview-escola-logo').attr('src', e.logo_url || LOGO_CTI_PADRAO);
 		$('#escola_modelo_certificado').val('');
@@ -258,6 +266,12 @@ function salvarEscola(){
 	fd.append('estado', $('#escola_estado').val() || '');
 	fd.append('ativo', $('#escola_ativo').val());
 	fd.append('dia_vencimento_assinatura', $('#escola_dia_venc').val() || '10');
+	fd.append('valor_mensal_custom', $('#escola_valor_custom').val() || '');
+	fd.append('assinatura_status', $('#escola_assinatura_status').val() || 'ativa');
+	fd.append('trial_ate', $('#escola_trial_ate').val() || '');
+	if($('#escola_sem_trial').is(':checked')){
+		fd.append('sem_trial', '1');
+	}
 	fd.append('plan_id', $('#escola_plan_id').val() || '');
 	fd.append('todos_modulos', $('#todos_modulos').is(':checked') ? '1' : '0');
 	fd.append('modulos_json', JSON.stringify(coletarSlugs()));

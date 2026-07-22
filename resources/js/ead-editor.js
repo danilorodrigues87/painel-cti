@@ -293,10 +293,23 @@ function abrirDialogoAtividade(at) {
 	var edit = !!at;
 	Swal.fire({
 		title: edit ? 'Editar atividade' : 'Nova atividade',
-		html: '<input id="sw-at-titulo" class="swal2-input" placeholder="Título" value="">' +
-			'<textarea id="sw-at-desc" class="swal2-textarea" placeholder="Descrição (opcional)"></textarea>' +
-			'<input id="sw-at-tent" type="number" min="1" max="10" class="swal2-input" placeholder="Tentativas por ciclo (padrão 3)">' +
-			'<input id="sw-at-dur" type="number" min="5" max="180" class="swal2-input" placeholder="Duração estimada (min)">',
+		width: 640,
+		customClass: { popup: 'swal-ead-wide' },
+		html:
+			'<div class="text-start px-1">' +
+			'<label class="form-label small mb-0 fw-semibold" for="sw-at-titulo">Título</label>' +
+			'<input id="sw-at-titulo" class="swal2-input mt-1 mb-2" style="width:100%;margin-left:0" placeholder="Ex.: Quiz da aula 3">' +
+			'<label class="form-label small mb-0 fw-semibold" for="sw-at-desc">Descrição (opcional)</label>' +
+			'<textarea id="sw-at-desc" class="swal2-textarea mt-1 mb-2" style="width:100%;margin-left:0" placeholder="Instruções para o aluno"></textarea>' +
+			'<div class="row g-2">' +
+			'<div class="col-6">' +
+			'<label class="form-label small mb-0 fw-semibold" for="sw-at-tent">Tentativas por ciclo</label>' +
+			'<input id="sw-at-tent" type="number" min="1" max="10" class="swal2-input mt-1" style="width:100%;margin-left:0" placeholder="3">' +
+			'</div>' +
+			'<div class="col-6">' +
+			'<label class="form-label small mb-0 fw-semibold" for="sw-at-dur">Duração estimada (min)</label>' +
+			'<input id="sw-at-dur" type="number" min="5" max="180" class="swal2-input mt-1" style="width:100%;margin-left:0" placeholder="30">' +
+			'</div></div></div>',
 		didOpen: function () {
 			if (edit) {
 				$('#sw-at-titulo').val(at.titulo || '');
@@ -309,6 +322,7 @@ function abrirDialogoAtividade(at) {
 			}
 		},
 		showCancelButton: true,
+		confirmButtonText: edit ? 'Salvar' : 'Criar',
 		preConfirm: function () {
 			var titulo = ($('#sw-at-titulo').val() || '').trim();
 			if (!titulo) {

@@ -20,6 +20,8 @@ include __DIR__.'/admin/categoria_cursos.php';
 
 include __DIR__.'/admin/caixa.php';
 
+include __DIR__.'/admin/estoque.php';
+
 include __DIR__.'/admin/pagamentos.php';
 
 include __DIR__.'/admin/autentication.php';

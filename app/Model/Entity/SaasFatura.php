@@ -16,24 +16,37 @@ class SaasFatura {
 	public $mp_payment_id;
 	public $pix_copia_cola;
 	public $pix_qr_base64;
+	public $email_enviado_em;
 	public $pago_em;
 	public $criado_em;
 	public $atualizado_em;
 
 	public static function temColunaPixQrBase64(): bool {
-		static $cache = null;
-		if ($cache !== null) {
-			return $cache;
+		return self::temColuna('pix_qr_base64');
+	}
+
+	public static function temColunaEmailEnviado(): bool {
+		return self::temColuna('email_enviado_em');
+	}
+
+	private static function temColuna(string $coluna): bool {
+		static $cache = [];
+		$coluna = preg_replace('/[^a-z0-9_]/i', '', $coluna) ?: '';
+		if ($coluna === '') {
+			return false;
+		}
+		if (array_key_exists($coluna, $cache)) {
+			return $cache[$coluna];
 		}
 		try {
 			$row = (new Database('saas_faturas'))->execute(
-				"SHOW COLUMNS FROM saas_faturas LIKE 'pix_qr_base64'"
+				"SHOW COLUMNS FROM saas_faturas LIKE '{$coluna}'"
 			)->fetch(\PDO::FETCH_ASSOC);
-			$cache = !empty($row);
+			$cache[$coluna] = !empty($row);
 		} catch (\Throwable $e) {
-			$cache = false;
+			$cache[$coluna] = false;
 		}
-		return $cache;
+		return $cache[$coluna];
 	}
 
 	public static function tabelaExiste(): bool {
@@ -78,6 +91,9 @@ class SaasFatura {
 		if (self::temColunaPixQrBase64()) {
 			$dados['pix_qr_base64'] = $this->pix_qr_base64 ?: null;
 		}
+		if (self::temColunaEmailEnviado()) {
+			$dados['email_enviado_em'] = $this->email_enviado_em ?: null;
+		}
 		$this->id = (int)(new Database('saas_faturas'))->insert($dados);
 		return $this->id > 0;
 	}
@@ -94,6 +110,9 @@ class SaasFatura {
 		];
 		if (self::temColunaPixQrBase64()) {
 			$dados['pix_qr_base64'] = $this->pix_qr_base64 ?: null;
+		}
+		if (self::temColunaEmailEnviado()) {
+			$dados['email_enviado_em'] = $this->email_enviado_em ?: null;
 		}
 		return (bool)(new Database('saas_faturas'))->update('id = '.(int)$this->id, $dados);
 	}

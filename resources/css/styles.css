@@ -11241,3 +11241,24 @@ body {
   font-size: 0.75rem;
   border-radius: 0.375rem !important;
 }
+
+/* Anti-autofill: armadilha + limpeza visual de e-mail em campos de busca */
+.painel-autofill-trap,
+.crm-autofill-trap {
+  position: absolute !important;
+  left: -9999px !important;
+  top: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+input[type="search"]:-webkit-autofill,
+input[data-anti-autofill]:-webkit-autofill,
+input.anti-autofill:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+  -webkit-text-fill-color: #212529 !important;
+  transition: background-color 99999s ease-out;
+}

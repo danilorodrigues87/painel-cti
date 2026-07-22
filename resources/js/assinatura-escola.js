@@ -78,11 +78,22 @@ function carregar(){
 		$('#ass-valor-mensal').text(r.valor_mensal_br ? ('R$ '+r.valor_mensal_br) : '—');
 		$('#ass-dia-venc').text(r.dia_vencimento || '—');
 
-		if(r.assinatura_status === 'suspensa' || !r.escola_ativa){
+		if(r.em_trial){
+			$('#alert-assinatura').removeClass('d-none alert-warning').addClass('alert-info')
+				.text('Você está em período de trial'+(r.trial_ate ? (' até '+r.trial_ate) : '')+'. Cobrança começa após o trial.');
+		} else if(r.bloqueada || r.assinatura_status === 'suspensa' || !r.escola_ativa){
 			$('#alert-assinatura').removeClass('d-none alert-info').addClass('alert-warning')
-				.text('Sua assinatura está suspensa ou a escola inativa. Regularize o pagamento abaixo (se houver PIX) ou fale com o suporte CTI.');
+				.text('Assinatura suspensa. Regularize o pagamento abaixo para liberar o painel.');
 		} else {
 			$('#alert-assinatura').addClass('d-none');
+		}
+
+		const soLeitura = !!r.so_leitura;
+		$('#btn-atualizar-pix, #btn-verificar-pag, #btn-copiar-pix-escola').toggleClass('d-none', soLeitura);
+		if(soLeitura){
+			$('#alert-somente-diretor').removeClass('d-none');
+		} else {
+			$('#alert-somente-diretor').addClass('d-none');
 		}
 
 		setAberta(res.aberta || null);

@@ -13,6 +13,7 @@ class Stq_Fornecedores
     public $email;
     public $contato;
     public $status;
+    public $id_admin;
     public $created_at;
     public $updated_at;
 
@@ -20,17 +21,25 @@ class Stq_Fornecedores
      * BUSCAS
      * ========================== */
 
-    public static function getById(int $id)
+    public static function getById(int $id, ?int $idAdmin = null)
     {
+        $where = 'id = ' . (int)$id;
+        if ($idAdmin !== null) {
+            $where .= ' AND id_admin = ' . (int)$idAdmin;
+        }
         return (new Database('stq_fornecedores'))
-            ->select('id = ' . $id)
+            ->select($where)
             ->fetchObject(self::class);
     }
 
-    public static function getAtivos()
+    public static function getAtivos(?int $idAdmin = null)
     {
+        $where = 'status = 1';
+        if ($idAdmin !== null) {
+            $where .= ' AND id_admin = ' . (int)$idAdmin;
+        }
         return (new Database('stq_fornecedores'))
-            ->select('status = 1');
+            ->select($where);
     }
 
     /* ==========================
@@ -46,6 +55,7 @@ class Stq_Fornecedores
             'email'      => $this->email,
             'contato'    => $this->contato,
             'status'     => 1,
+            'id_admin'   => (int)$this->id_admin,
             'created_at' => date('Y-m-d H:i:s')
         ]);
 

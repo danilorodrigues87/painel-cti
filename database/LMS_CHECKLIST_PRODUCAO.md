@@ -24,6 +24,7 @@ Colar no phpMyAdmin **nesta ordem**. Scripts idempotentes parcialmente: se uma c
 | 10 | `database/lms_notificacoes.sql` | Notificações in-app do portal |
 | 11 | `database/lms_estudo_sessao.sql` | Heartbeat de tempo de estudo no player |
 | 12 | `database/lms_aula_comentarios.sql` | Comentários nas aulas |
+| 13 | `database/financeiro_acordos.sql` | Extrato consolidado: acordos + `caixa.id_acordo` (renegociação) |
 
 Confirmação rápida:
 
@@ -100,6 +101,8 @@ npm run build
 - [ ] Admin Pedagogico → Progresso EAD (turma): filtros + totais + CSV + link Detalhe
 - [ ] Login Ascend: sem link de primeiro acesso; recuperar senha funciona
 - [ ] Master: upload/remover figurinha aparece no portal
+- [ ] Admin Alunos → Extrato financeiro (todas matrículas) + PDF + Renegociar débitos (após `financeiro_acordos.sql`)
+- [ ] Portal aluno: menu Financeiro quando há títulos; só leitura
 - [ ] Permissões: Cursos Online / Conquistas EAD no checklist; desmarcar remove do menu (também Diretor)
 
 ## 5. Admin EAD (painel)

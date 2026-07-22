@@ -10,6 +10,7 @@ use \App\Model\Entity\CrmLeads as EntityCrmLeads;
 use \App\Model\Entity\CrmHistorico as EntityCrmHistorico;
 use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\DashboardEscolaHelper;
 use PDO;
 
 class Home extends Page{
@@ -33,7 +34,7 @@ class Home extends Page{
 
 		$dados = self::getInfo();
 
-		$content = View::render('admin/modules/home/index',[
+		$content = View::render('admin/modules/home/index', array_merge([
 			'qtt-clientes'           => $dados['qtt_clientes'],
 			'clientes-cadastrados'   => $dados['qtt_clientes_cadastrados'],
 			'recebido-hoje'          => $dados['recebido_hoje'],
@@ -49,8 +50,32 @@ class Home extends Page{
 			'crm-esquecidos'         => $dados['crm_esquecidos'],
 			'crm-conversao'          => $dados['crm_conversao'],
 			'comp-matriculas'        => $dados['comp_matriculas'],
-			'comp-receita'           => $dados['comp_receita']
-		]);
+			'comp-receita'           => $dados['comp_receita'],
+		], [
+			'visible-hoje'           => $dados['visible_hoje'],
+			'visible-agenda'         => $dados['visible_agenda'],
+			'visible-whatsapp'       => $dados['visible_whatsapp'],
+			'visible-pdv'            => $dados['visible_pdv'],
+			'visible-estoque'        => $dados['visible_estoque'],
+			'visible-ead'            => $dados['visible_ead'],
+			'visible-assinatura'     => $dados['visible_assinatura'],
+			'visible-acordos'        => $dados['visible_acordos'],
+			'agenda-hoje'            => $dados['agenda_hoje'],
+			'wa-fila'                => $dados['wa_fila'],
+			'wa-nao-lidas'           => $dados['wa_nao_lidas'],
+			'wa-abertas'             => $dados['wa_abertas'],
+			'pdv-hoje-qtd'           => $dados['pdv_hoje_qtd'],
+			'pdv-hoje-total'         => $dados['pdv_hoje_total'],
+			'estoque-baixo'          => $dados['estoque_baixo'],
+			'ead-concluidos'         => $dados['ead_concluidos'],
+			'ead-andamento'          => $dados['ead_andamento'],
+			'ead-nao-iniciados'      => $dados['ead_nao_iniciados'],
+			'ead-alunos'             => $dados['ead_alunos'],
+			'assinatura-label'       => $dados['assinatura_label'],
+			'assinatura-sub'         => $dados['assinatura_sub'],
+			'assinatura-class'       => $dados['assinatura_class'],
+			'acordos-ativos'         => $dados['acordos_ativos'],
+		]));
 
 		return parent::getPanel('Dashboard', $content, 'Dashboard', $request);
 	}
@@ -87,8 +112,14 @@ class Home extends Page{
 
 		$crmStats = self::getCrmStatsCards($id_admin);
 		$comparativo = self::getComparativoMes($id_admin);
+		$extra = DashboardEscolaHelper::kpis(
+			$id_admin,
+			(string)$nivel,
+			is_array($acesso) ? $acesso : [],
+			(int)($obUserLoged['usuario']['id'] ?? 0)
+		);
 
-		return [
+		return array_merge([
 			'qtt_clientes'             => $qtt_clientes,
 			'qtt_clientes_cadastrados' => $qtt_clientes_cadastrados,
 			'recebido_hoje'            => NumeroHelper::moedaBr($recebido_hoje ?: 0),
@@ -104,8 +135,8 @@ class Home extends Page{
 			'crm_esquecidos'           => $crmStats['esquecidos'],
 			'crm_conversao'            => $crmStats['conversao'],
 			'comp_matriculas'          => $comparativo['matriculas'],
-			'comp_receita'             => $comparativo['receita']
-		];
+			'comp_receita'             => $comparativo['receita'],
+		], $extra);
 	}
 
 	public static function getData($request){

@@ -14,6 +14,7 @@ class Stq_Produtos
     public $valor_custo;
     public $valor_venda;
     public $sku;
+    public $status;
     public $id_admin;
     public $created_at;
     public $updated_at;
@@ -25,7 +26,14 @@ class Stq_Produtos
     public static function getById(int $id)
     {
         return (new Database('stq_produtos'))
-            ->select('id = ' . $id)
+            ->select('id = ' . (int)$id)
+            ->fetchObject(self::class);
+    }
+
+    public static function getByIdAdmin(int $id, int $idAdmin)
+    {
+        return (new Database('stq_produtos'))
+            ->select('id = ' . (int)$id . ' AND id_admin = ' . (int)$idAdmin)
             ->fetchObject(self::class);
     }
 
@@ -40,10 +48,15 @@ class Stq_Produtos
             ->select($where, $order, $limit, $fields, $innerJoin);
     }
 
-    public static function getBySku(string $sku)
+    public static function getBySku(string $sku, ?int $idAdmin = null)
     {
+        $skuEsc = addslashes($sku);
+        $where = "sku = '{$skuEsc}'";
+        if ($idAdmin !== null) {
+            $where .= ' AND id_admin = ' . (int)$idAdmin;
+        }
         return (new Database('stq_produtos'))
-            ->select("sku = '{$sku}'")
+            ->select($where)
             ->fetchObject(self::class);
     }
 
@@ -61,6 +74,7 @@ class Stq_Produtos
             'valor_custo'  => $this->valor_custo,
             'valor_venda'  => $this->valor_venda,
             'sku'          => $this->sku,
+            'status'       => $this->status ?? 1,
             'id_admin'     => $this->id_admin,
             'created_at'   => date('Y-m-d H:i:s')
         ]);
@@ -75,14 +89,27 @@ class Stq_Produtos
     public function atualizar(): bool
     {
         return (new Database('stq_produtos'))->update(
-            'id = ' . $this->id,
+            'id = ' . (int)$this->id,
             [
                 'nome'         => $this->nome,
                 'id_categoria' => $this->id_categoria,
                 'descricao'    => $this->descricao,
                 'valor_custo'  => $this->valor_custo,
                 'valor_venda'  => $this->valor_venda,
+                'sku'          => $this->sku,
+                'status'       => $this->status ?? 1,
                 'updated_at'   => date('Y-m-d H:i:s')
+            ]
+        );
+    }
+
+    public function inativar(): bool
+    {
+        return (new Database('stq_produtos'))->update(
+            'id = ' . (int)$this->id,
+            [
+                'status' => 0,
+                'updated_at' => date('Y-m-d H:i:s'),
             ]
         );
     }

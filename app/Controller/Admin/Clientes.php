@@ -96,6 +96,9 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			<a class="dropdown-item" href="'.URL.'/painel/ead/aluno/'.$obUsers->id.'"><i class="fa-solid fa-graduation-cap fa-lg"></i> Progresso EAD</a>
 			</li>'
 				: '';
+			$linkExtrato = '<li>
+			<a class="dropdown-item" href="'.URL.'/painel/alunos/'.$obUsers->id.'/extrato"><i class="fa-solid fa-file-invoice-dollar fa-lg"></i> Extrato financeiro</a>
+			</li>';
 			$itens .= '<tr>
 			<td>'.$obUsers->nome.'</td>
 			<td>'.$obUsers->email.'</td>
@@ -113,6 +116,7 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			<a class="dropdown-item" href="#" onclick="anotacoesAluno('.$obUsers->id.')"><i class="fa-regular fa-note-sticky fa-lg"></i> Anotações</a>
 			</li>
 			'.$linkProgressoEad.'
+			'.$linkExtrato.'
 			<li>
 			<a class="dropdown-item" href="#" onclick=\'iniciarAtendimentoWa('.json_encode((string)$obUsers->whatsapp).', '.json_encode((string)$obUsers->nome).')\'><i class="fa-brands fa-whatsapp fa-lg text-success"></i> Atendimento WhatsApp</a>
 			</li>

@@ -53,12 +53,19 @@ class Assinaturas extends Page {
 		switch ($acao) {
 			case 'listar':
 				return self::listar($post);
+			case 'dashboard':
+				return json_encode([
+					'success' => true,
+					'dashboard' => SaasAssinaturaService::dashboardStats(),
+				], JSON_UNESCAPED_UNICODE);
 			case 'gerar':
 				return self::gerar($post);
 			case 'gerar_mes':
 				return self::gerarMes($post);
 			case 'reenviar_pix':
 				return self::reenviarPix($post);
+			case 'reenviar_email':
+				return self::reenviarEmail($post);
 			case 'marcar_paga':
 				return self::marcarPagaManual($post);
 			case 'processar':
@@ -94,6 +101,7 @@ class Assinaturas extends Page {
 			'success' => true,
 			'faturas' => $lista,
 			'mp_ok'   => MercadoPagoCtiHelper::configurado(),
+			'dashboard' => SaasAssinaturaService::dashboardStats(),
 		]);
 	}
 
@@ -121,12 +129,11 @@ class Assinaturas extends Page {
 		$erros = [];
 		$results = EscolasAssinantes::getEscolas(null, 'id ASC');
 		while ($e = $results->fetchObject(EscolasAssinantes::class)) {
-			$planId = (int)($e->plan_id ?? 0);
-			if ($planId <= 0 || !PlanosAssinatura::temColunaValorMensal()) {
+			SaasAssinaturaService::encerrarTrialSeExpirado($e);
+			if (SaasAssinaturaService::emTrialAtivo($e)) {
 				continue;
 			}
-			$plano = PlanosAssinatura::getById($planId);
-			if (!$plano instanceof PlanosAssinatura || (float)($plano->valor_mensal ?? 0) <= 0) {
+			if (!SaasAssinaturaService::escolaCobravel($e)) {
 				continue;
 			}
 			$r = SaasAssinaturaService::gerarFaturaEscola((int)$e->id, $competencia);
@@ -174,6 +181,23 @@ class Assinaturas extends Page {
 		return json_encode([
 			'success' => true,
 			'message' => 'PIX gerado.',
+			'fatura'  => SaasAssinaturaService::formatar($fat),
+		]);
+	}
+
+	private static function reenviarEmail(array $post): string {
+		$id = (int)($post['id'] ?? 0);
+		$fat = SaasFatura::getById($id);
+		if (!$fat instanceof SaasFatura) {
+			return json_encode(['success' => false, 'message' => 'Fatura não encontrada.']);
+		}
+		if ($fat->status === 'pago') {
+			return json_encode(['success' => false, 'message' => 'Fatura já paga.']);
+		}
+		$ok = SaasAssinaturaService::enviarEmailCobranca($fat, null, true);
+		return json_encode([
+			'success' => $ok,
+			'message' => $ok ? 'E-mail reenviado.' : 'Falha ao enviar (verifique SMTP sistema e e-mail da escola).',
 			'fatura'  => SaasAssinaturaService::formatar($fat),
 		]);
 	}

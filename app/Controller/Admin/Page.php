@@ -202,6 +202,12 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('pagamentos', $slugsEscola, true)) {
 				$allPermittedModules[] = 'Pagamentos';
 			}
+			if (in_array('estoque', $slugsEscola, true)) {
+				$allPermittedModules[] = 'Estoque';
+			}
+			if (in_array('vendas', $slugsEscola, true)) {
+				$allPermittedModules[] = 'PDV';
+			}
 			// IA Pedagógica: só Diretor + Cursos Online (respeita checklist; não força EAD)
 			if (in_array('ead', $slugsEscola, true)
 				&& in_array('Cursos Online', $allPermittedModules, true)) {
@@ -215,8 +221,21 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			$allPermittedModules[] = 'Progresso EAD';
 		}
 
+		$bloqueada = !empty($userLogedData['usuario']['assinatura_bloqueada']);
+		if ($bloqueada) {
+			$allPermittedModules = ['Assinatura'];
+			$banner = '<div class="alert alert-danger mb-3">'
+				.'<strong>Assinatura suspensa.</strong> O acesso está limitado a esta tela. '
+				.'Regularize o pagamento do Painel CTI para liberar o sistema.'
+				.'</div>';
+			$content = $banner.$content;
+		}
+
 		$temAcesso = in_array($currentModule, $allPermittedModules);
 		if(!$temAcesso && $currentModule === 'Agendamentos' && in_array('Laboratório', $allPermittedModules)){
+			$temAcesso = true;
+		}
+		if ($bloqueada && $currentModule === 'Assinatura') {
 			$temAcesso = true;
 		}
 

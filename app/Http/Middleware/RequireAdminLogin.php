@@ -18,6 +18,14 @@ class RequireAdminLogin{
 			$request->getRouter()->redirect('/');
 		}
 
+		// Escola suspensa: só Assinatura (+ logout)
+		if (SessionAdminLogin::isAssinaturaBloqueada()) {
+			$uri = (string)$request->getUri();
+			if (!SessionAdminLogin::uriPermitidaQuandoBloqueada($uri)) {
+				$request->getRouter()->redirect('/painel/assinatura');
+			}
+		}
+
 		//CONTINUA A EXECUÇÃO
 		return $next($request);
 		

@@ -5,3 +5,7 @@
 .vscode/
 resources/assets/img/*
 uploads/*
+
+# Sessões PHP (não versionar)
+app/sessions/*
+!app/sessions/.gitkeep

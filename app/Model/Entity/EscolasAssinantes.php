@@ -25,8 +25,10 @@ class EscolasAssinantes {
 	public $cep;
 	public $modulos_liberados;
 	public $plan_id;
+	public $valor_mensal_custom;
 	public $dia_vencimento_assinatura = 10;
 	public $assinatura_status = 'ativa';
+	public $trial_ate;
 	public $assinatura_proximo_vencimento;
 	public $modelo_certificado;
 	public $modelo_contrato_html;
@@ -34,6 +36,14 @@ class EscolasAssinantes {
 
 	public static function temColunaPlanId(): bool {
 		return self::temColuna('plan_id');
+	}
+
+	public static function temColunaValorMensalCustom(): bool {
+		return self::temColuna('valor_mensal_custom');
+	}
+
+	public static function temColunaTrialAte(): bool {
+		return self::temColuna('trial_ate');
 	}
 
 	public static function temColunasAssinatura(): bool {
@@ -136,12 +146,21 @@ class EscolasAssinantes {
 				? (int)$this->plan_id
 				: null;
 		}
+		if (self::temColunaValorMensalCustom()) {
+			$custom = $this->valor_mensal_custom;
+			$dados['valor_mensal_custom'] = ($custom !== null && $custom !== '' && (float)$custom > 0)
+				? round((float)$custom, 2)
+				: null;
+		}
 		if (self::temColunasAssinatura()) {
 			$dados['dia_vencimento_assinatura'] = max(1, min(28, (int)($this->dia_vencimento_assinatura ?: 10)));
 			$dados['assinatura_status'] = in_array((string)($this->assinatura_status ?? ''), ['ativa', 'suspensa', 'trial'], true)
 				? (string)$this->assinatura_status
 				: 'ativa';
 			$dados['assinatura_proximo_vencimento'] = $this->assinatura_proximo_vencimento ?: null;
+		}
+		if (self::temColunaTrialAte()) {
+			$dados['trial_ate'] = !empty($this->trial_ate) ? (string)$this->trial_ate : null;
 		}
 		if (self::temColunaModeloCertificado()) {
 			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;
@@ -177,12 +196,21 @@ class EscolasAssinantes {
 				? (int)$this->plan_id
 				: null;
 		}
+		if (self::temColunaValorMensalCustom()) {
+			$custom = $this->valor_mensal_custom;
+			$dados['valor_mensal_custom'] = ($custom !== null && $custom !== '' && (float)$custom > 0)
+				? round((float)$custom, 2)
+				: null;
+		}
 		if (self::temColunasAssinatura()) {
 			$dados['dia_vencimento_assinatura'] = max(1, min(28, (int)($this->dia_vencimento_assinatura ?: 10)));
 			$dados['assinatura_status'] = in_array((string)($this->assinatura_status ?? ''), ['ativa', 'suspensa', 'trial'], true)
 				? (string)$this->assinatura_status
 				: 'ativa';
 			$dados['assinatura_proximo_vencimento'] = $this->assinatura_proximo_vencimento ?: null;
+		}
+		if (self::temColunaTrialAte()) {
+			$dados['trial_ate'] = !empty($this->trial_ate) ? (string)$this->trial_ate : null;
 		}
 		if (self::temColunaModeloCertificado()) {
 			$dados['modelo_certificado'] = $this->modelo_certificado ?: null;

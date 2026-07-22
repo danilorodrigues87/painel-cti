@@ -14,6 +14,19 @@ use App\Model\Entity\SaasFatura;
 
 class AssinaturaEscola extends Page {
 
+	private static function assertAcessoTela($request, bool $api = false): bool {
+		$user = SessionUser::getUserLogedData();
+		$nivel = $user['usuario']['nivel'] ?? '';
+		$bloqueada = !empty($user['usuario']['assinatura_bloqueada']);
+		if ($nivel === 'Diretor' || $bloqueada) {
+			return true;
+		}
+		if (!$api) {
+			$request->getRouter()->redirect('/painel');
+		}
+		return false;
+	}
+
 	private static function assertDiretor($request, bool $api = false): bool {
 		$user = SessionUser::getUserLogedData();
 		if (($user['usuario']['nivel'] ?? '') !== 'Diretor') {
@@ -26,26 +39,35 @@ class AssinaturaEscola extends Page {
 	}
 
 	public static function index($request) {
-		if (!self::assertDiretor($request)) {
+		if (!self::assertAcessoTela($request)) {
 			return '';
 		}
+		$user = SessionUser::getUserLogedData();
+		$isDiretor = (($user['usuario']['nivel'] ?? '') === 'Diretor');
 		$content = View::render('admin/modules/assinatura/index', [
 			'grace_dias' => (string)SaasAssinaturaService::GRACE_DIAS,
+			'so_leitura' => $isDiretor ? '0' : '1',
 		]);
 		return parent::getPanel('Assinatura', $content, 'Financeiro', $request);
 	}
 
 	public static function getInfo($request) {
-		if (!self::assertDiretor($request, true)) {
+		if (!self::assertAcessoTela($request, true)) {
 			return json_encode(['success' => false, 'message' => 'Acesso negado.']);
 		}
 
 		$post = $request->getPostVars();
 		$acao = $post['acao'] ?? '';
 
+		if ($acao === 'carregar') {
+			return self::carregar();
+		}
+
+		if (!self::assertDiretor($request, true)) {
+			return json_encode(['success' => false, 'message' => 'Apenas o Diretor pode pagar/atualizar o PIX.']);
+		}
+
 		switch ($acao) {
-			case 'carregar':
-				return self::carregar();
 			case 'atualizar_pix':
 				return self::atualizarPix($post);
 			case 'verificar':
@@ -74,17 +96,28 @@ class AssinaturaEscola extends Page {
 		$escola = EscolasAssinantes::getEscolaById($idAdmin);
 		$planoNome = null;
 		$valorMensal = null;
+		$valorCustom = null;
+		$emTrial = false;
+		$trialAte = null;
 		if ($escola instanceof EscolasAssinantes) {
+			$valorMensal = SaasAssinaturaService::resolverValorMensal($escola);
+			if ($valorMensal <= 0) {
+				$valorMensal = null;
+			}
 			$planId = (int)($escola->plan_id ?? 0);
 			if ($planId > 0) {
 				$plano = PlanosAssinatura::getById($planId);
 				if ($plano instanceof PlanosAssinatura) {
 					$planoNome = (string)$plano->nome;
-					if (PlanosAssinatura::temColunaValorMensal()) {
-						$valorMensal = round((float)($plano->valor_mensal ?? 0), 2);
-					}
 				}
+			} else {
+				$planoNome = 'Personalizado';
 			}
+			if (EscolasAssinantes::temColunaValorMensalCustom() && (float)($escola->valor_mensal_custom ?? 0) > 0) {
+				$valorCustom = round((float)$escola->valor_mensal_custom, 2);
+			}
+			$emTrial = SaasAssinaturaService::emTrialAtivo($escola);
+			$trialAte = EscolasAssinantes::temColunaTrialAte() ? ($escola->trial_ate ?? null) : null;
 		}
 
 		$results = SaasFatura::get(
@@ -102,6 +135,8 @@ class AssinaturaEscola extends Page {
 			}
 		}
 
+		$user = SessionUser::getUserLogedData();
+
 		return json_encode([
 			'success'   => true,
 			'tabela_ok' => true,
@@ -111,6 +146,7 @@ class AssinaturaEscola extends Page {
 				'valor_mensal_br'              => $valorMensal !== null
 					? number_format($valorMensal, 2, ',', '.')
 					: null,
+				'valor_custom'                 => $valorCustom,
 				'dia_vencimento'               => $escola instanceof EscolasAssinantes && EscolasAssinantes::temColunasAssinatura()
 					? max(1, min(28, (int)($escola->dia_vencimento_assinatura ?? 10)))
 					: 10,
@@ -121,7 +157,11 @@ class AssinaturaEscola extends Page {
 					? ($escola->assinatura_proximo_vencimento ?? null)
 					: null,
 				'escola_ativa'                 => $escola instanceof EscolasAssinantes ? $escola->isAtiva() : false,
+				'em_trial'                     => $emTrial,
+				'trial_ate'                    => $trialAte,
 				'grace_dias'                   => SaasAssinaturaService::GRACE_DIAS,
+				'so_leitura'                   => (($user['usuario']['nivel'] ?? '') !== 'Diretor'),
+				'bloqueada'                    => !empty($user['usuario']['assinatura_bloqueada']),
 			],
 			'aberta'  => $aberta,
 			'faturas' => $faturas,

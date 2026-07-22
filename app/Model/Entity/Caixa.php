@@ -15,6 +15,7 @@ class Caixa{
 				$vencimento,
 				$referencia,
 				$id_ref,
+				$id_acordo,
 				$txt_id,
 				$ultima_alteracao,
 				$pix_copia_cola,
@@ -39,7 +40,7 @@ class Caixa{
 		
 		//INSERIR OS DADOS PARA O BANCO DE DADOS
 		$obDatabase = new Database('caixa');
-			$this->id = $obDatabase->insert([
+		$dados = [
 			'id_admin' => $this->id_admin,
 			'id_usuario' => $userLogedData['usuario']['id'],
 			'descricao' => $this->descricao,
@@ -56,7 +57,11 @@ class Caixa{
 			'status' => $this->status,
 			'pix_copia_cola' => $this->pix_copia_cola,
 			'nosso_numero' => $this->nosso_numero
-		]);
+		];
+		if (FinanceiroAcordo::caixaTemIdAcordo() && $this->id_acordo !== null && $this->id_acordo !== '') {
+			$dados['id_acordo'] = (int)$this->id_acordo;
+		}
+		$this->id = $obDatabase->insert($dados);
 		
 		return true; 
 	} 
