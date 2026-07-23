@@ -3,8 +3,8 @@
 use App\Http\Response;
 use App\Controller\Api\Student;
 
-$studentMw = ['api', 'cors-student'];
-$studentAuth = ['api', 'cors-student', 'student-jwt'];
+$studentMw = ['cors-student', 'api'];
+$studentAuth = ['cors-student', 'api', 'student-jwt'];
 
 $respond = static function (array $res) {
 	$contentType = $res['contentType'] ?? 'application/json';
@@ -88,6 +88,20 @@ $obRouter->get('/api/v1/student/achievements', [
 	'middlewares' => $studentAuth,
 	function ($request) use ($respond) {
 		return $respond(Student\Portal::achievements($request));
+	}
+]);
+
+$obRouter->get('/api/v1/student/referral/status', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Referral::status($request));
+	}
+]);
+
+$obRouter->post('/api/v1/student/referral', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Referral::submit($request));
 	}
 ]);
 

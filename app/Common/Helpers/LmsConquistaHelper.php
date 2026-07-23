@@ -5,7 +5,9 @@ namespace App\Common\Helpers;
 use App\Model\Entity\LmsCertificado;
 use App\Model\Entity\LmsConquistaAluno;
 use App\Model\Entity\LmsConquistaDef;
+use App\Model\Entity\LmsRankingDiario;
 use App\Model\Entity\LmsRoleplaySessao;
+use App\Model\Entity\User;
 use App\Model\Db\Database;
 use PDO;
 // BrandingHelper e LmsNotificacaoHelper: mesmo namespace
@@ -30,13 +32,30 @@ class LmsConquistaHelper {
 			return;
 		}
 
+		// conquistas_unlocked por último (conta desbloqueios desta passada)
+		usort($defs, static function ($a, $b) {
+			$aw = ((string)$a->meta_tipo === 'conquistas_unlocked') ? 1 : 0;
+			$bw = ((string)$b->meta_tipo === 'conquistas_unlocked') ? 1 : 0;
+			if ($aw !== $bw) {
+				return $aw <=> $bw;
+			}
+			return ((int)$a->ordem) <=> ((int)$b->ordem);
+		});
+
 		$stats = self::stats($idAdmin, $idAluno);
 		$now = date('Y-m-d H:i:s');
+		$unlockedCount = (int)($stats['conquistas_unlocked'] ?? 0);
 
 		foreach ($defs as $def) {
+			$metaTipo = (string)$def->meta_tipo;
 			$meta = max(1, (int)$def->meta_valor);
-			$progresso = self::progressoPara((string)$def->meta_tipo, $meta, $stats);
-			$unlockedAuto = $progresso >= $meta;
+
+			if ($metaTipo === 'conquistas_unlocked') {
+				$stats['conquistas_unlocked'] = $unlockedCount;
+			}
+
+			$progresso = self::progressoPara($metaTipo, $meta, $stats);
+			$unlockedAuto = ($metaTipo !== 'manual') && ($progresso >= $meta);
 
 			$row = LmsConquistaAluno::getByAlunoSlug($idAluno, (string)$def->slug);
 			if (!$row) {
@@ -49,13 +68,13 @@ class LmsConquistaHelper {
 
 			$manual = (($row->origem ?? 'auto') === 'manual') && !empty($row->unlocked_at);
 			$foiNova = false;
+			$jaTinha = !empty($row->unlocked_at);
 
 			$row->id_admin = $idAdmin;
 			$row->progresso = min($progresso, $meta);
 			$row->meta = $meta;
 
 			if ($manual) {
-				// Mantém desbloqueio manual; progresso reflete o real
 				$row->origem = 'manual';
 				if ((int)$row->progresso < $meta) {
 					$row->progresso = $meta;
@@ -72,6 +91,11 @@ class LmsConquistaHelper {
 			}
 
 			$row->salvar();
+
+			if (!$jaTinha && !empty($row->unlocked_at)) {
+				$unlockedCount++;
+			}
+
 			if ($foiNova) {
 				LmsNotificacaoHelper::criar(
 					$idAdmin,
@@ -147,6 +171,24 @@ class LmsConquistaHelper {
 		$meta = max(1, (int)($row->meta ?? $def->meta_valor));
 		$progresso = (int)($row->progresso ?? 0);
 		$badge = trim((string)($def->badge_url ?? ''));
+		$unlocked = !empty($row->unlocked_at);
+		$raridade = LmsConquistaDef::normalizarRaridade($def->raridade ?? 'bronze');
+		$secretoLocked = ($raridade === 'secreto' && !$unlocked);
+
+		if ($secretoLocked) {
+			return [
+				'id' => (string)$def->slug,
+				'subtitle' => 'Missão secreta',
+				'title' => '???',
+				'description' => 'Continue explorando o portal para descobrir esta conquista.',
+				'howTo' => '',
+				'icon' => 'Lock',
+				'rarity' => 'secreto',
+				'badgeUrl' => null,
+				'secret' => true,
+			];
+		}
+
 		$item = [
 			'id' => (string)$def->slug,
 			'subtitle' => (string)($def->subtitulo ?? ''),
@@ -154,10 +196,13 @@ class LmsConquistaHelper {
 			'description' => (string)$def->descricao,
 			'howTo' => (string)($def->como ?? ''),
 			'icon' => (string)($def->icone ?: 'Trophy'),
-			'rarity' => LmsConquistaDef::normalizarRaridade($def->raridade ?? 'bronze'),
+			'rarity' => $raridade,
 			'badgeUrl' => $badge !== '' ? BrandingHelper::urlBadgeConquista($badge) : null,
 		];
-		if (!empty($row->unlocked_at)) {
+		if ($raridade === 'secreto') {
+			$item['secret'] = true;
+		}
+		if ($unlocked) {
 			$item['unlockedAt'] = date('c', strtotime((string)$row->unlocked_at));
 			$item['progress'] = $meta;
 			$item['goal'] = $meta;
@@ -168,7 +213,7 @@ class LmsConquistaHelper {
 		return $item;
 	}
 
-	/** @return array{aulas:int,xp:int,nivel:int,nota_max:float,streak:int,estudo_min:int,certs:int,atividades_ok:int,roleplays_ok:int,cursos_avaliados:int} */
+	/** @return array<string,mixed> */
 	private static function stats(int $idAdmin, int $idAluno): array {
 		$aulas = 0;
 		$estudo = LmsEstudoHelper::minutosAluno($idAluno, $idAdmin);
@@ -191,18 +236,23 @@ class LmsConquistaHelper {
 
 		$notaMax = 0.0;
 		$atividadesOk = 0;
+		$nota100Count = 0;
 		try {
 			$row = (new Database('lms_atividade_tentativas'))->select(
 				'id_aluno = '.(int)$idAluno.' AND nota IS NOT NULL',
 				null,
 				null,
-				'MAX(nota) AS m, SUM(CASE WHEN nota >= 70 THEN 1 ELSE 0 END) AS ok'
+				'MAX(nota) AS m,
+				 SUM(CASE WHEN nota >= 70 THEN 1 ELSE 0 END) AS ok,
+				 COUNT(DISTINCT CASE WHEN nota >= 100 THEN id_atividade END) AS n100'
 			)->fetch(PDO::FETCH_ASSOC);
 			$notaMax = (float)($row['m'] ?? 0);
 			$atividadesOk = (int)($row['ok'] ?? 0);
+			$nota100Count = (int)($row['n100'] ?? 0);
 		} catch (\Throwable $e) {
 			$notaMax = 0.0;
 			$atividadesOk = 0;
+			$nota100Count = 0;
 		}
 
 		$roleplaysOk = 0;
@@ -234,7 +284,50 @@ class LmsConquistaHelper {
 			$cursosAvaliados = 0;
 		}
 
-		return [
+		$avatarOk = 0;
+		try {
+			if (User::temColunaFoto()) {
+				$u = User::getUserById($idAluno);
+				$foto = $u ? trim((string)($u->foto ?? '')) : '';
+				$avatarOk = ($foto !== '') ? 1 : 0;
+			}
+		} catch (\Throwable $e) {
+			$avatarOk = 0;
+		}
+
+		$conquistasUnlocked = 0;
+		try {
+			$row = (new Database('lms_conquistas_aluno'))->select(
+				'id_aluno = '.(int)$idAluno.' AND unlocked_at IS NOT NULL',
+				null,
+				null,
+				'COUNT(*) AS total'
+			)->fetch(PDO::FETCH_ASSOC);
+			$conquistasUnlocked = (int)($row['total'] ?? 0);
+		} catch (\Throwable $e) {
+			$conquistasUnlocked = 0;
+		}
+
+		$cursoAtividades100 = self::countCursosAtividadesPerfeitas($idAdmin, $idAluno);
+
+		$rank = [
+			'rank_escola_1' => 0,
+			'rank_escola_2' => 0,
+			'rank_escola_3' => 0,
+			'rank_global_1' => 0,
+			'rank_global_2' => 0,
+			'rank_global_3' => 0,
+		];
+		if (class_exists(LmsRankingDiario::class) && LmsRankingDiario::tabelaExiste()) {
+			$rank['rank_escola_1'] = LmsRankingDiario::diasConsecutivosNaPosicao($idAluno, 'escola', 1, $idAdmin);
+			$rank['rank_escola_2'] = LmsRankingDiario::diasConsecutivosNaPosicao($idAluno, 'escola', 2, $idAdmin);
+			$rank['rank_escola_3'] = LmsRankingDiario::diasConsecutivosNaPosicao($idAluno, 'escola', 3, $idAdmin);
+			$rank['rank_global_1'] = LmsRankingDiario::diasConsecutivosNaPosicao($idAluno, 'global', 1, 0);
+			$rank['rank_global_2'] = LmsRankingDiario::diasConsecutivosNaPosicao($idAluno, 'global', 2, 0);
+			$rank['rank_global_3'] = LmsRankingDiario::diasConsecutivosNaPosicao($idAluno, 'global', 3, 0);
+		}
+
+		return array_merge([
 			'aulas' => $aulas,
 			'xp' => $xp,
 			'nivel' => $nivel,
@@ -245,7 +338,35 @@ class LmsConquistaHelper {
 			'atividades_ok' => $atividadesOk,
 			'roleplays_ok' => $roleplaysOk,
 			'cursos_avaliados' => $cursosAvaliados,
-		];
+			'avatar_ok' => $avatarOk,
+			'conquistas_unlocked' => $conquistasUnlocked,
+			'curso_atividades_100' => $cursoAtividades100,
+			'nota_100_count' => $nota100Count,
+			'manual' => 0,
+		], $rank);
+	}
+
+	/** Cursos em que o aluno tirou 100% em todas as atividades do curso. */
+	private static function countCursosAtividadesPerfeitas(int $idAdmin, int $idAluno): int {
+		try {
+			$sql = 'SELECT a.id_curso,
+				COUNT(DISTINCT a.id) AS total_ativ,
+				COUNT(DISTINCT CASE WHEN t.nota >= 100 THEN a.id END) AS ok_ativ
+				FROM lms_atividades a
+				INNER JOIN lms_cursos c ON c.id = a.id_curso AND c.id_admin = '.(int)$idAdmin.'
+				LEFT JOIN lms_atividade_tentativas t
+					ON t.id_atividade = a.id AND t.id_aluno = '.(int)$idAluno.'
+				GROUP BY a.id_curso
+				HAVING total_ativ > 0 AND ok_ativ = total_ativ';
+			$stmt = (new Database())->execute($sql);
+			$n = 0;
+			while ($stmt && $stmt->fetch(PDO::FETCH_ASSOC)) {
+				$n++;
+			}
+			return $n;
+		} catch (\Throwable $e) {
+			return 0;
+		}
 	}
 
 	/**
@@ -432,6 +553,23 @@ class LmsConquistaHelper {
 				return (int)$stats['roleplays_ok'];
 			case 'cursos_avaliados':
 				return (int)$stats['cursos_avaliados'];
+			case 'avatar_ok':
+				return (int)($stats['avatar_ok'] ?? 0);
+			case 'conquistas_unlocked':
+				return (int)($stats['conquistas_unlocked'] ?? 0);
+			case 'curso_atividades_100':
+				return (int)($stats['curso_atividades_100'] ?? 0);
+			case 'nota_100_count':
+				return (int)($stats['nota_100_count'] ?? 0);
+			case 'rank_escola_1':
+			case 'rank_escola_2':
+			case 'rank_escola_3':
+			case 'rank_global_1':
+			case 'rank_global_2':
+			case 'rank_global_3':
+				return (int)($stats[$tipo] ?? 0);
+			case 'manual':
+				return 0;
 			default:
 				return 0;
 		}

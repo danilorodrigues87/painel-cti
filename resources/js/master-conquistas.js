@@ -9,7 +9,8 @@ function raridadeBadge(r){
 		bronze: 'bg-secondary',
 		prata: 'bg-info text-dark',
 		ouro: 'bg-warning text-dark',
-		lendario: 'bg-danger'
+		lendario: 'bg-danger',
+		secreto: 'bg-dark'
 	};
 	const cls = map[r] || 'bg-secondary';
 	return '<span class="badge '+cls+'">'+esc(r)+'</span>';

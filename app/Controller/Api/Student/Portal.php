@@ -67,6 +67,7 @@ class Portal {
 		}
 		$u->foto = $nova;
 		$u->atualizaPerfil();
+		LmsConquistaHelper::recalcular((int)$u->id_admin, (int)$u->id);
 		$fresh = User::getUserById((int)$u->id);
 		return self::ok([
 			'ok' => true,

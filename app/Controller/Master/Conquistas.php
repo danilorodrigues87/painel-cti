@@ -20,12 +20,23 @@ class Conquistas extends Page {
 		'nota_min',
 		'nota_100',
 		'cursos_avaliados',
+		'avatar_ok',
+		'conquistas_unlocked',
+		'curso_atividades_100',
+		'nota_100_count',
+		'rank_escola_1',
+		'rank_escola_2',
+		'rank_escola_3',
+		'rank_global_1',
+		'rank_global_2',
+		'rank_global_3',
+		'manual',
 	];
 
 	private const ICONES = [
 		'Sparkles', 'Flame', 'Star', 'Trophy', 'Crown', 'Award', 'BookOpen', 'Clock',
 		'Target', 'Zap', 'Heart', 'Rocket', 'Medal', 'GraduationCap', 'Brain', 'Calendar',
-		'Mountain', 'Gem', 'Shield', 'Swords',
+		'Mountain', 'Gem', 'Shield', 'Swords', 'Camera', 'Globe', 'Lock', 'HelpCircle',
 	];
 
 	public static function index($request) {

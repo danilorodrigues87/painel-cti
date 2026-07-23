@@ -97,9 +97,10 @@ class LmsConquistaDef {
 			if (!$temOverride) {
 				return $todas;
 			}
+			// Slug novo sem override → ativo (não esconde medalhas adicionadas depois)
 			return array_values(array_filter($todas, static function ($d) use ($map) {
 				$slug = (string)$d->slug;
-				return isset($map[$slug]) ? $map[$slug] : false;
+				return isset($map[$slug]) ? $map[$slug] : true;
 			}));
 		} catch (\Throwable $e) {
 			return $todas;
@@ -140,7 +141,7 @@ class LmsConquistaDef {
 
 	public static function normalizarRaridade($r): string {
 		$r = strtolower(trim((string)$r));
-		$ok = ['bronze', 'prata', 'ouro', 'lendario'];
+		$ok = ['bronze', 'prata', 'ouro', 'lendario', 'secreto'];
 		return in_array($r, $ok, true) ? $r : 'bronze';
 	}
 }
