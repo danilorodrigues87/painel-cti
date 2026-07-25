@@ -66,6 +66,20 @@ $obRouter->post('/master/conquistas', [
 	}
 ]);
 
+$obRouter->get('/master/portal-branding', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\PortalBranding::index($request));
+	}
+]);
+
+$obRouter->post('/master/portal-branding', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\PortalBranding::salvar($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/perfil', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

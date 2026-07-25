@@ -101,20 +101,28 @@ class StudentApiMapper {
 	}
 
 	public static function course(LmsCurso $curso, int $idAluno, int $idAdmin, bool $withModules = true): array {
-		$trilha = Trilhas::getTrilhaById((int)$curso->id_trilha);
-		$nome = $trilha ? (string)$trilha->nome : 'Curso';
-		$carga = $trilha ? (int)$trilha->carga_h : 0;
+		$nome = $curso->nomeExibicao();
+		$carga = (int)($curso->carga_h ?? 0);
 		$catName = '';
-		if ($trilha && !empty($trilha->id_categoria)) {
-			$cat = CategoryCourses::getCategoryById((int)$trilha->id_categoria);
-			if ($cat) {
-				$catName = (string)$cat->nome;
+		if (!empty($curso->id_trilha)) {
+			$trilha = Trilhas::getTrilhaById((int)$curso->id_trilha);
+			if ($trilha && empty($carga)) {
+				$carga = (int)$trilha->carga_h;
+			}
+			if ($trilha && !empty($trilha->id_categoria)) {
+				$cat = CategoryCourses::getCategoryById((int)$trilha->id_categoria);
+				if ($cat) {
+					$catName = (string)$cat->nome;
+				}
 			}
 		}
 		$objectives = json_decode((string)($curso->objectives ?? '[]'), true);
 		if (!is_array($objectives)) {
 			$objectives = [];
 		}
+
+		// Conteúdo pertence ao criador do curso (vitrine cross-tenant)
+		$idOwner = (int)$curso->id_admin;
 
 		$modules = [];
 		$lessonsCount = 0;
@@ -133,32 +141,51 @@ class StudentApiMapper {
 		$assessmentDone = self::assessmentDoneMap($idAluno);
 		$roleplayDone = self::roleplayDoneMap($idAluno, $idAdmin);
 
-		$idTrilha = (int)$curso->id_trilha;
-		$idsIncompletas = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, $idAluno, $idAdmin);
-		$janela = LmsAgendaAcessoHelper::janelaAtiva($idAluno, $idAdmin, $idTrilha);
-		$consumidas = LmsAgendaAcessoHelper::aulasConsumidasHoje($idAluno, $idAdmin);
+		// Agenda pela trilha/plano da escola do aluno (inclui curso licenciado da vitrine).
+		$idTrilha = LmsAgendaAcessoHelper::idTrilhaAgendaAluno($idAluno, (int)$idAdmin);
+		$usaAgenda = $idTrilha > 0;
+		$idsIncompletas = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, $idAluno, $idOwner);
+		$janela = $usaAgenda ? LmsAgendaAcessoHelper::janelaAtiva($idAluno, $idAdmin, $idTrilha) : null;
+		$consumidas = $usaAgenda ? LmsAgendaAcessoHelper::aulasConsumidasHoje($idAluno, $idAdmin) : [];
 		$cotaMax = $janela ? (int)$janela['aulas_cota'] : 0;
 		$slots = $janela ? max(0, $cotaMax - count($consumidas)) : 0;
 		$aulasAgendaOk = [];
-		foreach ($idsIncompletas as $idInc) {
-			if (in_array($idInc, $consumidas, true)) {
-				$aulasAgendaOk[$idInc] = true;
-				continue;
+		if ($usaAgenda) {
+			foreach ($idsIncompletas as $idInc) {
+				if (in_array($idInc, $consumidas, true)) {
+					$aulasAgendaOk[$idInc] = true;
+					continue;
+				}
+				if ($slots > 0) {
+					$aulasAgendaOk[$idInc] = true;
+					$slots--;
+				}
 			}
-			if ($slots > 0) {
+			$accessWindow = LmsAgendaAcessoHelper::accessWindow($idAluno, $idAdmin, $idTrilha);
+		} else {
+			foreach ($idsIncompletas as $idInc) {
 				$aulasAgendaOk[$idInc] = true;
-				$slots--;
 			}
+			$accessWindow = [
+				'active' => true,
+				'window' => null,
+				'quotaMax' => 0,
+				'quotaUsed' => 0,
+				'quotaRemaining' => 0,
+				'consumedLessonIds' => [],
+				'nextWindow' => null,
+				'message' => 'Curso EAD sem restrição de agenda.',
+			];
+			$janela = ['label' => 'EAD livre'];
 		}
-		$accessWindow = LmsAgendaAcessoHelper::accessWindow($idAluno, $idAdmin, $idTrilha);
 
 		$prevUnidadeOk = true; // 1ª aula do módulo libera se não bloqueada no admin
 
-		foreach (LmsModulo::listByCurso((int)$curso->id, $idAdmin) as $mod) {
+		foreach (LmsModulo::listByCurso((int)$curso->id, $idOwner) as $mod) {
 			$lessons = [];
 			$curriculum = [];
 			$prevUnidadeOk = true;
-			foreach (LmsAula::listByModulo((int)$mod->id, $idAdmin) as $aula) {
+			foreach (LmsAula::listByModulo((int)$mod->id, $idOwner) as $aula) {
 				$lessonsCount++;
 				$prog = $progressMap[(int)$aula->id] ?? null;
 				$precisaRevisar = $prog && (int)($prog->precisa_revisar ?? 0) === 1;
@@ -168,7 +195,7 @@ class StudentApiMapper {
 
 				$adminLocked = ((int)($aula->bloqueado ?? 0) === 1);
 				$lessonLocked = $adminLocked || !$prevUnidadeOk;
-				$completed = $unidadeOk || ($assistida && count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idAdmin)) === 0);
+				$completed = $unidadeOk || ($assistida && count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0);
 				$revisaoLivre = $completed || $precisaRevisar;
 				$lockReason = null;
 				$lockMessage = null;
@@ -190,7 +217,7 @@ class StudentApiMapper {
 				if ($completed) {
 					$completedCount++;
 				}
-				$lessonPayload = self::lesson($aula, (int)$mod->id, $idAdmin, $assistida || $unidadeOk, $lessonLocked);
+				$lessonPayload = self::lesson($aula, (int)$mod->id, $idOwner, $assistida || $unidadeOk, $lessonLocked);
 				$lessonPayload['needsRewatch'] = $precisaRevisar;
 				$lessonPayload['unitScore'] = $prog && $prog->nota_unidade !== null ? (float)$prog->nota_unidade : null;
 				$lessonPayload['unitPassed'] = $unidadeOk;
@@ -216,7 +243,7 @@ class StudentApiMapper {
 					'lockMessage' => $lockMessage,
 				];
 
-				foreach (LmsAtividade::listByAula((int)$aula->id, $idAdmin) as $at) {
+				foreach (LmsAtividade::listByAula((int)$aula->id, $idOwner) as $at) {
 					$notaCiclo = LmsUnidadeAvaliacaoHelper::melhorNotaAtividade($idAluno, (int)$at->id, $ciclo);
 					// "completed" na sequência = já fez pelo menos 1 tentativa no ciclo (não exige ≥70 individual)
 					$doneSeq = $notaCiclo !== null;
@@ -232,7 +259,7 @@ class StudentApiMapper {
 					];
 				}
 
-				foreach (LmsRoleplayCenario::listByAula((int)$aula->id, $idAdmin) as $rp) {
+				foreach (LmsRoleplayCenario::listByAula((int)$aula->id, $idOwner) as $rp) {
 					$notaCiclo = LmsUnidadeAvaliacaoHelper::melhorNotaRoleplay($idAluno, (int)$rp->id, $idAdmin, $ciclo);
 					$doneSeq = $notaCiclo !== null;
 					$aulaCurriculum[] = [
@@ -266,11 +293,11 @@ class StudentApiMapper {
 				}
 				unset($it);
 
-				$semAvaliacao = count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idAdmin)) === 0;
+				$semAvaliacao = count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0;
 				$prevUnidadeOk = $unidadeOk || ($semAvaliacao && $assistida);
 			}
 
-			foreach (LmsRoleplayCenario::listByModuloSemAula((int)$mod->id, $idAdmin) as $rp) {
+			foreach (LmsRoleplayCenario::listByModuloSemAula((int)$mod->id, $idOwner) as $rp) {
 				$done = !empty($roleplayDone[(int)$rp->id]);
 				$curriculum[] = [
 					'kind' => 'roleplay',
@@ -301,9 +328,15 @@ class StudentApiMapper {
 		}
 
 		$progressPercent = $lessonsCount > 0 ? (int)round(($completedCount / $lessonsCount) * 100) : 0;
-		$desc = $trilha->descricao ?? ($curso->short_description ?? '');
+		$desc = $curso->short_description ?? '';
+		if (!empty($curso->id_trilha)) {
+			$trilhaDesc = Trilhas::getTrilhaById((int)$curso->id_trilha);
+			if ($trilhaDesc && !empty($trilhaDesc->descricao)) {
+				$desc = $trilhaDesc->descricao;
+			}
+		}
 
-		$rating = LmsCursoAvaliacao::mediaCurso((int)$curso->id, $idAdmin);
+		$rating = LmsCursoAvaliacao::mediaCurso((int)$curso->id, $idOwner);
 		$myRating = LmsCursoAvaliacao::getByAlunoCurso($idAluno, (int)$curso->id);
 
 		return [
@@ -383,6 +416,38 @@ class StudentApiMapper {
 		foreach (LmsVideo::listByAula((int)$aula->id, $idAdmin) as $v) {
 			$totalMin += (int)$v->duracao_min;
 			$provider = (string)($v->provider ?: 'youtube');
+			if ($provider === 'bunny') {
+				$status = (string)($v->bunny_status ?? '');
+				if ($status !== 'ready' && !empty($v->bunny_video_id)) {
+					$status = BunnyStreamHelper::sincronizarStatusVideo($v, $idAdmin);
+				}
+				if ($status !== 'ready' || empty($v->bunny_video_id)) {
+					// Expõe status para o portal mostrar "processando" em vez de "sem vídeo"
+					if (!empty($v->bunny_video_id)) {
+						$videos[] = [
+							'id' => (string)$v->id,
+							'title' => (string)($v->titulo ?: 'Vídeo'),
+							'url' => null,
+							'provider' => 'bunny',
+							'bunnyStatus' => $status ?: 'processing',
+							'durationMinutes' => (int)$v->duracao_min,
+							'order' => (int)$v->ordem,
+						];
+					}
+					continue;
+				}
+				// URL permanente não é exposta — Ascend chama /play
+				$videos[] = [
+					'id' => (string)$v->id,
+					'title' => (string)($v->titulo ?: 'Vídeo'),
+					'url' => null,
+					'provider' => 'bunny',
+					'bunnyStatus' => 'ready',
+					'durationMinutes' => (int)$v->duracao_min,
+					'order' => (int)$v->ordem,
+				];
+				continue;
+			}
 			$url = LmsHelper::normalizeVideoUrl((string)$v->url, $provider);
 			$videos[] = [
 				'id' => (string)$v->id,

@@ -106,13 +106,17 @@ class Router{
 	}
 
 	public function getUri(){
-		//URI DA REQUEST
+		// URI da request (ex.: /pjt/painel-cti/privacidade)
 		$uri = $this->request->getUri();
-		//FATIA A URI COM O PREFIXO
-		$xUri = strlen($this->prefix) ? explode($this->prefix, $uri) : [$uri];
-		
-		//RETORNA A URI SEM PREFIXO
-		return rtrim(end($xUri),'/');
+		// Prefixo sem barra final — evita explode falhar quando URL do .env termina com /
+		$prefix = rtrim((string)$this->prefix, '/');
+		if ($prefix !== '' && strpos($uri, $prefix) === 0) {
+			$uri = substr($uri, strlen($prefix)) ?: '/';
+		}
+		// Sempre com barra inicial (rotas são cadastradas como /privacidade, /painel, …)
+		$uri = '/'.ltrim($uri, '/');
+		$uri = rtrim($uri, '/');
+		return $uri === '' ? '/' : $uri;
 	}
 
 	//retorna os dados da rota atual

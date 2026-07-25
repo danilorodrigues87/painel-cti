@@ -136,4 +136,37 @@ class ModuleGateHelper {
 		unset(self::$cacheEscola[$idAdmin]);
 	}
 
+	/**
+	 * Após mudar plano/módulos da escola: alinha o checklist do Diretor aos módulos liberados.
+	 * Sem isso, getModulosEfetivos (escola ∩ usuario.acesso) esconde módulos novos.
+	 */
+	public static function sincronizarAcessoDiretores(int $idAdmin): int {
+		if ($idAdmin <= 0) {
+			return 0;
+		}
+		self::limparCache($idAdmin);
+		$labels = self::getModulosEscola($idAdmin);
+		if (empty($labels)) {
+			return 0;
+		}
+		$json = json_encode(array_values($labels), JSON_UNESCAPED_UNICODE);
+		$stmt = \App\Model\Entity\User::getUser(
+			'id_admin = '.(int)$idAdmin.' AND nivel = "Diretor"',
+			null,
+			null,
+			'id'
+		);
+		$n = 0;
+		$db = new \App\Model\Db\Database('usuarios');
+		while ($u = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+			$id = (int)($u['id'] ?? 0);
+			if ($id <= 0) {
+				continue;
+			}
+			$db->update('id = '.$id, ['acesso' => $json]);
+			$n++;
+		}
+		return $n;
+	}
+
 }

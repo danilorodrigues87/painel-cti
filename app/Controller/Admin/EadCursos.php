@@ -5,7 +5,7 @@ namespace App\Controller\Admin;
 use App\Utils\View;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\LmsHelper;
-use App\Model\Entity\Trilhas as EntityTrilhas;
+use App\Common\Helpers\BunnyStreamHelper;
 use App\Model\Entity\LmsCurso;
 use App\Model\Entity\LmsModulo;
 use App\Model\Entity\LmsAula;
@@ -23,22 +23,22 @@ class EadCursos extends Page {
 
 	public static function index($request) {
 		$content = View::render('admin/modules/ead/index', []);
-		return parent::getPanel('Cursos Online', $content, 'pedagogico', $request);
+		return parent::getPanel('Cursos Online', $content, 'portal_ead', $request);
 	}
 
-	public static function editor($request, $idTrilha) {
+	public static function editor($request, $idCurso) {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$idTrilha = (int)$idTrilha;
-		$trilha = EntityTrilhas::getTrilha('id = '.$idTrilha.' AND id_admin = '.$idAdmin)->fetchObject(EntityTrilhas::class);
-		if (!$trilha) {
+		$idCurso = (int)$idCurso;
+		$curso = LmsCurso::getByIdAdmin($idCurso, $idAdmin);
+		if (!$curso) {
 			$request->getRouter()->redirect('/painel/ead');
 			return '';
 		}
 		$content = View::render('admin/modules/ead/editor', [
-			'id_trilha' => $idTrilha,
-			'nome_trilha' => htmlspecialchars((string)$trilha->nome, ENT_QUOTES, 'UTF-8'),
+			'id_curso' => $idCurso,
+			'nome_curso' => htmlspecialchars($curso->nomeExibicao(), ENT_QUOTES, 'UTF-8'),
 		]);
-		return parent::getPanel('Cursos Online', $content, 'pedagogico', $request);
+		return parent::getPanel('Cursos Online', $content, 'portal_ead', $request);
 	}
 
 	public static function getInfo($request) {
@@ -55,6 +55,7 @@ class EadCursos extends Page {
 
 		$map = [
 			'listar' => 'listar',
+			'criar_curso' => 'criarCurso',
 			'carregar_curso' => 'carregarCurso',
 			'salvar_geral' => 'salvarGeral',
 			'listar_aulas' => 'listarAulas',
@@ -62,6 +63,10 @@ class EadCursos extends Page {
 			'excluir_aula' => 'excluirAula',
 			'salvar_video' => 'salvarVideo',
 			'excluir_video' => 'excluirVideo',
+			'bunny_criar_video' => 'bunnyCriarVideo',
+			'bunny_upload_auth' => 'bunnyUploadAuth',
+			'bunny_finalize' => 'bunnyFinalize',
+			'bunny_status' => 'bunnyStatus',
 			'salvar_material' => 'salvarMaterial',
 			'excluir_material' => 'excluirMaterial',
 			'salvar_atividade' => 'salvarAtividade',
@@ -71,6 +76,10 @@ class EadCursos extends Page {
 			'salvar_roleplay' => 'salvarRoleplay',
 			'excluir_roleplay' => 'excluirRoleplay',
 			'carregar_aula' => 'carregarAula',
+			'listar_matriculas_ead' => 'listarMatriculasEad',
+			'buscar_alunos' => 'buscarAlunos',
+			'matricular_ead' => 'matricularEad',
+			'desmatricular_ead' => 'desmatricularEad',
 		];
 
 		if (!isset($map[$acao])) {
@@ -83,40 +92,54 @@ class EadCursos extends Page {
 
 	private static function listar(array $post): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$results = EntityTrilhas::getTrilha('id_admin = '.$idAdmin, 'nome ASC');
+		$order = LmsCurso::temColunaTitulo() ? 'titulo ASC, id DESC' : 'id DESC';
+		$results = LmsCurso::get('id_admin = '.$idAdmin, $order);
 		$itens = [];
-		while ($t = $results->fetchObject(EntityTrilhas::class)) {
-			$curso = LmsCurso::getByTrilha((int)$t->id, $idAdmin);
-			$status = LmsHelper::statusEad($curso instanceof LmsCurso ? $curso : null, $idAdmin);
+		while ($c = $results->fetchObject(LmsCurso::class)) {
+			$status = LmsHelper::statusEad($c, $idAdmin);
 			$itens[] = [
-				'id_trilha' => (int)$t->id,
-				'nome' => $t->nome,
-				'carga_h' => $t->carga_h,
+				'id_curso' => (int)$c->id,
+				'nome' => $c->nomeExibicao(),
+				'carga_h' => $c->carga_h,
 				'status' => $status,
-				'publicado' => $curso instanceof LmsCurso ? (int)$curso->publicado : 0,
-				'aulas' => $curso instanceof LmsCurso ? LmsHelper::contagemAulasCurso((int)$curso->id, $idAdmin) : 0,
-				'id_curso' => $curso instanceof LmsCurso ? (int)$curso->id : null,
+				'publicado' => (int)$c->publicado,
+				'aulas' => LmsHelper::contagemAulasCurso((int)$c->id, $idAdmin),
+				'vitrine_ativo' => (int)($c->vitrine_ativo ?? 0),
+				'vitrine_preco_mensal' => (float)($c->vitrine_preco_mensal ?? 0),
 			];
 		}
 		return self::json([
 			'success' => true,
 			'sql_ok' => true,
+			'matricula_ead_ok' => \App\Model\Entity\LmsMatriculaEad::tabelaExiste(),
 			'xp_ok' => \App\Common\Helpers\LmsXpHelper::tabelasExistem(),
+			'bunny_ok' => BunnyStreamHelper::pronto($idAdmin) && LmsVideo::temColunasBunny(),
 			'itens' => $itens,
+		]);
+	}
+
+	private static function criarCurso(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$titulo = trim((string)($post['titulo'] ?? 'Novo curso'));
+		$curso = LmsHelper::criarCursoIndependente($idAdmin, $titulo);
+		if (!$curso) {
+			return self::json(['success' => false, 'message' => 'Não foi possível criar o curso.']);
+		}
+		return self::json([
+			'success' => true,
+			'message' => 'Curso criado.',
+			'id_curso' => (int)$curso->id,
 		]);
 	}
 
 	private static function carregarCurso(array $post): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$idTrilha = (int)($post['id_trilha'] ?? 0);
-		$trilha = EntityTrilhas::getTrilha('id = '.$idTrilha.' AND id_admin = '.$idAdmin)->fetchObject(EntityTrilhas::class);
-		if (!$trilha) {
-			return self::json(['success' => false, 'message' => 'Trilha não encontrada.']);
-		}
-		$curso = LmsHelper::garantirCursoTrilha($idTrilha, $idAdmin, (string)$trilha->nome);
+		$idCurso = (int)($post['id_curso'] ?? 0);
+		$curso = LmsCurso::getByIdAdmin($idCurso, $idAdmin);
 		if (!$curso) {
-			return self::json(['success' => false, 'message' => 'Não foi possível criar o curso EAD.']);
+			return self::json(['success' => false, 'message' => 'Curso não encontrado.']);
 		}
+		LmsHelper::garantirModuloPadrao((int)$curso->id, $idAdmin);
 		$objectives = json_decode((string)($curso->objectives ?? '[]'), true);
 		if (!is_array($objectives)) {
 			$objectives = [];
@@ -125,12 +148,13 @@ class EadCursos extends Page {
 			'success' => true,
 			'curso' => [
 				'id' => (int)$curso->id,
-				'id_trilha' => (int)$curso->id_trilha,
+				'titulo' => $curso->nomeExibicao(),
 				'slug' => $curso->slug,
 				'short_description' => $curso->short_description,
 				'cover_url' => $curso->cover_url,
 				'banner_url' => $curso->banner_url,
 				'level' => $curso->level,
+				'carga_h' => $curso->carga_h,
 				'objectives' => $objectives,
 				'objectives_text' => implode("\n", $objectives),
 				'instructor_name' => $curso->instructor_name,
@@ -138,29 +162,34 @@ class EadCursos extends Page {
 				'instructor_bio' => $curso->instructor_bio,
 				'instructor_avatar_url' => $curso->instructor_avatar_url,
 				'publicado' => (int)$curso->publicado,
+				'vitrine_ativo' => (int)($curso->vitrine_ativo ?? 0),
+				'vitrine_preco_mensal' => (float)($curso->vitrine_preco_mensal ?? 0),
+				'vitrine_descricao' => $curso->vitrine_descricao ?? '',
+				'vitrine_ok' => LmsCurso::temColunaVitrine(),
 			],
-			'trilha' => ['id' => (int)$trilha->id, 'nome' => $trilha->nome],
 		]);
 	}
 
 	private static function salvarGeral(array $post): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$idTrilha = (int)($post['id_trilha'] ?? 0);
-		$trilha = EntityTrilhas::getTrilha('id = '.$idTrilha.' AND id_admin = '.$idAdmin)->fetchObject(EntityTrilhas::class);
-		if (!$trilha) {
-			return self::json(['success' => false, 'message' => 'Trilha não encontrada.']);
-		}
-		$curso = LmsHelper::garantirCursoTrilha($idTrilha, $idAdmin, (string)$trilha->nome);
+		$idCurso = (int)($post['id_curso'] ?? 0);
+		$curso = LmsCurso::getByIdAdmin($idCurso, $idAdmin);
 		if (!$curso) {
-			return self::json(['success' => false, 'message' => 'Curso inválido.']);
+			return self::json(['success' => false, 'message' => 'Curso não encontrado.']);
 		}
 
+		$titulo = trim((string)($post['titulo'] ?? ''));
+		if ($titulo === '') {
+			return self::json(['success' => false, 'message' => 'Informe o título do curso.']);
+		}
+		$curso->titulo = $titulo;
 		$slugIn = trim((string)($post['slug'] ?? ''));
-		$slug = LmsHelper::slugify($slugIn !== '' ? $slugIn : (string)$trilha->nome);
+		$slug = LmsHelper::slugify($slugIn !== '' ? $slugIn : $titulo);
 		$curso->slug = LmsHelper::slugUnico($slug, $idAdmin, (int)$curso->id);
 		$curso->short_description = trim((string)($post['short_description'] ?? ''));
 		$curso->cover_url = trim((string)($post['cover_url'] ?? ''));
 		$curso->banner_url = trim((string)($post['banner_url'] ?? ''));
+		$curso->carga_h = ($post['carga_h'] ?? '') !== '' ? (int)$post['carga_h'] : null;
 		$level = (string)($post['level'] ?? 'Iniciante');
 		$curso->level = in_array($level, ['Iniciante', 'Intermediário', 'Avançado'], true) ? $level : 'Iniciante';
 		$objText = (string)($post['objectives_text'] ?? '');
@@ -171,9 +200,93 @@ class EadCursos extends Page {
 		$curso->instructor_bio = trim((string)($post['instructor_bio'] ?? ''));
 		$curso->instructor_avatar_url = trim((string)($post['instructor_avatar_url'] ?? ''));
 		$curso->publicado = !empty($post['publicado']) ? 1 : 0;
+
+		if (LmsCurso::temColunaVitrine()) {
+			$curso->vitrine_ativo = !empty($post['vitrine_ativo']) ? 1 : 0;
+			$curso->vitrine_preco_mensal = (float)str_replace(',', '.', (string)($post['vitrine_preco_mensal'] ?? 0));
+			if ($curso->vitrine_preco_mensal < 0) {
+				$curso->vitrine_preco_mensal = 0;
+			}
+			$curso->vitrine_descricao = trim((string)($post['vitrine_descricao'] ?? ''));
+			// Gratuito permitido (preço 0). Curso precisa estar publicado para aparecer na vitrine.
+			if ($curso->vitrine_ativo && (int)$curso->publicado !== 1) {
+				return self::json(['success' => false, 'message' => 'Publique o curso no portal para disponibilizá-lo na vitrine.']);
+			}
+		}
+
 		$curso->salvar();
 
 		return self::json(['success' => true, 'message' => 'Dados gerais salvos.', 'id_curso' => (int)$curso->id, 'slug' => $curso->slug]);
+	}
+
+	private static function listarMatriculasEad(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$idCurso = (int)($post['id_curso'] ?? 0);
+		$curso = LmsCurso::getByIdAdmin($idCurso, $idAdmin);
+		if (!$curso && LmsCurso::getById($idCurso)) {
+			// curso licenciado: matrículas são da escola assinante
+			$curso = LmsCurso::getById($idCurso);
+			if (!$curso || !\App\Common\Helpers\LmsMatriculaEadHelper::escolaPodeUsarCurso($curso, $idAdmin)) {
+				return self::json(['success' => false, 'message' => 'Curso não encontrado.']);
+			}
+		} elseif (!$curso) {
+			return self::json(['success' => false, 'message' => 'Curso não encontrado.']);
+		}
+		if (!\App\Model\Entity\LmsMatriculaEad::tabelaExiste()) {
+			return self::json(['success' => false, 'message' => 'Execute database/lms_ead_independente.sql', 'sql_ok' => false]);
+		}
+		$itens = [];
+		foreach (\App\Model\Entity\LmsMatriculaEad::listByCurso($idCurso, $idAdmin) as $m) {
+			$aluno = \App\Model\Entity\User::getUserById((int)$m->id_aluno);
+			$itens[] = [
+				'id' => (int)$m->id,
+				'id_aluno' => (int)$m->id_aluno,
+				'nome' => $aluno ? (string)$aluno->nome : '—',
+				'email' => $aluno ? (string)$aluno->email : '',
+				'inicio' => $m->inicio,
+			];
+		}
+		return self::json(['success' => true, 'itens' => $itens]);
+	}
+
+	private static function buscarAlunos(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$q = trim((string)($post['q'] ?? ''));
+		if (mb_strlen($q) < 2) {
+			return self::json(['success' => true, 'itens' => []]);
+		}
+		$qEsc = addslashes($q);
+		$stmt = \App\Model\Entity\User::getUser(
+			"id_admin = {$idAdmin} AND nivel = 'Cliente' AND (nome LIKE '%{$qEsc}%' OR email LIKE '%{$qEsc}%')",
+			'nome ASC',
+			'20'
+		);
+		$itens = [];
+		while ($u = $stmt->fetchObject(\App\Model\Entity\User::class)) {
+			$itens[] = ['id' => (int)$u->id, 'nome' => (string)$u->nome, 'email' => (string)$u->email];
+		}
+		return self::json(['success' => true, 'itens' => $itens]);
+	}
+
+	private static function matricularEad(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = \App\Common\Helpers\LmsMatriculaEadHelper::matricular(
+			$idAdmin,
+			(int)($post['id_aluno'] ?? 0),
+			(int)($post['id_curso'] ?? 0),
+			\App\Common\Helpers\LmsMatriculaEadHelper::createdByAtual()
+		);
+		return self::json(['success' => !empty($res['ok']), 'message' => $res['message'] ?? '']);
+	}
+
+	private static function desmatricularEad(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = \App\Common\Helpers\LmsMatriculaEadHelper::desmatricular(
+			$idAdmin,
+			(int)($post['id_aluno'] ?? 0),
+			(int)($post['id_curso'] ?? 0)
+		);
+		return self::json(['success' => !empty($res['ok']), 'message' => $res['message'] ?? '']);
 	}
 
 	private static function listarAulas(array $post): string {
@@ -213,6 +326,9 @@ class EadCursos extends Page {
 				'titulo' => $v->titulo,
 				'url' => $v->url,
 				'provider' => $v->provider,
+				'bunny_video_id' => $v->bunny_video_id ?? null,
+				'bunny_status' => $v->bunny_status ?? null,
+				'bunny_error' => $v->bunny_error ?? null,
 				'duracao_min' => (int)$v->duracao_min,
 				'ordem' => (int)$v->ordem,
 			];
@@ -282,6 +398,7 @@ class EadCursos extends Page {
 
 		return self::json([
 			'success' => true,
+			'bunny_ok' => BunnyStreamHelper::pronto($idAdmin) && LmsVideo::temColunasBunny(),
 			'aula' => [
 				'id' => (int)$aula->id,
 				'id_modulo' => (int)$aula->id_modulo,
@@ -363,10 +480,16 @@ class EadCursos extends Page {
 		if ($id > 0 && !$v) {
 			return self::json(['success' => false, 'message' => 'Vídeo não encontrado.']);
 		}
+		$provider = (string)($post['provider'] ?? 'youtube');
+		if (!in_array($provider, ['youtube', 'private', 'bunny'], true)) {
+			$provider = 'youtube';
+		}
+		if ($provider === 'bunny') {
+			return self::json(['success' => false, 'message' => 'Use o fluxo de upload Bunny para vídeos protegidos.']);
+		}
 		$v->id_aula = $idAula;
 		$v->id_admin = $idAdmin;
 		$v->titulo = trim((string)($post['titulo'] ?? ''));
-		$provider = (string)($post['provider'] ?? 'youtube') === 'private' ? 'private' : 'youtube';
 		$v->url = LmsHelper::normalizeVideoUrl($url, $provider);
 		$v->provider = $provider;
 		$v->duracao_min = (int)($post['duracao_min'] ?? 0);
@@ -382,8 +505,127 @@ class EadCursos extends Page {
 		if (!$v) {
 			return self::json(['success' => false, 'message' => 'Vídeo não encontrado.']);
 		}
+		if (($v->provider ?? '') === 'bunny' && !empty($v->bunny_video_id)) {
+			BunnyStreamHelper::excluirVideo($idAdmin, (string)$v->bunny_video_id);
+		}
 		$v->excluir();
 		return self::json(['success' => true, 'message' => 'Vídeo excluído.']);
+	}
+
+	private static function bunnyCriarVideo(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		if (!LmsVideo::temColunasBunny()) {
+			return self::json(['success' => false, 'message' => 'Execute database/lms_videos_bunny.sql']);
+		}
+		if (!BunnyStreamHelper::pronto($idAdmin)) {
+			return self::json(['success' => false, 'message' => 'Configure Bunny em Configurações → Bunny Stream.']);
+		}
+		$idAula = (int)($post['id_aula'] ?? 0);
+		$aula = LmsAula::getByIdAdmin($idAula, $idAdmin);
+		if (!$aula) {
+			return self::json(['success' => false, 'message' => 'Aula não encontrada.']);
+		}
+		$titulo = trim((string)($post['titulo'] ?? '')) ?: ((string)$aula->titulo.' — vídeo');
+		$created = BunnyStreamHelper::criarVideo($idAdmin, $titulo);
+		if (empty($created['ok'])) {
+			return self::json(['success' => false, 'message' => $created['message'] ?? 'Falha ao criar no Bunny.']);
+		}
+		$guid = (string)$created['videoId'];
+		$auth = BunnyStreamHelper::assinaturaUpload($idAdmin, $guid);
+		if (empty($auth['ok'])) {
+			return self::json(['success' => false, 'message' => $auth['message'] ?? 'Falha na assinatura de upload.']);
+		}
+		$v = new LmsVideo();
+		$v->id_aula = $idAula;
+		$v->id_admin = $idAdmin;
+		$v->titulo = $titulo;
+		$v->url = 'bunny:'.$guid;
+		$v->provider = 'bunny';
+		$v->bunny_video_id = $guid;
+		$v->bunny_status = 'uploading';
+		$v->bunny_error = null;
+		$v->duracao_min = 0;
+		$v->ordem = (int)($post['ordem'] ?? 0);
+		$newId = $v->salvar();
+		return self::json([
+			'success' => true,
+			'id' => $newId,
+			'bunny_video_id' => $guid,
+			'upload' => [
+				'putUrl' => $auth['putUrl'],
+				'accessKey' => $auth['accessKey'],
+				'libraryId' => $auth['libraryId'],
+				'videoId' => $auth['videoId'],
+				'expires' => $auth['expires'],
+				'signature' => $auth['signature'],
+			],
+		]);
+	}
+
+	private static function bunnyUploadAuth(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$id = (int)($post['id'] ?? 0);
+		$v = LmsVideo::getByIdAdmin($id, $idAdmin);
+		if (!$v || ($v->provider ?? '') !== 'bunny' || empty($v->bunny_video_id)) {
+			return self::json(['success' => false, 'message' => 'Vídeo Bunny não encontrado.']);
+		}
+		$auth = BunnyStreamHelper::assinaturaUpload($idAdmin, (string)$v->bunny_video_id);
+		if (empty($auth['ok'])) {
+			return self::json(['success' => false, 'message' => $auth['message'] ?? 'Falha']);
+		}
+		return self::json([
+			'success' => true,
+			'upload' => [
+				'putUrl' => $auth['putUrl'],
+				'accessKey' => $auth['accessKey'],
+				'libraryId' => $auth['libraryId'],
+				'videoId' => $auth['videoId'],
+				'expires' => $auth['expires'],
+				'signature' => $auth['signature'],
+			],
+		]);
+	}
+
+	private static function bunnyFinalize(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$id = (int)($post['id'] ?? 0);
+		$v = LmsVideo::getByIdAdmin($id, $idAdmin);
+		if (!$v || ($v->provider ?? '') !== 'bunny') {
+			return self::json(['success' => false, 'message' => 'Vídeo não encontrado.']);
+		}
+		$v->bunny_status = 'processing';
+		$v->bunny_error = null;
+		$v->salvar();
+		return self::json(['success' => true, 'bunny_status' => 'processing']);
+	}
+
+	private static function bunnyStatus(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$id = (int)($post['id'] ?? 0);
+		$v = LmsVideo::getByIdAdmin($id, $idAdmin);
+		if (!$v || ($v->provider ?? '') !== 'bunny' || empty($v->bunny_video_id)) {
+			return self::json(['success' => false, 'message' => 'Vídeo não encontrado.']);
+		}
+		$st = BunnyStreamHelper::statusVideo($idAdmin, (string)$v->bunny_video_id);
+		if (empty($st['ok'])) {
+			return self::json(['success' => false, 'message' => $st['message'] ?? 'Falha']);
+		}
+		$v->bunny_status = $st['status'];
+		if (($st['status'] ?? '') === 'ready') {
+			$v->duracao_min = (int)($st['durationMinutes'] ?? $v->duracao_min);
+			$v->bunny_error = null;
+		}
+		if (($st['status'] ?? '') === 'error') {
+			$v->bunny_error = 'Falha no processamento Bunny (código '.((int)($st['bunnyCode'] ?? 0)).').';
+		}
+		$v->salvar();
+		return self::json([
+			'success' => true,
+			'bunny_status' => $v->bunny_status,
+			'duracao_min' => (int)$v->duracao_min,
+			'encodeProgress' => (int)($st['encodeProgress'] ?? 0),
+			'bunny_error' => $v->bunny_error,
+		]);
 	}
 
 	private static function salvarMaterial(array $post): string {

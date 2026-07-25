@@ -10,11 +10,28 @@ class LmsVideo extends LmsBase {
 	public $titulo;
 	public $url;
 	public $provider = 'youtube';
+	public $bunny_video_id;
+	public $bunny_status;
+	public $bunny_error;
 	public $duracao_min = 0;
 	public $ordem = 0;
 
 	protected static function table(): string {
 		return 'lms_videos';
+	}
+
+	public static function temColunasBunny(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$stmt = (new \App\Model\Db\Database())->execute("SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
 	}
 
 	public static function listByAula(int $idAula, int $idAdmin): array {
@@ -30,15 +47,26 @@ class LmsVideo extends LmsBase {
 	}
 
 	public function salvar(): int {
+		$provider = in_array($this->provider, ['youtube', 'private', 'bunny'], true)
+			? $this->provider
+			: 'youtube';
 		$dados = [
 			'id_aula' => (int)$this->id_aula,
 			'id_admin' => (int)$this->id_admin,
 			'titulo' => $this->titulo,
 			'url' => $this->url,
-			'provider' => in_array($this->provider, ['youtube', 'private'], true) ? $this->provider : 'youtube',
+			'provider' => $provider,
 			'duracao_min' => (int)$this->duracao_min,
 			'ordem' => (int)$this->ordem,
 		];
+		if (self::temColunasBunny()) {
+			$dados['bunny_video_id'] = $this->bunny_video_id ?: null;
+			$status = $this->bunny_status;
+			$dados['bunny_status'] = in_array($status, ['uploading', 'processing', 'ready', 'error'], true)
+				? $status
+				: null;
+			$dados['bunny_error'] = $this->bunny_error ?: null;
+		}
 		if (!empty($this->id)) {
 			$this->updateRow((int)$this->id, (int)$this->id_admin, $dados);
 			return (int)$this->id;

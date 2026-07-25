@@ -41,7 +41,7 @@ class EadAlunoProgresso extends Page {
 			'nome_aluno' => htmlspecialchars((string)$aluno->nome, ENT_QUOTES, 'UTF-8'),
 			'email_aluno' => htmlspecialchars((string)$aluno->email, ENT_QUOTES, 'UTF-8'),
 		]);
-		return parent::getPanel('Progresso EAD', $content, 'pedagogico', $request);
+		return parent::getPanel('Progresso EAD', $content, 'portal_ead', $request);
 	}
 
 	public static function getInfo($request, $idAluno) {

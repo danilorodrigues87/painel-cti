@@ -173,6 +173,7 @@ class Planos extends Page {
 			$e->modulos_liberados = $mods;
 			$e->atualizar();
 			ModuleGateHelper::limparCache((int)$e->id);
+			ModuleGateHelper::sincronizarAcessoDiretores((int)$e->id);
 		}
 	}
 

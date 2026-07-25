@@ -1,0 +1,108 @@
+<h1 class="mt-4">Redes sociais</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item"><a href="{{URL}}/painel">Painel</a></li>
+	<li class="breadcrumb-item active">Agenda de posts</li>
+</ol>
+
+<div id="alert-sql-social" class="alert alert-warning d-none">
+	Execute <code>database/social_posts.sql</code> e <code>database/escola_integracoes_meta.sql</code> no phpMyAdmin.
+</div>
+<div id="alert-meta-off" class="alert alert-info d-none">
+	Conecte Facebook/Instagram em <a href="{{URL}}/painel/config/social">Configurações → Redes sociais</a> antes de publicar.
+</div>
+
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+	<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-semana-prev">← Semana</button>
+	<strong id="label-semana"></strong>
+	<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-semana-next">Semana →</button>
+	<button type="button" class="btn btn-primary btn-sm ms-auto" id="btn-novo-post">Novo post / lote</button>
+	<button type="button" class="btn btn-outline-dark btn-sm" id="btn-worker">Rodar worker</button>
+	<a class="btn btn-outline-secondary btn-sm" href="{{URL}}/painel/config/social">Config Meta</a>
+</div>
+<p class="small text-muted mb-3">Fuso: America/Sao_Paulo · Fase 1: imagem (JPG/PNG). Publicação pelo cron <code>worker/social.php</code>.</p>
+
+<div class="row g-3">
+	<div class="col-xl-8">
+		<div class="card shadow">
+			<div class="card-header">Agenda da semana</div>
+			<div class="card-body p-0">
+				<div class="table-responsive">
+					<table class="table table-bordered mb-0 align-middle" id="tbl-semana">
+						<thead class="table-light">
+							<tr id="thead-dias"></tr>
+						</thead>
+						<tbody id="tbody-semana"></tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-xl-4">
+		<div class="card shadow mb-3">
+			<div class="card-header">Detalhe</div>
+			<div class="card-body" id="painel-detalhe">
+				<p class="text-muted small mb-0">Selecione um post na grade.</p>
+			</div>
+		</div>
+		<div class="card shadow">
+			<div class="card-header">Lista da semana</div>
+			<div class="card-body p-0">
+				<ul class="list-group list-group-flush" id="lista-posts"></ul>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="modalPost" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title">Agendar post</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<input type="hidden" id="post_id" value="">
+				<div class="mb-2">
+					<label class="form-label">Canais</label>
+					<select class="form-select" id="post_canais">
+						<option value="ambos">Facebook + Instagram</option>
+						<option value="facebook">Só Facebook</option>
+						<option value="instagram">Só Instagram</option>
+					</select>
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Legenda</label>
+					<textarea class="form-control" id="post_caption" rows="4" maxlength="2200"></textarea>
+					<div class="form-text"><span id="caption_count">0</span>/2200</div>
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Data/hora</label>
+					<input type="datetime-local" class="form-control" id="post_agendado">
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Horários extras (lote — um por linha, mesmo formato)</label>
+					<textarea class="form-control" id="post_lote" rows="3" placeholder="2026-07-28T10:00&#10;2026-07-30T18:00"></textarea>
+					<div class="form-text">Cria cópias do mesmo post nos horários extras (mídia duplicada no servidor).</div>
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Imagem</label>
+					<input type="file" class="form-control" id="post_arquivo" accept="image/jpeg,image/png,image/webp">
+					<input type="hidden" id="post_path" value="">
+					<div id="post_preview" class="mt-2 d-none">
+						<img src="" alt="" class="img-fluid rounded border" style="max-height:180px;">
+					</div>
+				</div>
+				<div class="mb-0">
+					<label class="form-label">Ou URL HTTPS pública (avançado)</label>
+					<input type="url" class="form-control" id="post_url" placeholder="https://...">
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+				<button type="button" class="btn btn-success" id="btn-salvar-post">Agendar</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/social-agenda.js?v=20260725a"></script>

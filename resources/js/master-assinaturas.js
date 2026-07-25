@@ -218,7 +218,59 @@ $(function(){
 						return;
 					}
 					carregar();
+					carregarRepassesVitrine();
 				}, 'json');
 			});
 	});
+
+	function carregarTaxaVitrine(){
+		$.post(url_base + MASTER_ASSINATURAS_URL, { acao: 'vitrine_config' }, function(res){
+			if(res && res.success){
+				$('#vitrine-taxa-cti').val(res.taxa_cti_mensal || 0);
+			}
+		}, 'json');
+	}
+	function carregarRepassesVitrine(){
+		$.post(url_base + MASTER_ASSINATURAS_URL, { acao: 'vitrine_repasses', status: 'pendente' }, function(res){
+			const $tb = $('#lista-repasses-vitrine').empty();
+			if(!res || !res.success || !res.itens || !res.itens.length){
+				$tb.append('<tr><td colspan="6" class="text-muted">Nenhum repasse pendente.</td></tr>');
+				return;
+			}
+			res.itens.forEach(function(r){
+				$tb.append('<tr>'+
+					'<td>'+esc(r.escola)+'</td>'+
+					'<td>'+esc(r.curso)+'</td>'+
+					'<td>'+esc(r.competencia)+'</td>'+
+					'<td>R$ '+Number(r.valor||0).toFixed(2)+'</td>'+
+					'<td>'+esc(r.status)+'</td>'+
+					'<td><button type="button" class="btn btn-sm btn-outline-success btn-marcar-repasse" data-id="'+r.id+'">Marcar pago</button></td>'+
+					'</tr>');
+			});
+		}, 'json');
+	}
+	$('#btn-salvar-taxa-vitrine').on('click', function(){
+		$.post(url_base + MASTER_ASSINATURAS_URL, {
+			acao: 'vitrine_salvar_taxa',
+			taxa_cti_mensal: $('#vitrine-taxa-cti').val()
+		}, function(res){
+			if(!res || !res.success){
+				Swal.fire('Erro', (res && res.message) || 'Falha', 'error');
+				return;
+			}
+			Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: res.message, showConfirmButton: false, timer: 1500 });
+		}, 'json');
+	});
+	$(document).on('click', '.btn-marcar-repasse', function(){
+		const id = $(this).data('id');
+		$.post(url_base + MASTER_ASSINATURAS_URL, { acao: 'vitrine_marcar_repasse', id: id }, function(res){
+			if(!res || !res.success){
+				Swal.fire('Erro', (res && res.message) || 'Falha', 'error');
+				return;
+			}
+			carregarRepassesVitrine();
+		}, 'json');
+	});
+	carregarTaxaVitrine();
+	carregarRepassesVitrine();
 });

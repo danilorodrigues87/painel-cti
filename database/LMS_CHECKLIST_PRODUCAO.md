@@ -1,10 +1,10 @@
-﻿# LMS — Checklist de produção (Fase 1)
+# LMS — Checklist de produção (Fase 1)
 
 Use este guia ao subir o EAD + portal aluno em um servidor novo ou atualizar um existente.
 
 ## 0. Verificação rápida (após SQL)
 
-Cole `database/lms_verificar_producao.sql` no phpMyAdmin (somente leitura). Confirme tabelas/colunas e `total_conquistas_def` ≈ 100.
+Cole `database/lms_verificar_producao.sql` no phpMyAdmin (somente leitura). Confirme tabelas/colunas e `total_conquistas_def` ≈ 150 (após v3).
 
 ## 1. SQL (ordem obrigatória)
 
@@ -24,7 +24,13 @@ Colar no phpMyAdmin **nesta ordem**. Scripts idempotentes parcialmente: se uma c
 | 10 | `database/lms_notificacoes.sql` | Notificações in-app do portal |
 | 11 | `database/lms_estudo_sessao.sql` | Heartbeat de tempo de estudo no player |
 | 12 | `database/lms_aula_comentarios.sql` | Comentários nas aulas |
-| 13 | `database/financeiro_acordos.sql` | Extrato consolidado: acordos + `caixa.id_acordo` (renegociação) |
+| 13 | `database/lms_conquistas_v3.sql` | Raridade `secreto`, metas extras, `lms_ranking_diario` |
+| 14 | `database/lms_portal_presenca.sql` | Presença no portal (Alunos online) |
+| 15 | `database/portal_aluno_branding.sql` | Logo/hero do portal (Master branding) |
+| 16 | `database/lms_aula_anotacoes.sql` | Anotações privadas do aluno por aula |
+| 17 | `database/escola_integracoes_bunny.sql` | Credenciais Bunny Stream por escola |
+| 18 | `database/lms_videos_bunny.sql` | Provider `bunny` + status de upload/processamento |
+| 19 | `database/financeiro_acordos.sql` | Extrato consolidado: acordos + `caixa.id_acordo` (renegociação) |
 
 Confirmação rápida:
 
@@ -37,10 +43,17 @@ SHOW TABLES LIKE 'lms_curso_avaliacoes';
 SHOW TABLES LIKE 'lms_certificados';
 SHOW TABLES LIKE 'lms_conquistas_def';
 SHOW COLUMNS FROM lms_conquistas_def LIKE 'subtitulo';
+SHOW COLUMNS FROM lms_conquistas_def LIKE 'raridade';
 SELECT COUNT(*) FROM lms_conquistas_def;
+SHOW TABLES LIKE 'lms_ranking_diario';
 SHOW TABLES LIKE 'lms_notificacoes';
 SHOW TABLES LIKE 'lms_estudo_sessao';
 SHOW TABLES LIKE 'lms_aula_comentarios';
+SHOW TABLES LIKE 'lms_portal_presenca';
+SHOW TABLES LIKE 'lms_aula_anotacoes';
+SHOW TABLES LIKE 'portal_aluno_branding';
+SHOW COLUMNS FROM escola_integracoes LIKE 'bunny_ativo';
+SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
 ```
 
 ## 2. Painel CTI (backend)
@@ -57,6 +70,9 @@ SHOW TABLES LIKE 'lms_aula_comentarios';
 8. Aluno com matrícula ativa (`matriculas.status=0` + datas) no mesmo `id_admin`.
 9. **Pedagógico → Conquistas EAD:** ativar medalhas / liberar manualmente se quiser.
 10. **Master → Conquistas:** upload de figurinha (badge) opcional por medalha.
+11. **Master → Portal branding:** logo + imagem de login do Ascend (opcional).
+12. **Cron (produção):** `php worker/lms_ranking_diario.php` 1×/dia (conquistas de ranking × dias). Ex.: `15 0 * * *`.
+13. **Portal EAD → Alunos online:** confirma presença após aluno logado no Ascend.
 
 ## 3. Portal Ascend (frontend)
 
@@ -95,12 +111,20 @@ npm run build
 - [ ] Player: banner “Reassistir” + badge no currículo quando `needsRewatch`
 - [ ] Tempo de estudo sobe ao deixar o player aberto (heartbeat ~30s)
 - [ ] Comentários na aula: postar / responder / excluir o próprio
+- [ ] Anotações na aula: digitar → “Salvo na nuvem”; reabrir em outro browser mantém o texto
+- [ ] Configurações → Bunny Stream: salvar keys + Testar conexão
+- [ ] Editor EAD: upload Bunny (se ativo) e YouTube URL; player Ascend Bunny sem acelerar/avançar
+- [ ] Busca no Topbar: cursos / aulas / professores (dropdown)
+- [ ] Continuar/Começar: não abre aula bloqueada por sequência
 - [ ] Esqueci senha: recebe e-mail → `/reset-password?token=…` → login
 - [ ] Admin Conquistas EAD: toggle + liberar medalha manual
 - [ ] Admin Alunos → Progresso EAD: lista status das aulas + Liberar próxima aula
 - [ ] Admin Pedagogico → Progresso EAD (turma): filtros + totais + CSV + link Detalhe
 - [ ] Login Ascend: sem link de primeiro acesso; recuperar senha funciona
 - [ ] Master: upload/remover figurinha aparece no portal
+- [ ] Master Portal branding: logo/hero refletem no login Ascend e no painel
+- [ ] Admin Portal EAD → Alunos online: lista quem está no portal / em aula
+- [ ] Cron `lms_ranking_diario.php` rodou sem erro (após v3)
 - [ ] Admin Alunos → Extrato financeiro (todas matrículas) + PDF + Renegociar débitos (após `financeiro_acordos.sql`)
 - [ ] Portal aluno: menu Financeiro quando há títulos; só leitura
 - [ ] Permissões: Cursos Online / Conquistas EAD no checklist; desmarcar remove do menu (também Diretor)

@@ -33,7 +33,7 @@ class LmsHelper {
 		return trim($text, '-') ?: 'curso';
 	}
 
-	/** Garante curso + módulo "Conteúdo" para a trilha. */
+	/** Garante curso + módulo "Conteúdo" para a trilha (legado). */
 	public static function garantirCursoTrilha(int $idTrilha, int $idAdmin, string $nomeTrilha = ''): ?LmsCurso {
 		if (!self::tabelasExistem() || $idTrilha <= 0 || $idAdmin <= 0) {
 			return null;
@@ -47,8 +47,29 @@ class LmsHelper {
 		$curso = new LmsCurso();
 		$curso->id_admin = $idAdmin;
 		$curso->id_trilha = $idTrilha;
+		$curso->titulo = $nomeTrilha !== '' ? $nomeTrilha : 'curso-'.$idTrilha;
 		$base = self::slugify($nomeTrilha !== '' ? $nomeTrilha : 'curso-'.$idTrilha);
 		$curso->slug = self::slugUnico($base, $idAdmin);
+		$curso->short_description = '';
+		$curso->level = 'Iniciante';
+		$curso->objectives = '[]';
+		$curso->publicado = 0;
+		$curso->salvar();
+		self::garantirModuloPadrao((int)$curso->id, $idAdmin);
+		return LmsCurso::getByIdAdmin((int)$curso->id, $idAdmin);
+	}
+
+	/** Cria curso EAD independente (sem trilha). */
+	public static function criarCursoIndependente(int $idAdmin, string $titulo = 'Novo curso'): ?LmsCurso {
+		if (!self::tabelasExistem() || $idAdmin <= 0) {
+			return null;
+		}
+		$titulo = trim($titulo) !== '' ? trim($titulo) : 'Novo curso';
+		$curso = new LmsCurso();
+		$curso->id_admin = $idAdmin;
+		$curso->id_trilha = null;
+		$curso->titulo = $titulo;
+		$curso->slug = self::slugUnico(self::slugify($titulo), $idAdmin);
 		$curso->short_description = '';
 		$curso->level = 'Iniciante';
 		$curso->objectives = '[]';

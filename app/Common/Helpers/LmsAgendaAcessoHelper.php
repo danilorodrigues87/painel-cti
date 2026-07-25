@@ -43,6 +43,49 @@ class LmsAgendaAcessoHelper {
 		}
 	}
 
+	/**
+	 * Trilha comercial da escola do aluno para gate de agenda LMS.
+	 * Não usa curso.id_trilha (no criador da vitrine os IDs são de outro tenant).
+	 */
+	public static function idTrilhaAgendaAluno(int $idAluno, int $idAdminEscola): int {
+		if ($idAluno <= 0 || $idAdminEscola <= 0) {
+			return 0;
+		}
+		$mat = AgendaHelper::getMatriculaAtivaAluno($idAluno, $idAdminEscola);
+		if ($mat && (int)($mat['id_trilha'] ?? 0) > 0) {
+			return (int)$mat['id_trilha'];
+		}
+		try {
+			$row = AgendaPlano::getPlanos(
+				'id_aluno = '.(int)$idAluno.' AND id_admin = '.(int)$idAdminEscola.' AND ativo = 1 AND id_trilha > 0',
+				'id DESC',
+				1,
+				'id_trilha'
+			)->fetch(PDO::FETCH_ASSOC);
+			if ($row && (int)($row['id_trilha'] ?? 0) > 0) {
+				return (int)$row['id_trilha'];
+			}
+		} catch (\Throwable $e) {
+			/* ignore */
+		}
+		if (self::tabelasExistem()) {
+			try {
+				$row = AgendaAvulso::getAll(
+					'id_aluno = '.(int)$idAluno.' AND id_admin = '.(int)$idAdminEscola.' AND ativo = 1 AND id_trilha > 0',
+					'data DESC, id DESC',
+					1,
+					'id_trilha'
+				)->fetch(PDO::FETCH_ASSOC);
+				if ($row && (int)($row['id_trilha'] ?? 0) > 0) {
+					return (int)$row['id_trilha'];
+				}
+			} catch (\Throwable $e) {
+				/* ignore */
+			}
+		}
+		return 0;
+	}
+
 	/** Alinha com AgendaHelper::diaSemanaData (1=seg … 6=sáb; domingo → 1). */
 	public static function diaSemanaHoje(\DateTimeImmutable $now = null): int {
 		$now = $now ?: self::agora();
@@ -232,8 +275,19 @@ class LmsAgendaAcessoHelper {
 				'allowed' => true,
 				'reason' => null,
 				'message' => null,
-				'janela' => self::janelaAtiva($idAluno, $idAdmin, $idTrilha),
+				'janela' => $idTrilha > 0 ? self::janelaAtiva($idAluno, $idAdmin, $idTrilha) : null,
 				'liberadas' => [],
+			];
+		}
+
+		// Curso EAD independente (sem trilha comercial): sem restrição de agenda
+		if ($idTrilha <= 0) {
+			return [
+				'allowed' => true,
+				'reason' => null,
+				'message' => null,
+				'janela' => ['label' => 'EAD livre', 'aulas_cota' => 999],
+				'liberadas' => $idsIncompletasOrdenadas,
 			];
 		}
 

@@ -14,6 +14,7 @@ class SystemModules {
 		'tarefas'         => 'Tarefas',
 		'campanhas'       => 'Campanhas',
 		'whatsapp'        => 'WhatsApp',
+		'social'          => 'Redes sociais',
 		'dados_escola'    => 'Dados da escola',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
@@ -161,8 +162,34 @@ class SystemModules {
 						'link' => URL.'/painel/trilhas'
 					],
 					[
+						'label' => 'Categorias',
+						'link' => URL.'/painel/categoria/cursos'
+					],
+					[
+						'label' => 'Certificações',
+						'link' => URL.'/painel/certificados'
+					]
+				]
+			]
+		],
+		'portal_ead' => [
+			'label' => 'Portal EAD',
+			'icon' => 'fa-solid fa-laptop-code',
+			'subsections' => [
+				'name' => 'Layouts-portal-ead',
+				'icon' => 'fas fa-caret-down',
+				'items' => [
+					[
 						'label' => 'Cursos Online',
 						'link' => URL.'/painel/ead'
+					],
+					[
+						'label' => 'Vitrine de cursos',
+						'link' => URL.'/painel/ead/vitrine'
+					],
+					[
+						'label' => 'Alunos online',
+						'link' => URL.'/painel/ead/alunos-online'
 					],
 					[
 						'label' => 'Progresso EAD',
@@ -171,14 +198,6 @@ class SystemModules {
 					[
 						'label' => 'Conquistas EAD',
 						'link' => URL.'/painel/ead/conquistas'
-					],
-					[
-						'label' => 'Categorias',
-						'link' => URL.'/painel/categoria/cursos'
-					],
-					[
-						'label' => 'Certificações',
-						'link' => URL.'/painel/certificados'
 					]
 				]
 			]
@@ -205,6 +224,11 @@ class SystemModules {
 			'label' => 'WhatsApp',
 			'link' => URL.'/painel/whatsapp',
 			'icon' => 'fab fa-whatsapp'
+		],
+		'social' => [
+			'label' => 'Redes sociais',
+			'link' => URL.'/painel/social',
+			'icon' => 'fa-solid fa-share-nodes'
 		],
 		'campanhas' => [
 			'label' => 'Campanhas',
@@ -235,16 +259,26 @@ class SystemModules {
 						'link' => URL.'/painel/caixa/saida'
 					],
 					[
+						'label' => 'Relatórios',
+						'link' => URL.'/painel/caixa/relatorio'
+					]
+				]
+			]
+		],
+		'vendas' => [
+			'label' => 'Vendas',
+			'icon' => 'fa-solid fa-cash-register',
+			'subsections' => [
+				'name' => 'Layouts-vendas',
+				'icon' => 'fas fa-caret-down',
+				'items' => [
+					[
 						'label' => 'Estoque',
 						'link' => URL.'/painel/estoque'
 					],
 					[
 						'label' => 'PDV',
 						'link' => URL.'/painel/estoque/pdv'
-					],
-					[
-						'label' => 'Relatórios',
-						'link' => URL.'/painel/caixa/relatorio'
 					]
 				]
 			]
@@ -297,6 +331,14 @@ class SystemModules {
 					[
 						'label' => 'IA Pedagógica',
 						'link' => URL.'/painel/config/ia'
+					],
+					[
+						'label' => 'Bunny Stream',
+						'link' => URL.'/painel/config/bunny'
+					],
+					[
+						'label' => 'Conexão Meta',
+						'link' => URL.'/painel/config/social'
 					],
 					[
 						'label' => 'Modelo de contrato',

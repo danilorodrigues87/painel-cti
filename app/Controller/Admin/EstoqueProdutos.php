@@ -43,7 +43,7 @@ class EstoqueProdutos extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/estoque/produtos', []);
-		return parent::getPanel('Estoque', $content, 'Financeiro', $request);
+		return parent::getPanel('Estoque', $content, 'vendas', $request);
 	}
 
 	public static function getInfo($request) {

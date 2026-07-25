@@ -39,9 +39,65 @@ class SaasAssinaturaService {
 		return 0.0;
 	}
 
-	/** Escola elegível a cobrança automática (tem preço > 0). */
+	/**
+	 * Itens da fatura: plano + licenças vitrine + taxa CTI.
+	 * @return array{itens: array<int,array>, total: float}
+	 */
+	public static function montarItensFatura(int $idAdmin, float $valorPlano): array {
+		$itens = [];
+		$total = 0.0;
+		if ($valorPlano > 0) {
+			$itens[] = [
+				'tipo' => 'plano_painel',
+				'descricao' => 'Assinatura Painel CTI',
+				'valor' => round($valorPlano, 2),
+				'id_curso' => null,
+				'id_vitrine_assinatura' => null,
+				'id_escola_criadora' => null,
+			];
+			$total += $valorPlano;
+		}
+
+		if (\App\Model\Entity\LmsVitrineAssinatura::tabelaExiste()) {
+			$taxa = \App\Model\Entity\LmsVitrineConfig::taxaCtiMensal();
+			foreach (\App\Model\Entity\LmsVitrineAssinatura::listAtivasEscola($idAdmin) as $ass) {
+				$curso = \App\Model\Entity\LmsCurso::getById((int)$ass->id_curso);
+				if (!$curso instanceof \App\Model\Entity\LmsCurso) {
+					continue;
+				}
+				$preco = round((float)($curso->vitrine_preco_mensal ?? 0), 2);
+				if ($preco > 0) {
+					$itens[] = [
+						'tipo' => 'licenca_curso',
+						'descricao' => 'Licença EAD: '.$curso->nomeExibicao(),
+						'valor' => $preco,
+						'id_curso' => (int)$curso->id,
+						'id_vitrine_assinatura' => (int)$ass->id,
+						'id_escola_criadora' => (int)$ass->id_escola_criadora,
+					];
+					$total += $preco;
+				}
+				if ($taxa > 0) {
+					$itens[] = [
+						'tipo' => 'taxa_vitrine_cti',
+						'descricao' => 'Taxa CTI vitrine: '.$curso->nomeExibicao(),
+						'valor' => round($taxa, 2),
+						'id_curso' => (int)$curso->id,
+						'id_vitrine_assinatura' => (int)$ass->id,
+						'id_escola_criadora' => null,
+					];
+					$total += $taxa;
+				}
+			}
+		}
+
+		return ['itens' => $itens, 'total' => round($total, 2)];
+	}
+
+	/** Escola elegível a cobrança automática (plano ou licenças vitrine). */
 	public static function escolaCobravel(EscolasAssinantes $escola): bool {
-		return self::resolverValorMensal($escola) > 0;
+		$montagem = self::montarItensFatura((int)$escola->id, self::resolverValorMensal($escola));
+		return $montagem['total'] > 0;
 	}
 
 	/** Em trial válido (não gera fatura / não suspende por inadimplência do trial). */
@@ -145,9 +201,11 @@ class SaasAssinaturaService {
 			return ['ok' => true, 'message' => 'Fatura já existia.', 'fatura' => self::formatar($existente, $escola)];
 		}
 
-		$valor = self::resolverValorMensal($escola);
+		$valorPlano = self::resolverValorMensal($escola);
+		$montagem = self::montarItensFatura($idAdmin, $valorPlano);
+		$valor = $montagem['total'];
 		if ($valor <= 0) {
-			return ['ok' => false, 'message' => 'Sem valor mensal. Defina preço no plano ou valor custom da escola.'];
+			return ['ok' => false, 'message' => 'Sem valor mensal. Defina preço no plano, valor custom ou licenças na vitrine.'];
 		}
 
 		$planId = EscolasAssinantes::temColunaPlanId() ? (int)($escola->plan_id ?? 0) : 0;
@@ -170,6 +228,20 @@ class SaasAssinaturaService {
 		$fat->status = 'aberta';
 		if (!$fat->cadastrar()) {
 			return ['ok' => false, 'message' => 'Falha ao criar fatura.'];
+		}
+
+		if (\App\Model\Entity\SaasFaturaItem::tabelaExiste()) {
+			foreach ($montagem['itens'] as $row) {
+				$item = new \App\Model\Entity\SaasFaturaItem();
+				$item->id_fatura = (int)$fat->id;
+				$item->tipo = $row['tipo'];
+				$item->descricao = $row['descricao'];
+				$item->valor = $row['valor'];
+				$item->id_curso = $row['id_curso'];
+				$item->id_vitrine_assinatura = $row['id_vitrine_assinatura'];
+				$item->id_escola_criadora = $row['id_escola_criadora'];
+				$item->cadastrar();
+			}
 		}
 
 		$pixOk = self::anexarPix($fat, $escola);
@@ -276,6 +348,8 @@ class SaasAssinaturaService {
 		$fat->status = 'pago';
 		$fat->pago_em = $pagoEm ?: date('Y-m-d H:i:s');
 		$fat->atualizar();
+
+		\App\Model\Entity\LmsVitrineRepasse::gerarDeFaturaPaga((int)$fat->id, (string)$fat->competencia);
 
 		$escola = EscolasAssinantes::getEscolaById((int)$fat->id_admin);
 		if ($escola instanceof EscolasAssinantes) {

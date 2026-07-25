@@ -44,4 +44,25 @@ class AgendaPlano {
 			'data_fim' => date('Y-m-d')
 		]);
 	}
+
+	/** Reabre plano soft-deleted (uk_plano_horario_aluno bloqueia novo INSERT no mesmo dia). */
+	public function reativar(array $dados = []): bool {
+		$upd = [
+			'ativo' => 1,
+			'data_fim' => null,
+		];
+		if (isset($dados['matricula_id'])) {
+			$upd['matricula_id'] = (int)$dados['matricula_id'];
+		}
+		if (isset($dados['id_trilha'])) {
+			$upd['id_trilha'] = (int)$dados['id_trilha'];
+		}
+		if (isset($dados['dia_semana'])) {
+			$upd['dia_semana'] = (int)$dados['dia_semana'];
+		}
+		if (array_key_exists('data_inicio', $dados) && $dados['data_inicio']) {
+			$upd['data_inicio'] = $dados['data_inicio'];
+		}
+		return (new Database('agenda_plano'))->update('id = '.(int)$this->id, $upd);
+	}
 }

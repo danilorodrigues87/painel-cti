@@ -16,6 +16,7 @@ function toastErr(msg) {
 }
 
 var estadoAula = null;
+var bunnyOk = false;
 
 function idCurso() {
 	return parseInt($('#id_curso').val() || '0', 10);
@@ -26,13 +27,15 @@ function idAula() {
 }
 
 function carregarGeral() {
-	postEad({ acao: 'carregar_curso', id_trilha: $('#id_trilha').val() }).done(function (res) {
+	postEad({ acao: 'carregar_curso', id_curso: idCurso() }).done(function (res) {
 		if (!res || !res.success) {
 			toastErr(res && res.message);
 			return;
 		}
 		var c = res.curso;
 		$('#id_curso').val(c.id);
+		$('#titulo').val(c.titulo || '');
+		$('#carga_h').val(c.carga_h || '');
 		$('#slug').val(c.slug || '');
 		$('#short_description').val(c.short_description || '');
 		$('#cover_url').val(c.cover_url || '');
@@ -44,14 +47,30 @@ function carregarGeral() {
 		$('#instructor_bio').val(c.instructor_bio || '');
 		$('#instructor_avatar_url').val(c.instructor_avatar_url || '');
 		$('#publicado').prop('checked', !!c.publicado);
+		if (c.vitrine_ok) {
+			$('#bloco-vitrine').removeClass('d-none');
+			$('#vitrine_ativo').prop('checked', !!c.vitrine_ativo);
+			var preco = Number(c.vitrine_preco_mensal || 0);
+			$('#vitrine_preco_mensal').val(preco);
+			$('#vitrine_gratuito').prop('checked', !!c.vitrine_ativo && preco <= 0);
+			$('#vitrine_descricao').val(c.vitrine_descricao || '');
+			$('#vitrine_preco_mensal').prop('disabled', $('#vitrine_gratuito').is(':checked'));
+		}
 		listarAulas();
+		listarMatriculasEad();
 	});
 }
 
 function salvarGeral() {
+	var gratuito = $('#vitrine_gratuito').is(':checked');
+	if (gratuito) {
+		$('#vitrine_preco_mensal').val(0);
+	}
 	postEad({
 		acao: 'salvar_geral',
-		id_trilha: $('#id_trilha').val(),
+		id_curso: idCurso(),
+		titulo: $('#titulo').val(),
+		carga_h: $('#carga_h').val(),
 		slug: $('#slug').val(),
 		short_description: $('#short_description').val(),
 		cover_url: $('#cover_url').val(),
@@ -62,11 +81,37 @@ function salvarGeral() {
 		instructor_title: $('#instructor_title').val(),
 		instructor_bio: $('#instructor_bio').val(),
 		instructor_avatar_url: $('#instructor_avatar_url').val(),
-		publicado: $('#publicado').is(':checked') ? '1' : '0'
+		publicado: $('#publicado').is(':checked') ? '1' : '0',
+		vitrine_ativo: $('#vitrine_ativo').is(':checked') ? '1' : '0',
+		vitrine_preco_mensal: gratuito ? '0' : $('#vitrine_preco_mensal').val(),
+		vitrine_descricao: $('#vitrine_descricao').val()
 	}).done(function (res) {
 		if (!res || !res.success) return toastErr(res && res.message);
 		if (res.slug) $('#slug').val(res.slug);
 		toastOk(res.message);
+	});
+}
+
+function listarMatriculasEad() {
+	postEad({ acao: 'listar_matriculas_ead', id_curso: idCurso() }).done(function (res) {
+		if (!res || !res.success) {
+			$('#tbody-matriculas-ead').html('<tr><td colspan="4" class="text-danger">' + ((res && res.message) || 'Erro') + '</td></tr>');
+			return;
+		}
+		if (!res.itens || !res.itens.length) {
+			$('#tbody-matriculas-ead').html('<tr><td colspan="4" class="text-muted">Nenhum aluno matriculado neste curso.</td></tr>');
+			return;
+		}
+		var html = '';
+		res.itens.forEach(function (a) {
+			html += '<tr>' +
+				'<td>' + $('<div>').text(a.nome).html() + '</td>' +
+				'<td>' + $('<div>').text(a.email || '').html() + '</td>' +
+				'<td>' + (a.inicio || '—') + '</td>' +
+				'<td><button type="button" class="btn btn-sm btn-outline-danger btn-desmatricular" data-id="' + a.id_aluno + '">Remover</button></td>' +
+				'</tr>';
+		});
+		$('#tbody-matriculas-ead').html(html);
 	});
 }
 
@@ -88,6 +133,7 @@ function abrirAula(id) {
 	postEad({ acao: 'carregar_aula', id_aula: id }).done(function (res) {
 		if (!res || !res.success) return toastErr(res && res.message);
 		estadoAula = res;
+		bunnyOk = !!res.bunny_ok;
 		$('#aula-placeholder').addClass('d-none');
 		$('#painel-aula').removeClass('d-none');
 		var a = res.aula;
@@ -106,10 +152,21 @@ function abrirAula(id) {
 function renderVideos(list) {
 	var html = '';
 	list.forEach(function (v) {
+		var meta = '';
+		if (v.provider === 'bunny') {
+			var st = v.bunny_status || '—';
+			meta = '<span class="badge bg-info text-dark me-1">Bunny</span>' +
+				'<span class="badge bg-secondary">' + $('<div>').text(st).html() + '</span>';
+			if (v.bunny_error) {
+				meta += '<br><small class="text-danger">' + $('<div>').text(v.bunny_error).html() + '</small>';
+			}
+		} else {
+			meta = '<span class="badge bg-danger me-1">YouTube</span><small class="text-break">' + $('<div>').text(v.url || '').html() + '</small>';
+		}
 		html += '<li class="list-group-item d-flex justify-content-between align-items-start gap-2">' +
-			'<div class="flex-grow-1"><strong>' + $('<div>').text(v.titulo || 'Vídeo').html() + '</strong><br><small class="text-break">' + $('<div>').text(v.url).html() + '</small></div>' +
+			'<div class="flex-grow-1"><strong>' + $('<div>').text(v.titulo || 'Vídeo').html() + '</strong><br>' + meta + '</div>' +
 			'<div class="btn-group-vertical">' +
-			'<button type="button" class="btn btn-sm btn-outline-secondary btn-edit-video" data-id="' + v.id + '">Editar</button>' +
+			(v.provider === 'bunny' ? '' : '<button type="button" class="btn btn-sm btn-outline-secondary btn-edit-video" data-id="' + v.id + '">Editar</button>') +
 			'<button type="button" class="btn btn-sm btn-outline-danger btn-del-video" data-id="' + v.id + '">Excluir</button></div></li>';
 	});
 	$('#lista-videos').html(html || '<li class="list-group-item text-muted">Nenhum vídeo.</li>');
@@ -208,38 +265,129 @@ function opcoesToPipe(opcoes) {
 	}).filter(Boolean).join('|');
 }
 
+function uploadBunnyPut(file, upload, onProgress) {
+	return new Promise(function (resolve, reject) {
+		var xhr = new XMLHttpRequest();
+		xhr.open('PUT', upload.putUrl, true);
+		xhr.setRequestHeader('AccessKey', upload.accessKey);
+		xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+		xhr.upload.onprogress = function (e) {
+			if (!e.lengthComputable || typeof onProgress !== 'function') return;
+			onProgress(Math.round((e.loaded / e.total) * 100));
+		};
+		xhr.onload = function () {
+			if (xhr.status >= 200 && xhr.status < 300) resolve();
+			else reject(new Error('Upload Bunny HTTP ' + xhr.status));
+		};
+		xhr.onerror = function () { reject(new Error('Falha de rede no upload Bunny')); };
+		xhr.send(file);
+	});
+}
+
+function pollBunnyStatus(videoDbId, tries) {
+	tries = tries || 0;
+	return postEad({ acao: 'bunny_status', id: videoDbId }).then(function (res) {
+		if (!res || !res.success) {
+			return $.Deferred().reject(res && res.message).promise();
+		}
+		if (res.bunny_status === 'ready') return res;
+		if (res.bunny_status === 'error') {
+			return $.Deferred().reject(res.bunny_error || 'Erro no processamento').promise();
+		}
+		if (tries > 60) {
+			return $.Deferred().reject('Tempo esgotado aguardando processamento.').promise();
+		}
+		return new Promise(function (resolve) {
+			setTimeout(function () { resolve(pollBunnyStatus(videoDbId, tries + 1)); }, 3000);
+		});
+	});
+}
+
 function abrirDialogoVideo(v) {
 	var edit = !!v;
+	if (edit && v.provider === 'bunny') {
+		toastErr('Vídeos Bunny não são editáveis — exclua e envie de novo.');
+		return;
+	}
+	var bunnyOpt = bunnyOk
+		? '<option value="bunny">Bunny (upload protegido)</option>'
+		: '';
 	Swal.fire({
 		title: edit ? 'Editar vídeo' : 'Novo vídeo',
-		html: '<input id="sw-v-titulo" class="swal2-input" placeholder="Título">' +
+		html:
+			'<select id="sw-v-provider" class="swal2-select">' +
+			'<option value="youtube">YouTube (URL)</option>' +
+			bunnyOpt +
+			'</select>' +
+			'<input id="sw-v-titulo" class="swal2-input" placeholder="Título">' +
 			'<input id="sw-v-url" class="swal2-input" placeholder="URL YouTube">' +
-			'<input id="sw-v-min" class="swal2-input" type="number" placeholder="Minutos" value="0">',
+			'<input id="sw-v-file" class="swal2-file" type="file" accept="video/mp4,video/webm,video/*" style="display:none">' +
+			'<input id="sw-v-min" class="swal2-input" type="number" placeholder="Minutos" value="0">' +
+			'<div id="sw-v-progress" class="small text-muted mt-2" style="display:none"></div>',
 		didOpen: function () {
-			if (!edit) return;
-			$('#sw-v-titulo').val(v.titulo || '');
-			$('#sw-v-url').val(v.url || '');
-			$('#sw-v-min').val(v.duracao_min || 0);
+			var $prov = $('#sw-v-provider');
+			function syncProv() {
+				var p = $prov.val();
+				if (p === 'bunny') {
+					$('#sw-v-url').hide();
+					$('#sw-v-file').show();
+					$('#sw-v-min').hide();
+				} else {
+					$('#sw-v-url').show();
+					$('#sw-v-file').hide();
+					$('#sw-v-min').show();
+				}
+			}
+			$prov.on('change', syncProv);
+			if (edit) {
+				$prov.val(v.provider === 'bunny' ? 'bunny' : 'youtube').prop('disabled', true);
+				$('#sw-v-titulo').val(v.titulo || '');
+				$('#sw-v-url').val(v.url || '');
+				$('#sw-v-min').val(v.duracao_min || 0);
+			}
+			syncProv();
 		},
 		showCancelButton: true,
+		confirmButtonText: 'Salvar',
 		preConfirm: function () {
+			var provider = ($('#sw-v-provider').val() || 'youtube');
+			var titulo = ($('#sw-v-titulo').val() || '').trim();
+			if (provider === 'bunny') {
+				var fileEl = document.getElementById('sw-v-file');
+				var file = fileEl && fileEl.files && fileEl.files[0];
+				if (!file) {
+					Swal.showValidationMessage('Selecione o arquivo de vídeo.');
+					return false;
+				}
+				if (file.size > 800 * 1024 * 1024) {
+					Swal.showValidationMessage('Arquivo muito grande (máx. ~800 MB neste fluxo).');
+					return false;
+				}
+				return { provider: 'bunny', titulo: titulo, file: file };
+			}
 			var url = ($('#sw-v-url').val() || '').trim();
 			if (!url) {
 				Swal.showValidationMessage('Informe a URL do vídeo.');
 				return false;
 			}
 			return {
-				titulo: ($('#sw-v-titulo').val() || '').trim(),
+				provider: 'youtube',
+				titulo: titulo,
 				url: url,
 				duracao_min: parseInt($('#sw-v-min').val(), 10) || 0
 			};
 		}
 	}).then(function (r) {
-		if (!r.isConfirmed) return;
+		if (!r.isConfirmed || !r.value) return;
+		if (r.value.provider === 'bunny') {
+			enviarVideoBunny(r.value.titulo, r.value.file);
+			return;
+		}
 		var payload = $.extend({
 			acao: 'salvar_video',
 			id_aula: idAula(),
-			ordem: edit ? (v.ordem || 0) : $('#lista-videos li').length
+			ordem: edit ? (v.ordem || 0) : $('#lista-videos li').length,
+			provider: 'youtube'
 		}, r.value);
 		if (edit) payload.id = v.id;
 		postEad(payload).done(function (res) {
@@ -247,6 +395,47 @@ function abrirDialogoVideo(v) {
 			toastOk(res.message);
 			abrirAula(idAula());
 		});
+	});
+}
+
+function enviarVideoBunny(titulo, file) {
+	Swal.fire({
+		title: 'Enviando para Bunny…',
+		html: '<div id="bunny-up-pct">0%</div>',
+		allowOutsideClick: false,
+		didOpen: function () { Swal.showLoading(); }
+	});
+	postEad({
+		acao: 'bunny_criar_video',
+		id_aula: idAula(),
+		titulo: titulo || file.name,
+		ordem: $('#lista-videos li').length
+	}).done(function (res) {
+		if (!res || !res.success || !res.upload) {
+			Swal.close();
+			toastErr(res && res.message);
+			return;
+		}
+		var videoDbId = res.id;
+		uploadBunnyPut(file, res.upload, function (pct) {
+			$('#bunny-up-pct').text(pct + '%');
+		}).then(function () {
+			return postEad({ acao: 'bunny_finalize', id: videoDbId });
+		}).then(function () {
+			$('#bunny-up-pct').text('Processando…');
+			return pollBunnyStatus(videoDbId);
+		}).then(function () {
+			Swal.close();
+			toastOk('Vídeo Bunny pronto.');
+			abrirAula(idAula());
+		}).catch(function (err) {
+			Swal.close();
+			toastErr(typeof err === 'string' ? err : (err && err.message) || 'Falha no upload Bunny');
+			abrirAula(idAula());
+		});
+	}).fail(function () {
+		Swal.close();
+		toastErr('Falha ao criar vídeo no Bunny');
 	});
 }
 
@@ -563,6 +752,21 @@ $(function () {
 
 	$('#btn-salvar-geral').on('click', salvarGeral);
 
+	$(document).on('change', '#vitrine_gratuito', function () {
+		var on = $(this).is(':checked');
+		$('#vitrine_preco_mensal').prop('disabled', on);
+		if (on) {
+			$('#vitrine_preco_mensal').val(0);
+			$('#vitrine_ativo').prop('checked', true);
+		}
+	});
+	$(document).on('change', '#vitrine_preco_mensal', function () {
+		if (Number($(this).val() || 0) > 0) {
+			$('#vitrine_gratuito').prop('checked', false);
+			$('#vitrine_preco_mensal').prop('disabled', false);
+		}
+	});
+
 	$('#btn-nova-aula').on('click', function () {
 		postEad({
 			acao: 'salvar_aula',
@@ -644,4 +848,43 @@ $(function () {
 	$('#lista-roleplays').on('click', '.btn-del-roleplay', function () {
 		postEad({ acao: 'excluir_roleplay', id: $(this).data('id') }).done(function () { abrirAula(idAula()); });
 	});
+
+	var buscaTimer = null;
+	$('#busca-aluno').on('input', function () {
+		var q = $(this).val();
+		clearTimeout(buscaTimer);
+		if (!q || q.length < 2) {
+			$('#busca-aluno-resultados').empty();
+			return;
+		}
+		buscaTimer = setTimeout(function () {
+			postEad({ acao: 'buscar_alunos', q: q }).done(function (res) {
+				var html = '';
+				(res.itens || []).forEach(function (a) {
+					html += '<button type="button" class="list-group-item list-group-item-action btn-matricular-aluno" data-id="' + a.id + '">' +
+						$('<div>').text(a.nome + ' — ' + (a.email || '')).html() + '</button>';
+				});
+				$('#busca-aluno-resultados').html(html);
+			});
+		}, 300);
+	});
+	$('#busca-aluno-resultados').on('click', '.btn-matricular-aluno', function () {
+		var idAluno = $(this).data('id');
+		postEad({ acao: 'matricular_ead', id_curso: idCurso(), id_aluno: idAluno }).done(function (res) {
+			if (!res || !res.success) return toastErr(res && res.message);
+			toastOk(res.message);
+			$('#busca-aluno').val('');
+			$('#busca-aluno-resultados').empty();
+			listarMatriculasEad();
+		});
+	});
+	$('#tbody-matriculas-ead').on('click', '.btn-desmatricular', function () {
+		var idAluno = $(this).data('id');
+		postEad({ acao: 'desmatricular_ead', id_curso: idCurso(), id_aluno: idAluno }).done(function (res) {
+			if (!res || !res.success) return toastErr(res && res.message);
+			toastOk(res.message);
+			listarMatriculasEad();
+		});
+	});
+	$('#tab-alunos').on('shown.bs.tab', listarMatriculasEad);
 });

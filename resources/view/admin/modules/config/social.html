@@ -1,0 +1,96 @@
+<h1 class="mt-4">Redes sociais (Meta)</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item"><a href="{{URL}}/painel">Painel</a></li>
+	<li class="breadcrumb-item active">Configurações → Redes sociais</li>
+</ol>
+
+<div id="alert-sql-meta" class="alert alert-warning d-none">
+	Execute <code>database/escola_integracoes_meta.sql</code> no phpMyAdmin.
+</div>
+<div id="alert-app-meta" class="alert alert-warning d-none">
+	Configure <code>META_APP_ID</code> e <code>META_APP_SECRET</code> no <code>.env</code> do servidor para usar OAuth.
+	Enquanto isso, você pode colar Page ID / IG User ID / Page Token de teste (modo Dev).
+</div>
+<div id="alert-oauth" class="alert d-none"></div>
+
+<div class="alert alert-light border mb-4 small">
+	<p class="mb-1"><strong>Como funciona:</strong> a CTI possui o App Meta. Cada escola conecta a própria <em>Facebook Page</em> e o <em>Instagram Professional</em> vinculado.</p>
+	<p class="mb-1">Sem <strong>App Review</strong> da Meta (modo Live), só contas de teste do App funcionam em produção.</p>
+	<p class="mb-0">Agenda de posts: menu <em>Redes sociais</em>. WhatsApp continua em Evolution (não usa este módulo).</p>
+</div>
+
+<div class="row g-3">
+	<div class="col-lg-7">
+		<div class="card shadow mb-3">
+			<div class="card-header">Conexão</div>
+			<div class="card-body">
+				<div class="form-check form-switch mb-2">
+					<input class="form-check-input" type="checkbox" id="meta_fb_ativo">
+					<label class="form-check-label" for="meta_fb_ativo">Publicar no Facebook (Page)</label>
+				</div>
+				<div class="form-check form-switch mb-3">
+					<input class="form-check-input" type="checkbox" id="meta_ig_ativo">
+					<label class="form-check-label" for="meta_ig_ativo">Publicar no Instagram</label>
+				</div>
+				<div class="mb-2">
+					<button type="button" class="btn btn-primary" id="btn-oauth">Conectar com Facebook</button>
+					<button type="button" class="btn btn-outline-secondary" id="btn-testar">Testar conexão</button>
+					<button type="button" class="btn btn-outline-danger" id="btn-desconectar">Desconectar</button>
+				</div>
+				<p class="small text-muted mb-0" id="meta-status-txt">—</p>
+			</div>
+		</div>
+
+		<div class="card shadow mb-3">
+			<div class="card-header">IDs / Token (avançado ou modo Dev)</div>
+			<div class="card-body">
+				<div class="mb-2">
+					<label class="form-label">Page ID</label>
+					<input type="text" class="form-control" id="meta_page_id" placeholder="ID da Facebook Page">
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Nome da Page</label>
+					<input type="text" class="form-control" id="meta_page_name" placeholder="Opcional">
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Instagram User ID</label>
+					<input type="text" class="form-control" id="meta_ig_user_id" placeholder="IG Professional vinculado à Page">
+				</div>
+				<div class="mb-2">
+					<label class="form-label">@ Instagram</label>
+					<input type="text" class="form-control" id="meta_ig_username" placeholder="Opcional">
+				</div>
+				<div class="mb-2">
+					<label class="form-label">Page Access Token</label>
+					<input type="password" class="form-control" id="meta_page_token" placeholder="Deixe em branco para manter o salvo" autocomplete="off">
+					<div class="form-text" id="token_mask_txt"></div>
+				</div>
+				<button type="button" class="btn btn-success" id="btn-salvar">Salvar</button>
+			</div>
+		</div>
+	</div>
+	<div class="col-lg-5">
+		<div class="card shadow mb-3">
+			<div class="card-header">Webhook (Fase 2 — automações)</div>
+			<div class="card-body small">
+				<p>URL da escola (cadastre no App Meta quando for usar comentários→DM):</p>
+				<code id="webhook_url" class="d-block text-break">—</code>
+				<p class="mt-2 mb-0 text-muted">Verify token global: <code>META_WEBHOOK_VERIFY_TOKEN</code> no .env</p>
+			</div>
+		</div>
+		<div class="card shadow">
+			<div class="card-header">Próximos passos</div>
+			<div class="card-body small">
+				<ol class="mb-0 ps-3">
+					<li>Rodar SQLs Meta + social_posts</li>
+					<li>Preencher .env Meta</li>
+					<li>App Review (publicação) antes de clientes reais</li>
+					<li>Agendar posts em <a href="{{URL}}/painel/social">Redes sociais</a></li>
+					<li>Cron: <code>php worker/social.php</code></li>
+				</ol>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/config-social.js?v=20260725a"></script>

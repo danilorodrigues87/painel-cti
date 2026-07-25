@@ -40,15 +40,28 @@ class Assinaturas extends Page {
 	}
 
 	public static function getInfo($request) {
+		$post = $request->getPostVars();
+		$acao = $post['acao'] ?? '';
+
+		if (in_array($acao, ['vitrine_config', 'vitrine_salvar_taxa', 'vitrine_repasses', 'vitrine_marcar_repasse'], true)) {
+			switch ($acao) {
+				case 'vitrine_config':
+					return self::vitrineConfig($post);
+				case 'vitrine_salvar_taxa':
+					return self::vitrineSalvarTaxa($post);
+				case 'vitrine_repasses':
+					return self::vitrineRepasses($post);
+				case 'vitrine_marcar_repasse':
+					return self::vitrineMarcarRepasse($post);
+			}
+		}
+
 		if (!SaasFatura::tabelaExiste()) {
 			return json_encode([
 				'success' => false,
 				'message' => 'Execute database/saas_assinatura.sql no phpMyAdmin.',
 			]);
 		}
-
-		$post = $request->getPostVars();
-		$acao = $post['acao'] ?? '';
 
 		switch ($acao) {
 			case 'listar':
@@ -73,6 +86,60 @@ class Assinaturas extends Page {
 			default:
 				return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 		}
+	}
+
+	private static function vitrineConfig(array $post): string {
+		if (!\App\Model\Entity\LmsVitrineConfig::tabelaExiste()) {
+			return json_encode(['success' => false, 'message' => 'Execute database/lms_vitrine.sql']);
+		}
+		return json_encode([
+			'success' => true,
+			'taxa_cti_mensal' => \App\Model\Entity\LmsVitrineConfig::taxaCtiMensal(),
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function vitrineSalvarTaxa(array $post): string {
+		if (!\App\Model\Entity\LmsVitrineConfig::tabelaExiste()) {
+			return json_encode(['success' => false, 'message' => 'Execute database/lms_vitrine.sql']);
+		}
+		$valor = (float)str_replace(',', '.', (string)($post['taxa_cti_mensal'] ?? 0));
+		\App\Model\Entity\LmsVitrineConfig::setTaxaCtiMensal($valor);
+		return json_encode(['success' => true, 'message' => 'Taxa CTI atualizada.', 'taxa_cti_mensal' => $valor], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function vitrineRepasses(array $post): string {
+		if (!\App\Model\Entity\LmsVitrineRepasse::tabelaExiste()) {
+			return json_encode(['success' => false, 'message' => 'Execute database/lms_vitrine.sql', 'itens' => []]);
+		}
+		$status = trim((string)($post['status'] ?? 'pendente'));
+		$where = '1=1';
+		if ($status === 'pendente' || $status === 'pago') {
+			$where = 'status = "'.addslashes($status).'"';
+		}
+		$stmt = (new \App\Model\Db\Database('lms_vitrine_repasses'))->select($where, 'id DESC', '100');
+		$itens = [];
+		while ($r = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+			$criadora = EscolasAssinantes::getEscolaById((int)$r['id_escola_criadora']);
+			$curso = \App\Model\Entity\LmsCurso::getById((int)$r['id_curso']);
+			$itens[] = [
+				'id' => (int)$r['id'],
+				'competencia' => $r['competencia'],
+				'valor' => (float)$r['valor'],
+				'status' => $r['status'],
+				'escola' => $criadora ? (string)$criadora->nome : '#'.$r['id_escola_criadora'],
+				'curso' => $curso ? $curso->nomeExibicao() : '#'.$r['id_curso'],
+			];
+		}
+		return json_encode(['success' => true, 'itens' => $itens], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function vitrineMarcarRepasse(array $post): string {
+		$id = (int)($post['id'] ?? 0);
+		if ($id <= 0) {
+			return json_encode(['success' => false, 'message' => 'ID inválido.']);
+		}
+		\App\Model\Entity\LmsVitrineRepasse::marcarPago($id);
+		return json_encode(['success' => true, 'message' => 'Repasse marcado como pago.']);
 	}
 
 	private static function listar(array $post): string {

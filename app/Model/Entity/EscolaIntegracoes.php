@@ -62,6 +62,21 @@ class EscolaIntegracoes {
 	public $ai_provider;
 	public $ai_api_key;
 	public $ai_model;
+	public $bunny_ativo = 0;
+	public $bunny_library_id;
+	public $bunny_cdn_hostname;
+	public $bunny_api_key;
+	public $bunny_token_key;
+	public $meta_fb_ativo = 0;
+	public $meta_ig_ativo = 0;
+	public $meta_page_id;
+	public $meta_page_name;
+	public $meta_ig_user_id;
+	public $meta_ig_username;
+	public $meta_page_token;
+	public $meta_token_expires_at;
+	public $meta_webhook_token;
+	public $meta_conectado_em;
 	public $updated_at;
 
 	public static function temColunasCobranca(): bool {
@@ -217,6 +232,26 @@ class EscolaIntegracoes {
 				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
 			);
 			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'ai_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public static function temColunasBunny(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'bunny_ativo'");
 			$cache = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$cache = false;
@@ -405,6 +440,161 @@ class EscolaIntegracoes {
 		return self::temColunasAi()
 			&& (int)$this->ai_ativo === 1
 			&& !empty($this->getAiApiKeyDescriptografada());
+	}
+
+	/**
+	 * @param ?string $apiKeyNova null = manter
+	 * @param ?string $tokenKeyNova null = manter
+	 */
+	public function salvarBunny(?string $apiKeyNova, ?string $tokenKeyNova): bool {
+		self::$ultimoErro = null;
+		if (!self::temColunasBunny()) {
+			self::$ultimoErro = 'Colunas Bunny ausentes. Execute database/escola_integracoes_bunny.sql.';
+			return false;
+		}
+
+		$dados = [
+			'bunny_ativo' => (int)$this->bunny_ativo,
+			'bunny_library_id' => $this->bunny_library_id ?: null,
+			'bunny_cdn_hostname' => $this->bunny_cdn_hostname ?: null,
+		];
+
+		if ($apiKeyNova !== null && $apiKeyNova !== '') {
+			$cript = CryptoHelper::encrypt($apiKeyNova);
+			if ($cript === null) {
+				self::$ultimoErro = 'Não foi possível criptografar a AccessKey.';
+				return false;
+			}
+			$dados['bunny_api_key'] = $cript;
+		}
+		if ($tokenKeyNova !== null && $tokenKeyNova !== '') {
+			$cript = CryptoHelper::encrypt($tokenKeyNova);
+			if ($cript === null) {
+				self::$ultimoErro = 'Não foi possível criptografar o Token Key.';
+				return false;
+			}
+			$dados['bunny_token_key'] = $cript;
+		}
+
+		$existente = self::getByIdAdmin((int)$this->id_admin);
+		$db = new Database('escola_integracoes');
+
+		if ($existente instanceof self) {
+			$db->update('id_admin = '.(int)$this->id_admin, $dados);
+			return true;
+		}
+
+		$dados['id_admin'] = (int)$this->id_admin;
+		$dados['smtp_pass'] = null;
+		$dados['smtp_port'] = 587;
+		$dados['smtp_encryption'] = 'tls';
+		$dados['smtp_ativo'] = 0;
+		$db->insert($dados);
+		return true;
+	}
+
+	public function getBunnyApiKeyDescriptografada(): ?string {
+		return CryptoHelper::decrypt($this->bunny_api_key ?? null);
+	}
+
+	public function getBunnyTokenKeyDescriptografada(): ?string {
+		return CryptoHelper::decrypt($this->bunny_token_key ?? null);
+	}
+
+	public function temBunnyAtivo(): bool {
+		return self::temColunasBunny()
+			&& (int)$this->bunny_ativo === 1
+			&& trim((string)($this->bunny_library_id ?? '')) !== ''
+			&& trim((string)($this->bunny_cdn_hostname ?? '')) !== ''
+			&& !empty($this->getBunnyApiKeyDescriptografada())
+			&& !empty($this->getBunnyTokenKeyDescriptografada());
+	}
+
+	public static function temColunasMeta(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'meta_page_token'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	/**
+	 * @param ?string $pageTokenNovo null = manter
+	 */
+	public function salvarMeta(?string $pageTokenNovo): bool {
+		self::$ultimoErro = null;
+		if (!self::temColunasMeta()) {
+			self::$ultimoErro = 'Colunas Meta ausentes. Execute database/escola_integracoes_meta.sql.';
+			return false;
+		}
+
+		if (empty($this->meta_webhook_token)) {
+			$this->meta_webhook_token = bin2hex(random_bytes(16));
+		}
+
+		$dados = [
+			'meta_fb_ativo' => (int)$this->meta_fb_ativo,
+			'meta_ig_ativo' => (int)$this->meta_ig_ativo,
+			'meta_page_id' => $this->meta_page_id ?: null,
+			'meta_page_name' => $this->meta_page_name ?: null,
+			'meta_ig_user_id' => $this->meta_ig_user_id ?: null,
+			'meta_ig_username' => $this->meta_ig_username ?: null,
+			'meta_token_expires_at' => $this->meta_token_expires_at ?: null,
+			'meta_webhook_token' => $this->meta_webhook_token ?: null,
+			'meta_conectado_em' => $this->meta_conectado_em ?: null,
+		];
+
+		if ($pageTokenNovo !== null && $pageTokenNovo !== '') {
+			$cript = CryptoHelper::encrypt($pageTokenNovo);
+			if ($cript === null) {
+				self::$ultimoErro = 'Não foi possível criptografar o Page Token.';
+				return false;
+			}
+			$dados['meta_page_token'] = $cript;
+		}
+
+		$existente = self::getByIdAdmin((int)$this->id_admin);
+		$db = new Database('escola_integracoes');
+
+		if ($existente instanceof self) {
+			$db->update('id_admin = '.(int)$this->id_admin, $dados);
+			return true;
+		}
+
+		$dados['id_admin'] = (int)$this->id_admin;
+		$dados['smtp_pass'] = null;
+		$dados['smtp_port'] = 587;
+		$dados['smtp_encryption'] = 'tls';
+		$dados['smtp_ativo'] = 0;
+		$db->insert($dados);
+		return true;
+	}
+
+	public function getMetaPageTokenDescriptografada(): ?string {
+		return CryptoHelper::decrypt($this->meta_page_token ?? null);
+	}
+
+	public function temMetaPronto(): bool {
+		if (!self::temColunasMeta()) {
+			return false;
+		}
+		$token = $this->getMetaPageTokenDescriptografada();
+		$pageOk = trim((string)($this->meta_page_id ?? '')) !== '' && $token;
+		$fb = (int)$this->meta_fb_ativo === 1 && $pageOk;
+		$ig = (int)$this->meta_ig_ativo === 1 && $pageOk && trim((string)($this->meta_ig_user_id ?? '')) !== '';
+		return $fb || $ig;
 	}
 
 	public function salvar(): bool {

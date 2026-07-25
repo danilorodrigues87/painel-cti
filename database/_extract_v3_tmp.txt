@@ -1,0 +1,52 @@
+<?php
+$paths = array(
+  "C:\\Users\\Meu PC\\.cursor\\projects\\c-xampp-htdocs-pjt-wordspace-cti-code-workspace\\agent-transcripts\\6b4d0525-bc6d-40aa-ae67-c8e9b77cc5b4\\6b4d0525-bc6d-40aa-ae67-c8e9b77cc5b4.jsonl",
+  "C:\\Users\\Meu PC\\.cursor\\projects\\c-xampp-htdocs-pjt-painel-cti\\agent-transcripts\\6b4d0525-bc6d-40aa-ae67-c8e9b77cc5b4\\6b4d0525-bc6d-40aa-ae67-c8e9b77cc5b4.jsonl"
+);
+$out = "C:\\xampp\\htdocs\\pjt\\painel-cti\\database\\lms_conquistas_v3.sql";
+$found = null;
+foreach ($paths as $path) {
+  if (!is_file($path)) continue;
+  $fh = fopen($path, "r");
+  if (!$fh) continue;
+  while (($line = fgets($fh)) !== false) {
+    if (strpos($line, "lms_conquistas_v3.sql") === false) continue;
+    if (strpos($line, "INSERT INTO lms_conquistas_def") === false) continue;
+    $obj = json_decode($line, true);
+    if (!$obj) continue;
+    $content = isset($obj["message"]["content"]) ? $obj["message"]["content"] : array();
+    if (!is_array($content)) continue;
+    foreach ($content as $part) {
+      $type = isset($part["type"]) ? $part["type"] : "";
+      if ($type === "tool_use" && isset($part["name"]) && $part["name"] === "Write") {
+        $inp = isset($part["input"]) ? $part["input"] : array();
+        $p = isset($inp["path"]) ? (string)$inp["path"] : "";
+        if (strpos($p, "lms_conquistas_v3.sql") !== false) {
+          $cand = isset($inp["contents"]) ? $inp["contents"] : "";
+          if (strpos($cand, "INSERT INTO lms_conquistas_def") !== false && strlen($cand) > strlen((string)$found)) {
+            $found = $cand;
+          }
+        }
+      }
+      if ($type === "text") {
+        $t = isset($part["text"]) ? $part["text"] : "";
+        if (strpos($t, "```sql") !== false && strpos($t, "INSERT INTO lms_conquistas_def") !== false) {
+          $start = strpos($t, "```sql") + 6;
+          $end = strpos($t, "```", $start);
+          if ($end !== false) {
+            $cand = trim(substr($t, $start, $end - $start));
+            if (strlen($cand) > strlen((string)$found)) {
+              $found = $cand;
+            }
+          }
+        }
+      }
+    }
+  }
+  fclose($fh);
+}
+if ($found === null) { fwrite(STDERR, "NOT FOUND\n"); exit(1); }
+if (substr($found, -1) !== "\n") $found .= "\n";
+file_put_contents($out, $found);
+echo "OK " . strlen($found) . " chars\n";
+echo "INSERT blocks " . substr_count($found, "INSERT INTO") . "\n";

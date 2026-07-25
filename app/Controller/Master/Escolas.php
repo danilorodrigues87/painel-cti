@@ -117,10 +117,11 @@ class Escolas extends Page {
 				$ob->id_admin = (int)$ob->id;
 				$ob->atualizar();
 				ModuleGateHelper::limparCache((int)$ob->id);
+				ModuleGateHelper::sincronizarAcessoDiretores((int)$ob->id);
 
 				return json_encode([
 					'success' => true,
-					'message' => 'Escola atualizada.',
+					'message' => 'Escola atualizada. Módulos do Diretor sincronizados com o plano.',
 					'escola'  => self::formatar($ob, true),
 				]);
 			}

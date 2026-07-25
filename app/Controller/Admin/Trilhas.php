@@ -31,13 +31,57 @@ class Trilhas extends Page{
 		//DADOS DO ADMIN
 		$id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 		
-		$itens = '<button type="button" class="btn btn-success" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Nova Trilha</button>';
+		$queryParams = $request->getPostVars();
+		$busca = trim((string)($queryParams['busca'] ?? ''));
+		$idCategoria = (int)($queryParams['id_categoria'] ?? 0);
+		$filtroAtivo = (string)($queryParams['ativo'] ?? 'todos');
+
+		$where = 'trilhas.id_admin = '.(int)$id_admin;
+		if ($busca !== '') {
+			$where .= " AND trilhas.nome LIKE '%".addslashes($busca)."%'";
+		}
+		if ($idCategoria > 0) {
+			$where .= ' AND trilhas.id_categoria = '.$idCategoria;
+		}
+		if (EntityTrilhas::temColunaAtivo() && ($filtroAtivo === '1' || $filtroAtivo === '0')) {
+			$where .= ' AND trilhas.ativo = '.(int)$filtroAtivo;
+		}
+
+		$optCat = '<option value="0">Todas categorias</option>';
+		$cats = Category_Courses::getCategory('id_admin = '.(int)$id_admin, 'nome ASC');
+		while ($c = $cats->fetchObject(Category_Courses::class)) {
+			$sel = $idCategoria === (int)$c->id ? ' selected' : '';
+			$optCat .= '<option value="'.(int)$c->id.'"'.$sel.'>'.htmlspecialchars((string)$c->nome, ENT_QUOTES, 'UTF-8').'</option>';
+		}
+
+		$filtros = '<div class="row g-2 mb-3 align-items-end">
+			<div class="col-md-4">
+				<label class="form-label small mb-0">Busca</label>
+				<input type="text" class="form-control form-control-sm" id="filtro-trilha-busca" value="'.htmlspecialchars($busca, ENT_QUOTES, 'UTF-8').'" placeholder="Nome da trilha">
+			</div>
+			<div class="col-md-3">
+				<label class="form-label small mb-0">Categoria</label>
+				<select class="form-select form-select-sm" id="filtro-trilha-categoria">'.$optCat.'</select>
+			</div>
+			<div class="col-md-3">
+				<label class="form-label small mb-0">Status</label>
+				<select class="form-select form-select-sm" id="filtro-trilha-ativo">
+					<option value="todos"'.($filtroAtivo === 'todos' ? ' selected' : '').'>Todos</option>
+					<option value="1"'.($filtroAtivo === '1' ? ' selected' : '').'>Ativas</option>
+					<option value="0"'.($filtroAtivo === '0' ? ' selected' : '').'>Inativas</option>
+				</select>
+			</div>
+			<div class="col-md-2">
+				<button type="button" class="btn btn-sm btn-primary w-100" id="btn-filtrar-trilhas">Filtrar</button>
+			</div>
+		</div>';
+
+		$itens = '<button type="button" class="btn btn-success mb-2" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Nova Trilha</button>'.$filtros;
 
 		//QUANTIDADE TOTAL DE REGISTROS
-		$quantidadeTotal = EntityTrilhas::getTrilha('id_admin = ' . (int)$id_admin,null,null,'COUNT(*) as qtd')->fetchObject()->qtd;
+		$quantidadeTotal = EntityTrilhas::getTrilha($where,null,null,'COUNT(*) as qtd')->fetchObject()->qtd;
 
 		//PAGINA ATUAL
-		$queryParams = $request->getPostVars();
 		$paginaAtual = $queryParams['page'] ?? 1;
 
 		//INSTANCIA DE PAGINAÇÃO
@@ -46,9 +90,12 @@ class Trilhas extends Page{
 		$innerJoin = 'INNER JOIN categorias_curso ON trilhas.id_categoria = categorias_curso.id';
 
 		$fields = 'trilhas.id,trilhas.img, trilhas.nome as trilha, categorias_curso.nome as categoria, trilhas.carga_h';
+		if (EntityTrilhas::temColunaAtivo()) {
+			$fields .= ', trilhas.ativo';
+		}
 
 		//RESULTADOS DA PAGINA
-		$results = EntityTrilhas::getTrilha('trilhas.id_admin = ' . (int)$id_admin, 'id DESC', $obPagination->getLimit(),$fields,$innerJoin);
+		$results = EntityTrilhas::getTrilha($where, 'trilhas.id DESC', $obPagination->getLimit(),$fields,$innerJoin);
 
 // Defina a base da URL uma única vez fora do loop
 $caminhoImg = URL . '/uploads/img/site/curso/';
@@ -61,6 +108,13 @@ while ($obDados = $results->fetchObject(EntityTrilhas::class)) {
                 ? $caminhoImg . $obDados->img 
                 : $caminhoImg . 'sem-foto.png';
 
+	$badgeAtivo = '';
+	if (EntityTrilhas::temColunaAtivo()) {
+		$badgeAtivo = ((int)($obDados->ativo ?? 1) === 1)
+			? '<span class="badge bg-success">Ativa</span>'
+			: '<span class="badge bg-secondary">Inativa</span>';
+	}
+
     $itens .= '<tr>
                 <td>
                     <img src="' . $imgExibe . '" alt="Capa da Trilha" style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px;">
@@ -68,6 +122,7 @@ while ($obDados = $results->fetchObject(EntityTrilhas::class)) {
 			<td>'.$obDados->trilha.'</td>
 			<td>'.$obDados->categoria.'</td>
 			<td>'.$obDados->carga_h.'</td>
+			<td>'.$badgeAtivo.'</td>
 			<td>
 			<div class="dropdown">
 			<button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -97,13 +152,37 @@ while ($obDados = $results->fetchObject(EntityTrilhas::class)) {
 		<th>Nome</th>
 		<th>Categoria</th>
 		<th>Carga Horária</th>
+		<th>Status</th>
 		<th>Ações</th>
 		</tr>
 		</thead>
 		<tbody>'.$itens.'</tbody>
 		</table>
 		</div>
-		</div>';
+		</div>
+		<script>
+		(function(){
+			if (window.__trilhasFiltroBound) return;
+			window.__trilhasFiltroBound = true;
+			$(document).on("click", "#btn-filtrar-trilhas", function(){
+				if (typeof listagem === "undefined") return;
+				$.ajax({
+					url: url_base + listagem,
+					method: "POST",
+					dataType: "json",
+					data: {
+						page: 1,
+						busca: $("#filtro-trilha-busca").val() || "",
+						id_categoria: $("#filtro-trilha-categoria").val() || 0,
+						ativo: $("#filtro-trilha-ativo").val() || "todos"
+					}
+				}).done(function(res){
+					if (res && res.itens) $("#listar").html(res.itens);
+					if (res && res.pagination) $("#pagination").html(res.pagination);
+				});
+			});
+		})();
+		</script>';
 
 		//RETORNA
 		return $table;
@@ -264,6 +343,10 @@ $scriptJs = "<script>
         <input type="checkbox" name="ativoSite" value="1" class="form-check-input" ' . (isset($dados['site']) && $dados['site'] == 1 ? 'checked' : '') . '>
         <label class="form-check-label">Ativo no site</label>
     </div>
+             <div class="form-group form-check col-md-6 mt-3">
+        <input type="checkbox" name="ativoTrilha" value="1" class="form-check-input" ' . ((!isset($dados['ativo']) || (int)$dados['ativo'] === 1) ? 'checked' : '') . '>
+        <label class="form-check-label">Ativa para matrícula</label>
+    </div>
             </div>
 		</div>
                 </div>
@@ -323,6 +406,7 @@ public static function setNewTrilha($request){
     $obData->id_admin     = (int)$id_admin; // Limpo de caracteres invisíveis
     $obData->carga_h      = filter_var($postVars['carga_h'] ?? '', FILTER_SANITIZE_SPECIAL_CHARS);
     $obData->site         = isset($postVars['ativoSite']) ? 1 : 0;
+    $obData->ativo        = isset($postVars['ativoTrilha']) ? 1 : 0;
     $obData->valor_mensal = NumeroHelper::moedaEN($valorLimpo) ?: 0.00;
     $obData->img          = $img;
 

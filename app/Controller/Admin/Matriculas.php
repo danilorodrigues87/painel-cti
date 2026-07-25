@@ -234,7 +234,13 @@ while ($obAlunos = $resultsUser->fetchObject(EntityUser::class)) {
 $optSlqUsers .= '</select>';
 
 
-$resultsTrilhas = EntityTrilhas::getTrilha("id_admin = '". $id_admin ."'",'nome ASC');
+$whereTrilhas = "id_admin = '". $id_admin ."'";
+if (EntityTrilhas::temColunaAtivo()) {
+  // Na edição, inclui a trilha atual mesmo se inativa
+  $idTrilhaAtual = (int)($dados['id_trilha'] ?? 0);
+  $whereTrilhas .= ' AND (ativo = 1'.($idTrilhaAtual > 0 ? ' OR id = '.$idTrilhaAtual : '').')';
+}
+$resultsTrilhas = EntityTrilhas::getTrilha($whereTrilhas,'nome ASC');
 
     // Carrega o SELECT
 $optSlqTrilhas = '';

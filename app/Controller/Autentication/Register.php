@@ -7,6 +7,7 @@ use \App\Model\Entity\User;
 use \App\Controller\Admin\Alert;
 use \App\Session\User\Login as SessionUserLogin;
 use \App\Common\Helpers\EmailValidator;
+use \App\Common\Helpers\BrandingHelper;
 
 class Register{
 
@@ -25,7 +26,8 @@ class Register{
 		//RETORNA A PÁGINA COMPLETA
 		return View::render('login/page',[
 			'title' => 'Criar conta',
-			'content' => $content
+			'content' => $content,
+			'favicon_url' => BrandingHelper::urlFaviconCti(),
 		]);
 	}
 

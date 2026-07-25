@@ -39,7 +39,7 @@ class EstoquePdv extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/estoque/pdv', []);
-		return parent::getPanel('PDV', $content, 'Financeiro', $request);
+		return parent::getPanel('PDV', $content, 'vendas', $request);
 	}
 
 	public static function getInfo($request) {

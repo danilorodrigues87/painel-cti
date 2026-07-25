@@ -105,7 +105,7 @@ class LmsEstudoHelper {
 			return ['ok' => false, 'totalMinutes' => 0, 'sessionSeconds' => 0, 'message' => 'Dados inválidos.'];
 		}
 
-		$origens = ['presence', 'youtube', 'private'];
+		$origens = ['presence', 'youtube', 'private', 'bunny'];
 		if (!in_array($origem, $origens, true)) {
 			$origem = 'presence';
 		}

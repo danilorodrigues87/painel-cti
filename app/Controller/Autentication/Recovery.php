@@ -8,6 +8,7 @@ use \App\Session\User\Login as SessionUser;
 use \App\Model\Entity\User;
 use \App\Common\Helpers\TenantHelper; 
 use \App\Common\Communication\Email;
+use \App\Common\Helpers\BrandingHelper;
 
 class Recovery{
 
@@ -26,7 +27,8 @@ class Recovery{
 		//RETORNA A PÁGINA COMPLETA
 		return View::render('login/page',[
 			'title' => 'Recuperar senha',
-			'content' => $content
+			'content' => $content,
+			'favicon_url' => BrandingHelper::urlFaviconCti(),
 		]);
 	}
 

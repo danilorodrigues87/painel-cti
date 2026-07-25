@@ -2,6 +2,8 @@
 
 // INCLUI AS ROTAS
 
+include __DIR__.'/admin/public.php';
+
 include __DIR__.'/admin/home.php';
 
 include __DIR__.'/admin/clientes.php';
@@ -55,3 +57,5 @@ include __DIR__.'/admin/evolution.php';
 include __DIR__.'/admin/whatsapp.php';
 
 include __DIR__.'/admin/ead.php';
+
+include __DIR__.'/admin/social.php';

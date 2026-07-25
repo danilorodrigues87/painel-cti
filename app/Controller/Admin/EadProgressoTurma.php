@@ -29,7 +29,7 @@ class EadProgressoTurma extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/ead/progresso-turma', []);
-		return parent::getPanel('Progresso EAD', $content, 'pedagogico', $request);
+		return parent::getPanel('Progresso EAD', $content, 'portal_ead', $request);
 	}
 
 	public static function getInfo($request) {

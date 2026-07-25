@@ -6,6 +6,7 @@ use App\Utils\View;
 use App\Session\User\Login as SessionUser;
 use App\Model\Entity\User as EntityUser;
 use App\Common\Helpers\UserFotoHelper;
+use App\Common\Helpers\BrandingHelper;
 
 class Page {
 
@@ -26,6 +27,7 @@ class Page {
 			'current_planos'       => $menuAtivo === 'planos' ? 'active' : '',
 			'current_assinaturas'  => $menuAtivo === 'assinaturas' ? 'active' : '',
 			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',
+			'current_portal'       => $menuAtivo === 'portal' ? 'active' : '',
 			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',
 		]);
 
@@ -35,6 +37,8 @@ class Page {
 			'menu'     => $menu,
 			'user'     => $nome,
 			'foto_url' => $fotoUrl,
+			'logo_url' => BrandingHelper::urlLogoCti(),
+			'favicon_url' => BrandingHelper::urlFaviconCti(),
 		]);
 	}
 }

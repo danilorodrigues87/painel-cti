@@ -8,6 +8,7 @@ use \App\Model\Entity\EscolasAssinantes;
 use \App\Controller\Admin\Alert;
 use \App\Session\User\Login as SessionUserLogin;
 use \App\Common\Helpers\MasterGateHelper;
+use \App\Common\Helpers\BrandingHelper;
 
 class Login{
 
@@ -23,15 +24,20 @@ class Login{
 		//STATUS
 		$status = !is_null($errorMessage) ? Alert::getError($errorMessage) : '';
 
+		$logoUrl = BrandingHelper::urlLogoCti();
+		$faviconUrl = BrandingHelper::urlFaviconCti();
+
 		//CONTEUDO DA PAGINA DE LOGIN
 		$content = View::render('login/login',[
 			'status' => $status,
+			'logo_url' => $logoUrl,
 		]);
 
 		//RETORNA A PÁGINA COMPLETA
 		return View::render('login/page',[
 			'title' => 'Login Sistema',
-			'content' => $content
+			'content' => $content,
+			'favicon_url' => $faviconUrl,
 		]);
 	}
 

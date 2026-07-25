@@ -14,6 +14,7 @@ class BrandingHelper {
 	public const DIR_ESCOLAS = '/img/escolas/';
 	public const DIR_MODELO_CERT = '/img/certificado/modelos/';
 	public const DIR_CONQUISTAS = '/img/conquistas/';
+	public const DIR_PORTAL = '/img/portal/';
 	public const MODELO_CERT_PADRAO = 'uploads/img/certificado/modelo_cert.png';
 
 	public static function urlBase(): string {
@@ -21,11 +22,36 @@ class BrandingHelper {
 	}
 
 	public static function urlLogoCti(): string {
-		return self::urlBase().'/'.self::LOGO_CTI;
+		$portal = self::urlLogoPortalAtual();
+		return $portal !== null ? $portal : self::urlBase().'/'.self::LOGO_CTI;
 	}
 
 	public static function urlFaviconCti(): string {
-		return self::urlBase().'/'.self::ICONE_CTI;
+		$portal = self::urlLogoPortalAtual();
+		return $portal !== null ? $portal : self::urlBase().'/'.self::ICONE_CTI;
+	}
+
+	/** Logo enviada no Master (Portal do aluno), se existir. */
+	public static function urlLogoPortalAtual(): ?string {
+		static $cache = false;
+		static $url = null;
+		if ($cache !== false) {
+			return $url;
+		}
+		$cache = true;
+		try {
+			if (!class_exists(\App\Model\Entity\PortalAlunoBranding::class)) {
+				return null;
+			}
+			if (!\App\Model\Entity\PortalAlunoBranding::tabelasExistem()) {
+				return null;
+			}
+			$row = \App\Model\Entity\PortalAlunoBranding::get();
+			$url = self::urlPortalLogo($row->logo ?? null);
+		} catch (\Throwable $e) {
+			$url = null;
+		}
+		return $url;
 	}
 
 	public static function urlModeloCertPadrao(): string {
@@ -118,6 +144,40 @@ class BrandingHelper {
 			return null;
 		}
 		return self::urlBase().'/uploads'.self::DIR_CONQUISTAS.$arquivo;
+	}
+
+	public static function processarUploadPortalLogo(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_PORTAL, $atual, 2 * 1024 * 1024);
+	}
+
+	public static function processarUploadPortalLoginHero(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_PORTAL, $atual, 5 * 1024 * 1024);
+	}
+
+	/** URL pública da logo do portal do aluno; null se inválido/ausente. */
+	public static function urlPortalLogo(?string $arquivo): ?string {
+		return self::urlPortalArquivo($arquivo);
+	}
+
+	/** URL pública do fundo do login do portal; null se inválido/ausente. */
+	public static function urlPortalLoginHero(?string $arquivo): ?string {
+		return self::urlPortalArquivo($arquivo);
+	}
+
+	private static function urlPortalArquivo(?string $arquivo): ?string {
+		$arquivo = trim((string)$arquivo);
+		if ($arquivo === '' || strpos($arquivo, '..') !== false || strpos($arquivo, '/') !== false || strpos($arquivo, '\\') !== false) {
+			return null;
+		}
+		$raiz = realpath(__DIR__.'/../../../');
+		if ($raiz === false) {
+			return null;
+		}
+		$fs = $raiz.DIRECTORY_SEPARATOR.'uploads'.str_replace('/', DIRECTORY_SEPARATOR, self::DIR_PORTAL).$arquivo;
+		if (!is_file($fs)) {
+			return null;
+		}
+		return self::urlBase().'/uploads'.self::DIR_PORTAL.$arquivo;
 	}
 
 	private static function processarUploadImagem(?array $file, string $dirRelativo, ?string $atual, int $maxBytes): ?string {

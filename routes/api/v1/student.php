@@ -12,6 +12,13 @@ $respond = static function (array $res) {
 };
 
 // Auth (sem JWT)
+$obRouter->get('/api/v1/student/branding', [
+	'middlewares' => $studentMw,
+	function ($request) use ($respond) {
+		return $respond(Student\Branding::get($request));
+	}
+]);
+
 $obRouter->post('/api/v1/student/auth/login', [
 	'middlewares' => $studentMw,
 	function ($request) use ($respond) {
@@ -175,6 +182,13 @@ $obRouter->post('/api/v1/student/study/heartbeat', [
 	}
 ]);
 
+$obRouter->post('/api/v1/student/presence', [
+	'middlewares' => $studentAuth,
+	function ($request) use ($respond) {
+		return $respond(Student\Portal::presence($request));
+	}
+]);
+
 $obRouter->get('/api/v1/student/courses/{courseId}/lessons/{lessonId}/comments', [
 	'middlewares' => $studentAuth,
 	function ($request, $courseId, $lessonId) use ($respond) {
@@ -193,6 +207,27 @@ $obRouter->post('/api/v1/student/courses/{courseId}/lessons/{lessonId}/comments/
 	'middlewares' => $studentAuth,
 	function ($request, $courseId, $lessonId, $commentId) use ($respond) {
 		return $respond(Student\Portal::deleteComment($request, $courseId, $lessonId, $commentId));
+	}
+]);
+
+$obRouter->get('/api/v1/student/courses/{courseId}/lessons/{lessonId}/notes', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId) use ($respond) {
+		return $respond(Student\Portal::getNotes($request, $courseId, $lessonId));
+	}
+]);
+
+$obRouter->put('/api/v1/student/courses/{courseId}/lessons/{lessonId}/notes', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId) use ($respond) {
+		return $respond(Student\Portal::putNotes($request, $courseId, $lessonId));
+	}
+]);
+
+$obRouter->get('/api/v1/student/courses/{courseId}/lessons/{lessonId}/videos/{videoId}/play', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId, $videoId) use ($respond) {
+		return $respond(Student\Portal::playVideo($request, $courseId, $lessonId, $videoId));
 	}
 ]);
 

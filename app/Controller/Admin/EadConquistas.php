@@ -30,7 +30,7 @@ class EadConquistas extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/ead/conquistas', []);
-		return parent::getPanel('Conquistas EAD', $content, 'pedagogico', $request);
+		return parent::getPanel('Conquistas EAD', $content, 'portal_ead', $request);
 	}
 
 	public static function getInfo($request) {

@@ -19,6 +19,12 @@ SHOW TABLES LIKE 'lms_estudo_sessao';
 SHOW TABLES LIKE 'lms_aula_comentarios';
 SHOW TABLES LIKE 'lms_sessao_cota';
 SHOW TABLES LIKE 'agenda_avulso';
+SHOW TABLES LIKE 'lms_ranking_diario';
+SHOW TABLES LIKE 'lms_portal_presenca';
+SHOW TABLES LIKE 'lms_aula_anotacoes';
+SHOW TABLES LIKE 'portal_aluno_branding';
+SHOW COLUMNS FROM escola_integracoes LIKE 'bunny_ativo';
+SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
 
 -- 2) Colunas de fluxo de avaliação
 SHOW COLUMNS FROM lms_atividade_tentativas LIKE 'status';
@@ -26,8 +32,9 @@ SHOW COLUMNS FROM lms_atividade_tentativas LIKE 'ciclo';
 SHOW COLUMNS FROM lms_progresso_aula LIKE 'precisa_revisar';
 SHOW COLUMNS FROM lms_conquistas_def LIKE 'subtitulo';
 SHOW COLUMNS FROM lms_conquistas_def LIKE 'badge_url';
+SHOW COLUMNS FROM lms_conquistas_def LIKE 'raridade';
 
--- 3) Seeds de conquistas (esperado ~100)
+-- 3) Seeds de conquistas (esperado ~100 na v2; ~150 após v3)
 SELECT COUNT(*) AS total_conquistas_def FROM lms_conquistas_def;
 
 -- 4) Cursos publicados por escola (ajuste id_admin se quiser filtrar)

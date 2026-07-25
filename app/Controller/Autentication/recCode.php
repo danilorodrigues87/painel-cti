@@ -6,6 +6,7 @@ use \App\Utils\View;
 use \App\Controller\Admin\Alert;
 use \App\Model\Entity\User; 
 use \App\Common\Communication\Email;
+use \App\Common\Helpers\BrandingHelper;
 
 class recCode{
 
@@ -24,7 +25,8 @@ class recCode{
 		//RETORNA A PÁGINA COMPLETA
 		return View::render('login/page',[
 			'title' => 'Código de Segurança',
-			'content' => $content
+			'content' => $content,
+			'favicon_url' => BrandingHelper::urlFaviconCti(),
 		]);
 	}
 

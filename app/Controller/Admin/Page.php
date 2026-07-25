@@ -9,6 +9,7 @@ use \App\Common\SystemModules;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\ModuleGateHelper;
 use \App\Common\Helpers\UserFotoHelper;
+use \App\Common\Helpers\BrandingHelper;
 
 class Page {
 
@@ -79,6 +80,8 @@ class Page {
 			'company' => $userLogedData['escola']['nome'] ?? '',
 			'banner_impersonate' => $bannerImpersonate,
 			'foto_url' => $fotoUser,
+			'logo_url' => BrandingHelper::urlLogoCti(),
+			'favicon_url' => BrandingHelper::urlFaviconCti(),
 		]);
 	}
 
@@ -208,17 +211,36 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('vendas', $slugsEscola, true)) {
 				$allPermittedModules[] = 'PDV';
 			}
-			// IA Pedagógica: só Diretor + Cursos Online (respeita checklist; não força EAD)
+			// IA Pedagógica / Bunny Stream: só Diretor + Cursos Online (respeita checklist; não força EAD)
 			if (in_array('ead', $slugsEscola, true)
 				&& in_array('Cursos Online', $allPermittedModules, true)) {
 				$allPermittedModules[] = 'IA Pedagógica';
+				$allPermittedModules[] = 'Bunny Stream';
+			}
+			if (in_array('social', $slugsEscola, true)) {
+				if (!in_array('Redes sociais', $allPermittedModules, true)) {
+					$allPermittedModules[] = 'Redes sociais';
+				}
+				if (!in_array('Conexão Meta', $allPermittedModules, true)) {
+					$allPermittedModules[] = 'Conexão Meta';
+				}
 			}
 		}
 
-		// Progresso EAD não é checkbox: tela auxiliar de Alunos, liberada só com Cursos Online
-		if (in_array('Cursos Online', $allPermittedModules, true)
-			&& !in_array('Progresso EAD', $allPermittedModules, true)) {
-			$allPermittedModules[] = 'Progresso EAD';
+		// Progresso EAD / Alunos online / Vitrine: telas auxiliares liberadas com Cursos Online
+		if (in_array('Cursos Online', $allPermittedModules, true)) {
+			if (!in_array('Progresso EAD', $allPermittedModules, true)) {
+				$allPermittedModules[] = 'Progresso EAD';
+			}
+			if (!in_array('Alunos online', $allPermittedModules, true)) {
+				$allPermittedModules[] = 'Alunos online';
+			}
+			if (!in_array('Vitrine', $allPermittedModules, true)) {
+				$allPermittedModules[] = 'Vitrine';
+			}
+			if (!in_array('Vitrine de cursos', $allPermittedModules, true)) {
+				$allPermittedModules[] = 'Vitrine de cursos';
+			}
 		}
 
 		$bloqueada = !empty($userLogedData['usuario']['assinatura_bloqueada']);

@@ -9,7 +9,11 @@ use App\Common\Helpers\LmsXpHelper;
 use App\Common\Helpers\LmsConquistaHelper;
 use App\Common\Helpers\LmsNotificacaoHelper;
 use App\Common\Helpers\LmsEstudoHelper;
+use App\Common\Helpers\LmsPresencaHelper;
 use App\Common\Helpers\LmsComentarioHelper;
+use App\Common\Helpers\LmsAnotacaoHelper;
+use App\Common\Helpers\BunnyStreamHelper;
+use App\Model\Entity\LmsVideo;
 use App\Common\Helpers\UserFotoHelper;
 use App\Common\Helpers\LmsAgendaAcessoHelper;
 use App\Model\Entity\LmsCurso;
@@ -24,6 +28,19 @@ class Portal {
 			'code' => $code,
 			'json' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
 		];
+	}
+
+	/** Resolve aula do conteúdo (tenant criador), não só do tenant do aluno. */
+	private static function aulaDoCurso(LmsCurso $curso, int $lessonId): ?LmsAula {
+		$idOwner = StudentEntitlement::idAdminConteudo($curso);
+		$aula = LmsAula::getByIdAdmin($lessonId, $idOwner);
+		if (!$aula) {
+			$aula = LmsAula::getById($lessonId);
+		}
+		if (!$aula instanceof LmsAula) {
+			return null;
+		}
+		return StudentEntitlement::aulaPertenceCurso($aula, $curso, $idOwner) ? $aula : null;
 	}
 
 	private static function err(string $msg, int $code = 400): array {
@@ -117,9 +134,9 @@ class Portal {
 		$idAdmin = (int)$u->id_admin;
 		$idAluno = (int)$u->id;
 		$out = [];
-		foreach (StudentEntitlement::idsTrilhasMatriculadas($idAluno, $idAdmin) as $idTrilha) {
-			$curso = LmsCurso::getByTrilha($idTrilha, $idAdmin);
-			if ($curso instanceof LmsCurso && (int)$curso->publicado === 1) {
+		foreach (StudentEntitlement::idsCursosEad($idAluno, $idAdmin) as $idCurso) {
+			$curso = LmsCurso::getById((int)$idCurso);
+			if ($curso instanceof LmsCurso && StudentEntitlement::podeAcessarCurso($curso, $idAluno, $idAdmin)) {
 				$out[] = StudentApiMapper::course($curso, $idAluno, $idAdmin, true);
 			}
 		}
@@ -176,23 +193,25 @@ class Portal {
 		if (!$curso) {
 			return self::err('Curso não encontrado ou sem acesso.', 404);
 		}
-		$aula = LmsAula::getByIdAdmin((int)$lessonId, (int)$u->id_admin);
-		if (!$aula || !StudentEntitlement::aulaPertenceCurso($aula, $curso, (int)$u->id_admin)) {
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
 			return self::err('Aula não encontrada.', 404);
 		}
 
-		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, (int)$u->id_admin);
+		$idOwner = StudentEntitlement::idAdminConteudo($curso);
+		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, $idOwner);
 		$progExistente = LmsProgressoAula::getAlunoAula((int)$u->id, (int)$aula->id);
 		$precisaRevisar = $progExistente && (int)($progExistente->precisa_revisar ?? 0) === 1;
 		$unidadeOk = $progExistente && (int)($progExistente->unidade_aprovada ?? 0) === 1;
 		$assistida = $progExistente && !empty($progExistente->concluida_em) && !$precisaRevisar;
-		$semAval = count(\App\Common\Helpers\LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, (int)$u->id_admin)) === 0;
+		$semAval = count(\App\Common\Helpers\LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0;
 		$concluidaOuRevisao = $unidadeOk || ($semAval && $assistida) || $precisaRevisar;
 
+		$idTrilhaAgenda = LmsAgendaAcessoHelper::idTrilhaAgendaAluno((int)$u->id, (int)$u->id_admin);
 		$acesso = LmsAgendaAcessoHelper::avaliarAcessoAula(
 			(int)$u->id,
 			(int)$u->id_admin,
-			(int)$curso->id_trilha,
+			$idTrilhaAgenda,
 			(int)$aula->id,
 			$concluidaOuRevisao,
 			$idsInc
@@ -236,7 +255,7 @@ class Portal {
 		return self::ok([
 			'course' => $coursePayload,
 			'lesson' => $lessonPayload,
-			'accessWindow' => $coursePayload['accessWindow'] ?? LmsAgendaAcessoHelper::accessWindow((int)$u->id, (int)$u->id_admin, (int)$curso->id_trilha),
+			'accessWindow' => $coursePayload['accessWindow'] ?? LmsAgendaAcessoHelper::accessWindow((int)$u->id, (int)$u->id_admin, $idTrilhaAgenda),
 		]);
 	}
 
@@ -246,23 +265,25 @@ class Portal {
 		if (!$curso) {
 			return self::err('Curso não encontrado ou sem acesso.', 404);
 		}
-		$aula = LmsAula::getByIdAdmin((int)$lessonId, (int)$u->id_admin);
-		if (!$aula || !StudentEntitlement::aulaPertenceCurso($aula, $curso, (int)$u->id_admin)) {
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
 			return self::err('Aula não encontrada.', 404);
 		}
 
-		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, (int)$u->id_admin);
+		$idOwner = StudentEntitlement::idAdminConteudo($curso);
+		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, $idOwner);
 		$prog = LmsProgressoAula::getAlunoAula((int)$u->id, (int)$aula->id);
 		$precisaRevisar = $prog && (int)($prog->precisa_revisar ?? 0) === 1;
 		$unidadeOk = $prog && (int)($prog->unidade_aprovada ?? 0) === 1;
 		$assistida = $prog && !empty($prog->concluida_em) && !$precisaRevisar;
-		$semAval = count(\App\Common\Helpers\LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, (int)$u->id_admin)) === 0;
+		$semAval = count(\App\Common\Helpers\LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0;
 		$concluidaOuRevisao = $unidadeOk || ($semAval && $assistida) || $precisaRevisar;
 
+		$idTrilhaAgenda = LmsAgendaAcessoHelper::idTrilhaAgendaAluno((int)$u->id, (int)$u->id_admin);
 		$acesso = LmsAgendaAcessoHelper::avaliarAcessoAula(
 			(int)$u->id,
 			(int)$u->id_admin,
-			(int)$curso->id_trilha,
+			$idTrilhaAgenda,
 			(int)$aula->id,
 			$concluidaOuRevisao,
 			$idsInc
@@ -323,24 +344,12 @@ class Portal {
 
 	public static function accessWindow($request) {
 		$u = self::user($request);
-		$post = $request->getQueryParams() ?: [];
-		$idCurso = (int)($post['courseId'] ?? $post['course_id'] ?? 0);
-		$idTrilha = 0;
-		if ($idCurso > 0) {
-			$curso = StudentEntitlement::cursoDoAluno($idCurso, (int)$u->id, (int)$u->id_admin, false);
-			if ($curso) {
-				$idTrilha = (int)$curso->id_trilha;
-			}
-		}
-		if ($idTrilha <= 0) {
-			$mat = \App\Common\Helpers\AgendaHelper::getMatriculaAtivaAluno((int)$u->id, (int)$u->id_admin);
-			$idTrilha = $mat ? (int)$mat['id_trilha'] : 0;
-		}
+		$idTrilha = LmsAgendaAcessoHelper::idTrilhaAgendaAluno((int)$u->id, (int)$u->id_admin);
 		if ($idTrilha <= 0) {
 			return self::ok([
-				'active' => false,
-				'message' => 'Sem matrícula ativa.',
-				'quotaMax' => 2,
+				'active' => true,
+				'message' => 'Curso EAD sem restrição de agenda.',
+				'quotaMax' => 0,
 				'quotaUsed' => 0,
 				'quotaRemaining' => 0,
 			]);
@@ -437,6 +446,27 @@ class Portal {
 		return self::ok(LmsConquistaHelper::listForApi((int)$u->id_admin, (int)$u->id));
 	}
 
+	/** Presença geral no portal (logado, qualquer página). */
+	public static function presence($request) {
+		$u = self::user($request);
+		$post = $request->getPostVars() ?: [];
+		$path = trim((string)($post['path'] ?? $post['rota'] ?? ''));
+		$idCurso = isset($post['courseId']) ? (int)$post['courseId'] : (isset($post['id_curso']) ? (int)$post['id_curso'] : null);
+		$idAula = isset($post['lessonId']) ? (int)$post['lessonId'] : (isset($post['id_aula']) ? (int)$post['id_aula'] : null);
+		$res = LmsPresencaHelper::ping(
+			(int)$u->id_admin,
+			(int)$u->id,
+			$path,
+			$idCurso,
+			$idAula
+		);
+		if (empty($res['ok'])) {
+			$code = !empty($res['message']) && strpos((string)$res['message'], 'sql') !== false ? 501 : 400;
+			return self::err((string)($res['message'] ?? 'Falha na presença.'), $code);
+		}
+		return self::ok(['ok' => true]);
+	}
+
 	/** Heartbeat de tempo de estudo (player Ascend). */
 	public static function studyHeartbeat($request) {
 		$u = self::user($request);
@@ -449,16 +479,20 @@ class Portal {
 		if ($idAula <= 0) {
 			return self::err('Informe a aula.');
 		}
-		$aula = LmsAula::getByIdAdmin($idAula, (int)$u->id_admin);
-		if (!$aula) {
-			return self::err('Aula não encontrada.', 404);
-		}
 		if ($idCurso > 0) {
 			$curso = StudentEntitlement::cursoDoAluno((string)$idCurso, (int)$u->id, (int)$u->id_admin, false);
-			if (!$curso || !StudentEntitlement::aulaPertenceCurso($aula, $curso, (int)$u->id_admin)) {
-				return self::err('Aula não pertence ao curso.', 403);
+			if (!$curso) {
+				return self::err('Curso sem acesso.', 403);
+			}
+			$aula = self::aulaDoCurso($curso, $idAula);
+			if (!$aula) {
+				return self::err('Aula não encontrada.', 404);
 			}
 		} else {
+			$aula = LmsAula::getById($idAula);
+			if (!$aula) {
+				return self::err('Aula não encontrada.', 404);
+			}
 			$idCurso = null;
 		}
 
@@ -483,8 +517,8 @@ class Portal {
 		if (!$curso) {
 			return self::err('Curso não encontrado ou sem acesso.', 404);
 		}
-		$aula = LmsAula::getByIdAdmin((int)$lessonId, (int)$u->id_admin);
-		if (!$aula || !StudentEntitlement::aulaPertenceCurso($aula, $curso, (int)$u->id_admin)) {
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
 			return self::err('Aula não encontrada.', 404);
 		}
 		if (!LmsComentarioHelper::tabelasExistem()) {
@@ -499,8 +533,8 @@ class Portal {
 		if (!$curso) {
 			return self::err('Curso não encontrado ou sem acesso.', 404);
 		}
-		$aula = LmsAula::getByIdAdmin((int)$lessonId, (int)$u->id_admin);
-		if (!$aula || !StudentEntitlement::aulaPertenceCurso($aula, $curso, (int)$u->id_admin)) {
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
 			return self::err('Aula não encontrada.', 404);
 		}
 		$post = $request->getPostVars() ?: [];
@@ -531,5 +565,85 @@ class Portal {
 			return self::err($res['message'] ?? 'Falha ao excluir.', 400);
 		}
 		return self::ok(['ok' => true]);
+	}
+
+	public static function getNotes($request, $courseId, $lessonId) {
+		$u = self::user($request);
+		$curso = StudentEntitlement::cursoDoAluno($courseId, (int)$u->id, (int)$u->id_admin, !ctype_digit((string)$courseId));
+		if (!$curso) {
+			return self::err('Curso não encontrado ou sem acesso.', 404);
+		}
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
+			return self::err('Aula não encontrada.', 404);
+		}
+		return self::ok(LmsAnotacaoHelper::getForApi((int)$u->id_admin, (int)$u->id, (int)$aula->id));
+	}
+
+	public static function putNotes($request, $courseId, $lessonId) {
+		$u = self::user($request);
+		$curso = StudentEntitlement::cursoDoAluno($courseId, (int)$u->id, (int)$u->id_admin, !ctype_digit((string)$courseId));
+		if (!$curso) {
+			return self::err('Curso não encontrado ou sem acesso.', 404);
+		}
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
+			return self::err('Aula não encontrada.', 404);
+		}
+		$post = $request->getPostVars() ?: [];
+		$texto = (string)($post['text'] ?? $post['texto'] ?? '');
+		$res = LmsAnotacaoHelper::salvar(
+			(int)$u->id_admin,
+			(int)$u->id,
+			(int)$aula->id,
+			(int)$curso->id,
+			$texto
+		);
+		if (empty($res['ok'])) {
+			$code = strpos((string)($res['message'] ?? ''), 'sql') !== false ? 501 : 400;
+			return self::err($res['message'] ?? 'Falha ao salvar anotação.', $code);
+		}
+		return self::ok($res);
+	}
+
+	public static function playVideo($request, $courseId, $lessonId, $videoId) {
+		$u = self::user($request);
+		$curso = StudentEntitlement::cursoDoAluno($courseId, (int)$u->id, (int)$u->id_admin, !ctype_digit((string)$courseId));
+		if (!$curso) {
+			return self::err('Curso não encontrado ou sem acesso.', 404);
+		}
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
+			return self::err('Aula não encontrada.', 404);
+		}
+		$idOwner = StudentEntitlement::idAdminConteudo($curso);
+		$v = LmsVideo::getByIdAdmin((int)$videoId, $idOwner);
+		if (!$v || (int)$v->id_aula !== (int)$aula->id) {
+			return self::err('Vídeo não encontrado.', 404);
+		}
+		if (($v->provider ?? '') !== 'bunny' || empty($v->bunny_video_id)) {
+			return self::err('Vídeo Bunny indisponível.', 404);
+		}
+		if (($v->bunny_status ?? '') !== 'ready') {
+			BunnyStreamHelper::sincronizarStatusVideo($v, $idOwner);
+			$v = LmsVideo::getByIdAdmin((int)$videoId, $idOwner) ?: $v;
+		}
+		if (($v->bunny_status ?? '') !== 'ready') {
+			return self::err(
+				(($v->bunny_status ?? '') === 'error')
+					? 'Vídeo Bunny com erro no encode. Reenvie no painel.'
+					: 'Vídeo Bunny ainda processando. Tente em instantes.',
+				409
+			);
+		}
+		$play = BunnyStreamHelper::urlPlayback($idOwner, (string)$v->bunny_video_id, 7200);
+		if (empty($play['ok'])) {
+			return self::err($play['message'] ?? 'Falha ao assinar playback.', 501);
+		}
+		return self::ok([
+			'playbackUrl' => $play['playbackUrl'],
+			'expiresAt' => (int)$play['expiresAt'],
+			'provider' => 'bunny',
+		]);
 	}
 }

@@ -15,7 +15,7 @@ use PDO;
 
 class AgendaLaboratorio extends Page {
 
-	private static $dias = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb'];
+	private static $dias = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado'];
 
 	private static function garantirLabPadrao($id_admin) {
 		$total = (int)Laboratorios::getLabs('id_admin = '.(int)$id_admin, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
@@ -202,7 +202,7 @@ class AgendaLaboratorio extends Page {
 		$diasOpt = '';
 		for($d = 1; $d <= 6; $d++){
 			$sel = ($dia_semana == $d) ? 'selected' : '';
-			$diasOpt .= '<option '.$sel.' value="'.$d.'">'.self::$dias[$d].'-feira</option>';
+			$diasOpt .= '<option '.$sel.' value="'.$d.'">'.self::$dias[$d].'</option>';
 		}
 
 		$form = '<form id="form" method="POST">
@@ -297,31 +297,42 @@ class AgendaLaboratorio extends Page {
 			return;
 		}
 
-		$dup = AgendaPlano::getPlanos(
-			'id_aluno = '.$idAluno.' AND id_horario = '.$idHorario.' AND ativo = 1',
-			null, 1, 'id'
-		)->fetch(PDO::FETCH_ASSOC);
-		if($dup){
+		$existente = AgendaPlano::getPlanos(
+			'id_admin = '.(int)$id_admin.' AND id_aluno = '.$idAluno.' AND id_horario = '.$idHorario,
+			'id DESC',
+			1
+		)->fetchObject(AgendaPlano::class);
+
+		if ($existente instanceof AgendaPlano && (int)$existente->ativo === 1) {
 			echo 'Este aluno já está neste horário.';
 			return;
 		}
 
 		$cap = AgendaHelper::getCapacidadeHorario($idHorario);
 		$ocup = AgendaHelper::contarPlanosHorario($idHorario);
-		if($ocup >= $cap){
+		if ($ocup >= $cap) {
 			echo 'Não há vagas disponíveis neste horário.';
 			return;
 		}
 
-		$ob = new AgendaPlano;
-		$ob->id_admin = $id_admin;
-		$ob->matricula_id = (int)$matricula['id'];
-		$ob->id_aluno = $idAluno;
-		$ob->id_trilha = $idTrilha;
-		$ob->id_horario = $idHorario;
-		$ob->dia_semana = $diaSemana;
-		$ob->data_inicio = date('Y-m-d');
-		$ob->cadastrar();
+		if ($existente instanceof AgendaPlano) {
+			$existente->reativar([
+				'matricula_id' => (int)$matricula['id'],
+				'id_trilha' => $idTrilha,
+				'dia_semana' => $diaSemana,
+				'data_inicio' => date('Y-m-d'),
+			]);
+		} else {
+			$ob = new AgendaPlano;
+			$ob->id_admin = $id_admin;
+			$ob->matricula_id = (int)$matricula['id'];
+			$ob->id_aluno = $idAluno;
+			$ob->id_trilha = $idTrilha;
+			$ob->id_horario = $idHorario;
+			$ob->dia_semana = $diaSemana;
+			$ob->data_inicio = date('Y-m-d');
+			$ob->cadastrar();
+		}
 
 		AgendaHelper::recalcularVagasHorario($idHorario);
 		echo 'salvo';
