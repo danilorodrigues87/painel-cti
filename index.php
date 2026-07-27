@@ -23,9 +23,6 @@ if (stripos($uri, '/api/v1/student') !== false) {
 	}
 }
 
-//inclde para testes
-//include __DIR__.'/testes.php';
-
 $obRouter = new Router(URL);
 
 //INCLUI AS ROTAS DO PAINEL

@@ -14,3 +14,4 @@ Regras rápidas:
 - Não criar commits Git sem pedido explícito do usuário.
 - Controllers/Entities com mesmo nome: usar alias EntityX.
 - Comunicação em português, respostas diretas.
+- Scripts temporários de teste (`_test_*.php`, `testes.php`, includes de debug no `index.php`, dumps na raiz): **apagar ao terminar o diagnóstico**. Não deixar gambiarras no código final.

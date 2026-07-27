@@ -34,8 +34,8 @@ class Router{
 		//Informações da URL atual
 		$parseUrl = parse_url($this->url);
 		
-		//Define o prefixo
-		$this->prefix = $parseUrl['path'] ?? '';
+		//Define o prefixo (sem barra final — getUri também normaliza assim)
+		$this->prefix = rtrim((string)($parseUrl['path'] ?? ''), '/');
 	}
 
 	//Adiciona uma rota na classe
@@ -70,8 +70,11 @@ class Router{
 			$params['variables'] = array_merge($params['variables'], $matches[1]);
 		}
 
-		//REMOVE BARRA NO FINAL DA ROTA
+		//REMOVE BARRA NO FINAL DA ROTA (mantém "/" para a home/login)
 		$route = rtrim($route,'/');
+		if ($route === '') {
+			$route = '/';
+		}
 
 		//PADRÃO DE VALIDAÇÃO DA URL
 		$patternRoute = '/^'.str_replace('/', '\/', $route).'$/';
