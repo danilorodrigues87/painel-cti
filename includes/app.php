@@ -26,18 +26,32 @@ $detectRequestUrl = function(){
 	return rtrim($scheme.'://'.$host.$scriptDir, '/');
 };
 
-$envUrl = getenv('URL') ?: '';
+$envUrl = rtrim((string)(getenv('URL') ?: ''), '/');
 $requestUrl = $detectRequestUrl();
 $envHost = parse_url($envUrl, PHP_URL_HOST);
 $requestHost = $_SERVER['HTTP_HOST'] ?? '';
+$envPath = rtrim((string)(parse_url($envUrl, PHP_URL_PATH) ?? ''), '/');
+$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+if($scriptDir === '/' || $scriptDir === '.'){
+	$scriptDir = '';
+}
+$scriptPath = rtrim($scriptDir, '/');
 
-// Em ambiente local, prioriza a URL real da requisição
-$appUrl = ($envHost && $requestHost && $envHost !== $requestHost)
-	? $requestUrl
-	: ($envUrl ?: $requestUrl);
+// Host do .env diferente do request (ex.: localhost vs 127.0.0.1) → URL real
+// Path do .env diferente da pasta do index.php → path real (evita 404 em produção)
+if ($envHost && $requestHost && strcasecmp((string)$envHost, (string)$requestHost) !== 0) {
+	$appUrl = $requestUrl;
+} elseif ($envUrl !== '' && $envPath === $scriptPath) {
+	$appUrl = $envUrl;
+} elseif ($envHost) {
+	$scheme = parse_url($envUrl, PHP_URL_SCHEME) ?: (($requestUrl !== '' && str_starts_with($requestUrl, 'https')) ? 'https' : 'http');
+	$appUrl = rtrim($scheme.'://'.$envHost.$scriptPath, '/');
+} else {
+	$appUrl = $requestUrl;
+}
 
-//DEFINE A CONSTANTE DE URL
-define('URL', $appUrl);
+//DEFINE A CONSTANTE DE URL (sem barra final)
+define('URL', rtrim($appUrl, '/'));
 define('SITE', getenv('SITE'));
 define('TIMEZONE', getenv('TIMEZONE'));
 date_default_timezone_set(TIMEZONE);

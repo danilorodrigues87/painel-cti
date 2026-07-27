@@ -6,11 +6,12 @@ use App\Common\Environment;
 
 /**
  * CORS para o portal Ascend (API aluno).
- * Em local, sempre ecoa o Origin (evita "Failed to fetch" / CORS error).
+ * Headers e preflight ficam aqui — não no index.php.
  */
 class CorsStudent {
 
-	public function handle($request, $next) {
+	/** Aplica headers CORS (rotas OK e respostas de erro do Router). */
+	public static function applyHeaders(): void {
 		$origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
 		$allowedRaw = (string)(Environment::get('STUDENT_CORS_ORIGINS')
 			?: 'http://localhost:8080,http://127.0.0.1:8080,http://localhost:8081,http://127.0.0.1:8081');
@@ -24,8 +25,7 @@ class CorsStudent {
 		} elseif (self::isLocalDevOrigin($origin)) {
 			$allow = true;
 		} else {
-			// Ainda assim ecoa Origin se a requisição veio do portal (JWT protege a API)
-			// — evita bloqueio por lista desatualizada no .env
+			// Ecoa Origin (JWT protege a API) — evita bloqueio por lista desatualizada no .env
 			$allow = true;
 		}
 
@@ -44,6 +44,14 @@ class CorsStudent {
 		header('Access-Control-Expose-Headers: Content-Type, Authorization');
 		header('Access-Control-Max-Age: 86400');
 		header('Access-Control-Allow-Private-Network: true');
+	}
+
+	public static function isStudentApiUri(string $uri): bool {
+		return str_starts_with('/'.ltrim($uri, '/'), '/api/v1/student');
+	}
+
+	public function handle($request, $next) {
+		self::applyHeaders();
 
 		if (strtoupper($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
 			http_response_code(204);

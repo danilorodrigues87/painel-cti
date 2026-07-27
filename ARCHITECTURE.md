@@ -42,7 +42,11 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 | Sessão | `App\Session\User\Login` — chave `$_SESSION['usuario-mvc-1']` |
 | Front | Bootstrap 5, jQuery, SweetAlert2, Font Awesome |
 
-**Constante `URL`:** detectada em `includes/app.php` (prioriza host da requisição em local se diferir do `.env`).
+**Constante `URL`:** em `includes/app.php` — host/path alinhados ao request e à pasta do `index.php` (`SCRIPT_NAME`). Sem barra final. O `.env` `URL` deve ser a URL pública (HTTPS em produção); path errado no `.env` é corrigido pelo path real do deploy.
+
+**Router:** o prefixo de rotas vem de `dirname(SCRIPT_NAME)` (onde o app está montado), **não** do path do `.env`. Assim local (`/pjt/painel-cti`) e produção (raiz ou subpasta) resolvem `/`, `/privacidade`, `/painel` sem gambiarra.
+
+**CORS API aluno:** só em `CorsStudent` + `Router` (preflight OPTIONS e 404/405 com headers). **Não** colocar CORS no `index.php`.
 
 **AJAX obrigatório:** sempre prefixar com `url_base` (`resources/js/url-base.js`). Sem isso, em subpastas XAMPP as rotas quebram.
 

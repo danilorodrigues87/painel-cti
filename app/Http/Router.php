@@ -6,13 +6,14 @@ use \Closure;
 use \Exception;
 use \ReflectionFunction;
 use \App\Http\Middleware\Queue as MiddlewareQueue;
+use \App\Http\Middleware\CorsStudent;
 use \App\Utils\View;
 
 
 class Router{
 
-	private $url = ''; // URL completa da raiz do projeto
-	private $prefix = ''; // Prefixo de todas as rotas
+	private $url = ''; // URL pública da raiz do projeto (links / redirects)
+	private $prefix = ''; // Prefixo de montagem (pasta onde o index.php vive)
 	private $routes = []; // Index de todas rotas
 	private $request; // Instancia de Request
 	private $contentType = 'text/html'; // ContentType padrão
@@ -20,7 +21,7 @@ class Router{
 	// Metodo inicia as classes
 	public function __construct($url){
 		$this->request = new Request($this);
-		$this->url = $url;
+		$this->url = rtrim((string)$url, '/');
 		$this->setPrefix();
 	}
 
@@ -29,13 +30,16 @@ class Router{
 		$this->contentType = $contentType;
 	}
 
-	//define o prefixo das rotas
+	/**
+	 * Prefixo = pasta real do deploy (SCRIPT_NAME), não o path do .env.
+	 * Local: /pjt/painel-cti | Produção na raiz: (vazio) | Subpasta no servidor: /app
+	 */
 	private function setPrefix(){
-		//Informações da URL atual
-		$parseUrl = parse_url($this->url);
-		
-		//Define o prefixo (sem barra final — getUri também normaliza assim)
-		$this->prefix = rtrim((string)($parseUrl['path'] ?? ''), '/');
+		$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
+		if ($scriptDir === '/' || $scriptDir === '.') {
+			$scriptDir = '';
+		}
+		$this->prefix = rtrim($scriptDir, '/');
 	}
 
 	//Adiciona uma rota na classe
@@ -111,12 +115,11 @@ class Router{
 	public function getUri(){
 		// URI da request (ex.: /pjt/painel-cti/privacidade)
 		$uri = $this->request->getUri();
-		// Prefixo sem barra final — evita explode falhar quando URL do .env termina com /
-		$prefix = rtrim((string)$this->prefix, '/');
+		$prefix = $this->prefix;
 		if ($prefix !== '' && strpos($uri, $prefix) === 0) {
 			$uri = substr($uri, strlen($prefix)) ?: '/';
 		}
-		// Sempre com barra inicial (rotas são cadastradas como /privacidade, /painel, …)
+		// Sempre com barra inicial (rotas cadastradas como /privacidade, /painel, …)
 		$uri = '/'.ltrim($uri, '/');
 		$uri = rtrim($uri, '/');
 		return $uri === '' ? '/' : $uri;
@@ -174,7 +177,15 @@ class Router{
 	//EXECUTA A ROTA ATUAL
 	public function run(){
 		try {
-			
+			$uri = $this->getUri();
+
+			// Preflight da API aluno: CORS sem depender de rota cadastrada
+			if (strtoupper($this->request->getHttpMethod()) === 'OPTIONS'
+				&& CorsStudent::isStudentApiUri($uri)) {
+				CorsStudent::applyHeaders();
+				return new Response(204, '', 'application/json');
+			}
+
 			//OBTEM A ROTA ATUAL
 			$route = $this->getRoute();
 		
@@ -198,7 +209,16 @@ class Router{
 			return (new MiddlewareQueue($route['middlewares'],$route['controller'],$args))->next($this->request);
 
 		} catch (Exception $e) {
-			return new Response($e->getCode(),$this->getErrorMessage($e->getMessage()),$this->contentType);
+			// 404/405 da API aluno ainda precisam de CORS (middleware não chega a rodar)
+			if (CorsStudent::isStudentApiUri($this->getUri())) {
+				CorsStudent::applyHeaders();
+				$this->contentType = 'application/json';
+			}
+			$code = (int)$e->getCode();
+			if ($code < 400 || $code > 599) {
+				$code = 500;
+			}
+			return new Response($code,$this->getErrorMessage($e->getMessage()),$this->contentType);
 		}
 	}
 
@@ -224,11 +244,8 @@ class Router{
 
 	//REDIRECIONA A URL
 	public function redirect($route){
-		//URL
-		$url = $this->url.$route;
-	
-		//EXECUTA O DIRECT
-		header('location: '.$url);
+		$url = $this->url.'/'.ltrim((string)$route, '/');
+		header('Location: '.$url);
 		exit;
 	}
 
