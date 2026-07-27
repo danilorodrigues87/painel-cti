@@ -22,6 +22,7 @@ class Page {
     if($termosAceito){
         $defaultModules[] = "Dashboard";
         $defaultModules[] = "Perfil";
+        $defaultModules[] = "Ajuda";
     }
 
     return $defaultModules;
@@ -174,7 +175,14 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 		$userLogedData = SessionUser::getUserLogedData();
 
-		$termosAceito = User::getUser('id = ' . (int)$userLogedData['usuario']['id'],$order = null,$limit = null,'termos_uso')->fetchObject()->termos_uso;
+		$termosAceito = TermosDeUso::usuarioAceitouVersaoAtual(
+			User::getUser(
+				'id = '.(int)$userLogedData['usuario']['id'],
+				null,
+				null,
+				'termos_uso'.(\App\Model\Entity\User::temColunasTermosVersao() ? ', termos_versao' : '')
+			)->fetchObject()
+		);
 
 		$permittedModules = array();
 
@@ -217,14 +225,13 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 				$allPermittedModules[] = 'IA Pedagógica';
 				$allPermittedModules[] = 'Bunny Stream';
 			}
-			if (in_array('social', $slugsEscola, true)) {
-				if (!in_array('Redes sociais', $allPermittedModules, true)) {
-					$allPermittedModules[] = 'Redes sociais';
-				}
-				if (!in_array('Conexão Meta', $allPermittedModules, true)) {
-					$allPermittedModules[] = 'Conexão Meta';
-				}
-			}
+		}
+
+		// Conexão Meta (config): só aparece se já tem "Redes sociais" no checklist + é Diretor
+		if (($userLogedData['usuario']['nivel'] ?? '') === 'Diretor'
+			&& in_array('Redes sociais', $allPermittedModules, true)
+			&& !in_array('Conexão Meta', $allPermittedModules, true)) {
+			$allPermittedModules[] = 'Conexão Meta';
 		}
 
 		// Progresso EAD / Alunos online / Vitrine: telas auxiliares liberadas com Cursos Online

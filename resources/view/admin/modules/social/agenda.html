@@ -5,7 +5,7 @@
 </ol>
 
 <div id="alert-sql-social" class="alert alert-warning d-none">
-	Execute <code>database/social_posts.sql</code> e <code>database/escola_integracoes_meta.sql</code> no phpMyAdmin.
+	Execute <code>database/social_posts.sql</code>, <code>database/social_posts_formato.sql</code> e <code>database/escola_integracoes_meta.sql</code> no phpMyAdmin.
 </div>
 <div id="alert-meta-off" class="alert alert-info d-none">
 	Conecte Facebook/Instagram em <a href="{{URL}}/painel/config/social">Configurações → Redes sociais</a> antes de publicar.
@@ -19,7 +19,7 @@
 	<button type="button" class="btn btn-outline-dark btn-sm" id="btn-worker">Rodar worker</button>
 	<a class="btn btn-outline-secondary btn-sm" href="{{URL}}/painel/config/social">Config Meta</a>
 </div>
-<p class="small text-muted mb-3">Fuso: America/Sao_Paulo · Fase 1: imagem (JPG/PNG). Publicação pelo cron <code>worker/social.php</code>.</p>
+<p class="small text-muted mb-3">Fuso: America/Sao_Paulo · Formatos: Feed, Story, Reel e Carrossel. Story/Reel publicam só no Instagram. Cron: <code>worker/social.php</code>.</p>
 
 <div class="row g-3">
 	<div class="col-xl-8">
@@ -57,43 +57,54 @@
 	<div class="modal-dialog modal-lg">
 		<div class="modal-content">
 			<div class="modal-header">
-				<h5 class="modal-title">Agendar post</h5>
+				<h5 class="modal-title">Agendar publicação</h5>
 				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
 			</div>
 			<div class="modal-body">
 				<input type="hidden" id="post_id" value="">
-				<div class="mb-2">
-					<label class="form-label">Canais</label>
-					<select class="form-select" id="post_canais">
-						<option value="ambos">Facebook + Instagram</option>
-						<option value="facebook">Só Facebook</option>
-						<option value="instagram">Só Instagram</option>
-					</select>
+				<div class="row g-2 mb-2">
+					<div class="col-md-6">
+						<label class="form-label">Formato</label>
+						<select class="form-select" id="post_formato">
+							<option value="feed">Feed (imagem)</option>
+							<option value="story">Story (IG)</option>
+							<option value="reel">Reel (IG · vídeo)</option>
+							<option value="carousel">Carrossel (2–10)</option>
+						</select>
+					</div>
+					<div class="col-md-6">
+						<label class="form-label">Canais</label>
+						<select class="form-select" id="post_canais">
+							<option value="ambos">Facebook + Instagram</option>
+							<option value="facebook">Só Facebook</option>
+							<option value="instagram">Só Instagram</option>
+						</select>
+					</div>
+				</div>
+				<div id="aviso-formato-ig" class="alert alert-warning small py-2 d-none">
+					Story e Reel publicam apenas no Instagram. O canal Facebook será ignorado.
 				</div>
 				<div class="mb-2">
 					<label class="form-label">Legenda</label>
-					<textarea class="form-control" id="post_caption" rows="4" maxlength="2200"></textarea>
-					<div class="form-text"><span id="caption_count">0</span>/2200</div>
+					<textarea class="form-control" id="post_caption" rows="3" maxlength="2200"></textarea>
+					<div class="form-text"><span id="caption_count">0</span>/2200 · Stories não usam legenda na API.</div>
 				</div>
 				<div class="mb-2">
 					<label class="form-label">Data/hora</label>
 					<input type="datetime-local" class="form-control" id="post_agendado">
 				</div>
 				<div class="mb-2">
-					<label class="form-label">Horários extras (lote — um por linha, mesmo formato)</label>
-					<textarea class="form-control" id="post_lote" rows="3" placeholder="2026-07-28T10:00&#10;2026-07-30T18:00"></textarea>
-					<div class="form-text">Cria cópias do mesmo post nos horários extras (mídia duplicada no servidor).</div>
+					<label class="form-label">Horários extras (lote — um por linha)</label>
+					<textarea class="form-control" id="post_lote" rows="2" placeholder="2026-07-28T10:00"></textarea>
 				</div>
 				<div class="mb-2">
-					<label class="form-label">Imagem</label>
-					<input type="file" class="form-control" id="post_arquivo" accept="image/jpeg,image/png,image/webp">
-					<input type="hidden" id="post_path" value="">
-					<div id="post_preview" class="mt-2 d-none">
-						<img src="" alt="" class="img-fluid rounded border" style="max-height:180px;">
-					</div>
+					<label class="form-label" id="label-arquivo">Mídia</label>
+					<input type="file" class="form-control" id="post_arquivo" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple>
+					<div class="form-text" id="hint-midia">Feed: 1 imagem. Story: 1 imagem ou vídeo. Reel: 1 vídeo. Carrossel: 2–10 arquivos.</div>
+					<div id="post_preview_list" class="d-flex flex-wrap gap-2 mt-2"></div>
 				</div>
 				<div class="mb-0">
-					<label class="form-label">Ou URL HTTPS pública (avançado)</label>
+					<label class="form-label">Ou URL HTTPS (avançado, 1 mídia)</label>
 					<input type="url" class="form-control" id="post_url" placeholder="https://...">
 				</div>
 			</div>
@@ -105,4 +116,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/social-agenda.js?v=20260725a"></script>
+<script src="{{URL}}/resources/js/social-agenda.js?v=20260727a"></script>

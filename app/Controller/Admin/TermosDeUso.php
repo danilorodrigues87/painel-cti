@@ -1,47 +1,62 @@
 <?php 
 
 namespace App\Controller\Admin;
+
 use \App\Utils\View;
 use \App\Model\Entity\User as EntityUser;
 use \App\Session\User\Login as SessionUser;
 use \App\Model\Entity\EstadoCidades;
 
-class TermosDeUso extends Page{
+class TermosDeUso extends Page {
 
-	//RETORNA O FORMULARIO
+	/** Versão vigente do termo (alterar força novo aceite quando colunas SQL existem). */
+	public const VERSAO = '2026-07';
+	public const DATA_VERSAO = '27/07/2026';
+
 	public static function index($request){
-		//CONTEÚDO DE FORMULÁRIO
-		$content = View::render('admin/modules/termos_uso/index',[
-			'termos' => self::getTermos()
+		$content = View::render('admin/modules/termos_uso/index', [
+			'termos' => self::getTermosHtml()
 		]);
-
-		//RETORNA A PÁGINA COMPLETA
-		/**
-         * TITULO DA PAGINA
-         * CONTEUDO
-         * CURRENTSESSION SESSÃO ATUAL
-         * REQUEST SE NESCESSÁRIO
-         */
-		return parent::getPanel('Termos de Uso',$content,'Termos de Uso');
+		return parent::getPanel('Termos de Uso', $content, 'Termos de Uso', $request);
 	}
 
-	
+	public static function usuarioAceitouVersaoAtual(?object $userRow = null): bool {
+		if ($userRow === null) {
+			$session = SessionUser::getUserLogedData();
+			$id = (int)($session['usuario']['id'] ?? 0);
+			if ($id <= 0) {
+				return false;
+			}
+			$campos = 'termos_uso';
+			if (EntityUser::temColunasTermosVersao()) {
+				$campos .= ', termos_versao';
+			}
+			$userRow = EntityUser::getUser('id = '.$id, null, null, $campos)->fetchObject();
+		}
+		if (!$userRow || (int)($userRow->termos_uso ?? 0) !== 1) {
+			return false;
+		}
+		if (!EntityUser::temColunasTermosVersao()) {
+			return true;
+		}
+		$v = trim((string)($userRow->termos_versao ?? ''));
+		// Aceite antigo sem versão: exige reaceitar a versão atual
+		return $v === self::VERSAO;
+	}
 
-	public static function getTermos(){
-
+	public static function getTermosHtml(): string {
 		$userLogedData = SessionUser::getUserLogedData();
-
 		$dadosEscola = $userLogedData['escola'];
-
 		$id_user = (int)$userLogedData['usuario']['id'];
-
 		$dadosUser = (array) EntityUser::getUserById($id_user);
 
-		$termosAceito = $dadosUser['termos_uso'];
+		$campos = 'termos_uso';
+		if (EntityUser::temColunasTermosVersao()) {
+			$campos .= ', termos_aceito_em, termos_versao';
+		}
+		$rowTermos = EntityUser::getUser('id = '.$id_user, null, null, $campos)->fetchObject();
+		$aceitouAtual = self::usuarioAceitouVersaoAtual($rowTermos);
 
-		$checkDisabled = ($termosAceito) ? 'checked disabled' : '';
-
-		// Preferência: endereço do usuário; se vazio, usa cidade/UF da escola
 		$cidadeId = (int)($dadosUser['cidade'] ?? 0);
 		$estadoId = (int)($dadosUser['uf'] ?? 0);
 		if ($cidadeId <= 0) {
@@ -80,70 +95,59 @@ class TermosDeUso extends Page{
 		}
 		$enderecoUser = $partesEndereco ? implode(', ', $partesEndereco) : 'endereço não informado';
 
+		$urlBase = rtrim((string)URL, '/');
+		$escolaNome = htmlspecialchars((string)($dadosEscola['nome'] ?? ''), ENT_QUOTES, 'UTF-8');
 
-		$declaracao = 'Declaro estar ciente e concordar com os termos deste documento, assumindo total responsabilidade pelo uso adequado dos dados dos clientes da escola <b>'.$dadosEscola['nome'].'.</b>';
+		if ($aceitouAtual) {
+			$aceitoEm = !empty($rowTermos->termos_aceito_em)
+				? date('d/m/Y H:i', strtotime((string)$rowTermos->termos_aceito_em))
+				: '—';
+			$versaoAceita = htmlspecialchars((string)($rowTermos->termos_versao ?? self::VERSAO), ENT_QUOTES, 'UTF-8');
+			$blocoStatus = '<div class="alert alert-success">Termo versão <strong>'
+				.$versaoAceita.'</strong> aceito em <strong>'.$aceitoEm.'</strong>.</div>';
+		} else {
+			$blocoStatus = '<div class="form-check my-4">'
+				.'<input onchange="ativaBtn()" class="form-check-input" type="checkbox" id="termo_uso">'
+				.'<label class="form-check-label" for="termo_uso">'
+				.'Declaro estar ciente e concordar com este Termo de Uso e Responsabilidade (versão '
+				.self::VERSAO.'), assumindo responsabilidade pelo uso adequado dos dados tratados no Painel CTI '
+				.'em nome da escola <strong>'.$escolaNome.'</strong>.'
+				.'</label></div>'
+				.'<button disabled onclick="termos()" id="btn-termo" class="btn btn-primary mb-3">Aceitar e continuar</button>';
+		}
 
-		$termo = '
-		<div class="row mt-5">
-		<div class="container col-9">
-		<h2>Termo de Responsabilidade do Funcionário</h2><br>
-
-		<p>
-		Eu, <strong>'.$dadosUser['nome'].'</strong>, inscrito(a) no CPF sob o nº <strong class="mascara-cpf">'.$dadosUser['cpf'].'</strong>, residente e domiciliado(a) em <strong>'.$enderecoUser.'</strong>, funcionário(a) da escola <b>'.$dadosEscola['nome'].'</b> com CNPJ <b class="mascara-cnpj">'.$dadosEscola['cpf_cnpj'].'</b> em que presto serviços e assumo total responsabilidade pelo cadastramento e utilização dos dados pessoais dos clientes nesta plataforma online.
-		</p>
-
-		<h4>1. Dados Pessoais Cadastrados</h4>
-		<p>
-		Comprometo-me a cadastrar apenas os dados pessoais básicos de identificação dos clientes, incluindo nome, documentos de identidade, telefone, email e endereço, conforme autorizado pelos próprios clientes.
-		</p>
-
-		<h4>2. Uso Adequado dos Dados</h4>
-		<p>
-		Comprometo-me a utilizar os dados cadastrados exclusivamente para fins relacionados às atividades da escola <b>'.$dadosEscola['nome'].'.</b>, não compartilhando, divulgando ou utilizando esses dados de forma indevida ou para benefício próprio.
-		</p>
-
-		<h4>3. Proteção e Segurança dos Dados</h4>
-		<p>
-		Comprometo-me a adotar as medidas necessárias para proteger e manter em segurança os dados dos clientes, evitando acessos não autorizados, perdas ou vazamentos de informações.
-		</p>
-
-		<h4>4. Responsabilidade Legal</h4>
-		<p>
-		Estou ciente de que a violação desta responsabilidade poderá resultar em medidas disciplinares, legais e financeiras, conforme estabelecido pelas leis aplicáveis e pela política interna da escola <b>'.$dadosEscola['nome'].'.</b>.
-		</p> 
-		<div class="form-check my-5">
-		<input onchange="ativaBtn()" class="form-check-input" type="checkbox" '.$checkDisabled.' id="termo_uso">
-		<label class="form-check-label" for="termo_uso">
-		'.$declaracao.'
-		</label>
-		</div>
-		<button disabled onclick="termos('.$id_user.')" id="btn-termo" class="btn btn-primary mb-5">Autorizar</button>
-		</div>
-		</div> 
-		';
-
-		return $termo;
-		
+		return View::render('admin/modules/termos_uso/conteudo', [
+			'versao' => self::VERSAO,
+			'data_versao' => self::DATA_VERSAO,
+			'nome' => htmlspecialchars((string)($dadosUser['nome'] ?? ''), ENT_QUOTES, 'UTF-8'),
+			'cpf' => htmlspecialchars((string)($dadosUser['cpf'] ?? ''), ENT_QUOTES, 'UTF-8'),
+			'endereco' => htmlspecialchars($enderecoUser, ENT_QUOTES, 'UTF-8'),
+			'escola_nome' => $escolaNome,
+			'escola_cnpj' => htmlspecialchars((string)($dadosEscola['cpf_cnpj'] ?? ''), ENT_QUOTES, 'UTF-8'),
+			'url_privacidade' => $urlBase.'/privacidade',
+			'url_exclusao' => $urlBase.'/exclusao-de-dados',
+			'bloco_status' => $blocoStatus,
+		]);
 	}
 
 	public static function aceitaTermo($request){
-
-		$id_user = $request->getPostVars()['id_user'];
-
-		//NOVA INSTANCIA
-		$obUsers = new EntityUser;
-		$obUsers->id = $id_user;
-		$obUsers->termos_uso = 1;
-		$obUsers->termoAceito();
-
-		if($obUsers){
-			return true;
-		} else {
-			return 'Erro ao aceitar termos';
+		$session = SessionUser::getUserLogedData();
+		$id = (int)($session['usuario']['id'] ?? 0);
+		if ($id <= 0) {
+			return '0';
 		}
 
+		$obUsers = new EntityUser;
+		$obUsers->id = $id;
+		$obUsers->termos_uso = 1;
+		$obUsers->termos_versao = self::VERSAO;
+		$obUsers->termos_aceito_em = date('Y-m-d H:i:s');
+		$ok = $obUsers->termoAceito();
+
+		if ($ok) {
+			SessionUser::marcarTermosAceitos(self::VERSAO);
+			return '1';
+		}
+		return '0';
 	}
-
-	
-
 }

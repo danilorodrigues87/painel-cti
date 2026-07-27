@@ -138,6 +138,7 @@ class SocialAgenda extends Page {
 			$itens[] = [
 				'id' => (int)$p->id,
 				'canais' => $p->canais,
+				'formato' => (string)($p->formato ?? 'feed'),
 				'caption' => (string)$p->caption,
 				'status' => $p->status,
 				'agendado_em' => $p->agendado_em,
@@ -167,6 +168,20 @@ class SocialAgenda extends Page {
 		if (!in_array($canais, ['facebook', 'instagram', 'ambos'], true)) {
 			$canais = 'ambos';
 		}
+		$formato = (string)($post['formato'] ?? 'feed');
+		if (!in_array($formato, ['feed', 'story', 'reel', 'carousel'], true)) {
+			$formato = 'feed';
+		}
+		if (!SocialPost::temColunaFormato() && $formato !== 'feed') {
+			return self::json([
+				'success' => false,
+				'message' => 'Execute database/social_posts_formato.sql no phpMyAdmin para Story/Reel/Carrossel.',
+			]);
+		}
+		if ($formato === 'story' || $formato === 'reel') {
+			$canais = 'instagram';
+		}
+
 		$agendado = trim((string)($post['agendado_em'] ?? ''));
 		if ($agendado !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/', $agendado)) {
 			return self::json(['success' => false, 'message' => 'Data/hora inválida.']);
@@ -182,11 +197,49 @@ class SocialAgenda extends Page {
 			return self::json(['success' => false, 'message' => 'Informe data/hora para agendar.']);
 		}
 
-		$path = trim((string)($post['path_local'] ?? ''));
-		$urlExt = trim((string)($post['url_externa'] ?? ''));
-		$tipo = trim((string)($post['tipo_midia'] ?? 'image'));
-		if (!in_array($tipo, ['image', 'video'], true)) {
-			$tipo = 'image';
+		// midias: JSON [{path,url_externa,tipo}] ou legado path_local / url_externa único
+		$listaMidias = [];
+		if (!empty($post['midias'])) {
+			$decoded = is_string($post['midias']) ? json_decode((string)$post['midias'], true) : $post['midias'];
+			if (is_array($decoded)) {
+				foreach ($decoded as $row) {
+					if (!is_array($row)) {
+						continue;
+					}
+					$path = trim((string)($row['path'] ?? $row['path_local'] ?? ''));
+					$urlExt = trim((string)($row['url_externa'] ?? $row['url'] ?? ''));
+					$tipo = trim((string)($row['tipo'] ?? 'image'));
+					if (!in_array($tipo, ['image', 'video'], true)) {
+						$tipo = 'image';
+					}
+					if ($path === '' && $urlExt === '') {
+						continue;
+					}
+					$listaMidias[] = ['path' => $path, 'url_externa' => $urlExt, 'tipo' => $tipo];
+				}
+			}
+		}
+		if (!$listaMidias) {
+			$path = trim((string)($post['path_local'] ?? ''));
+			$urlExt = trim((string)($post['url_externa'] ?? ''));
+			$tipo = trim((string)($post['tipo_midia'] ?? 'image'));
+			if (!in_array($tipo, ['image', 'video'], true)) {
+				$tipo = 'image';
+			}
+			if ($path !== '' || $urlExt !== '') {
+				$listaMidias[] = ['path' => $path, 'url_externa' => $urlExt, 'tipo' => $tipo];
+			}
+		}
+
+		$nMid = count($listaMidias);
+		if ($formato === 'carousel' && $nMid > 0 && ($nMid < 2 || $nMid > 10)) {
+			return self::json(['success' => false, 'message' => 'Carrossel exige de 2 a 10 mídias.']);
+		}
+		if ($formato === 'reel' && $nMid > 0 && ($listaMidias[0]['tipo'] ?? '') !== 'video') {
+			return self::json(['success' => false, 'message' => 'Reel exige um vídeo.']);
+		}
+		if ($formato === 'feed' && $nMid > 0 && ($listaMidias[0]['tipo'] ?? '') !== 'image') {
+			return self::json(['success' => false, 'message' => 'Feed exige imagem. Use Reel para vídeo.']);
 		}
 
 		if ($id > 0) {
@@ -202,37 +255,38 @@ class SocialAgenda extends Page {
 
 		$ob->caption = $caption;
 		$ob->canais = $canais;
+		$ob->formato = $formato;
 		$ob->agendado_em = $agendadoSql;
 		$ob->status = $status === 'agendado' ? 'agendado' : 'rascunho';
 		$ob->erro_msg = null;
 		$ob->salvar();
 
-		$midias = SocialPostMidia::listByPost((int)$ob->id, $idAdmin);
-		if ($path !== '' || $urlExt !== '') {
-			if ($midias) {
-				$m = $midias[0];
-				if ($m->path_local && $path !== '' && $m->path_local !== $path) {
+		$existentes = SocialPostMidia::listByPost((int)$ob->id, $idAdmin);
+		if ($listaMidias) {
+			foreach ($existentes as $m) {
+				if (!empty($m->path_local)) {
 					SocialMediaStorage::apagar((string)$m->path_local);
 				}
-			} else {
+				$m->excluir();
+			}
+			foreach ($listaMidias as $ord => $row) {
 				$m = new SocialPostMidia();
 				$m->id_post = (int)$ob->id;
 				$m->id_admin = $idAdmin;
-				$m->ordem = 0;
+				$m->ordem = $ord;
+				$m->tipo = $row['tipo'];
+				if ($row['path'] !== '') {
+					$m->path_local = $row['path'];
+					$m->url_externa = null;
+				} else {
+					$m->url_externa = $row['url_externa'];
+				}
+				$m->salvar();
 			}
-			$m->tipo = $tipo;
-			if ($path !== '') {
-				$m->path_local = $path;
-				$m->url_externa = null;
-			} elseif ($urlExt !== '') {
-				$m->url_externa = $urlExt;
-			}
-			$m->salvar();
-		} elseif (!$midias && $status === 'agendado') {
-			return self::json(['success' => false, 'message' => 'Envie uma imagem ou URL HTTPS.']);
+		} elseif (!$existentes && $status === 'agendado') {
+			return self::json(['success' => false, 'message' => 'Envie mídia (upload ou URL HTTPS).']);
 		}
 
-		// Lote: horarios extras (JSON array de datetime)
 		$lote = [];
 		if (!empty($post['lote_horarios'])) {
 			$decoded = json_decode((string)$post['lote_horarios'], true);
@@ -241,6 +295,7 @@ class SocialAgenda extends Page {
 			}
 		}
 		$criados = [(int)$ob->id];
+		$midiasRef = SocialPostMidia::listByPost((int)$ob->id, $idAdmin);
 		foreach ($lote as $h) {
 			$h = trim((string)$h);
 			if (!preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/', $h)) {
@@ -252,22 +307,23 @@ class SocialAgenda extends Page {
 			$novo->created_by = $ob->created_by;
 			$novo->caption = $caption;
 			$novo->canais = $canais;
+			$novo->formato = $formato;
 			$novo->agendado_em = $hsql;
 			$novo->status = 'agendado';
 			$novo->salvar();
-			if ($path !== '' || $urlExt !== '') {
+			foreach ($midiasRef as $ord => $src) {
 				$nm = new SocialPostMidia();
 				$nm->id_post = (int)$novo->id;
 				$nm->id_admin = $idAdmin;
-				$nm->tipo = $tipo;
-				$nm->ordem = 0;
-				if ($path !== '') {
-					$copy = SocialMediaStorage::copiarParaEscola($idAdmin, $path);
-					$nm->path_local = $copy ? $copy['relative'] : $path;
-					$nm->mime = $copy['mime'] ?? null;
-					$nm->bytes = $copy['bytes'] ?? null;
+				$nm->tipo = $src->tipo;
+				$nm->ordem = $ord;
+				if (!empty($src->path_local)) {
+					$copy = SocialMediaStorage::copiarParaEscola($idAdmin, (string)$src->path_local);
+					$nm->path_local = $copy ? $copy['relative'] : $src->path_local;
+					$nm->mime = $copy['mime'] ?? $src->mime;
+					$nm->bytes = $copy['bytes'] ?? $src->bytes;
 				} else {
-					$nm->url_externa = $urlExt;
+					$nm->url_externa = $src->url_externa;
 				}
 				$nm->salvar();
 			}

@@ -28,6 +28,22 @@ class User{
 		return $cache;
 	}
 
+	public static function temColunasTermosVersao(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('usuarios'))->execute(
+				"SHOW COLUMNS FROM usuarios LIKE 'termos_versao'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
 	//RETORNA UM USUÁRIO COM BASE NO EMAIL
 	public static function getUserByEmail($email){
 		return (new Database('usuarios'))->select('email = "'.$email.'"')->fetchObject(self::class);
@@ -137,14 +153,16 @@ class User{
 	}
 
 
-	//ATUALIZA A MENSAGEM NO BANCO
+	//ATUALIZA ACEITE DOS TERMOS
 	public function termoAceito(){
-
-		//ATUALIZA OS DADOS PARA O BANCO DE DADOS
-		return (new Database('usuarios'))->update('id = '.$this->id,[
+		$dados = [
 			'termos_uso' => $this->termos_uso
-		]);
-
+		];
+		if (self::temColunasTermosVersao()) {
+			$dados['termos_versao'] = $this->termos_versao ?? null;
+			$dados['termos_aceito_em'] = $this->termos_aceito_em ?? date('Y-m-d H:i:s');
+		}
+		return (new Database('usuarios'))->update('id = '.$this->id, $dados);
 	}
 
 	//EXCLUI DO BANCO DE DADOS

@@ -80,6 +80,20 @@ $obRouter->post('/master/portal-branding', [
 	}
 ]);
 
+$obRouter->get('/master/documentacao', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Documentacao::index($request));
+	}
+]);
+
+$obRouter->post('/master/documentacao', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Documentacao::salvar($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/perfil', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

@@ -147,12 +147,11 @@ function valorPagar() {
    $.ajax({
      url: url_base+aceitaTermo,
      method: "post",
-     data: {id_user},
+     data: {},
      dataType: "text",
      success: function(result) {
-      console.log(result)
-      if (result == true) {
-       location.reload();
+      if (String(result).trim() === '1' || result == true) {
+       location.href = url_base + 'painel';
      }
    },
  });

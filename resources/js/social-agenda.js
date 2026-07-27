@@ -1,5 +1,6 @@
 var semanaInicio = null;
 var postsCache = [];
+var midiasPendentes = [];
 var diasNomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
 function postSocial(data) {
@@ -20,7 +21,7 @@ function ymd(d) {
 
 function mondayOf(date) {
 	var d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-	var day = d.getDay(); // 0=dom
+	var day = d.getDay();
 	var diff = day === 0 ? -6 : 1 - day;
 	d.setDate(d.getDate() + diff);
 	return d;
@@ -44,8 +45,47 @@ function statusBadge(st) {
 	return '<span class="badge bg-' + (map[st] || 'secondary') + '">' + st + '</span>';
 }
 
+function formatoBadge(f) {
+	var map = { feed: 'Feed', story: 'Story', reel: 'Reel', carousel: 'Carrossel' };
+	return '<span class="badge bg-info text-dark">' + (map[f] || f || 'Feed') + '</span>';
+}
+
 function esc(s) {
 	return $('<div>').text(s == null ? '' : String(s)).html();
+}
+
+function syncFormatoUi() {
+	var f = $('#post_formato').val();
+	var igOnly = f === 'story' || f === 'reel';
+	$('#aviso-formato-ig').toggleClass('d-none', !igOnly);
+	if (igOnly) {
+		$('#post_canais').val('instagram').prop('disabled', true);
+	} else {
+		$('#post_canais').prop('disabled', false);
+	}
+	var multi = f === 'carousel';
+	$('#post_arquivo').prop('multiple', multi);
+	if (f === 'reel') {
+		$('#post_arquivo').attr('accept', 'video/mp4,video/quicktime');
+	} else if (f === 'feed') {
+		$('#post_arquivo').attr('accept', 'image/jpeg,image/png,image/webp');
+	} else {
+		$('#post_arquivo').attr('accept', 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime');
+	}
+}
+
+function renderPreviewMidias() {
+	var html = '';
+	midiasPendentes.forEach(function (m, i) {
+		html += '<div class="border rounded p-1 position-relative" style="width:72px">';
+		if (m.tipo === 'video') {
+			html += '<div class="small text-center py-3">▶</div>';
+		} else {
+			html += '<img src="' + esc(m.url) + '" alt="" style="width:64px;height:64px;object-fit:cover" class="rounded">';
+		}
+		html += '<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1 btn-rm-midia" data-i="' + i + '">×</button></div>';
+	});
+	$('#post_preview_list').html(html);
 }
 
 function carregarSemana() {
@@ -86,15 +126,14 @@ function renderGrade() {
 		var d = new Date(dt);
 		var mon = mondayOf(d);
 		if (ymd(mon) !== ymd(semanaInicio)) return;
-		var idx = (d.getDay() + 6) % 7; // seg=0
+		var idx = (d.getDay() + 6) % 7;
 		byDay[idx].push(p);
 	});
 
 	var horas = {};
 	postsCache.forEach(function (p) {
 		if (!p.agendado_em) return;
-		var h = p.agendado_em.substr(11, 5);
-		horas[h] = true;
+		horas[p.agendado_em.substr(11, 5)] = true;
 	});
 	var listaH = Object.keys(horas).sort();
 	if (!listaH.length) listaH = ['09:00', '12:00', '18:00'];
@@ -108,12 +147,12 @@ function renderGrade() {
 			});
 			html += '<td class="p-1 align-top">';
 			cell.forEach(function (p) {
-				var thumb = (p.midias && p.midias[0] && p.midias[0].url)
+				var thumb = (p.midias && p.midias[0] && p.midias[0].url && p.midias[0].tipo !== 'video')
 					? '<img src="' + esc(p.midias[0].url) + '" alt="" style="width:40px;height:40px;object-fit:cover" class="rounded me-1">'
 					: '';
 				html += '<button type="button" class="btn btn-sm btn-light border w-100 text-start mb-1 btn-post-item" data-id="' + p.id + '">' +
 					'<div class="d-flex align-items-start">' + thumb +
-					'<div class="small flex-grow-1">' + statusBadge(p.status) +
+					'<div class="small flex-grow-1">' + statusBadge(p.status) + ' ' + formatoBadge(p.formato) +
 					'<div class="text-truncate" style="max-width:9rem">' + esc((p.caption || '').slice(0, 40)) + '</div>' +
 					'<div class="text-muted">' + esc(p.canais) + '</div></div></div></button>';
 			});
@@ -133,6 +172,7 @@ function renderLista() {
 	postsCache.forEach(function (p) {
 		html += '<li class="list-group-item list-group-item-action btn-post-item py-2" data-id="' + p.id + '" style="cursor:pointer">' +
 			'<div class="d-flex justify-content-between"><span class="small">' + esc(p.agendado_em || '—') + '</span>' + statusBadge(p.status) + '</div>' +
+			'<div class="small">' + formatoBadge(p.formato) + ' · ' + esc(p.canais) + '</div>' +
 			'<div class="small text-truncate">' + esc(p.caption || '(sem legenda)') + '</div></li>';
 	});
 	$('#lista-posts').html(html);
@@ -144,11 +184,17 @@ function mostrarDetalhe(id) {
 		$('#painel-detalhe').html('<p class="text-muted small">Post não encontrado.</p>');
 		return;
 	}
-	var img = (p.midias && p.midias[0] && p.midias[0].url)
-		? '<img src="' + esc(p.midias[0].url) + '" class="img-fluid rounded border mb-2" alt="">'
-		: '';
-	var html = img +
-		'<div class="mb-2">' + statusBadge(p.status) + ' <span class="small text-muted">' + esc(p.canais) + '</span></div>' +
+	var imgs = '';
+	(p.midias || []).forEach(function (m) {
+		if (m.url && m.tipo !== 'video') {
+			imgs += '<img src="' + esc(m.url) + '" class="img-fluid rounded border mb-1 me-1" style="max-height:100px" alt="">';
+		} else if (m.tipo === 'video') {
+			imgs += '<div class="badge bg-secondary mb-1">Vídeo</div> ';
+		}
+	});
+	var html = imgs +
+		'<div class="mb-2">' + statusBadge(p.status) + ' ' + formatoBadge(p.formato) +
+		' <span class="small text-muted">' + esc(p.canais) + '</span></div>' +
 		'<div class="small mb-2"><strong>Quando:</strong> ' + esc(p.agendado_em || '—') + '</div>' +
 		'<p class="small">' + esc(p.caption || '') + '</p>';
 	if (p.erro_msg) html += '<div class="alert alert-danger small py-2">' + esc(p.erro_msg) + '</div>';
@@ -167,16 +213,31 @@ function abrirModalNovo() {
 	$('#post_id').val('');
 	$('#post_caption').val('');
 	$('#caption_count').text('0');
-	$('#post_canais').val('ambos');
+	$('#post_formato').val('feed');
+	$('#post_canais').val('ambos').prop('disabled', false);
 	$('#post_agendado').val('');
 	$('#post_lote').val('');
-	$('#post_path').val('');
 	$('#post_url').val('');
 	$('#post_arquivo').val('');
-	$('#post_preview').addClass('d-none').find('img').attr('src', '');
+	midiasPendentes = [];
+	renderPreviewMidias();
+	syncFormatoUi();
 	var el = document.getElementById('modalPost');
 	if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).show();
 	else $(el).modal('show');
+}
+
+function uploadArquivo(file) {
+	var fd = new FormData();
+	fd.append('arquivo', file);
+	return $.ajax({
+		url: url_base + 'painel/social/upload',
+		method: 'POST',
+		data: fd,
+		processData: false,
+		contentType: false,
+		dataType: 'json'
+	});
 }
 
 $(function () {
@@ -192,42 +253,61 @@ $(function () {
 		carregarSemana();
 	});
 	$('#btn-novo-post').on('click', abrirModalNovo);
+	$('#post_formato').on('change', syncFormatoUi);
 
 	$('#post_caption').on('input', function () {
 		$('#caption_count').text(String($(this).val() || '').length);
 	});
 
 	$('#post_arquivo').on('change', function () {
-		var f = this.files && this.files[0];
-		if (!f) return;
-		var fd = new FormData();
-		fd.append('arquivo', f);
-		$.ajax({
-			url: url_base + 'painel/social/upload',
-			method: 'POST',
-			data: fd,
-			processData: false,
-			contentType: false,
-			dataType: 'json'
-		}).done(function (res) {
-			if (!res || !res.success) return Swal.fire('Upload', (res && res.message) || 'Falha', 'error');
-			$('#post_path').val(res.path);
-			$('#post_url').val('');
-			$('#post_preview').removeClass('d-none').find('img').attr('src', res.url);
+		var files = this.files ? Array.prototype.slice.call(this.files) : [];
+		if (!files.length) return;
+		var f = $('#post_formato').val();
+		var max = f === 'carousel' ? 10 : 1;
+		if (f === 'carousel' && midiasPendentes.length + files.length > 10) {
+			return Swal.fire('Carrossel', 'Máximo 10 mídias.', 'warning');
+		}
+		if (f !== 'carousel') midiasPendentes = [];
+		var chain = $.Deferred().resolve();
+		files.slice(0, max).forEach(function (file) {
+			chain = chain.then(function () {
+				return uploadArquivo(file).then(function (res) {
+					if (!res || !res.success) {
+						Swal.fire('Upload', (res && res.message) || 'Falha', 'error');
+						return;
+					}
+					midiasPendentes.push({ path: res.path, url: res.url, tipo: res.tipo || 'image' });
+					$('#post_url').val('');
+					renderPreviewMidias();
+				});
+			});
 		});
+		$(this).val('');
+	});
+
+	$(document).on('click', '.btn-rm-midia', function () {
+		midiasPendentes.splice(Number($(this).data('i')), 1);
+		renderPreviewMidias();
 	});
 
 	$('#btn-salvar-post').on('click', function () {
 		var loteLines = ($('#post_lote').val() || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+		var midias = midiasPendentes.map(function (m) {
+			return { path: m.path, tipo: m.tipo };
+		});
+		var url = ($('#post_url').val() || '').trim();
+		if (!midias.length && url) {
+			var f = $('#post_formato').val();
+			midias.push({ url_externa: url, tipo: f === 'reel' ? 'video' : 'image' });
+		}
 		postSocial({
 			acao: 'salvar',
 			caption: $('#post_caption').val(),
+			formato: $('#post_formato').val(),
 			canais: $('#post_canais').val(),
 			agendado_em: $('#post_agendado').val(),
 			status: 'agendado',
-			path_local: $('#post_path').val(),
-			url_externa: $('#post_url').val(),
-			tipo_midia: 'image',
+			midias: JSON.stringify(midias),
 			lote_horarios: JSON.stringify(loteLines)
 		}).done(function (res) {
 			if (!res || !res.success) return Swal.fire('Erro', (res && res.message) || 'Falha', 'error');
@@ -246,7 +326,7 @@ $(function () {
 		var id = $(this).data('id');
 		Swal.fire({ title: 'Cancelar post?', showCancelButton: true, confirmButtonText: 'Sim' }).then(function (r) {
 			if (!r.isConfirmed) return;
-			postSocial({ acao: 'cancelar', id: id }).done(function (res) {
+			postSocial({ acao: 'cancelar', id: id }).done(function () {
 				carregarSemana();
 				$('#painel-detalhe').html('<p class="text-muted small">Cancelado.</p>');
 			});

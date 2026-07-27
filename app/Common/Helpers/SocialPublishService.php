@@ -56,20 +56,44 @@ class SocialPublishService {
 			return self::falha($post, 'Page/token ausentes. Reconecte em Configurações → Redes sociais.');
 		}
 
+		$formato = in_array((string)($post->formato ?? 'feed'), ['feed', 'story', 'reel', 'carousel'], true)
+			? (string)$post->formato
+			: 'feed';
+		if (!SocialPost::temColunaFormato()) {
+			$formato = 'feed';
+		}
+
 		$midias = SocialPostMidia::listByPost((int)$post->id, (int)$post->id_admin);
-		$primeira = $midias[0] ?? null;
-		$url = $primeira ? $primeira->urlPublica() : '';
-		if ($url === '') {
+		$itens = [];
+		foreach ($midias as $m) {
+			$url = $m->urlPublica();
+			if ($url === '') {
+				continue;
+			}
+			$itens[] = [
+				'url' => $url,
+				'tipo' => (($m->tipo ?? 'image') === 'video') ? 'video' : 'image',
+			];
+		}
+		if (!$itens) {
 			return self::falha($post, 'Post sem mídia (upload ou URL).');
 		}
-		if (($primeira->tipo ?? 'image') !== 'image') {
-			return self::falha($post, 'Fase 1: apenas imagem. Vídeo/Reels na Fase 3.');
+
+		$valid = self::validarMidiasFormato($formato, $itens);
+		if ($valid !== null) {
+			return self::falha($post, $valid);
 		}
 
 		$caption = (string)($post->caption ?? '');
 		$canais = (string)$post->canais;
 		$querFb = $canais === 'facebook' || $canais === 'ambos';
 		$querIg = $canais === 'instagram' || $canais === 'ambos';
+
+		// Story/Reel: só Instagram nesta fase
+		if ($formato === 'story' || $formato === 'reel') {
+			$querFb = false;
+			$querIg = true;
+		}
 
 		if ($querFb && (int)$cfg->meta_fb_ativo !== 1) {
 			return self::falha($post, 'Facebook desativado nas configurações da escola.');
@@ -83,7 +107,7 @@ class SocialPublishService {
 
 		$erros = [];
 		if ($querFb) {
-			$fb = MetaGraphHelper::publicarFotoPage($pageId, $token, $url, $caption);
+			$fb = self::publicarFacebook($pageId, $token, $formato, $itens, $caption);
 			if (empty($fb['ok'])) {
 				if (!empty($fb['auth_error'])) {
 					return self::falha($post, 'Token Meta inválido/revogado. Reconecte a conta. '.($fb['message'] ?? ''));
@@ -94,7 +118,7 @@ class SocialPublishService {
 			}
 		}
 		if ($querIg) {
-			$ig = MetaGraphHelper::publicarImagemInstagram($igId, $token, $url, $caption);
+			$ig = self::publicarInstagram($igId, $token, $formato, $itens, $caption);
 			if (empty($ig['ok'])) {
 				if (!empty($ig['auth_error'])) {
 					return self::falha($post, 'Token Meta inválido/revogado. Reconecte a conta. '.($ig['message'] ?? ''));
@@ -126,6 +150,91 @@ class SocialPublishService {
 			'ok' => true,
 			'message' => $erros ? 'Publicado parcialmente: '.implode(' | ', $erros) : 'Publicado.',
 		];
+	}
+
+	/**
+	 * @param array<int,array{url:string,tipo:string}> $itens
+	 */
+	private static function validarMidiasFormato(string $formato, array $itens): ?string {
+		$n = count($itens);
+		if ($formato === 'carousel') {
+			if ($n < 2 || $n > 10) {
+				return 'Carrossel exige de 2 a 10 mídias.';
+			}
+			return null;
+		}
+		if ($n < 1) {
+			return 'Envie ao menos uma mídia.';
+		}
+		$tipo = $itens[0]['tipo'];
+		if ($formato === 'reel' && $tipo !== 'video') {
+			return 'Reel exige um vídeo.';
+		}
+		if ($formato === 'feed' && $tipo !== 'image') {
+			return 'Feed (FB/IG) nesta versão exige imagem. Use Reel para vídeo ou Carrossel.';
+		}
+		return null;
+	}
+
+	/**
+	 * @param array<int,array{url:string,tipo:string}> $itens
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	private static function publicarFacebook(
+		string $pageId,
+		string $token,
+		string $formato,
+		array $itens,
+		string $caption
+	): array {
+		if ($formato === 'story' || $formato === 'reel') {
+			return ['ok' => false, 'message' => 'Story/Reel não publicam no Facebook nesta versão.'];
+		}
+		if ($formato === 'carousel') {
+			$ids = [];
+			foreach ($itens as $i => $item) {
+				if ($item['tipo'] !== 'image') {
+					return ['ok' => false, 'message' => 'Carrossel no Facebook: use apenas imagens nesta versão.'];
+				}
+				$cap = $i === 0 ? $caption : '';
+				$fb = MetaGraphHelper::publicarFotoPage($pageId, $token, $item['url'], $cap);
+				if (empty($fb['ok'])) {
+					return $fb;
+				}
+				$ids[] = (string)($fb['id'] ?? '');
+			}
+			return ['ok' => true, 'id' => implode(',', array_filter($ids))];
+		}
+		// feed
+		$first = $itens[0];
+		if ($first['tipo'] !== 'image') {
+			return ['ok' => false, 'message' => 'Facebook feed: apenas imagem.'];
+		}
+		return MetaGraphHelper::publicarFotoPage($pageId, $token, $first['url'], $caption);
+	}
+
+	/**
+	 * @param array<int,array{url:string,tipo:string}> $itens
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	private static function publicarInstagram(
+		string $igId,
+		string $token,
+		string $formato,
+		array $itens,
+		string $caption
+	): array {
+		if ($formato === 'story') {
+			return MetaGraphHelper::publicarStoryInstagram($igId, $token, $itens[0]['url'], $itens[0]['tipo']);
+		}
+		if ($formato === 'reel') {
+			return MetaGraphHelper::publicarReelInstagram($igId, $token, $itens[0]['url'], $caption);
+		}
+		if ($formato === 'carousel') {
+			return MetaGraphHelper::publicarCarouselInstagram($igId, $token, $itens, $caption);
+		}
+		// feed imagem
+		return MetaGraphHelper::publicarImagemInstagram($igId, $token, $itens[0]['url'], $caption);
 	}
 
 	private static function falha(SocialPost $post, string $msg): array {

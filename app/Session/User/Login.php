@@ -265,4 +265,16 @@ class Login {
         return true;
     }
 
+    /** Atualiza sessão após aceite do termo (versão vigente). */
+    public static function marcarTermosAceitos(string $versao = ''): void {
+        self::init();
+        if (!isset($_SESSION['usuario-mvc-1'])) {
+            return;
+        }
+        $_SESSION['usuario-mvc-1']['termos_uso'] = 1;
+        if ($versao !== '') {
+            $_SESSION['usuario-mvc-1']['termos_versao'] = $versao;
+        }
+    }
+
 }

@@ -13,7 +13,7 @@ class Privacy {
 	public static function index($request) {
 		$logoUrl = BrandingHelper::urlLogoCti();
 		$faviconUrl = BrandingHelper::urlFaviconCti();
-		$atualizado = '25 de julho de 2026';
+		$atualizado = '27 de julho de 2026';
 		$contato = 'ctieducacional@gmail.com';
 		$site = 'https://ctieducacional.com.br';
 		$urlPolitica = rtrim((string)URL, '/').'/privacidade';

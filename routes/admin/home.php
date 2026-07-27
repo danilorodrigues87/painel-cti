@@ -45,3 +45,18 @@ $obRouter->post('/painel/aceita-termos',[
 		return new Response(200,Admin\TermosDeUso::aceitaTermo($request));
 	}
 ]);
+
+// Central de ajuda (usuário logado)
+$obRouter->get('/painel/ajuda',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\Ajuda::index($request));
+	}
+]);
+
+$obRouter->get('/painel/ajuda/{slug}',[
+	'middlewares' => ['required-admin-login'],
+	function($request, $slug){
+		return new Response(200, Admin\Ajuda::artigo($request, $slug));
+	}
+]);

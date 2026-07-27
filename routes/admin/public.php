@@ -52,3 +52,16 @@ $obRouter->get('/user-data-deletion', [
 		return new Response(200, PublicPages\DataDeletion::index($request));
 	}
 ]);
+
+// Central de ajuda (pública)
+$obRouter->get('/ajuda', [
+	function ($request) {
+		return new Response(200, \App\Controller\Admin\Ajuda::indexPublico($request));
+	}
+]);
+
+$obRouter->get('/ajuda/{slug}', [
+	function ($request, $slug) {
+		return new Response(200, \App\Controller\Admin\Ajuda::artigoPublico($request, $slug));
+	}
+]);

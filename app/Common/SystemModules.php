@@ -351,6 +351,11 @@ class SystemModules {
 			'label' => 'Termos de Uso',
 			'link' => URL.'/painel/termos-de-uso',
 			'icon' => 'fa-solid fa-file-circle-check'
+		],
+		'Ajuda' => [
+			'label' => 'Ajuda',
+			'link' => URL.'/painel/ajuda',
+			'icon' => 'fa-solid fa-circle-question'
 		]
 
 	];

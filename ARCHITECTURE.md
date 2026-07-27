@@ -70,7 +70,10 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 ### Níveis de usuário
 - Exemplos: `Diretor`, `Financeiro`, `Cliente` (aluno), etc.
 - Telas **Comunicação** e **Campanhas**: acesso automático para `Diretor` em `Page::getPanel` (Comunicação não entra mais no checklist de funcionários — só Diretor).
+- **Redes sociais:** **não** é auto-grant do Diretor — exige label `Redes sociais` em `usuarios.acesso` (interseção com o plano). **Conexão Meta** (submenu Config) aparece só se Diretor **e** já tem `Redes sociais`.
 - Catálogo de permissões: removidos mortos `Vouchers`, `Vendas`, `Recorrente`, `Escolas` e `Comunicação` (checklist). Slug `ead` → **Cursos Online**; slug `conquistas_ead` → **Conquistas EAD** (checkbox separado quando o plano tem `ead`). Menu EAD respeita `usuarios.acesso` para todos os níveis (incluindo Diretor). Progresso EAD (tela auxiliar) e IA Pedagógica (só Diretor) acompanham **Cursos Online**. Diretor ainda recebe automático: Comunicação, Campanhas, WhatsApp, Assinatura, Dados da escola (+ Modelo de contrato / Pagamentos se o plano liberar).
+- **Termos de Uso (LGPD):** gate em `Page::getPanel` até aceite da versão vigente (`TermosDeUso::VERSAO`). Texto em view; aceite usa só o usuário da sessão. SQL opcional: `database/usuarios_termos_versao.sql` (`termos_aceito_em`, `termos_versao`). Sem as colunas, mantém só flag `termos_uso`.
+- **Ajuda:** menu padrão (após aceite dos termos) → `/painel/ajuda`; pública `/ajuda`. Conteúdo editável no Master.
 
 ### Preferências do produto (não quebrar)
 - Diretor da escola **não** deve conseguir marcar permissões de módulos que a escola não contratou
@@ -243,12 +246,19 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 ### 5.9 Redes sociais (Meta — Facebook / Instagram)
 
 - **App Meta:** um só da CTI (`.env`: `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_GRAPH_VERSION`). Escolas **conectam** Page + IG Professional (OAuth ou token Dev).
-- **Config:** `/painel/config/social` (Diretor) — tokens em `escola_integracoes` via `CryptoHelper`. SQL: `database/escola_integracoes_meta.sql`
-- **Agenda:** `/painel/social` — grade semanal, lote de horários, upload em `uploads/social/{id_admin}/` (Meta faz cURL na URL pública; purge após publish). SQL: `database/social_posts.sql`
-- **Worker:** `php worker/social.php [id_admin] [limite]` — cron a cada 5 min. Não publicar em massa no request HTTP.
-- **Webhook:** `GET/POST /webhook/meta` (verify) e `/webhook/meta/{idAdmin}/{token}` — esqueleto Fase 1; automações keyword→DM = Fase 2.
-- **Módulo plano:** slug `social` → label `Redes sociais`. WhatsApp continua Evolution.
-- **App Review Meta** obrigatório para escolas reais (modo Live). Sem review, só testers do App.
+- **Config:** `/painel/config/social` (Diretor + permissão Redes sociais) — tokens em `escola_integracoes` via `CryptoHelper`. SQL: `database/escola_integracoes_meta.sql`
+- **Agenda:** `/painel/social` — grade semanal, lote, formatos **`feed` | `story` | `reel` | `carousel`** (SQL: `database/social_posts.sql` + `database/social_posts_formato.sql`). Upload em `uploads/social/{id_admin}/`.
+- **Publicação:** Feed imagem FB+IG; Carrossel IG (e fotos FB); **Story/Reel só Instagram** (`media_type=STORIES|REELS`). Worker: `php worker/social.php [id_admin] [limite]`.
+- **Permissão:** slug `social` no plano **e** label `Redes sociais` no checklist do usuário (sem auto-grant Diretor).
+- **Webhook:** esqueleto Fase 1; keyword→DM = Fase 2. App Review Meta para Live.
+
+### 5.10 Documentação / Ajuda da plataforma
+
+- SQL: `database/platform_help.sql` (`platform_help_categorias`, `platform_help_artigos`).
+- Master: `/master/documentacao` — CRUD categorias/artigos + URL de vídeo (YouTube/Vimeo embed).
+- Escola (logado): `/painel/ajuda` e `/painel/ajuda/{slug}`.
+- Público: `/ajuda` e `/ajuda/{slug}` (mesmo conteúdo publicado).
+- Menu **Ajuda** entra nos módulos padrão após aceite dos termos.
 
 Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 

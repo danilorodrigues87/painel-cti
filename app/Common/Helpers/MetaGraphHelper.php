@@ -161,23 +161,14 @@ class MetaGraphHelper {
 	}
 
 	/**
-	 * Publica imagem no Instagram (container + publish).
+	 * Aguarda container IG e publica.
 	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
 	 */
-	public static function publicarImagemInstagram(string $igUserId, string $pageToken, string $imageUrl, string $caption): array {
-		$container = self::post($igUserId.'/media', [
-			'image_url' => $imageUrl,
-			'caption' => $caption,
-		], $pageToken);
-		if (empty($container['ok'])) {
-			return $container;
-		}
-		$creationId = (string)($container['data']['id'] ?? '');
+	public static function aguardarEPublicarIg(string $igUserId, string $pageToken, string $creationId, int $tentativas = 40): array {
 		if ($creationId === '') {
 			return ['ok' => false, 'message' => 'Meta não retornou creation_id do container IG.'];
 		}
-		// Aguarda container pronto (até ~30s)
-		for ($i = 0; $i < 10; $i++) {
+		for ($i = 0; $i < $tentativas; $i++) {
 			$st = self::get($creationId, ['fields' => 'status_code'], $pageToken);
 			$code = (string)($st['data']['status_code'] ?? '');
 			if ($code === 'FINISHED' || $code === 'PUBLISHED') {
@@ -198,6 +189,140 @@ class MetaGraphHelper {
 			'ok' => true,
 			'id' => (string)($pub['data']['id'] ?? $creationId),
 		];
+	}
+
+	/**
+	 * Publica imagem no feed do Instagram (container + publish).
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function publicarImagemInstagram(string $igUserId, string $pageToken, string $imageUrl, string $caption): array {
+		$container = self::post($igUserId.'/media', [
+			'image_url' => $imageUrl,
+			'caption' => $caption,
+		], $pageToken);
+		if (empty($container['ok'])) {
+			return $container;
+		}
+		return self::aguardarEPublicarIg($igUserId, $pageToken, (string)($container['data']['id'] ?? ''));
+	}
+
+	/**
+	 * Story IG (imagem ou vídeo). Caption não se aplica a Stories na API.
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function publicarStoryInstagram(
+		string $igUserId,
+		string $pageToken,
+		string $mediaUrl,
+		string $tipo = 'image'
+	): array {
+		$fields = ['media_type' => 'STORIES'];
+		if ($tipo === 'video') {
+			$fields['video_url'] = $mediaUrl;
+		} else {
+			$fields['image_url'] = $mediaUrl;
+		}
+		$container = self::post($igUserId.'/media', $fields, $pageToken);
+		if (empty($container['ok'])) {
+			return $container;
+		}
+		return self::aguardarEPublicarIg(
+			$igUserId,
+			$pageToken,
+			(string)($container['data']['id'] ?? ''),
+			$tipo === 'video' ? 60 : 40
+		);
+	}
+
+	/**
+	 * Reel IG (vídeo).
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function publicarReelInstagram(
+		string $igUserId,
+		string $pageToken,
+		string $videoUrl,
+		string $caption = ''
+	): array {
+		$fields = [
+			'media_type' => 'REELS',
+			'video_url' => $videoUrl,
+			'share_to_feed' => 'true',
+		];
+		if ($caption !== '') {
+			$fields['caption'] = $caption;
+		}
+		$container = self::post($igUserId.'/media', $fields, $pageToken);
+		if (empty($container['ok'])) {
+			return $container;
+		}
+		return self::aguardarEPublicarIg($igUserId, $pageToken, (string)($container['data']['id'] ?? ''), 60);
+	}
+
+	/**
+	 * Carrossel IG (2–10 itens image/video).
+	 * @param array<int,array{url:string,tipo:string}> $itens
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function publicarCarouselInstagram(
+		string $igUserId,
+		string $pageToken,
+		array $itens,
+		string $caption = ''
+	): array {
+		$children = [];
+		foreach ($itens as $item) {
+			$url = trim((string)($item['url'] ?? ''));
+			$tipo = (($item['tipo'] ?? 'image') === 'video') ? 'video' : 'image';
+			if ($url === '') {
+				continue;
+			}
+			$fields = ['is_carousel_item' => 'true'];
+			if ($tipo === 'video') {
+				$fields['media_type'] = 'VIDEO';
+				$fields['video_url'] = $url;
+			} else {
+				$fields['image_url'] = $url;
+			}
+			$c = self::post($igUserId.'/media', $fields, $pageToken);
+			if (empty($c['ok'])) {
+				return $c;
+			}
+			$cid = (string)($c['data']['id'] ?? '');
+			if ($cid === '') {
+				return ['ok' => false, 'message' => 'Falha ao criar item do carrossel IG.'];
+			}
+			// Vídeo no carrossel precisa processar antes do parent
+			if ($tipo === 'video') {
+				for ($i = 0; $i < 40; $i++) {
+					$st = self::get($cid, ['fields' => 'status_code'], $pageToken);
+					$code = (string)($st['data']['status_code'] ?? '');
+					if ($code === 'FINISHED' || $code === 'PUBLISHED') {
+						break;
+					}
+					if ($code === 'ERROR') {
+						return ['ok' => false, 'message' => 'Item de vídeo do carrossel falhou.'];
+					}
+					usleep(1500000);
+				}
+			}
+			$children[] = $cid;
+		}
+		if (count($children) < 2) {
+			return ['ok' => false, 'message' => 'Carrossel exige pelo menos 2 mídias válidas.'];
+		}
+		$parentFields = [
+			'media_type' => 'CAROUSEL',
+			'children' => implode(',', $children),
+		];
+		if ($caption !== '') {
+			$parentFields['caption'] = $caption;
+		}
+		$parent = self::post($igUserId.'/media', $parentFields, $pageToken);
+		if (empty($parent['ok'])) {
+			return $parent;
+		}
+		return self::aguardarEPublicarIg($igUserId, $pageToken, (string)($parent['data']['id'] ?? ''), 40);
 	}
 
 	/**

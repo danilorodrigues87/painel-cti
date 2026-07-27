@@ -10,6 +10,7 @@ class SocialPost {
 	public $id;
 	public $id_admin;
 	public $canais = 'ambos';
+	public $formato = 'feed';
 	public $caption;
 	public $status = 'rascunho';
 	public $agendado_em;
@@ -20,6 +21,22 @@ class SocialPost {
 	public $created_by;
 	public $created_at;
 	public $updated_at;
+
+	public static function temColunaFormato(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$row = (new Database('social_posts'))->execute(
+				"SHOW COLUMNS FROM social_posts LIKE 'formato'"
+			)->fetch(PDO::FETCH_ASSOC);
+			$ok = !empty($row);
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
 
 	public static function tabelaExiste(): bool {
 		static $ok = null;
@@ -75,6 +92,8 @@ class SocialPost {
 	}
 
 	public function salvar(): int {
+		$formato = in_array($this->formato, ['feed', 'story', 'reel', 'carousel'], true)
+			? $this->formato : 'feed';
 		$dados = [
 			'id_admin' => (int)$this->id_admin,
 			'canais' => in_array($this->canais, ['facebook', 'instagram', 'ambos'], true) ? $this->canais : 'ambos',
@@ -88,6 +107,9 @@ class SocialPost {
 			'erro_msg' => $this->erro_msg ?: null,
 			'created_by' => $this->created_by ? (int)$this->created_by : null,
 		];
+		if (self::temColunaFormato()) {
+			$dados['formato'] = $formato;
+		}
 		$db = new Database('social_posts');
 		if (!empty($this->id)) {
 			$db->update('id = '.(int)$this->id.' AND id_admin = '.(int)$this->id_admin, $dados);
