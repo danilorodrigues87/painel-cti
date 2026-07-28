@@ -32,6 +32,41 @@ class TenantHelper {
 		return $wherePadrao;
 	}
 
+	/** Escapa termo para LIKE (sem %/_); retorna '' se vazio. */
+	public static function termoLike(string $busca): string {
+		$busca = trim($busca);
+		if ($busca === '') {
+			return '';
+		}
+		$busca = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $busca);
+		return addslashes($busca);
+	}
+
+	/**
+	 * IDs de alunos (nivel Cliente) do tenant cujo nome/email/whatsapp batem com a busca.
+	 * @return list<int>|null null = sem filtro de busca; [] = nenhum match
+	 */
+	public static function idsAlunosPorBusca(int $idAdmin, string $busca): ?array {
+		$termo = self::termoLike($busca);
+		if ($termo === '') {
+			return null;
+		}
+		$like = '\'%'.$termo.'%\'';
+		$stmt = (new Database('usuarios'))->select(
+			'id_admin = '.(int)$idAdmin.' AND nivel = "Cliente" AND ('
+			.'nome LIKE '.$like.' OR email LIKE '.$like.' OR whatsapp LIKE '.$like
+			.')',
+			null,
+			null,
+			'id'
+		);
+		$ids = [];
+		while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+			$ids[] = (int)$row['id'];
+		}
+		return $ids;
+	}
+
 	public static function pertence(string $tabela, int $id, int $idAdmin, string $coluna = 'id_admin'): bool {
 		if ($id <= 0 || $idAdmin <= 0) {
 			return false;

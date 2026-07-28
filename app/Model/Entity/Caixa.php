@@ -124,7 +124,7 @@ class Caixa{
 
 		return (new Database('caixa'))->update($where, [
 			'valor_pago' => $this->valor_pago,
-			'status' => 1,
+			'status' => \App\Common\Helpers\FinanceiroAlunoHelper::STATUS_PAGO,
 			'id_usuario' => 0,
 			'tipo_pagamento' => 'Pix',
 			'data_pagamento' => $this->data_pagamento,
@@ -143,6 +143,7 @@ class Caixa{
 	}
 
 	//EXCLUI DO BANCO DE DADOS
+	/** @deprecated Preferir MatriculaStatusHelper::cancelarParcelasAbertas (baixa R$ 0). */
 	public function excluirMatricula(){
 
 		return (new Database('caixa'))->delete('id_ref = '.$this->id_ref.' AND status = 0');

@@ -16,8 +16,7 @@ class StudentEntitlement {
 		$stmt = Matriculas::getMatriculas(
 			'id_aluno = '.(int)$idAluno
 			.' AND id_admin = '.(int)$idAdmin
-			.' AND status = 0'
-			.' AND (fim IS NULL OR fim >= CURDATE())'
+			.' AND '.MatriculaStatusHelper::sqlAtiva('')
 		);
 		$rows = [];
 		while ($r = $stmt->fetchObject(Matriculas::class)) {

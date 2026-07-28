@@ -24,6 +24,7 @@ class Page {
 			'user'                 => $nome,
 			'current_home'         => $menuAtivo === 'home' ? 'active' : '',
 			'current_escolas'      => $menuAtivo === 'escolas' ? 'active' : '',
+			'current_chamados'     => $menuAtivo === 'chamados' ? 'active' : '',
 			'current_planos'       => $menuAtivo === 'planos' ? 'active' : '',
 			'current_assinaturas'  => $menuAtivo === 'assinaturas' ? 'active' : '',
 			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',

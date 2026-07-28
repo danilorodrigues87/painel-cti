@@ -15,6 +15,15 @@ use App\Session\User\Login as SessionUser;
  */
 class FinanceiroAlunoHelper {
 
+	/** Status canônico ao gravar título em aberto. */
+	public const STATUS_ABERTO = 'Em aberto';
+
+	/** Status canônico ao gravar título pago. */
+	public const STATUS_PAGO = 1;
+
+	/** Tolerância em R$ para comparar valor face vs pago (PIX/float). */
+	public const TOLERANCIA_VALOR = 0.05;
+
 	public static function tituloAberto($status): bool {
 		if ($status === 0 || $status === '0') {
 			return true;
@@ -30,6 +39,56 @@ class FinanceiroAlunoHelper {
 	}
 
 	/**
+	 * Compara valor pago com face do título (com tolerância de centavos).
+	 */
+	public static function valorCompativelComFace(float $valorPago, float $valorFace, float $tolerancia = self::TOLERANCIA_VALOR): bool {
+		if ($valorPago <= 0 || $valorFace < 0) {
+			return false;
+		}
+		return abs(round($valorPago, 2) - round($valorFace, 2)) <= $tolerancia;
+	}
+
+	/** Fragmento SQL: título em aberto (legado 0 / "0" / "Em aberto"). */
+	public static function sqlTituloAberto(string $coluna = 'status'): string {
+		$c = $coluna !== '' ? $coluna : 'status';
+		return '('.$c.' = 0 OR '.$c.' = "0" OR '.$c.' = "Em aberto")';
+	}
+
+	/** Fragmento SQL: título pago (legado 1 / "1" / "Pago"). */
+	public static function sqlTituloPago(string $coluna = 'status'): string {
+		$c = $coluna !== '' ? $coluna : 'status';
+		return '('.$c.' = 1 OR '.$c.' = "1" OR '.$c.' = "Pago")';
+	}
+
+	/**
+	 * Desconto de pontualidade (10%) se elegível: flag na matrícula e vencimento > hoje.
+	 * @return array{elegivel:bool,valor:float,desconto:float,valor_com_desconto:float,valor_pagar:float}
+	 */
+	public static function calcularPontualidade(float $valorFace, $vencimento, $descontoPontualidadeAtivo): array {
+		$valor = round((float)$valorFace, 2);
+		$out = [
+			'elegivel' => false,
+			'valor' => $valor,
+			'desconto' => 0.0,
+			'valor_com_desconto' => $valor,
+			'valor_pagar' => $valor,
+		];
+		$temFlag = !empty($descontoPontualidadeAtivo) && (int)$descontoPontualidadeAtivo !== 0;
+		$venc = is_string($vencimento) ? $vencimento : (string)$vencimento;
+		$hoje = date('Y-m-d');
+		if (!$temFlag || $venc === '' || $venc <= $hoje) {
+			return $out;
+		}
+		$comDesc = round($valor * 0.90, 2);
+		$desc = round($valor - $comDesc, 2);
+		$out['elegivel'] = true;
+		$out['desconto'] = $desc;
+		$out['valor_com_desconto'] = $comDesc;
+		$out['valor_pagar'] = $comDesc;
+		return $out;
+	}
+
+	/**
 	 * @return array{ok:bool,message?:string,aluno?:array,matriculas?:array,acordos?:array,titulos?:array,totais?:array}
 	 */
 	public static function extrato(int $idAdmin, int $idAluno): array {
@@ -42,6 +101,8 @@ class FinanceiroAlunoHelper {
 		$titulos = [];
 		$hoje = date('Y-m-d');
 
+		MatriculaStatusHelper::encerrarVencidasTenant($idAdmin);
+
 		$mats = Matriculas::getMatriculas(
 			'id_admin = '.(int)$idAdmin.' AND id_aluno = '.(int)$idAluno,
 			'id DESC'
@@ -50,7 +111,7 @@ class FinanceiroAlunoHelper {
 			$trilha = Trilhas::getTrilhaById((int)$m->id_trilha);
 			$nomeCurso = $trilha ? (string)$trilha->nome : ('Trilha #'.(int)$m->id_trilha);
 			$statusMat = (int)($m->status ?? 0);
-			$statusLabel = $statusMat === 0 ? 'Em andamento' : ($statusMat === 1 ? 'Encerrada' : ($statusMat === 3 ? 'Cancelada' : (string)$statusMat));
+			$statusLabel = MatriculaStatusHelper::labelStatus($statusMat);
 
 			$pago = 0.0;
 			$aberto = 0.0;
@@ -72,7 +133,7 @@ class FinanceiroAlunoHelper {
 				} elseif ($row['status'] === 'vencido') {
 					$vencido += (float)$row['valor'];
 					$aberto += (float)$row['valor'];
-				} else {
+				} elseif ($row['status'] === 'aberto') {
 					$aberto += (float)$row['valor'];
 				}
 			}
@@ -115,7 +176,7 @@ class FinanceiroAlunoHelper {
 					} elseif ($row['status'] === 'vencido') {
 						$vencido += (float)$row['valor'];
 						$aberto += (float)$row['valor'];
-					} else {
+					} elseif ($row['status'] === 'aberto') {
 						$aberto += (float)$row['valor'];
 					}
 				}
@@ -182,9 +243,12 @@ class FinanceiroAlunoHelper {
 	private static function mapTitulo(Caixa $c, string $origem, int $origemId, string $origemLabel): array {
 		$hoje = date('Y-m-d');
 		$venc = (string)($c->vencimento ?? '');
+		$tipoPag = (string)($c->tipo_pagamento ?? '');
 		$status = 'pago';
 		if (self::tituloAberto($c->status)) {
 			$status = ($venc !== '' && $venc < $hoje) ? 'vencido' : 'aberto';
+		} elseif (MatriculaStatusHelper::ehBaixaAdministrativa($tipoPag)) {
+			$status = $tipoPag === MatriculaStatusHelper::TIPO_CANCELAMENTO ? 'cancelada' : 'renegociada';
 		} elseif (!self::tituloPago($c->status)) {
 			$status = self::tituloAberto($c->status) ? 'aberto' : 'pago';
 		}
@@ -199,7 +263,7 @@ class FinanceiroAlunoHelper {
 			'valor_pago' => (float)($c->valor_pago ?? 0),
 			'vencimento' => $venc,
 			'data_pagamento' => (string)($c->data_pagamento ?? ''),
-			'tipo_pagamento' => (string)($c->tipo_pagamento ?? ''),
+			'tipo_pagamento' => $tipoPag,
 			'status' => $status,
 			'status_raw' => (string)($c->status ?? ''),
 			'selecionavel' => $status === 'aberto' || $status === 'vencido',
@@ -297,7 +361,7 @@ class FinanceiroAlunoHelper {
 
 		$obsBaixa = 'Renegociação → Acordo #'.$idAcordo;
 		foreach ($titulosOk as $c) {
-			$c->status = 1;
+			$c->status = self::STATUS_PAGO;
 			$c->tipo_pagamento = 'Renegociação';
 			$c->data_pagamento = date('Y-m-d');
 			$c->valor_pago = 0;
@@ -325,7 +389,7 @@ class FinanceiroAlunoHelper {
 			$ob->referencia = 'Acordo financeiro';
 			$ob->id_ref = 0;
 			$ob->id_acordo = $idAcordo;
-			$ob->status = 'Em aberto';
+			$ob->status = self::STATUS_ABERTO;
 			$ob->tipo_pagamento = '';
 			$ob->valor_pago = 0;
 			$ob->data_pagamento = null;
@@ -454,7 +518,7 @@ class FinanceiroAlunoHelper {
 		$c->valor_pago = $valorPago;
 		$c->data_pagamento = date('Y-m-d', $ts);
 		$c->tipo_pagamento = $tipoPagamento;
-		$c->status = 1;
+		$c->status = self::STATUS_PAGO;
 		$c->atualizar();
 
 		return ['ok' => true, 'message' => 'Baixa registrada.'];

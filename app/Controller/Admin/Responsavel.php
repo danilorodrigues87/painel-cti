@@ -34,55 +34,38 @@ class Responsavel extends Page{
 		$postVars = $request->getPostVars();
 		$paginaAtual = $postVars['page'] ?? 1;
 
-    $id_cliente = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? intval($postVars['filtro']) : '';
+    $id_cliente = (isset($postVars['filtro']) && $postVars['filtro'] !== '' && $postVars['filtro'] !== null && (int)$postVars['filtro'] > 0)
+		? (int)$postVars['filtro'] : 0;
+	$busca = trim((string)($postVars['busca'] ?? ''));
 
+    $where = 'id_admin = '.(int)$id_admin;
+	if ($id_cliente > 0) {
+		$where .= ' AND id = '.$id_cliente;
+	}
+	$termo = TenantHelper::termoLike($busca);
+	if ($termo !== '') {
+		$like = '\'%'.$termo.'%\'';
+		$where .= ' AND (nome LIKE '.$like.' OR email LIKE '.$like.' OR whatsapp LIKE '.$like.' OR cpf LIKE '.$like.')';
+	}
 
-    // SELECT PARA PESQUISA POR CLIENTE
-    $selecteCliente =
-    '<div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
-    <select onchange="listar(this.value,1)" class="form-control" id="responsavel" name="responsavel">
-    <option value="0">Filtrar por Responsável</option>';
-
-    $results = EntityRes::getRes("id_admin = '". $id_admin ."'", 'nome ASC');
-
-    while ($obCliente = $results->fetchObject(EntityRes::class)) {
-
-      $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
-
-      $selecteCliente .=
-      '<option '.$selected.' value="'.$obCliente->id.'">'.$obCliente->nome.'</option>';
-
-    }
-
-    $selecteCliente .=
-    ' </select>
-    </div>';
-
-    $wherePadrao = "id_admin = '" . $id_admin . "'";
-    $where = TenantHelper::whereComFiltroId((int)$id_cliente, (int)$id_admin, $wherePadrao);
-
-$itens = '<div class="row">' . $selecteCliente . '
-    <div class="col">
-        <button type="button" class="btn btn-success" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Cadastrar novo</button>
-    </div>
-</div>';
+$itens = '';
 
 // QUANTIDADE TOTAL DE REGISTROS
-$quantidadeTotal = EntityRes::getRes($where, 'nome ASC', null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+$quantidadeTotal = (int)(EntityRes::getRes($where, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd ?? 0);
 
 // INSTANCIA DE PAGINAÇÃO
-$obPagination = new Pagination($quantidadeTotal, $paginaAtual, 5);
+$obPagination = new Pagination($quantidadeTotal, $paginaAtual, 10);
 
 // RESULTADOS DA PAGINA
-$results = EntityRes::getRes($where, 'id DESC', $obPagination->getLimit());
+$results = EntityRes::getRes($where, 'nome ASC', $obPagination->getLimit());
 
 
 		//REDERIZA O ITEM
 		while ($obUsers = $results->fetchObject(EntityRes::class)) {
 			$itens .= '<tr>
-			<td>'.$obUsers->nome.'</td>
-			<td>'.$obUsers->email.'</td>
-			<td class="mascara-celular">'.$obUsers->whatsapp.'</td>
+			<td>'.htmlspecialchars((string)$obUsers->nome, ENT_QUOTES, 'UTF-8').'</td>
+			<td>'.htmlspecialchars((string)$obUsers->email, ENT_QUOTES, 'UTF-8').'</td>
+			<td class="mascara-celular">'.htmlspecialchars((string)$obUsers->whatsapp, ENT_QUOTES, 'UTF-8').'</td>
 			<td>
 			<div class="dropdown">
 			<button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -105,6 +88,9 @@ $results = EntityRes::getRes($where, 'id DESC', $obPagination->getLimit());
 
 		}
 
+		if ($itens === '') {
+			$itens = '<tr><td colspan="4" class="text-center text-muted py-4">Nenhum responsável encontrado com esses filtros.</td></tr>';
+		}
 
 		$table = '
 		<div class="card-body">

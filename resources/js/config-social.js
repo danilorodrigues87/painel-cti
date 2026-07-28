@@ -111,10 +111,10 @@ $(function () {
 	var params = new URLSearchParams(window.location.search);
 	if (params.get('oauth') === 'ok') {
 		$('#alert-oauth').removeClass('d-none').addClass('alert-success')
-			.text('OAuth OK. Page conectada' + (params.get('pages') ? ' (' + params.get('pages') + ' page(s) — usamos a primeira). Reconecte se liberou novos escopos no App Review.' : '.'));
+			.text('Conexão realizada. Página do Facebook vinculada' + (params.get('pages') ? ' (' + params.get('pages') + '). Se o suporte liberar novas permissões, conecte novamente.' : '.') );
 	} else if (params.get('oauth') === 'erro') {
 		$('#alert-oauth').removeClass('d-none').addClass('alert-danger')
-			.text(params.get('msg') || 'Falha no OAuth.');
+			.text(params.get('msg') || 'Não foi possível conectar. Tente de novo ou fale com o suporte.');
 	}
 
 	carregar();

@@ -5,6 +5,7 @@ namespace App\Controller\Webhook;
 use App\Common\Helpers\MercadoPagoEscolaHelper;
 use App\Common\Helpers\MercadoPagoCtiHelper;
 use App\Common\Helpers\SaasAssinaturaService;
+use App\Common\Helpers\FinanceiroAlunoHelper;
 use App\Common\Gateways\MercadoPago\Pix;
 use App\Model\Entity\Caixa;
 use App\Model\Entity\EscolaIntegracoes;
@@ -186,8 +187,7 @@ class MercadoPago {
 			return false;
 		}
 
-		$status = (string)($titulo->status ?? '');
-		if ($status === '1' || $status === 'pago' || (int)$status === 1) {
+		if (FinanceiroAlunoHelper::tituloPago($titulo->status ?? null)) {
 			return true;
 		}
 
@@ -200,9 +200,18 @@ class MercadoPago {
 			}
 		}
 
-		$valorPago = (float)$pagamento['transaction_amount'];
+		$valorFace = round((float)($titulo->valor ?? 0), 2);
+		$valorPago = round((float)($pagamento['transaction_amount'] ?? 0), 2);
 		if ($valorPago <= 0) {
-			$valorPago = (float)$titulo->valor;
+			error_log('[MP webhook] pagamento sem transaction_amount caixa_id='.(int)($titulo->id ?? 0).' id_admin='.$idAdmin);
+			return false;
+		}
+		if (!FinanceiroAlunoHelper::valorCompativelComFace($valorPago, $valorFace)) {
+			error_log('[MP webhook] valor divergente caixa_id='.(int)($titulo->id ?? 0)
+				.' id_admin='.$idAdmin
+				.' face='.$valorFace
+				.' pago='.$valorPago);
+			return false;
 		}
 
 		$titulo->id_admin = $idAdmin;

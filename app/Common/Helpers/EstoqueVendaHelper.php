@@ -128,7 +128,7 @@ class EstoqueVendaHelper {
 		$caixa->data_pagamento = $hoje;
 		$caixa->referencia = 'venda_stq';
 		$caixa->id_ref = (int)$venda->id;
-		$caixa->status = 1;
+		$caixa->status = \App\Common\Helpers\FinanceiroAlunoHelper::STATUS_PAGO;
 		$caixa->txt_id = '';
 		$caixa->pix_copia_cola = '';
 		$caixa->nosso_numero = '';

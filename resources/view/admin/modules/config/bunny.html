@@ -4,7 +4,7 @@
 </ol>
 
 <div id="alert-sql-bunny" class="alert alert-warning d-none">
-	Execute o SQL <code>database/escola_integracoes_bunny.sql</code> e <code>database/lms_videos_bunny.sql</code> no phpMyAdmin.
+	A integração de vídeos ainda não está liberada nesta escola. Fale com o <strong>suporte</strong> para ativar.
 </div>
 
 <div class="card mb-4">
@@ -54,10 +54,12 @@
 		<ol class="mb-0">
 			<li>Ativar <strong>Token Authentication</strong> na Video Library.</li>
 			<li>Ativar <strong>Block Direct URL File Access</strong>.</li>
-			<li>Em <strong>Allowed Domains / Allowed Referrers</strong>: domínio do portal Ascend (ex.: <code>localhost:8080</code> em local e o domínio de produção) e do painel.</li>
-			<li>Use a <strong>Token Authentication Key</strong> da Pull Zone / Security (não a API AccessKey).</li>
-			<li>Ativar <strong>MediaCage DRM</strong> (anti-download) se disponível no plano.</li>
-			<li>Player: desativar playback speeds extras (o Ascend também bloqueia acelerar/seek).</li>
+			<li>Em <strong>Allowed Domains / Allowed Referrers</strong>, cadastre:
+				<code>admin.ctieducacional.com.br</code> (painel) e
+				<code>aluno.ctieducacional.com.br</code> (portal do aluno).</li>
+			<li>Use a <strong>Token Authentication Key</strong> da área Security da library (não use a API AccessKey).</li>
+			<li>Se o plano Bunny permitir, ative <strong>MediaCage DRM</strong> (protege contra download).</li>
+			<li>No player, desative velocidades extras de reprodução (o portal do aluno também bloqueia acelerar e pular o vídeo).</li>
 		</ol>
 	</div>
 </div>

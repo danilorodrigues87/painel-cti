@@ -180,7 +180,7 @@ class AgendaLaboratorio extends Page {
 		$innerJoin = 'INNER JOIN usuarios ON matriculas.id_aluno = usuarios.id';
 		$fields = 'DISTINCT usuarios.id, usuarios.nome AS aluno';
 		$resultsUser = EntityMatri::getMatriculas(
-			'matriculas.status = 0 AND matriculas.id_admin = '.$id_admin,
+			'matriculas.status = 0 AND (matriculas.fim IS NULL OR matriculas.fim >= CURDATE()) AND matriculas.id_admin = '.$id_admin,
 			'aluno ASC', null, $fields, $innerJoin
 		);
 
@@ -364,7 +364,7 @@ class AgendaLaboratorio extends Page {
 		$innerJoin = 'INNER JOIN usuarios ON matriculas.id_aluno = usuarios.id';
 		$fields = 'DISTINCT usuarios.id, usuarios.nome AS aluno';
 		$resultsUser = EntityMatri::getMatriculas(
-			'matriculas.status = 0 AND matriculas.id_admin = '.$id_admin,
+			'matriculas.status = 0 AND (matriculas.fim IS NULL OR matriculas.fim >= CURDATE()) AND matriculas.id_admin = '.$id_admin,
 			'aluno ASC', null, $fields, $innerJoin
 		);
 		$optUsers = '<select class="form-control" name="id_aluno" id="av_id_aluno" onchange="infoAlunoAvulso()" required>

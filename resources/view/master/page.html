@@ -5,8 +5,19 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
   <title>{{title}}</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('painel-cti-theme');
+        document.documentElement.setAttribute('data-bs-theme', t === 'dark' ? 'dark' : 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+      }
+    })();
+  </script>
   <link rel="shortcut icon" type="image/x-icon" href="{{favicon_url}}">
   <link href="{{URL}}/resources/css/styles.css" rel="stylesheet" />
+  <link href="{{URL}}/resources/css/panel-theme.css?v=20260728c" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.4/dist/sweetalert2.min.css">
   <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -30,6 +41,7 @@
         </a>
         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
           <li><a class="dropdown-item" href="{{URL}}/master/perfil"><i class="fa-regular fa-id-badge me-1"></i> Perfil e senha</a></li>
+          <li><a class="dropdown-item" href="#" id="btn-toggle-theme"><i class="fa-regular fa-moon me-1"></i> Tema escuro</a></li>
           <li><hr class="dropdown-divider" /></li>
           <li><a class="dropdown-item" href="{{URL}}/logout"><i class="fas fa-arrow-right-from-bracket me-1"></i> Sair</a></li>
         </ul>
@@ -58,5 +70,6 @@
   <script src="{{URL}}/resources/js/sidebarToggle.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="{{URL}}/resources/js/script.js"></script>
+  <script src="{{URL}}/resources/js/panel-theme.js?v=20260728b"></script>
 </body>
 </html>

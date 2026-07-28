@@ -91,7 +91,7 @@ class Home extends Page{
 		$visibleCrm = in_array('Leads', $acesso, true) ? '' : 'd-none';
 
 		$qtt_clientes = (int)Matriculas::getMatriculas(
-			'id_admin = '.$id_admin.' AND status = 0 AND fim >= CURDATE()',
+			'id_admin = '.$id_admin.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlAtiva(''),
 			null, null, 'COUNT(*) as qtd'
 		)->fetchObject()->qtd;
 
@@ -101,12 +101,17 @@ class Home extends Page{
 		)->fetchObject()->qtd;
 
 		$recebido_hoje = Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada" AND status = 1 AND DATE(data_pagamento) = CURDATE()',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND DATE(data_pagamento) = CURDATE()'
+			.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento'),
 			null, null, 'SUM(valor_pago) as recebe'
 		)->fetchObject()->recebe;
 
 		$receber_semana = Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada" AND WEEK(CURRENT_TIMESTAMP) = WEEK(vencimento) AND YEAR(CURRENT_DATE) = YEAR(vencimento)',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND WEEK(CURRENT_TIMESTAMP) = WEEK(vencimento) AND YEAR(CURRENT_DATE) = YEAR(vencimento)'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloAberto('status'),
 			null, null, 'SUM(valor) as recebe'
 		)->fetchObject()->recebe;
 
@@ -152,7 +157,10 @@ class Home extends Page{
 
 		$financasRaw = self::agruparPorMes(
 			Caixa::getCaixa(
-				'tipo_transacao = "Entrada" AND id_admin = "'.$id_admin.'" AND status = 1 AND data_pagamento >= '.$intervaloSql,
+				'tipo_transacao = "Entrada" AND id_admin = "'.$id_admin.'"'
+				.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+				.' AND data_pagamento >= '.$intervaloSql
+				.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento'),
 				'mes_ano ASC', null,
 				'DATE_FORMAT(data_pagamento, "%Y-%m") AS mes_ano, SUM(valor_pago) AS total',
 				null, 'DATE_FORMAT(data_pagamento, "%Y-%m")'
@@ -192,12 +200,16 @@ class Home extends Page{
 		$id_admin = SessionUser::getUserLogedData()['usuario']['id_admin'];
 
 		$recebido = Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada" AND status = 1 AND tipo_pagamento = "Dinheiro"',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND tipo_pagamento = "Dinheiro"',
 			null, null, 'SUM(valor_pago) as recebe'
 		)->fetchObject()->recebe;
 
 		$retirado = Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Saida" AND status = 1 AND tipo_pagamento = "Dinheiro"',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Saida"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND tipo_pagamento = "Dinheiro"',
 			null, null, 'SUM(valor_pago) as recebe'
 		)->fetchObject()->recebe;
 
@@ -209,7 +221,10 @@ class Home extends Page{
 		$id_admin = SessionUser::getUserLogedData()['usuario']['id_admin'];
 
 		$valores = Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada" AND MONTH(CURRENT_TIMESTAMP) = MONTH(vencimento) AND YEAR(CURRENT_DATE) = YEAR(vencimento) AND DATE(vencimento) < CURRENT_DATE AND status = 0',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND MONTH(CURRENT_TIMESTAMP) = MONTH(vencimento) AND YEAR(CURRENT_DATE) = YEAR(vencimento)'
+			.' AND DATE(vencimento) < CURRENT_DATE'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloAberto('status'),
 			null, null, 'SUM(valor) as recebe'
 		)->fetchObject()->recebe;
 
@@ -285,12 +300,18 @@ class Home extends Page{
 		)->fetchObject()->qtd;
 
 		$recAtual = (float)Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada" AND status = 1 AND MONTH(data_pagamento) = MONTH(CURDATE()) AND YEAR(data_pagamento) = YEAR(CURDATE())',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND MONTH(data_pagamento) = MONTH(CURDATE()) AND YEAR(data_pagamento) = YEAR(CURDATE())'
+			.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento'),
 			null, null, 'SUM(valor_pago) as total'
 		)->fetchObject()->total;
 
 		$recAnterior = (float)Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada" AND status = 1 AND MONTH(data_pagamento) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(data_pagamento) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))',
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND MONTH(data_pagamento) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(data_pagamento) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))'
+			.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento'),
 			null, null, 'SUM(valor_pago) as total'
 		)->fetchObject()->total;
 

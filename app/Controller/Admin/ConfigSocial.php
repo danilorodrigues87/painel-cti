@@ -189,7 +189,7 @@ class ConfigSocial extends Page {
 		if (!MetaGraphHelper::appConfigurado()) {
 			return json_encode([
 				'success' => false,
-				'message' => 'Configure META_APP_ID e META_APP_SECRET no .env do servidor.',
+				'message' => 'A conexão com Facebook ainda não está disponível. Fale com o suporte.',
 			]);
 		}
 		$idAdmin = TenantHelper::getIdAdmin();

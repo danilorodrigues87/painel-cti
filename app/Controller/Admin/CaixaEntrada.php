@@ -7,6 +7,8 @@ use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\FinanceiroAlunoHelper;
+use \App\Model\Entity\Matriculas as EntityMatri;
 
 class CaixaEntrada extends Page{
 
@@ -53,7 +55,7 @@ $vencimentoSql = "AND vencimento < CURDATE()";
 }
 
 // Corrigido a construção da cláusula WHERE
-$where = 'id_admin = "' . $id_admin . '" AND status= "Em aberto" AND tipo_transacao = "Entrada" ' . $vencimentoSql;
+$where = 'id_admin = "' . $id_admin . '" AND '.FinanceiroAlunoHelper::sqlTituloAberto('status').' AND tipo_transacao = "Entrada" ' . $vencimentoSql;
 
 $itens = '';
 
@@ -70,10 +72,12 @@ $results = EntityCaixa::getCaixa($where, 'vencimento DESC', $obPagination->getLi
 		//REDERIZA O ITEM
 while ($obDados = $results->fetchObject(EntityCaixa::class)) {
 
-    if($obDados->status == 0){
+    if (FinanceiroAlunoHelper::tituloAberto($obDados->status)) {
         $status = 'Em aberto';
-      } else if($obDados->status == 1){
+      } else if (FinanceiroAlunoHelper::tituloPago($obDados->status)) {
         $status = 'Pago';
+      } else {
+        $status = (string)($obDados->status ?? '');
       } 
 
 	$itens .= '<tr>
@@ -153,7 +157,11 @@ private static function getForm($request) {
         }
         $dados = (array) EntityCaixa::getCaixaById($id);
 
-        //$obMatricula = (array) EntityMatri::getMatriculaById($dados['id_ref']);
+        $obMatricula = [];
+        $idRef = (int)($dados['id_ref'] ?? 0);
+        if ($idRef > 0 && TenantHelper::pertenceMatricula($idRef, $id_admin)) {
+            $obMatricula = (array) EntityMatri::getMatriculaById($idRef);
+        }
 
         // DADOS DO USUARIO
         $nivel = parent::getIdAdmin()['usuario']['nivel'];
@@ -163,19 +171,22 @@ private static function getForm($request) {
 
         $dias = DateTimeHelper::subtrairDatas($dados['vencimento'], DateTimeHelper::hoje())->d;
 
-        if ($dados['vencimento'] > DateTimeHelper::hoje()) {
-            $vencido = 'vence em';
+        $pont = FinanceiroAlunoHelper::calcularPontualidade(
+            (float)($dados['valor'] ?? 0),
+            $dados['vencimento'] ?? '',
+            $obMatricula['desconto_pontualidade'] ?? 0
+        );
+        $desconto = $pont['desconto'];
+        $valorComDesconto = $pont['valor_com_desconto'];
+        $valorPagar = $pont['valor_pagar'];
 
-            if (isset($obMatricula['desconto_pontualidade']) && $obMatricula['desconto_pontualidade']) {
-                $valorComDesconto = $dados['valor'] * 90 / 100;
-                $desconto = $dados['valor'] - $valorComDesconto;
-            }
+        if (($dados['vencimento'] ?? '') > DateTimeHelper::hoje()) {
+            $vencido = 'vence em';
         } else {
             $vencido = 'vencido há';
         }
 
         $valor = $dados['valor'];
-        $valorPagar = $dados['valor'] - $desconto;
 
         $vencimento = DateTimeHelper::databr($dados['vencimento']);
 
@@ -326,7 +337,7 @@ if($postVars['id'] == ''){
   $obCaixa->txt_id = '';
   $obCaixa->pix_copia_cola = '';
   $obCaixa->nosso_numero = '';
-  $obCaixa->status = 1;
+  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
   $obCaixa->lancarMovimentacao();
   
 
@@ -344,7 +355,7 @@ if($postVars['id'] == ''){
   $obCaixa->valor_pago = $valor_pagar;
   $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
   $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
-  $obCaixa->status = 1;
+  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
   $obCaixa->atualizar();
 
 }

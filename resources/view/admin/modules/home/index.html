@@ -304,7 +304,8 @@
         <div class="card-header bg-white border-0 fw-semibold">
           <i class="fas fa-chart-area me-1"></i> Matrículas
         </div>
-        <div class="card-body">
+        <div class="card-body position-relative">
+          <div class="chart-empty-msg text-muted small text-center py-5 d-none" data-for="graficoVendas">Sem matrículas no período.</div>
           <canvas id="graficoVendas" width="100%" height="40"></canvas>
         </div>
       </div>
@@ -315,7 +316,8 @@
         <div class="card-header bg-white border-0 fw-semibold">
           <i class="fa-solid fa-coins me-1"></i> Financeiro
         </div>
-        <div class="card-body">
+        <div class="card-body position-relative">
+          <div class="chart-empty-msg text-muted small text-center py-5 d-none" data-for="graficoFinanceiro">Sem receitas no período.</div>
           <canvas id="graficoFinanceiro" width="100%" height="40"></canvas>
         </div>
       </div>
@@ -435,5 +437,5 @@
   let carregaDadosHome = 'painel/';
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.js" crossorigin="anonymous"></script>
-<script src="{{URL}}/resources/js/graficos.js?v=20260722f"></script>
+<script src="{{URL}}/resources/js/vendor/chart.min.js?v=2.8.0"></script>
+<script src="{{URL}}/resources/js/graficos.js?v=20260728i"></script>

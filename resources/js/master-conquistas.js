@@ -1,4 +1,8 @@
 const MASTER_CONQ_URL = 'master/conquistas';
+const CONQ_PAGE_SIZE = 25;
+
+var _conqAll = [];
+var _conqPage = 1;
 
 function esc(s){
 	return $('<div>').text(s == null ? '' : String(s)).html();
@@ -42,33 +46,76 @@ function limpar(){
 	if ($('#conq_icone option').length) $('#conq_icone').val('Trophy');
 }
 
-function renderLista(lista){
-	const $tb = $('#lista-conquistas-master').empty();
-	if (!lista || !lista.length) {
-		$tb.append('<tr><td colspan="6" class="text-center text-muted py-4">Nenhuma conquista ainda.</td></tr>');
-		return;
-	}
-	lista.forEach(function(c){
-		const badge = c.ativo ? '<span class="badge bg-success">Ativo</span>' : '<span class="badge bg-secondary">Inativo</span>';
-		const thumb = c.badge_full_url
-			? '<img src="'+esc(c.badge_full_url)+'" alt="" style="width:32px;height:32px;object-fit:contain" class="me-2">'
-			: '<i class="fas fa-medal me-2 text-muted"></i>';
-		const titulo = (c.subtitulo ? '<strong>'+esc(c.subtitulo)+'</strong><br>' : '')
-			+ '<span>'+esc(c.titulo)+'</span>'
-			+ '<br><small class="text-muted">'+esc(c.slug)+'</small>';
-		$tb.append(
-			'<tr>'
-			+'<td>'+esc(c.ordem)+'</td>'
-			+'<td><div class="d-flex align-items-center">'+thumb+'<div>'+titulo+'</div></div></td>'
-			+'<td><code>'+esc(c.meta_tipo)+'</code> ≥ '+esc(c.meta_valor)+'</td>'
-			+'<td>'+raridadeBadge(c.raridade)+'</td>'
-			+'<td>'+badge+'</td>'
-			+'<td class="text-end">'
-			+'<button type="button" class="btn btn-sm btn-outline-primary me-1 btn-editar-conq" data-id="'+c.id+'"><i class="fas fa-edit"></i></button>'
-			+'<button type="button" class="btn btn-sm btn-outline-danger btn-excluir-conq" data-id="'+c.id+'"><i class="fas fa-trash"></i></button>'
-			+'</td></tr>'
-		);
+function filtrarLista(){
+	var q = ($('#filtro-conq-busca').val() || '').toLowerCase().trim();
+	var rar = ($('#filtro-conq-raridade').val() || '').trim();
+	var ativo = ($('#filtro-conq-ativo').val() || '').trim();
+	return _conqAll.filter(function(c){
+		if (rar && String(c.raridade || '') !== rar) return false;
+		if (ativo !== '' && String(c.ativo ? 1 : 0) !== ativo) return false;
+		if (!q) return true;
+		var blob = [
+			c.titulo, c.subtitulo, c.slug, c.meta_tipo, c.descricao, c.raridade
+		].join(' ').toLowerCase();
+		return blob.indexOf(q) >= 0;
 	});
+}
+
+function renderLista(){
+	var lista = filtrarLista();
+	var total = lista.length;
+	var pages = Math.max(1, Math.ceil(total / CONQ_PAGE_SIZE));
+	if (_conqPage > pages) _conqPage = pages;
+	if (_conqPage < 1) _conqPage = 1;
+	var start = (_conqPage - 1) * CONQ_PAGE_SIZE;
+	var slice = lista.slice(start, start + CONQ_PAGE_SIZE);
+
+	const $tb = $('#lista-conquistas-master').empty();
+	if (!slice.length) {
+		$tb.append('<tr><td colspan="6" class="text-center text-muted py-4">Nenhuma conquista encontrada.</td></tr>');
+	} else {
+		slice.forEach(function(c){
+			const badge = c.ativo ? '<span class="badge bg-success">Ativo</span>' : '<span class="badge bg-secondary">Inativo</span>';
+			const thumb = c.badge_full_url
+				? '<img src="'+esc(c.badge_full_url)+'" alt="" style="width:32px;height:32px;object-fit:contain" class="me-2">'
+				: '<i class="fas fa-medal me-2 text-muted"></i>';
+			const titulo = (c.subtitulo ? '<strong>'+esc(c.subtitulo)+'</strong><br>' : '')
+				+ '<span>'+esc(c.titulo)+'</span>'
+				+ '<br><small class="text-muted">'+esc(c.slug)+'</small>';
+			$tb.append(
+				'<tr>'
+				+'<td>'+esc(c.ordem)+'</td>'
+				+'<td><div class="d-flex align-items-center">'+thumb+'<div>'+titulo+'</div></div></td>'
+				+'<td><code>'+esc(c.meta_tipo)+'</code> ≥ '+esc(c.meta_valor)+'</td>'
+				+'<td>'+raridadeBadge(c.raridade)+'</td>'
+				+'<td>'+badge+'</td>'
+				+'<td class="text-end">'
+				+'<button type="button" class="btn btn-sm btn-outline-primary me-1 btn-editar-conq" data-id="'+c.id+'"><i class="fas fa-edit"></i></button>'
+				+'<button type="button" class="btn btn-sm btn-outline-danger btn-excluir-conq" data-id="'+c.id+'"><i class="fas fa-trash"></i></button>'
+				+'</td></tr>'
+			);
+		});
+	}
+
+	var from = total ? start + 1 : 0;
+	var to = Math.min(start + CONQ_PAGE_SIZE, total);
+	$('#conq-pag-resumo').text(total ? (from + '–' + to + ' de ' + total) : '0 registros');
+	$('#conq-pag-info').text(_conqAll.length ? (_conqAll.length + ' no total') : '');
+
+	var $pag = $('#conq-paginacao').empty();
+	if (pages <= 1) return;
+	$pag.append('<li class="page-item'+( _conqPage <= 1 ? ' disabled' : '')+'"><a class="page-link conq-pag-nav" href="#" data-page="'+(_conqPage-1)+'">‹</a></li>');
+	var i;
+	for (i = 1; i <= pages; i++) {
+		if (pages > 9 && Math.abs(i - _conqPage) > 2 && i !== 1 && i !== pages) {
+			if (i === 2 || i === pages - 1) {
+				$pag.append('<li class="page-item disabled"><span class="page-link">…</span></li>');
+			}
+			continue;
+		}
+		$pag.append('<li class="page-item'+(_conqPage === i ? ' active' : '')+'"><a class="page-link conq-pag-nav" href="#" data-page="'+i+'">'+i+'</a></li>');
+	}
+	$pag.append('<li class="page-item'+( _conqPage >= pages ? ' disabled' : '')+'"><a class="page-link conq-pag-nav" href="#" data-page="'+(_conqPage+1)+'">›</a></li>');
 }
 
 function carregar(){
@@ -77,7 +124,9 @@ function carregar(){
 			Swal.fire('Erro', (res && res.message) || 'Falha ao listar.', 'error');
 			return;
 		}
-		renderLista(res.conquistas || []);
+		_conqAll = res.conquistas || [];
+		_conqPage = 1;
+		renderLista();
 	}, 'json');
 }
 
@@ -160,6 +209,15 @@ $(function(){
 		$('#modalConquistaMaster').modal('show');
 	});
 	$('#btn-salvar-conquista').on('click', salvar);
+	$('#filtro-conq-busca').on('input', function(){ _conqPage = 1; renderLista(); });
+	$('#filtro-conq-raridade, #filtro-conq-ativo').on('change', function(){ _conqPage = 1; renderLista(); });
+	$(document).on('click', '.conq-pag-nav', function(e){
+		e.preventDefault();
+		var p = parseInt($(this).data('page'), 10);
+		if (!p || $(this).parent().hasClass('disabled') || $(this).parent().hasClass('active')) return;
+		_conqPage = p;
+		renderLista();
+	});
 	$(document).on('click', '.btn-editar-conq', function(){
 		abrir($(this).data('id'));
 	});

@@ -179,7 +179,7 @@ class CampanhaSegmentoHelper {
 			WHERE u.id_admin = :id_admin
 			  AND u.nivel = "Cliente"
 			  AND m.status = 0
-			  AND m.fim >= :hoje
+			  AND (m.fim IS NULL OR m.fim >= :hoje)
 			  AND '.$campo.' IS NOT NULL
 			  AND '.$campo.' != ""
 		';
@@ -205,7 +205,7 @@ class CampanhaSegmentoHelper {
 			    FROM matriculas m
 			    WHERE m.id_admin = :id_admin2
 			      AND m.status = 0
-			      AND m.fim >= :hoje
+			      AND (m.fim IS NULL OR m.fim >= :hoje)
 			  )
 		';
 
@@ -254,7 +254,7 @@ class CampanhaSegmentoHelper {
 				  AND MONTH(u.nascimento) = :mes
 				  AND DAY(u.nascimento) = :dia
 				  AND m.status = 0
-				  AND m.fim >= :hoje
+				  AND (m.fim IS NULL OR m.fim >= :hoje)
 				  AND '.$campo.' IS NOT NULL
 				  AND '.$campo.' != ""
 			';

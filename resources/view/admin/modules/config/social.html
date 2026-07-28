@@ -5,21 +5,21 @@
 </ol>
 
 <div id="alert-sql-meta" class="alert alert-warning d-none">
-	Execute <code>database/escola_integracoes_meta.sql</code> no phpMyAdmin.
+	A conexão com redes sociais ainda não está liberada nesta escola. Fale com o <strong>suporte</strong> para ativar.
 </div>
 <div id="alert-sql-auto" class="alert alert-warning d-none">
-	Execute <code>database/social_automacoes.sql</code> no phpMyAdmin para keyword → DM.
+	As automações de comentário ainda não estão liberadas. Fale com o <strong>suporte</strong> para ativar.
 </div>
 <div id="alert-app-meta" class="alert alert-warning d-none">
-	Configure <code>META_APP_ID</code> e <code>META_APP_SECRET</code> no <code>.env</code> do servidor para usar OAuth.
-	Enquanto isso, você pode colar Page ID / IG User ID / Page Token de teste (modo Dev).
+	A conexão automática com o Facebook ainda não está disponível neste servidor.
+	Fale com o <strong>suporte</strong> para liberar, ou use os campos avançados abaixo se o suporte orientar.
 </div>
 <div id="alert-oauth" class="alert d-none"></div>
 
 <div class="alert alert-light border mb-4 small">
-	<p class="mb-1"><strong>Como funciona:</strong> a CTI possui o App Meta. Cada escola conecta a própria <em>Facebook Page</em> e o <em>Instagram Professional</em> vinculado.</p>
-	<p class="mb-1">Sem <strong>App Review</strong> da Meta (modo Live), só contas de teste do App funcionam em produção.</p>
-	<p class="mb-0">Agenda: menu <em>Redes sociais</em>. Automações: palavra-chave em comentário → DM (private reply).</p>
+	<p class="mb-1"><strong>Como funciona:</strong> a CTI Educacional fornece a integração com a Meta. Sua escola conecta a própria <em>Página do Facebook</em> e o <em>Instagram Profissional</em> vinculado a ela.</p>
+	<p class="mb-1">Enquanto a Meta não aprovar o aplicativo em modo completo, só contas liberadas pelo suporte conseguem publicar normalmente.</p>
+	<p class="mb-0">Para agendar posts, use o menu <em>Redes sociais</em>. Automações: quando alguém comenta com uma palavra-chave, o sistema pode responder em mensagem privada (DM).</p>
 </div>
 
 <div class="row g-3">
@@ -50,7 +50,7 @@
 		</div>
 
 		<div class="card shadow mb-3">
-			<div class="card-header">IDs / Token (avançado ou modo Dev)</div>
+			<div class="card-header">Dados da conexão (avançado)</div>
 			<div class="card-body">
 				<div class="mb-2">
 					<label class="form-label">Page ID</label>
@@ -101,25 +101,24 @@
 	</div>
 	<div class="col-lg-5">
 		<div class="card shadow mb-3">
-			<div class="card-header">Webhook Meta</div>
+			<div class="card-header">URL de integração (suporte / Meta)</div>
 			<div class="card-body small">
-				<p class="mb-1"><strong>Callback URL (App Dashboard — preferencial):</strong></p>
+				<p class="mb-1"><strong>URL principal:</strong></p>
 				<code id="webhook_url_global" class="d-block text-break mb-2">—</code>
-				<p class="mb-1"><strong>URL por escola (alternativa):</strong></p>
+				<p class="mb-1"><strong>URL desta escola (alternativa):</strong></p>
 				<code id="webhook_url" class="d-block text-break">—</code>
-				<p class="mt-2 mb-0 text-muted">Verify token: <code>META_WEBHOOK_VERIFY_TOKEN</code> no .env · Campos: Page <code>feed</code>, Instagram <code>comments</code></p>
+				<p class="mt-2 mb-0 text-muted">Se precisar configurar isso no painel da Meta, peça orientação ao suporte.</p>
 			</div>
 		</div>
 		<div class="card shadow">
-			<div class="card-header">App Review (checklist)</div>
+			<div class="card-header">Dicas</div>
 			<div class="card-body small">
 				<ol class="mb-0 ps-3">
-					<li>HTTPS em produção + callback <code>/webhook/meta</code></li>
-					<li>Permissões: publish + <code>instagram_manage_comments</code>, <code>instagram_manage_messages</code>, <code>pages_messaging</code></li>
-					<li>Reconectar OAuth após liberar escopos</li>
-					<li>Assinar webhooks da Page (botão acima)</li>
-					<li>Testar comentário com keyword em conta tester</li>
-					<li>Agendar posts em <a href="{{URL}}/painel/social">Redes sociais</a> · cron <code>worker/social.php</code></li>
+					<li>Use <strong>Conectar com Facebook</strong> para vincular a Página e o Instagram da escola.</li>
+					<li>Depois de conectar, clique em <strong>Assinar webhooks</strong> para as automações funcionarem.</li>
+					<li>Teste um comentário com a palavra-chave cadastrada e confira se a DM chega.</li>
+					<li>Agende publicações em <a href="{{URL}}/painel/social">Redes sociais</a>.</li>
+					<li>Se algo falhar, fale com o <strong>suporte</strong>.</li>
 				</ol>
 			</div>
 		</div>
@@ -169,4 +168,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-social.js?v=20260727b"></script>
+<script src="{{URL}}/resources/js/config-social.js?v=20260728c"></script>

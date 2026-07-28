@@ -12,6 +12,8 @@
   use \App\Model\Entity\Caixa;
   use \App\Common\Helpers\TenantHelper;
   use \App\Common\Helpers\BrandingHelper;
+  use \App\Common\Helpers\MatriculaStatusHelper;
+  use \App\Common\Helpers\FinanceiroAlunoHelper;
   use \App\Model\Entity\Responsaveis as EntityRes;
 
   class Carnes extends Page{
@@ -38,46 +40,47 @@
 
       // POSTS
       $postVars = $request->getPostVars();
-      $id_cliente = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? intval($postVars['filtro']) : '';
-
-      // SELECT PARA PESQUISA POR CLIENTE
-      $selecteCliente =
-      '<div class="row px-3 pt-3">
-      <div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
-      <select onchange="listar(this.value,1)" class="form-control" id="aluno" name="aluno">
-      <option value="0">Filtrar por aluno</option>';
-
-      $results = EntityUser::getUser("nivel = 'Cliente' AND id_admin = '". $id_admin ."'", 'nome ASC');
-
-      while ($obCliente = $results->fetchObject(EntityUser::class)) {
-
-        $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
-
-        $selecteCliente .=
-        '<option '.$selected.' value="'.$obCliente->id.'">'.htmlspecialchars((string)$obCliente->nome, ENT_QUOTES, 'UTF-8').'</option>';
-
-      }
-
-      $selecteCliente .=
-      ' </select>
-      </div>
-      </div>';
-
+      $id_cliente = (isset($postVars['filtro']) && $postVars['filtro'] !== '' && $postVars['filtro'] !== '0' && (int)$postVars['filtro'] > 0)
+        ? (int)$postVars['filtro'] : 0;
+      $busca = trim((string)($postVars['busca'] ?? ''));
+      $statusFiltro = trim((string)($postVars['status'] ?? ''));
+      $parcelaFiltro = trim((string)($postVars['parcela'] ?? ''));
 
       //PAGINA ATUAL
       $paginaAtual = $postVars['page'] ?? 1;
-      $aluno = (isset($postVars['filtro']) && $postVars['filtro'] !== '' && $postVars['filtro'] !== '0' && (int)$postVars['filtro'] > 0)
-        ? ' AND id_aluno = '.(int)$postVars['filtro']
-        : '';
+
+      $where = 'id_admin = '.(int)$id_admin;
+      if ($id_cliente > 0) {
+        $where .= ' AND id_aluno = '.$id_cliente;
+      }
+      $idsBusca = TenantHelper::idsAlunosPorBusca((int)$id_admin, $busca);
+      if (is_array($idsBusca)) {
+        if (!$idsBusca) {
+          $where .= ' AND 1=0';
+        } else {
+          $where .= ' AND id_aluno IN ('.implode(',', $idsBusca).')';
+        }
+      }
+      if ($statusFiltro === '0' || $statusFiltro === '1' || $statusFiltro === '3') {
+        $where .= ' AND status = '.(int)$statusFiltro;
+      }
+      if ($parcelaFiltro === 'aberto') {
+        $where .= ' AND id IN (SELECT id_ref FROM caixa WHERE id_admin = '.(int)$id_admin.' AND '.FinanceiroAlunoHelper::sqlTituloAberto('status').')';
+      } else      if ($parcelaFiltro === 'atraso') {
+        $where .= ' AND id IN (SELECT id_ref FROM caixa WHERE id_admin = '.(int)$id_admin
+          .' AND '.FinanceiroAlunoHelper::sqlTituloAberto('status').' AND vencimento < CURDATE())';
+      }
+
+      MatriculaStatusHelper::encerrarVencidasTenant((int)$id_admin);
 
       //QUANTIDADE TOTAL DE REGISTROS
-      $quantidadeTotal = (int)(EntityMatri::getMatriculas('id_admin = ' . (int)$id_admin.' '.$aluno,null,null,'COUNT(*) as qtd')->fetchObject()->qtd ?? 0);
+      $quantidadeTotal = (int)(EntityMatri::getMatriculas($where,null,null,'COUNT(*) as qtd')->fetchObject()->qtd ?? 0);
 
       //INSTANCIA DE PAGINAÇÃO
-      $obPagination = new Pagination($quantidadeTotal,$paginaAtual,5);
+      $obPagination = new Pagination($quantidadeTotal,$paginaAtual,10);
 
       //RESULTADOS DA PAGINA
-      $results = EntityMatri::getMatriculas('id_admin = ' . (int)$id_admin.' '.$aluno, 'id DESC', $obPagination->getLimit()); 
+      $results = EntityMatri::getMatriculas($where, 'id DESC', $obPagination->getLimit()); 
 
 
       //REDERIZA O ITEM
@@ -136,8 +139,11 @@
 
       }
 
+      if ($itens === '') {
+        $itens = '<tr><td colspan="6" class="text-center text-muted py-4">Nenhum carnê encontrado com esses filtros.</td></tr>';
+      }
 
-      $table = $selecteCliente.'
+      $table = '
       <div class="card-body">
       <div class="table-responsive">
       <table class="table table-striped" id="dataTable" width="100%" cellspacing="0">
@@ -202,8 +208,7 @@
       // Carrega o SELECT
     while ($obDados = $results->fetchObject(Caixa::class)) {
 
-
-      if($obDados->status){
+      if (FinanceiroAlunoHelper::tituloPago($obDados->status)) {
         $status = 'Pago';
         $baixaIcon = 'disabled';
         $reciboIcon = '';
@@ -288,26 +293,20 @@
 
    $dias = DateTimeHelper::subtrairDatas($dados['vencimento'],DateTimeHelper::hoje())->d;
 
-   $desconto=0;
-   $valorComDesconto=0;
+   $pont = FinanceiroAlunoHelper::calcularPontualidade(
+     (float)($dados['valor'] ?? 0),
+     $dados['vencimento'] ?? '',
+     $obMatricula['desconto_pontualidade'] ?? 0
+   );
+   $desconto = $pont['desconto'];
+   $valorComDesconto = $pont['valor_com_desconto'];
+   $valorPagar = $pont['valor_pagar'];
 
-   if($dados['vencimento'] > DateTimeHelper::hoje()){
+   if(($dados['vencimento'] ?? '') > DateTimeHelper::hoje()){
     $vencido = 'vence em';
-
-    if($obMatricula['desconto_pontualidade']){
-
-      $valorComDesconto = $dados['valor']*90/100;
-      $desconto = $dados['valor']-$valorComDesconto;
-      
-    }
-
   } else {
     $vencido = 'vencido há';
-
   }
-
-  $valorPagar = $dados['valor']-$desconto;
-
 
   $vencimento = DateTimeHelper::databr($dados['vencimento']);
 
@@ -624,7 +623,7 @@ $valor_pagar = floatval($valor_pagar);
   $obCaixa->valor_pago = $valor_pagar;
   $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
   $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
-  $obCaixa->status = 1;
+  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
   $obCaixa->atualizar();
 
   if(!$obCaixa){

@@ -1,29 +1,26 @@
-<h1 class="mt-4">Financeiro</h1>
+<h1 class="mt-4">Relatórios</h1>
 <ol class="breadcrumb mb-4">
-  <li class="breadcrumb-item active">Relatório</li>
+  <li class="breadcrumb-item"><a href="{{URL}}/painel">Painel</a></li>
+  <li class="breadcrumb-item active">Relatório financeiro</li>
 </ol>
 
-<div class="card shadow mb-4">
-
-  <div id="filtragem"></div>
-
-  <div id="listar"></div>
-  
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div id="filtragem"></div>
+    <div id="listar" class="mt-3 text-muted small">Carregando filtros…</div>
+  </div>
 </div>
 
-<!-- Modal formulario -->
-<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-	<div class="modal-dialog modal-full-screen">
+<div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-xl">
 		<div class="modal-content">
-			<div id="listar-dados">
-			</div>
+			<div id="listar-dados"></div>
 		</div>
 	</div>
 </div>
- 
+
 <script>
 	let listagem = 'painel/caixa/relatorio';
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.js"></script>
-
- <script src="{{URL}}/resources/js/relatorio.js"></script>
+<script src="{{URL}}/resources/js/relatorio.js"></script>

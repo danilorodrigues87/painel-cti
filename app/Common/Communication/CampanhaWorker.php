@@ -516,7 +516,7 @@ class CampanhaWorker {
 			WHERE m.id_aluno = ?
 			  AND m.id_admin = ?
 			  AND m.status = 0
-			  AND m.fim >= ?
+			  AND (m.fim IS NULL OR m.fim >= ?)
 			ORDER BY m.fim DESC
 			LIMIT 1
 		';

@@ -9,3 +9,15 @@ uploads/*
 # Sessões PHP (não versionar)
 app/sessions/*
 !app/sessions/.gitkeep
+
+# Diagnósticos / dumps temporários (nunca versionar)
+_diag_*
+_curl_*
+_login_*
+*_curl_*.tmp
+*_curl_*.bin
+*_curl_*.json
+database/_tmp*
+database/_extract*
+database/_verify*
+debug-*.log

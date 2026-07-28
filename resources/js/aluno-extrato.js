@@ -59,6 +59,8 @@
 	function badgeStatus(st) {
 		if (st === 'pago') return '<span class="badge bg-success">Pago</span>';
 		if (st === 'vencido') return '<span class="badge bg-danger">Vencido</span>';
+		if (st === 'cancelada') return '<span class="badge bg-secondary">Cancelada (R$ 0)</span>';
+		if (st === 'renegociada') return '<span class="badge bg-secondary">Renegociação</span>';
 		return '<span class="badge bg-warning text-dark">Em aberto</span>';
 	}
 

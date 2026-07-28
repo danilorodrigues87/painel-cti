@@ -45,8 +45,8 @@ class Database{
         $this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->connection->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     }catch(PDOException $e){
-        //SUBSTITUIR POR MENSAGEM AMIGÁVEL
-        die('ERROR: '.$e->getMessage());
+        error_log('[Database] conexão: '.$e->getMessage());
+        throw new \RuntimeException('Erro interno de banco de dados. Contate o suporte.', 0, $e);
     }
 }
 
@@ -57,8 +57,8 @@ class Database{
             $statement->execute($params);
             return $statement;
         }catch(PDOException $e){
-            //SUBSTITUIR POR MENSAGEM AMIGAVEL
-            die('ERROR: '.$e->getMessage());
+            error_log('[Database] query: '.$e->getMessage());
+            throw new \RuntimeException('Erro interno de banco de dados. Contate o suporte.', 0, $e);
         }
     }
 

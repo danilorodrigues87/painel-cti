@@ -7,6 +7,8 @@ use \App\Model\Entity\User as EntityUser;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\FinanceiroAlunoHelper;
+use \App\Common\Helpers\MatriculaStatusHelper;
 
 class Relatorios extends Page{
 
@@ -113,8 +115,9 @@ $forma_pgtoChbx = $campos['forma_pgtoChbx'];
   // Isolamento por escola
   $conditions[] = 'id_admin = '.(int)$id_admin;
 
-  // Condição padrão
-  $conditions[] = 'status = 1';
+  // Condição padrão (pago — inclui legado "Pago")
+  $conditions[] = FinanceiroAlunoHelper::sqlTituloPago('status');
+  $conditions[] = MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento');
 
     // Filtro de tipo de transação
   if (!empty($postVars['tipo_transacao'])) {

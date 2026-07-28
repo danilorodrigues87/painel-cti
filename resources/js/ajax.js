@@ -5,6 +5,26 @@ $(document).ready(function(){
 });
 
 var _listarReq = null;
+var _ultimoFiltroLista = null;
+var _buscaFiltroTimer = null;
+
+function coletarFiltrosBarra() {
+  var data = {};
+  var $bar = $('#barra-filtros-lista');
+  if (!$bar.length) {
+    return data;
+  }
+  $bar.find('input[name], select[name]').each(function () {
+    var n = $(this).attr('name');
+    if (!n) return;
+    data[n] = $(this).val();
+  });
+  return data;
+}
+
+function irPagina(page) {
+  listar(_ultimoFiltroLista, page || 1);
+}
 
 // FUNÇÃO LISTAR CONTEUDOS DA PAGINA
 function listar(filtro=null, page=1) {
@@ -12,18 +32,32 @@ function listar(filtro=null, page=1) {
     return;
   }
 
+  if (arguments.length >= 1) {
+    _ultimoFiltroLista = filtro;
+  }
+
   if (_listarReq && typeof _listarReq.abort === 'function') {
     try { _listarReq.abort(); } catch (e) {}
   }
 
-  if ($('#listar').length && !$('#listar').html().trim()) {
-    $('#listar').html('<div class="p-4 text-center text-muted">Carregando...</div>');
+  if ($('#listar').length) {
+    var cur = ($('#listar').html() || '').trim();
+    if (!cur || cur.indexOf('Carregando') >= 0 || cur.indexOf('table') < 0) {
+      $('#listar').html('<div class="p-4 text-center text-muted">Carregando...</div>');
+    }
+  }
+
+  var data = Object.assign({ page: page || 1 }, coletarFiltrosBarra());
+  if (_ultimoFiltroLista !== null && _ultimoFiltroLista !== undefined && _ultimoFiltroLista !== '') {
+    data.filtro = _ultimoFiltroLista;
+  } else if (data.filtro === undefined) {
+    data.filtro = null;
   }
 
   _listarReq = $.ajax({
     url: url_base + listagem,
     method: 'post',
-    data: { filtro: filtro, page: page },
+    data: data,
     dataType: 'json',
     timeout: 30000,
     success: function(result) {
@@ -40,6 +74,7 @@ function listar(filtro=null, page=1) {
       $('#fil-financeiro').removeClass('active');
       $('#fil-parceiro').removeClass('active');
       $('#fil-cliente').removeClass('active');
+      $('#fil-comercial').removeClass('active');
       $('#fil-inativo').removeClass('active');
 
       if (filtro == null || filtro === '' || filtro === '0' || filtro === 0) {
@@ -73,6 +108,36 @@ function listar(filtro=null, page=1) {
     }
   });
 }
+
+$(document).on('change', '#barra-filtros-lista select[name]', function () {
+  listar(null, 1);
+});
+$(document).on('input', '#barra-filtros-lista input[name="busca"]', function () {
+  clearTimeout(_buscaFiltroTimer);
+  _buscaFiltroTimer = setTimeout(function () {
+    listar(null, 1);
+  }, 350);
+});
+$(document).on('keydown', '#barra-filtros-lista input[name="busca"]', function (e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    clearTimeout(_buscaFiltroTimer);
+    listar(null, 1);
+  }
+});
+$(document).on('click', '#barra-filtros-lista .btn-aplicar-filtros', function (e) {
+  e.preventDefault();
+  listar(null, 1);
+});
+$(document).on('click', '#barra-filtros-lista .btn-limpar-filtros', function (e) {
+  e.preventDefault();
+  var $bar = $('#barra-filtros-lista');
+  $bar.find('input[name="busca"]').val('');
+  $bar.find('select').each(function () {
+    $(this).val($(this).find('option:first').val());
+  });
+  listar(null, 1);
+});
 
 
 
@@ -119,12 +184,12 @@ function excluir(id) {
 }
 
 
-// FUNÇÃO DE EXCLUSÃO
+// FUNÇÃO DE CANCELAMENTO DE CONTRATO
 function cancelar_contrato(id) {
 
     Swal.fire({
-      title: "Você tem certeza que quer cancelar esse contrato?",
-      text: "Isso não poderá ser recuperado!",
+      title: "Cancelar este contrato?",
+      text: "As parcelas em aberto serão baixadas com R$ 0 (histórico preservado). Parcelas já pagas não mudam.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonColor: "#3085d6",
@@ -140,25 +205,56 @@ function cancelar_contrato(id) {
         data: {id},
         dataType: "json",
         success: function(result){
-            if(result){
-                result = "Contrato cancelado com sucesso!"
-                let status = "success"
-            } else {
-                let status = "error"
-            }
+            var ok = result === true || (result && result.ok);
+            var msg = (result && result.message) ? result.message : (ok ? "Contrato cancelado com sucesso!" : "Erro ao cancelar.");
             Swal.fire({
-              title: "Cancelado!",
-              text: result,
-              icon: status
+              title: ok ? "Cancelado!" : "Atenção",
+              text: msg,
+              icon: ok ? "success" : "error"
           });
             listar(null,1);
         },
-
+        error: function(){
+            Swal.fire({ title: "Erro", text: "Falha ao cancelar o contrato.", icon: "error" });
+        }
     })
 
    }
 });
 
+}
+
+function encerrar_contrato(id) {
+  if (typeof encerrar === 'undefined' || !encerrar) {
+    return;
+  }
+  Swal.fire({
+    title: "Encerrar esta matrícula?",
+    text: "Marca o contrato como encerrado (conclusão). Não altera o carnê.",
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: "Sim, encerrar"
+  }).then(function (result) {
+    if (!result.isConfirmed) return;
+    $.ajax({
+      url: url_base + encerrar,
+      method: "post",
+      data: { id: id },
+      dataType: "json",
+      success: function (res) {
+        var ok = res && res.ok;
+        Swal.fire({
+          title: ok ? "Encerrado!" : "Atenção",
+          text: (res && res.message) ? res.message : (ok ? "OK" : "Erro"),
+          icon: ok ? "success" : "error"
+        });
+        listar(null, 1);
+      },
+      error: function () {
+        Swal.fire({ title: "Erro", text: "Falha ao encerrar.", icon: "error" });
+      }
+    });
+  });
 }
 
 

@@ -1,123 +1,74 @@
-<h1 class="mt-4">Carnês Gerados</h1>
+<h1 class="mt-4">Carnês</h1>
+<ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item"><a href="{{URL}}/painel">Painel</a></li>
+  <li class="breadcrumb-item active">Carnês gerados</li>
+</ol>
 
-<hr>
-
-<div class="card shadow mb-4">
-	<div id="listar"></div>
-
-	<nav class="container">
-		<ul class="pagination">
-			<div id="pagination">
-			</div>	
-		</ul>
-	</nav>
-	
+<div id="barra-filtros-lista" class="card shadow-sm mb-3">
+	<div class="card-body py-3">
+		<div class="row g-2 align-items-end">
+			<div class="col-md-4">
+				<label class="form-label small mb-1" for="filtro-busca-carne">Aluno</label>
+				<input type="search" class="form-control form-control-sm" name="busca" id="filtro-busca-carne" placeholder="Nome, e-mail ou WhatsApp…">
+			</div>
+			<div class="col-md-2">
+				<label class="form-label small mb-1" for="filtro-status-carne">Matrícula</label>
+				<select class="form-select form-select-sm" name="status" id="filtro-status-carne">
+					<option value="">Todas</option>
+					<option value="0">Em andamento</option>
+					<option value="1">Encerrado</option>
+					<option value="3">Cancelado</option>
+				</select>
+			</div>
+			<div class="col-md-3">
+				<label class="form-label small mb-1" for="filtro-parcela-carne">Parcelas</label>
+				<select class="form-select form-select-sm" name="parcela" id="filtro-parcela-carne">
+					<option value="">Todas</option>
+					<option value="aberto">Com parcela em aberto</option>
+					<option value="atraso">Com parcela em atraso</option>
+				</select>
+			</div>
+			<div class="col-md-3 d-flex flex-wrap gap-2">
+				<button type="button" class="btn btn-sm btn-outline-secondary btn-limpar-filtros">Limpar</button>
+			</div>
+		</div>
+	</div>
 </div>
 
-<!-- Modal formulario -->
-<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+<div class="card shadow-sm mb-4">
+	<div class="card-body p-0">
+		<div id="listar" class="p-3 text-muted small">Carregando…</div>
+		<nav class="px-3 pb-3" aria-label="Paginação">
+			<ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+		</nav>
+	</div>
+</div>
+
+<div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
 	<div class="modal-dialog modal-xl">
 		<div class="modal-content">
-			<div id="listar-dados">
-			</div>
+			<div id="listar-dados"></div>
 		</div>
 	</div>
 </div>
- 
-<!-- Modal Baixa -->
-<div class="modal fade" id="modalDarBaixa" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+
+<div class="modal fade" id="modalDarBaixa" tabindex="-1" aria-hidden="true">
 	<div class="modal-dialog">
 		<div class="modal-content">
-			<div id="body_dar_baixa"></div>
-		</div>
-	</div>
-</div>
-
-<!-- Modal Pagamento Carrinho -->
-<div class="modal fade" id="modalCarrinhoPagamento" tabindex="-1" aria-labelledby="modalCarrinhoLabel" aria-hidden="true">
-	<div class="modal-dialog">
-		<div class="modal-content">
-			<div id="body_carrinho_pagamento"></div>
-		</div>
-	</div>
-</div>
-
-<!-- Card flutuante do carrinho -->
-<div id="caixa-carrinho-widget" class="carrinho-widget d-none">
-	<div class="carrinho-toggle" onclick="toggleCarrinhoDetalhes()">
-		<div>
-			<strong>Carrinho</strong><br>
-			<small><span id="carrinho-qtd">0</span> itens</small>
-		</div>
-		<div class="text-end">
-			<small>Total</small><br>
-			<strong id="carrinho-total">R$ 0,00</strong>
-		</div>
-	</div>
-	<div id="carrinho-detalhes" class="carrinho-detalhes d-none">
-		<ul id="carrinho-itens" class="list-group list-group-flush mb-2"></ul>
-
-		<form id="form-carrinho-add-avulso" class="mt-2">
-			<div class="mb-1">
-				<input type="text" name="descricao" class="form-control form-control-sm" placeholder="Descrição serviço/produto">
+			<div class="modal-header">
+				<h5 class="modal-title">Dar baixa</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
 			</div>
-			<div class="mb-1">
-				<input type="text" name="valor" class="form-control form-control-sm" placeholder="Valor">
-			</div>
-			<button type="submit" class="btn btn-sm btn-outline-primary w-100">Adicionar item avulso</button>
-			<div id="response-carrinho-avulso" class="mt-1"></div>
-		</form>
-
-		<button type="button" class="btn btn-sm btn-primary w-100 mt-2" onclick="abrirPagamentoCarrinho()">
-			Finalizar pagamento
-		</button>
+			<div class="modal-body" id="body_dar_baixa"></div>
+		</div>
 	</div>
 </div>
-
-<style>
-.carrinho-widget{
-	position: fixed;
-	right: 20px;
-	bottom: 20px;
-	z-index: 1050;
-	min-width: 260px;
-	max-width: 320px;
-	background: #ffffff;
-	border-radius: 0.75rem;
-	box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
-	border: 1px solid rgba(0,0,0,0.08);
-	overflow: hidden;
-}
-.carrinho-toggle{
-	cursor: pointer;
-	padding: 0.75rem 0.9rem;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	background: linear-gradient(135deg,#0d6efd,#4dabf7);
-	color: #fff;
-}
-.carrinho-detalhes{
-	background: #fff;
-	max-height: 340px;
-	overflow-y: auto;
-	padding: 0.5rem 0.75rem 0.75rem;
-}
-</style>
 
 <script>
 	let listagem = 'painel/carnes';
 	let formulario = 'painel/carnes/form';
 	let edicao = 'painel/carnes/save';
 	let formBaixa = 'painel/carnes/dar-baixa';
-
-	let rotaCarrinhoResumo      = 'painel/caixa/carrinho/get';
-	let rotaCarrinhoAddTitulo   = 'painel/caixa/carrinho/add-titulo';
-	let rotaCarrinhoAddAvulso   = 'painel/caixa/carrinho/add-avulso';
-	let rotaCarrinhoRemove      = 'painel/caixa/carrinho/remove';
-	let rotaCarrinhoForm        = 'painel/caixa/carrinho/form';
-	let rotaCarrinhoFinalizar   = 'painel/caixa/carrinho/finalizar';
-
 </script>
- <script src="{{URL}}/resources/js/ajax.js?v=20260717n"></script>
- <script src="{{URL}}/resources/js/carrinho.js?v=20260717a"></script>
+<script src="{{URL}}/resources/js/ajax.js?v=20260728f"></script>
+<script src="{{URL}}/resources/js/carrinho.js"></script>

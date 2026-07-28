@@ -1,26 +1,22 @@
-<h1 class="mt-4">Pedagógico</h1>
+<h1 class="mt-4">Trilhas</h1>
 <ol class="breadcrumb mb-4">
+  <li class="breadcrumb-item"><a href="{{URL}}/painel">Painel</a></li>
   <li class="breadcrumb-item active">Trilhas</li>
 </ol>
 
-<div class="card shadow mb-4">
-	<div id="listar"></div>
-
-	<nav class="container">
-		<ul class="pagination">
-			<div id="pagination">
-			</div>	
-		</ul>
-	</nav>
-	
+<div class="card shadow-sm mb-4">
+	<div class="card-body p-0">
+		<div id="listar" class="p-3 text-muted small">Carregando…</div>
+		<nav class="px-3 pb-3" aria-label="Paginação">
+			<ul class="pagination pagination-sm mb-0" id="pagination"></ul>
+		</nav>
+	</div>
 </div>
 
-<!-- Modal formulario -->
-<div class="modal fade" id="formModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+<div class="modal fade" id="formModal" tabindex="-1" aria-hidden="true">
 	<div class="modal-dialog modal-lg">
 		<div class="modal-content">
-			<div id="listar-dados">
-			</div>
+			<div id="listar-dados"></div>
 		</div>
 	</div>
 </div>
@@ -29,8 +25,6 @@
 	let listagem = 'painel/trilhas';
 	let formulario = 'painel/trilhas/form';
 	let edicao = 'painel/trilhas/save';
-	let exclusao = 'painel/trilhas/exclusao';
 	let deletar = 'painel/trilhas/excluir';
 </script>
- <script src="{{URL}}/resources/js/ajax.js?v=20260717n"></script>
- <script src="{{URL}}/resources/js/ckeditor.js"></script>
+<script src="{{URL}}/resources/js/ajax.js?v=20260717n"></script>

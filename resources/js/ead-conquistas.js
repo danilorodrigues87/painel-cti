@@ -1,4 +1,6 @@
 (function () {
+	var _lista = [];
+
 	function post(data) {
 		return $.ajax({
 			url: url_base + 'painel/ead/conquistas',
@@ -16,21 +18,19 @@
 		}
 	}
 
-	function carregar() {
-		post({ acao: 'listar' }).done(function (res) {
-			if (!res.success) {
-				$('#alert-sql-conq').removeClass('d-none').text(res.message || 'Erro');
-				return;
-			}
-			$('#alert-sql-conq').addClass('d-none');
-			var list = res.conquistas || [];
-			$('#badge-count').text(list.filter(function (c) { return c.ativo_escola; }).length + ' / ' + list.length);
-			var $tb = $('#tbody-conquistas').empty();
-			var $sel = $('#slug-liberar').empty();
-			if (!list.length) {
-				$tb.append('<tr><td colspan="4" class="text-muted p-3">Nenhuma conquista cadastrada.</td></tr>');
-				return;
-			}
+	function renderLista() {
+		var q = ($('#filtro-conq-escola').val() || '').toLowerCase().trim();
+		var list = !_lista.length ? [] : _lista.filter(function (c) {
+			if (!q) return true;
+			var blob = [c.titulo, c.subtitulo, c.slug, c.raridade, c.meta_tipo].join(' ').toLowerCase();
+			return blob.indexOf(q) >= 0;
+		});
+		$('#badge-count').text(_lista.filter(function (c) { return c.ativo_escola; }).length + ' / ' + _lista.length);
+		var $tb = $('#tbody-conquistas').empty();
+		var $sel = $('#slug-liberar').empty();
+		if (!list.length) {
+			$tb.append('<tr><td colspan="4" class="text-muted p-3">' + (q ? 'Nenhum resultado no filtro.' : 'Nenhuma conquista cadastrada.') + '</td></tr>');
+		} else {
 			list.forEach(function (c) {
 				var checked = c.ativo_escola ? ' checked' : '';
 				$tb.append(
@@ -44,12 +44,26 @@
 					'<td class="small">' + $('<div>').text((c.meta_tipo || '') + ' ≥ ' + (c.meta_valor || '')).html() + '</td>' +
 					'</tr>'
 				);
-				if (c.ativo_escola) {
-					$sel.append(
-						$('<option>').val(c.slug).text(c.titulo + ' (' + c.slug + ')')
-					);
-				}
 			});
+		}
+		_lista.forEach(function (c) {
+			if (c.ativo_escola) {
+				$sel.append(
+					$('<option>').val(c.slug).text(c.titulo + ' (' + c.slug + ')')
+				);
+			}
+		});
+	}
+
+	function carregar() {
+		post({ acao: 'listar' }).done(function (res) {
+			if (!res.success) {
+				$('#alert-sql-conq').removeClass('d-none').text(res.message || 'Erro');
+				return;
+			}
+			$('#alert-sql-conq').addClass('d-none');
+			_lista = res.conquistas || [];
+			renderLista();
 		}).fail(function () {
 			toast('Falha ao carregar conquistas.', false);
 		});
@@ -77,6 +91,8 @@
 			});
 		}, 280);
 	});
+
+	$('#filtro-conq-escola').on('input', renderLista);
 
 	$('#lista-alunos').on('click', 'button', function () {
 		var id = $(this).data('id');

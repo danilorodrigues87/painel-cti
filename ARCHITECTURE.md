@@ -3,7 +3,7 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-22 (Master SaaS 2+)  
+**Última atualização:** 2026-07-28 (Fase 1 segurança)  
 **Repo:** `painel-cti`  
 **DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
@@ -40,15 +40,34 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 | Views | `App\Utils\View` + templates em `resources/view/` |
 | Rotas | `routes/admin.php` inclui arquivos em `routes/admin/*` |
 | Sessão | `App\Session\User\Login` — chave `$_SESSION['usuario-mvc-1']` |
-| Front | Bootstrap 5, jQuery, SweetAlert2, Font Awesome |
+| Front | Bootstrap 5.2, jQuery, SweetAlert2, Font Awesome · tema claro/escuro (`panel-theme.js` + `data-bs-theme`) |
 
 **Constante `URL`:** em `includes/app.php` — host/path alinhados ao request e à pasta do `index.php` (`SCRIPT_NAME`). Sem barra final. O `.env` `URL` deve ser a URL pública (HTTPS em produção); path errado no `.env` é corrigido pelo path real do deploy.
 
 **Router:** o prefixo de rotas vem de `dirname(SCRIPT_NAME)` (onde o app está montado), **não** do path do `.env`. Assim local (`/pjt/painel-cti`) e produção (raiz ou subpasta) resolvem `/`, `/privacidade`, `/painel` sem gambiarra.
 
-**CORS API aluno:** só em `CorsStudent` + `Router` (preflight OPTIONS e 404/405 com headers). **Não** colocar CORS no `index.php`.
+**CORS API aluno:** só Origins em `STUDENT_CORS_ORIGINS` (+ localhost em dev). **Não** ecoar Origin arbitrário. Headers em `CorsStudent` + `Router` — **não** no `index.php`.
 
 **AJAX obrigatório:** sempre prefixar com `url_base` (`resources/js/url-base.js`). Sem isso, em subpastas XAMPP as rotas quebram.
+
+**Tema UI (escola + Master):** toggle no dropdown do usuário; preferência em `localStorage` chave `painel-cti-theme` (`light`|`dark`); `html[data-bs-theme]` + CSS `resources/css/panel-theme.css`. Login e portal do aluno não usam este toggle.
+
+---
+
+## 2.1 Para IAs / higiene (obrigatório)
+
+- Regras Cursor: `.cursor/rules/painel-cti.mdc` + `.cursorrules`.
+- **Branding:** textos visíveis = **portal do aluno** / CTI Educacional. Nunca “Ascend”/“Aurora” na UI. Pasta `ascend-academy` é só nome técnico.
+- **Testes temporários:** `_test_*.php`, `_diag_*.php`, `_curl_*`, dumps, `#region agent log` — apagar ao terminar a tarefa.
+- **Docs:** ao concluir feature/fase, atualizar este `ARCHITECTURE.md` (e checklist SQL se houver).
+- Sem commit Git sem pedido explícito do usuário.
+
+### Backlog pós-auditoria (jul/2026)
+
+1. ~~**Fase 1 segurança:**~~ **Feito (2026-07-28):** leftovers `_diag_*`/`_curl_*` removidos; CORS allowlist em `CorsStudent`; `Database` sem `die()` PDO ao cliente; `CryptoHelper` sem fallback previsível; `.gitignore` dumps.
+2. ~~**Dashboard Master rico:**~~ **Feito (2026-07-28):** `/master` com KPIs SaaS (trial, suspensas, faturas, receita), escolas recentes, lista Atenção e atalhos.
+3. ~~**Shells CRUD Admin + layout alinhado ao Master:**~~ **Feito (2026-07-28):** sidenav irmão do content (`container-fluid`); H1/breadcrumb nas listas principais; API Testimony + stub `/users/me` removidos; JS “Copia” apagados.
+4. Portal: certificados só visualizar (sem baixar) — intencional.
 
 ---
 
@@ -102,6 +121,21 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - SQL: usuário prefere **colar no phpMyAdmin**; evitar criar arquivos `.sql` no repo salvo pedido explícito
 - **Não commitar** a menos que o usuário peça
 
+### Filtros de lista (Alunos / Responsáveis / Matrículas / Carnês)
+- Toolbar na view: `#barra-filtros-lista` com `input[name]` / `select[name]`
+- `ajax.js` envia os campos no POST de `listar()` (debounce na busca; paginação via `irPagina(N)` mantém filtros)
+- Params comuns: `busca`, `ativo` (`s`/`n`), `matricula` (`ativa`/`sem`), `status` (`0`/`1`/`3`), `parcela` (`aberto`/`atraso`)
+- Helpers: `TenantHelper::termoLike()`, `TenantHelper::idsAlunosPorBusca()`
+
+### Ciclo de vida da matrícula (`MatriculaStatusHelper`)
+- Códigos: `0` andamento · `1` encerrado · `3` cancelado
+- **Ativa** (única definição): `status = 0 AND (fim IS NULL OR fim >= CURDATE())` — filtro Alunos, dashboard, agenda, campanhas, `StudentEntitlement`
+- Ao listar Matrículas/Carnês/extrato: `encerrarVencidasTenant()` marca `status=1` se `fim < hoje`
+- **Cancelar:** `status=3` + baixa administrativa nas parcelas abertas (`status=1`, `valor_pago=0`, `tipo_pagamento=Cancelamento`) — **não apaga** carnê
+- **Encerrar** (botão): só `status=1`, sem mexer no caixa
+- Higiene legado (opt-in): `database/matricula_status_higiene.sql` (preview → apply no phpMyAdmin)
+- KPIs de receita: excluir `tipo_pagamento` Cancelamento/Renegociação (`sqlExcluirNaoReceita`)
+
 ### Segurança esperada
 - Validar `id_admin` / `TenantHelper` em listagens e updates
 - Senhas SMTP: `CryptoHelper` (AES-256-CBC, chave `APP_KEY` ou fallback `SYSTEM_TOKEN`)
@@ -117,10 +151,15 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - Aluno = `usuarios.nivel = 'Cliente'`
 
 ### 5.2 Financeiro
-- `caixa` — títulos de entrada/saída; carnê gera parcelas com `status` `Em aberto` / pago (`0`/`1` misturado no legado — tratar ambos)
+- `caixa` — títulos de entrada/saída; carnê gera parcelas com `status` `Em aberto` / pago (`0`/`1` misturado no legado — tratar ambos via `FinanceiroAlunoHelper::sqlTituloAberto` / `sqlTituloPago` / `tituloAberto` / `tituloPago`)
 - Carnês ligados a `matriculas` via `caixa.id_ref`
 - **Extrato consolidado do aluno:** `/painel/alunos/{id}/extrato` (atalho em Alunos) — todas as matrículas + acordos; PDF via html2pdf; SQL `database/financeiro_acordos.sql`
 - **Renegociação:** marca títulos abertos como `tipo_pagamento=Renegociação` (histórico) e cria `financeiro_acordos` + novas parcelas (`caixa.id_acordo`, `id_ref=0`) sem liberar EAD
+- **Pontualidade (10%):** `FinanceiroAlunoHelper::calcularPontualidade` — Carnê Simples, baixa em Carnês/Entrada/Carrinho se vencimento > hoje; desativado com PIX
+- KPIs dashboard: “a receber semana” = só abertos; inadimplentes = abertos vencidos (triplo status); receita exclui Cancelamento/Renegociação
+- **Status canônico ao gravar:** aberto = `Em aberto` (`STATUS_ABERTO`); pago = `1` (`STATUS_PAGO`). Leitura continua aceitando legado `0`/`Pago`
+- **Webhook PIX escola:** só baixa se `transaction_amount` ≈ face do título (± R$ 0,05); divergência → `error_log`, não marca pago
+- Higiene status legado (opt-in): `database/caixa_status_normalizar.sql`
 - Portal aluno: `GET /api/v1/student/finance` + página `/finance` (só leitura, menu se houver títulos)
 - Carrinho de pagamento + recibos (baixa manual dinheiro/cartão)
 - Gateway **Mercado Pago** (PIX QR no carnê) em `app/Common/Gateways/MercadoPago/`
@@ -129,8 +168,8 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
   - SQL: `database/escola_integracoes_mercadopago.sql`
   - Sem MP ativo: matrícula só oferece **Carnê Simples**
   - Interface `PixGatewayInterface` para próximos bancos
-- Desconto pontualidade: só no **Carnê Simples** (desativado com PIX)
-- **Estoque + PDV (MVP):** SQL `database/estoque_vendas.sql`
+- Desconto pontualidade: só no **Carnê Simples** (desativado com PIX); helper `calcularPontualidade` em Carnês, Caixa Entrada e Carrinho
+- **Estoque + PDV (MVP):** SQL `database/estoque_vendas.sql`. Painel `/painel/estoque` + PDV. **API pública `/api/v1/estoque/*` removida** (sem uso; vazava multi-tenant).
   - Menu Financeiro → **Estoque** (`/painel/estoque`) e **PDV** (`/painel/estoque/pdv`)
   - Slugs: `estoque`, `vendas` (label PDV); Diretor ganha automático se o plano liberar
   - Produtos/categorias/movimentações (`stq_*`); venda baixa estoque + Entrada paga no `caixa` (`referencia=venda_stq`)
@@ -144,7 +183,8 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 ### 5.3 CRM
 - `crm_leads` Kanban, funis, histórico, importação planilha
 - Tarefas estilo Trello (`crm_tarefas_*`)
-- WhatsApp no CRM hoje: link `wa.me` / TODOs Evolution — **não** Evolution completa
+- **WhatsApp no CRM:** um botão “WhatsApp” → `iniciarAtendimentoWa` — com módulo + Evolution conectada abre o Inbox; sem plano/desconectado abre **WhatsApp Web** (`wa.me`)
+- Auto-mensagem ao mudar status (`novo` / `em_atendimento` / `matriculado`): Evolution via `WhatsappEscolaService::enviarTexto`; se escola sem módulo ou desconectada, registra no histórico e `status_wa=pulado` (não tenta enviar)
 
 ### 5.4 Agenda Laboratório v2 (feita)
 Arquitetura:
@@ -263,6 +303,17 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - Público: `/ajuda` e `/ajuda/{slug}` (mesmo conteúdo publicado).
 - Menu **Ajuda** entra nos módulos padrão após aceite dos termos.
 
+### 5.11 Chamados de suporte (escola ↔ Master)
+
+- SQL: `database/chamados_suporte.sql` (`chamados`, `chamado_mensagens`).
+- Número: `CHM-{ano}-{id}` (ex.: `CHM-2026-00042`).
+- Categorias fixas: dúvida, erro/bug, financeiro, acesso/login, sugestão, outro.
+- Status: aberto → em_andamento → aguardando_escola → resolvido / fechado.
+- Escola: menu padrão **Suporte** (`/painel/suporte`) — abrir chamado, histórico, thread, anexo (print imagem ≤5 MB em `uploads/chamados/{id_admin}/`).
+- Master: **Chamados** (`/master/chamados`) — fila global com filtros (escola, status, categoria), resposta, mudança de status.
+- Anexos só por rota autenticada: `/painel/suporte/anexo/{id}` e `/master/chamados/anexo/{id}`.
+- Entities: `Chamado`, `ChamadoMensagem`; helpers: `ChamadoHelper`, `ChamadoAnexoHelper`.
+
 Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 
 ---
@@ -282,6 +333,7 @@ Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` co
 | Validador | `EmailValidator.php`, `EmailAuditoriaHelper.php` |
 | Agenda | `AgendaHelper.php`, controllers `Agenda*` |
 | CRM | `CrmLeads.php`, `resources/js/crm.js` |
+| Suporte / chamados | `Controller/Admin/Suporte.php`, `Controller/Master/Chamados.php`, `Chamado*.php`, `resources/js/suporte.js` |
 | URL AJAX | `resources/js/url-base.js` |
 
 ---
@@ -477,6 +529,8 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 
 > Agenda v2, CRM, etc. têm SQLs próprios já aplicados em ambientes de desenvolvimento — conferir banco antes de recriar.
 
+**Chamados de suporte (novo):** colar `database/chamados_suporte.sql`.
+
 ---
 
 ## 8. Roadmap (planejado × feito)
@@ -484,6 +538,7 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 ### Feito
 | Item | Status |
 |------|--------|
+| Chamados de suporte (escola ↔ Master) | Feito |
 | CRM Kanban + tarefas + histórico | Feito |
 | Agenda laboratório v2 + diário | Feito |
 | Sync de permissões em tempo real (sessão) | Feito |
@@ -647,16 +702,16 @@ Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 ## 12. Handoff para agente / contexto recente (jul/2026)
 
-**Leia primeiro:** este arquivo + `.cursorrules` + `README.md` + `.env.example`.
+**Leia primeiro:** este arquivo + `.cursorrules` + `.cursor/rules/painel-cti.mdc` + `README.md` + `.env.example`.
 
-**Concluído recentemente:** Master SaaS 2+ (dashboard, e-mail, trial, valor custom, login restrito Assinatura). Estoque + PDV. Extrato/renegociação.
+**Concluído recentemente:** chamados de suporte (escola ↔ Master); curto prazo CRM/WA + Chart.js; matrícula status + financeiro; Fase 1 segurança; Master SaaS 2+; Social Fase A; LMS EAD.
 
-**MVP + Fase 1 entregues:** LMS EAD (§5.8) — painel Cursos Online (editor com editar/preview) + API `/api/v1/student` + Ascend. SQL: ordem em `database/LMS_CHECKLIST_PRODUCAO.md`. Trilha = comercial; `lms_*` = portal. Aula flexível (0..N vídeos/materiais/atividades/roleplay).
+**MVP LMS:** painel Cursos Online + API `/api/v1/student` + portal do aluno (`ascend-academy`). SQL: `database/LMS_CHECKLIST_PRODUCAO.md`.
 
 **NÃO reabrir** carnê MP aluno / Evolution sem pedido.
 
-**SQL a colar:** `database/lms_ead.sql` + `database/lms_xp.sql` + `database/lms_atividade_tentativas_status.sql`.
-
 **Workspace multi-root:** `painel-cti` + `ascend-academy` — integração via API aluno (não compartilhar sessão admin).
+
+**Próximo foco sugerido:** médio prazo — Fase 5+ templates CRM editáveis; Fase 3c multi-números WA; Social Meta App Review sob demanda.
 
 **Fim do documento.** Atualize este `ARCHITECTURE.md` sempre que concluir uma fase do roadmap.

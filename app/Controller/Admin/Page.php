@@ -23,6 +23,7 @@ class Page {
         $defaultModules[] = "Dashboard";
         $defaultModules[] = "Perfil";
         $defaultModules[] = "Ajuda";
+        $defaultModules[] = "Suporte";
     }
 
     return $defaultModules;
@@ -54,7 +55,7 @@ class Page {
 
 
 	// RETORNA O CONTEUDO (VIEW) ESTRUTURA GENERICA PAGINA PAINEL
-	public static function getPage($title,$content){
+	public static function getPage($title, $content, $menu = ''){
 		$userLogedData = SessionUser::getUserLogedData();
 
 		$bannerImpersonate = '';
@@ -77,6 +78,7 @@ class Page {
 		return View::render('admin/page',[
 			'title' => $title,
 			'content' => $content,
+			'menu' => $menu,
 			'user' => $userLogedData['usuario']['nome'],
 			'company' => $userLogedData['escola']['nome'] ?? '',
 			'banner_impersonate' => $bannerImpersonate,
@@ -270,12 +272,12 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 		if ($temAcesso) {
 
-		$contentPanel = View::render('admin/panel',[
+		$menuHtml = View::render('admin/panel',[
 			'menu' => self::getMenu($currentSessionMenu,$allPermittedModules),
-			'content' => $content
+			'user' => $userLogedData['usuario']['nome'] ?? '',
 		]);
 
-		return self::getPage($currentModule, $contentPanel);
+		return self::getPage($currentModule, $content, $menuHtml);
 
 	} else {
 
@@ -287,18 +289,8 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 
 	private static function getPaginationLink($postVars, $page, $label = null) {
-    // ALTERA A PÁGINA
-    $postVars['page'] = $page['page'];
-
-     // Obtém o filtro, se existir
-    $filtro = isset($postVars['filtro']) ? $postVars['filtro'] : null;
-
-    // Garante que o filtro seja passado corretamente como string
-    $filtroJs = $filtro !== null ? "'$filtro'" : 'null';
-
-    // VIEW
     $viewLink = '<li class="page-item ' . ($page['current'] ? 'active' : '') . '">
-        <a class="page-link" onclick="listar(' . $filtroJs . ',' . $postVars['page'] . ')" href="#">' . ($label ?? $page['page']) . '</a>
+        <a class="page-link" href="#" onclick="irPagina('.(int)$page['page'].'); return false;">' . ($label ?? $page['page']) . '</a>
     </li>';
     return $viewLink;
 }

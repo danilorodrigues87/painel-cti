@@ -4,8 +4,10 @@ namespace App\Controller\Admin;
 
 use \App\Model\Entity\CaixaCarrinho as EntityCaixaCarrinho;
 use \App\Model\Entity\Caixa as EntityCaixa;
+use \App\Model\Entity\Matriculas as EntityMatri;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\FinanceiroAlunoHelper;
 
 class CaixaCarrinho extends Page{
 
@@ -91,8 +93,13 @@ class CaixaCarrinho extends Page{
 			return json_encode($resposta);
 		}
 
-		if($obCaixa->status == 1){
+		if (FinanceiroAlunoHelper::tituloPago($obCaixa->status)) {
 			$resposta['erro'] = 'Este título já está pago.';
+			return json_encode($resposta);
+		}
+
+		if (!FinanceiroAlunoHelper::tituloAberto($obCaixa->status)) {
+			$resposta['erro'] = 'Este título não está em aberto.';
 			return json_encode($resposta);
 		}
 
@@ -112,13 +119,27 @@ class CaixaCarrinho extends Page{
 
 		$descricao = $obCaixa->descricao.' - Venc. '.DateTimeHelper::databr($obCaixa->vencimento);
 
+		$flagPont = 0;
+		$idRef = (int)($obCaixa->id_ref ?? 0);
+		if ($idRef > 0) {
+			$mat = EntityMatri::getMatriculaById($idRef);
+			if ($mat) {
+				$flagPont = $mat->desconto_pontualidade ?? 0;
+			}
+		}
+		$pont = FinanceiroAlunoHelper::calcularPontualidade(
+			(float)$obCaixa->valor,
+			$obCaixa->vencimento ?? '',
+			$flagPont
+		);
+
 		$obCarrinho = new EntityCaixaCarrinho;
 		$obCarrinho->id_admin      = $id_admin;
 		$obCarrinho->id_usuario    = $id_usuario;
 		$obCarrinho->referencia_id = $idCaixa;
 		$obCarrinho->tipo          = 'titulo';
 		$obCarrinho->descricao     = $descricao;
-		$obCarrinho->valor         = (float)$obCaixa->valor;
+		$obCarrinho->valor         = (float)$pont['valor_pagar'];
 		$obCarrinho->cadastrar();
 
 		$resposta['sucesso'] = true;
@@ -332,8 +353,24 @@ class CaixaCarrinho extends Page{
 					continue;
 				}
 
-				//CÁLCULO BÁSICO (MANTÉM VALOR ORIGINAL)
-				$valorItem = (float)$obCaixa->valor;
+				if (FinanceiroAlunoHelper::tituloPago($obCaixa->status)) {
+					continue;
+				}
+
+				$flagPont = 0;
+				$idRef = (int)($obCaixa->id_ref ?? 0);
+				if ($idRef > 0) {
+					$mat = EntityMatri::getMatriculaById($idRef);
+					if ($mat) {
+						$flagPont = $mat->desconto_pontualidade ?? 0;
+					}
+				}
+				$pont = FinanceiroAlunoHelper::calcularPontualidade(
+					(float)$obCaixa->valor,
+					$obCaixa->vencimento ?? '',
+					$flagPont
+				);
+				$valorItem = (float)$pont['valor_pagar'];
 				$totalCalculado += $valorItem;
 
 				$obUpdate = new EntityCaixa;
@@ -341,7 +378,7 @@ class CaixaCarrinho extends Page{
 				$obUpdate->valor_pago     = $valorItem;
 				$obUpdate->data_pagamento = $data_pagamento;
 				$obUpdate->tipo_pagamento = $tipo_pagamento;
-				$obUpdate->status         = 1;
+				$obUpdate->status         = FinanceiroAlunoHelper::STATUS_PAGO;
 				$obUpdate->atualizar();
 
 			} else {
@@ -364,7 +401,7 @@ class CaixaCarrinho extends Page{
 				$obCaixa->txt_id         = '';
 				$obCaixa->pix_copia_cola = '';
 				$obCaixa->nosso_numero   = '';
-				$obCaixa->status         = 1;
+				$obCaixa->status         = FinanceiroAlunoHelper::STATUS_PAGO;
 				$obCaixa->lancarMovimentacao();
 			}
 		}

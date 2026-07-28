@@ -7,6 +7,7 @@ use \App\Model\Db\Pagination;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\FinanceiroAlunoHelper;
 
 class CaixaSaida extends Page{
 
@@ -53,7 +54,7 @@ $vencimentoSql = "AND vencimento < CURDATE()";
 }
 
 // Corrigido a construção da cláusula WHERE
-$where = 'id_admin = "' . $id_admin . '" AND status= "Em aberto" AND tipo_transacao = "Saida" ' . $vencimentoSql;
+$where = 'id_admin = "' . $id_admin . '" AND '.FinanceiroAlunoHelper::sqlTituloAberto('status').' AND tipo_transacao = "Saida" ' . $vencimentoSql;
 
 $itens = '';
 
@@ -70,10 +71,12 @@ $results = EntityCaixa::getCaixa($where, 'id ASC', $obPagination->getLimit());
 		//REDERIZA O ITEM
 while ($obDados = $results->fetchObject(EntityCaixa::class)) {
 
-   if($obDados->status == 0){
+   if (FinanceiroAlunoHelper::tituloAberto($obDados->status)) {
     $status = 'Em aberto';
-} else if($obDados->status == 1){
+} else if (FinanceiroAlunoHelper::tituloPago($obDados->status)) {
     $status = 'Pago';
+} else {
+    $status = (string)($obDados->status ?? '');
 } 
 
 $itens .= '<tr>
@@ -332,7 +335,7 @@ if($postVars['id'] == ''){
   $obCaixa->txt_id = '';
   $obCaixa->pix_copia_cola = '';
   $obCaixa->nosso_numero = '';
-  $obCaixa->status = 1;
+  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
   $obCaixa->lancarMovimentacao();
   
 
@@ -350,7 +353,7 @@ if($postVars['id'] == ''){
   $obCaixa->valor_pago = $valor_pagar;
   $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
   $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
-  $obCaixa->status = 1;
+  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
   $obCaixa->atualizar();
 
 }

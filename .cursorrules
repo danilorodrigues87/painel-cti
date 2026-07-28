@@ -6,6 +6,7 @@ Contexto: Estou migrando de upload manual para Git.
 Antes de alterar o código, leia:
 - README.md (visão geral e setup)
 - ARCHITECTURE.md (arquitetura completa, padrões, SQL, roadmap e armadilhas — obrigatório para IAs)
+- .cursor/rules/painel-cti.mdc (higiene, branding, backlog)
 
 Regras rápidas:
 - Multi-tenant por id_admin (tabela escolas_assinantes).
@@ -14,4 +15,6 @@ Regras rápidas:
 - Não criar commits Git sem pedido explícito do usuário.
 - Controllers/Entities com mesmo nome: usar alias EntityX.
 - Comunicação em português, respostas diretas.
-- Scripts temporários de teste (`_test_*.php`, `testes.php`, includes de debug no `index.php`, dumps na raiz): **apagar ao terminar o diagnóstico**. Não deixar gambiarras no código final.
+- Scripts temporários de teste (`_test_*.php`, `_diag_*.php`, `_curl_*`, testes.php, includes de debug no `index.php`, dumps na raiz, `#region agent log`): **apagar ao terminar o diagnóstico**. Não deixar gambiarras no código final.
+- Branding UI: sempre “portal do aluno” / CTI Educacional — nunca “Ascend”/“Aurora” em telas ou e-mails.
+- Após feature: atualizar ARCHITECTURE.md.

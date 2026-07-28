@@ -54,6 +54,16 @@ $obRouter->post('/painel/matriculas/cancelar',[
 	}
 ]);
 
+//ROTA DE ENCERRAMENTO
+$obRouter->post('/painel/matriculas/encerrar',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\Matriculas::encerrarMatricula($request));
+	}
+]);
+
 
 //ROTA DE FORMULARIO DE EDIÇÃO
 $obRouter->post('/painel/busca-responsavel',[

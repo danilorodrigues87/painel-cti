@@ -41,8 +41,7 @@ class AgendaHelper {
 		$row = Matriculas::getMatriculas(
 			'matriculas.id_aluno = '.(int)$idAluno.'
 			AND matriculas.id_admin = '.(int)$idAdmin.'
-			AND matriculas.status = 0
-			AND matriculas.fim >= CURDATE()',
+			AND '.MatriculaStatusHelper::sqlAtiva('matriculas'),
 			'id DESC', 1,
 			'matriculas.id, matriculas.aulas_semanais, matriculas.id_trilha'
 		)->fetch(PDO::FETCH_ASSOC);

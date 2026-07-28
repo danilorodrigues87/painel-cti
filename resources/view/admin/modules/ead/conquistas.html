@@ -4,7 +4,7 @@
 </ol>
 
 <div id="alert-sql-conq" class="alert alert-warning d-none">
-	Execute <code>database/lms_conquistas.sql</code> e <code>lms_conquistas_v2.sql</code> no phpMyAdmin.
+	As conquistas ainda não estão liberadas nesta escola. Fale com o <strong>suporte</strong> para ativar.
 </div>
 
 <div class="row">
@@ -29,9 +29,12 @@
 	</div>
 	<div class="col-lg-7 mb-4">
 		<div class="card">
-			<div class="card-header d-flex justify-content-between align-items-center">
+			<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
 				<span><i class="fa-solid fa-toggle-on me-1"></i> Medalhas visíveis nesta escola</span>
 				<span class="badge bg-secondary" id="badge-count">—</span>
+			</div>
+			<div class="card-body border-bottom py-2">
+				<input type="search" class="form-control form-control-sm" id="filtro-conq-escola" placeholder="Filtrar por título ou slug…">
 			</div>
 			<div class="card-body p-0">
 				<div class="table-responsive" style="max-height:520px;overflow:auto;">
@@ -51,11 +54,11 @@
 				</div>
 			</div>
 			<div class="card-footer small text-muted">
-				Sem personalização, todas as conquistas ativas do Master aparecem. Ao desativar a primeira, o sistema grava o mapa da escola.
-				Artes customizadas: Master → Conquistas (upload de badge).
+				Sem personalização, todas as conquistas ativas do catálogo CTI aparecem. Ao desativar a primeira, o sistema grava o mapa da escola.
+				Para artes customizadas (badge), fale com o <strong>suporte</strong>.
 			</div>
 		</div>
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/ead-conquistas.js?v=20260722a"></script>
+<script src="{{URL}}/resources/js/ead-conquistas.js?v=20260728p"></script>

@@ -59,3 +59,5 @@ include __DIR__.'/admin/whatsapp.php';
 include __DIR__.'/admin/ead.php';
 
 include __DIR__.'/admin/social.php';
+
+include __DIR__.'/admin/suporte.php';

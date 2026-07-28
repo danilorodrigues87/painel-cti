@@ -87,6 +87,27 @@ $obRouter->get('/master/documentacao', [
 	}
 ]);
 
+$obRouter->get('/master/chamados', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Chamados::index($request));
+	}
+]);
+
+$obRouter->post('/master/chamados', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Chamados::getInfo($request), 'application/json');
+	}
+]);
+
+$obRouter->get('/master/chamados/anexo/{id}', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		return Master\Chamados::downloadAnexo($request, $id);
+	}
+]);
+
 $obRouter->post('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

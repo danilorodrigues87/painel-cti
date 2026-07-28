@@ -77,13 +77,13 @@
       }
       var u = r.ultima;
       var t = u
-        ? ('última ' + (u.created_at || '') + ' · ' + (u.origem || '') + ' · ok ' + (u.ok || 0) + ' / erros ' + (u.erro || 0) + ' (proc. ' + (u.processados || 0) + ')')
-        : 'ainda não executado';
+        ? ('última execução em ' + (u.created_at || '') + ' · publicados ' + (u.ok || 0) + ' · erros ' + (u.erro || 0))
+        : 'ainda não houve execução automática';
       $('#worker-status-txt').text(t);
-      var hint = '';
-      if (r.cron_cli) hint += 'CLI: <code class="small">' + esc(r.cron_cli) + '</code>';
-      if (r.cron_http) hint += (hint ? ' · ' : '') + 'HTTP: <code class="small">' + esc(r.cron_http) + '</code>';
-      $('#cron-hint').html(hint);
+      $('#cron-hint').empty();
+      if (!u && r.cron_http) {
+        $('#cron-hint').text('Se as publicações não saírem sozinhas, fale com o suporte.');
+      }
     });
   }
 

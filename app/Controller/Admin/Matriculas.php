@@ -16,6 +16,7 @@ use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\ModuleGateHelper;
 use \App\Common\Helpers\BrandingHelper;
 use \App\Common\Helpers\ContratoTemplateHelper;
+use \App\Common\Helpers\MatriculaStatusHelper;
 use \App\Model\Entity\EscolasAssinantes;
 
 
@@ -45,47 +46,36 @@ class Matriculas extends Page{
     $postVars = $request->getPostVars();
     $paginaAtual = $postVars['page'] ?? 1;
 
+ $id_cliente = (isset($postVars['filtro']) && $postVars['filtro'] !== '' && $postVars['filtro'] !== null && (int)$postVars['filtro'] > 0)
+	? (int)$postVars['filtro'] : 0;
+	$busca = trim((string)($postVars['busca'] ?? ''));
+	$statusFiltro = trim((string)($postVars['status'] ?? ''));
 
+    $where = 'id_admin = '.(int)$id_admin;
+	if ($id_cliente > 0) {
+		$where .= ' AND id_aluno = '.$id_cliente;
+	}
+	$idsBusca = TenantHelper::idsAlunosPorBusca((int)$id_admin, $busca);
+	if (is_array($idsBusca)) {
+		if (!$idsBusca) {
+			$where .= ' AND 1=0';
+		} else {
+			$where .= ' AND id_aluno IN ('.implode(',', $idsBusca).')';
+		}
+	}
+	if ($statusFiltro === '0' || $statusFiltro === '1' || $statusFiltro === '3') {
+		$where .= ' AND status = '.(int)$statusFiltro;
+	}
 
- $id_cliente = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? intval($postVars['filtro']) : '';
+		MatriculaStatusHelper::encerrarVencidasTenant((int)$id_admin);
 
-
-    // SELECT PARA PESQUISA POR CLIENTE
-    $selecteCliente =
-    '<div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
-    <select onchange="listar(this.value,1)" class="form-control" id="aluno" name="aluno">
-    <option value="0">Filtrar por aluno</option>';
-
-    $results = EntityUser::getUser("nivel = 'Cliente' AND id_admin = '". $id_admin ."'", 'nome ASC'); 
-
-    while ($obCliente = $results->fetchObject(EntityUser::class)) {
-
-      $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
-
-      $selecteCliente .=
-      '<option '.$selected.' value="'.$obCliente->id.'">'.$obCliente->nome.'</option>';
-
-    }
-
-    $selecteCliente .=
-    ' </select>
-    </div>';
-
-
-    $wherePadrao = "id_admin = '" . (int)$id_admin . "'";
-    $where = TenantHelper::whereMatriculaFiltro((int)$id_cliente, (int)$id_admin, $wherePadrao);
-
-    $itens = '<div class="row">' . $selecteCliente . '
-    <div class="col">
-        <button type="button" class="btn btn-success" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Nova Matricula</button>
-    </div>
-</div>';
+    $itens = '';
 
 		//QUANTIDADE TOTAL DE REGISTROS
-		$quantidadeTotal = EntityMatri::getMatriculas($where,null,null,'COUNT(*) as qtd')->fetchObject()->qtd;
+		$quantidadeTotal = (int)(EntityMatri::getMatriculas($where,null,null,'COUNT(*) as qtd')->fetchObject()->qtd ?? 0);
 
 		//INSTANCIA DE PAGINAÇÃO
-		$obPagination = new Pagination($quantidadeTotal,$paginaAtual,5);
+		$obPagination = new Pagination($quantidadeTotal,$paginaAtual,10);
 
 		//RESULTADOS DA PAGINA
 		$results = EntityMatri::getMatriculas($where, 'id DESC', $obPagination->getLimit()); 
@@ -105,14 +95,17 @@ class Matriculas extends Page{
 			}
 
             $disabled='';
+			$btnEncerrar = '';
 
 			$total = $dados->qtd_parcelas * $dados->valor;
-			if($dados->status == 0){
-				$status = 'Em andamento';
-			} else if($dados->status == 1){
-				$status = 'Encerrado';
+			$statusMat = (int)$dados->status;
+			$status = MatriculaStatusHelper::labelStatus($statusMat);
+			if ($statusMat === MatriculaStatusHelper::STATUS_ANDAMENTO) {
+				$btnEncerrar = '<li>
+        <a class="dropdown-item" href="#" onclick="encerrar_contrato('.$dados->id.'); return false;">
+        <i class="fa-regular fa-circle-check fa-lg"></i> Encerrar</a>
+        </li>';
 			} else {
-				$status = 'Cancelado';
                 $disabled='disabled';
 			}
 
@@ -137,6 +130,7 @@ class Matriculas extends Page{
         <a class="dropdown-item disabled" href="#" onclick="list_itens('.$dados->id.', \'editar\')">
         <i class="far fa-edit fa-lg"></i> Editar</a>
         </li>
+        '.$btnEncerrar.'
         <li>
         <a class="dropdown-item '.$disabled.'" href="#" onclick="cancelar_contrato('.$dados->id.')" >
         <i class="fa-regular fa-rectangle-xmark fa-lg"></i> Cancelar</a>
@@ -148,6 +142,9 @@ class Matriculas extends Page{
 
      }
 
+		if ($itens === '') {
+			$itens = '<tr><td colspan="6" class="text-center text-muted py-4">Nenhuma matrícula encontrada com esses filtros.</td></tr>';
+		}
 
      $table = '<div class="card-body">
      <div class="table-responsive">
@@ -553,25 +550,38 @@ public static function cancelarMatricula($request){
   $id_admin = parent::getIdAdminInt();
 
   if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
-    return 'Matrícula não encontrada.';
+    return json_encode(['ok' => false, 'message' => 'Matrícula não encontrada.']);
   }
 
-        //NOVA INSTANCIA
+  $mat = EntityMatri::getMatriculaById($id);
+  if (!$mat || (int)$mat->status !== MatriculaStatusHelper::STATUS_ANDAMENTO) {
+    return json_encode(['ok' => false, 'message' => 'Só é possível cancelar matrícula em andamento.']);
+  }
+
   $obUsers = new EntityMatri;
   $obUsers->id = $id;
   $obUsers->cancelar();
 
-  if($obUsers){
+  $baixadas = MatriculaStatusHelper::cancelarParcelasAbertas($id, $id_admin);
 
-    $obCaixa = new EntityCaixa;
-    $obCaixa->id_ref = $postVars['id'];
-    $obCaixa->excluirMatricula();
-
-   return true;
-} else {
-   return 'Erro ao cancelar essa matricula';
+  return json_encode([
+    'ok' => true,
+    'message' => 'Contrato cancelado. '.$baixadas.' parcela(s) em aberto baixada(s) com R$ 0 (histórico preservado).',
+    'parcelas_baixadas' => $baixadas,
+  ]);
 }
 
+public static function encerrarMatricula($request){
+
+  $postVars = $request->getPostVars();
+  $id = (int)($postVars['id'] ?? 0);
+  $id_admin = parent::getIdAdminInt();
+
+  if (!MatriculaStatusHelper::encerrarMatricula($id, $id_admin)) {
+    return json_encode(['ok' => false, 'message' => 'Não foi possível encerrar esta matrícula.']);
+  }
+
+  return json_encode(['ok' => true, 'message' => 'Matrícula encerrada.']);
 }
 
 public static function verContrato($request,$id){

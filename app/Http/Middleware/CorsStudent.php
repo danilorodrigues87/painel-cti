@@ -5,8 +5,9 @@ namespace App\Http\Middleware;
 use App\Common\Environment;
 
 /**
- * CORS para o portal Ascend (API aluno).
+ * CORS para o portal do aluno (API /api/v1/student).
  * Headers e preflight ficam aqui — não no index.php.
+ * Só Origins listados em STUDENT_CORS_ORIGINS (ou localhost em dev).
  */
 class CorsStudent {
 
@@ -19,31 +20,28 @@ class CorsStudent {
 
 		$allow = false;
 		if ($origin === '') {
+			// Mesma origem / curl / sem browser — não ecoa Origin arbitrário
+			$allow = false;
+		} elseif (in_array('*', $origins, true)) {
 			$allow = true;
-		} elseif (in_array($origin, $origins, true) || in_array('*', $origins, true)) {
+		} elseif (in_array($origin, $origins, true)) {
 			$allow = true;
 		} elseif (self::isLocalDevOrigin($origin)) {
 			$allow = true;
-		} else {
-			// Ecoa Origin (JWT protege a API) — evita bloqueio por lista desatualizada no .env
-			$allow = true;
 		}
 
-		if ($allow) {
-			if ($origin !== '') {
-				header('Access-Control-Allow-Origin: '.$origin);
-				header('Access-Control-Allow-Credentials: true');
-				header('Vary: Origin');
-			} else {
-				header('Access-Control-Allow-Origin: *');
+		if ($allow && $origin !== '') {
+			header('Access-Control-Allow-Origin: '.$origin);
+			header('Access-Control-Allow-Credentials: true');
+			header('Vary: Origin');
+			header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+			header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
+			header('Access-Control-Expose-Headers: Content-Type, Authorization');
+			header('Access-Control-Max-Age: 86400');
+			if (self::isLocalDevOrigin($origin)) {
+				header('Access-Control-Allow-Private-Network: true');
 			}
 		}
-
-		header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-		header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
-		header('Access-Control-Expose-Headers: Content-Type, Authorization');
-		header('Access-Control-Max-Age: 86400');
-		header('Access-Control-Allow-Private-Network: true');
 	}
 
 	public static function isStudentApiUri(string $uri): bool {
@@ -54,11 +52,24 @@ class CorsStudent {
 		self::applyHeaders();
 
 		if (strtoupper($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
-			http_response_code(204);
+			$origin = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+			$allowed = $origin !== '' && (
+				self::isLocalDevOrigin($origin)
+				|| in_array($origin, self::allowedOrigins(), true)
+				|| in_array('*', self::allowedOrigins(), true)
+			);
+			http_response_code($allowed ? 204 : 403);
 			exit;
 		}
 
 		return $next($request);
+	}
+
+	/** @return list<string> */
+	private static function allowedOrigins(): array {
+		$allowedRaw = (string)(Environment::get('STUDENT_CORS_ORIGINS')
+			?: 'http://localhost:8080,http://127.0.0.1:8080,http://localhost:8081,http://127.0.0.1:8081');
+		return array_values(array_filter(array_map('trim', explode(',', $allowedRaw))));
 	}
 
 	private static function isLocalDevOrigin(string $origin): bool {

@@ -356,6 +356,11 @@ class SystemModules {
 			'label' => 'Ajuda',
 			'link' => URL.'/painel/ajuda',
 			'icon' => 'fa-solid fa-circle-question'
+		],
+		'Suporte' => [
+			'label' => 'Suporte',
+			'link' => URL.'/painel/suporte',
+			'icon' => 'fa-solid fa-headset'
 		]
 
 	];

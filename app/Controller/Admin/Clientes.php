@@ -11,6 +11,7 @@ use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\EmailValidator;
 use \App\Common\Helpers\UserFotoHelper;
 use \App\Common\Helpers\ModuleGateHelper;
+use \App\Common\Helpers\MatriculaStatusHelper;
 use \App\Model\Entity\AlunoObservacao;
 use \App\Session\User\Login as SessionUser;
 
@@ -40,49 +41,42 @@ class Clientes extends Page{
 		$postVars = $request->getPostVars();
 		$paginaAtual = $postVars['page'] ?? 1;
 
-    $id_cliente = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? intval($postVars['filtro']) : '';
+    $id_cliente = (isset($postVars['filtro']) && $postVars['filtro'] !== '' && $postVars['filtro'] !== null && (int)$postVars['filtro'] > 0)
+		? (int)$postVars['filtro'] : 0;
+	$busca = trim((string)($postVars['busca'] ?? ''));
+	$ativo = trim((string)($postVars['ativo'] ?? ''));
+	$comMatricula = trim((string)($postVars['matricula'] ?? ''));
 
-    // SELECT PARA PESQUISA POR CLIENTE
-    $selecteCliente =
-    '<div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
-    <select onchange="listar(this.value,1)" class="form-control" id="aluno" name="aluno">
-    <option value="0">Filtrar por aluno</option>';
+    $where = "nivel = 'Cliente' AND id_admin = ".(int)$id_admin;
+	if ($id_cliente > 0) {
+		$where .= ' AND id = '.$id_cliente;
+	}
+	$termo = TenantHelper::termoLike($busca);
+	if ($termo !== '') {
+		$like = '\'%'.$termo.'%\'';
+		$where .= ' AND (nome LIKE '.$like.' OR email LIKE '.$like.' OR whatsapp LIKE '.$like.')';
+	}
+	if ($ativo === 's' || $ativo === 'n') {
+		$where .= ' AND ativo = "'.$ativo.'"';
+	}
+	if ($comMatricula === 'ativa') {
+		$where .= ' AND id IN (SELECT id_aluno FROM matriculas WHERE id_admin = '.(int)$id_admin
+			.' AND '.MatriculaStatusHelper::sqlAtiva('matriculas').')';
+	} elseif ($comMatricula === 'sem') {
+		$where .= ' AND id NOT IN (SELECT id_aluno FROM matriculas WHERE id_admin = '.(int)$id_admin
+			.' AND '.MatriculaStatusHelper::sqlAtiva('matriculas').')';
+	}
 
-    $results = EntityUser::getUser("nivel = 'Cliente' AND id_admin = '". $id_admin ."'", 'nome ASC');
-
-    while ($obCliente = $results->fetchObject(EntityUser::class)) {
-
-      $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
-
-      $selecteCliente .=
-      '<option '.$selected.' value="'.$obCliente->id.'">'.$obCliente->nome.'</option>';
-
-    }
-
-    $selecteCliente .=
-    ' </select>
-    </div>';
-
-
-
-    $wherePadrao = "nivel = 'Cliente' AND id_admin = '" . $id_admin . "'";
-    $where = TenantHelper::whereComFiltroId((int)$id_cliente, (int)$id_admin, $wherePadrao);
-
-$itens = '<div class="row">' . $selecteCliente . '
-    <div class="col">
-        <button type="button" class="btn btn-success" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Cadastrar novo</button>
-    </div>
-</div>';
-
+$itens = '';
 
 // QUANTIDADE TOTAL DE REGISTROS
-$quantidadeTotal = EntityUser::getUser($where, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+$quantidadeTotal = (int)(EntityUser::getUser($where, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd ?? 0);
 
 // INSTANCIA DE PAGINAÇÃO
-$obPagination = new Pagination($quantidadeTotal, $paginaAtual, 5);
+$obPagination = new Pagination($quantidadeTotal, $paginaAtual, 10);
 
 // RESULTADOS DA PAGINA
-$results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
+$results = EntityUser::getUser($where, 'nome ASC', $obPagination->getLimit());
 
 		$userLoged = SessionUser::getUserLogedData();
 		$idAdminGate = (int)($userLoged['usuario']['id_admin'] ?? 0);
@@ -91,6 +85,9 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 
 		//REDERIZA O ITEM
 		while ($obUsers = $results->fetchObject(EntityUser::class)) {
+			$badgeAtivo = (($obUsers->ativo ?? '') === 's')
+				? '<span class="badge bg-success">Ativo</span>'
+				: '<span class="badge bg-secondary">Inativo</span>';
 			$linkProgressoEad = $podeProgressoEad
 				? '<li>
 			<a class="dropdown-item" href="'.URL.'/painel/ead/aluno/'.$obUsers->id.'"><i class="fa-solid fa-graduation-cap fa-lg"></i> Progresso EAD</a>
@@ -100,9 +97,9 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 			<a class="dropdown-item" href="'.URL.'/painel/alunos/'.$obUsers->id.'/extrato"><i class="fa-solid fa-file-invoice-dollar fa-lg"></i> Extrato financeiro</a>
 			</li>';
 			$itens .= '<tr>
-			<td>'.$obUsers->nome.'</td>
-			<td>'.$obUsers->email.'</td>
-			<td class="mascara-celular">'.$obUsers->whatsapp.'</td>
+			<td>'.htmlspecialchars((string)$obUsers->nome, ENT_QUOTES, 'UTF-8').'<div class="small mt-1">'.$badgeAtivo.'</div></td>
+			<td>'.htmlspecialchars((string)$obUsers->email, ENT_QUOTES, 'UTF-8').'</td>
+			<td class="mascara-celular">'.htmlspecialchars((string)$obUsers->whatsapp, ENT_QUOTES, 'UTF-8').'</td>
 			<td>
 			<div class="dropdown">
 			<button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -133,6 +130,9 @@ $results = EntityUser::getUser($where, 'id DESC', $obPagination->getLimit());
 
 		}
 
+		if ($itens === '') {
+			$itens = '<tr><td colspan="4" class="text-center text-muted py-4">Nenhum aluno encontrado com esses filtros.</td></tr>';
+		}
 
 		$table = '<div class="card-body">
 		<div class="table-responsive">

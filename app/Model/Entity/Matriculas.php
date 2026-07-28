@@ -124,7 +124,7 @@ class Matriculas{
 			$obCaixa->vencimento = $vencimento;
 			$obCaixa->referencia = 'Mtrcicula Curso';
 			$obCaixa->id_ref = $this->id;
-			$obCaixa->status = 'Em aberto';
+			$obCaixa->status = \App\Common\Helpers\FinanceiroAlunoHelper::STATUS_ABERTO;
 			$obCaixa->tipo_pagamento = '';
 			$obCaixa->valor_pago = 0;
 			$obCaixa->txt_id = '';

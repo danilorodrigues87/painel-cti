@@ -12,6 +12,8 @@ use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\PlanilhaHelper;
 use \App\Common\Helpers\EmailValidator;
 use \App\Common\Communication\WhatsappEscolaService;
+use \App\Common\Helpers\ModuleGateHelper;
+use \App\Model\Db\Database;
 use \App\Model\Db\Pagination;
 
 class CrmLeads extends Page{
@@ -1173,15 +1175,72 @@ class CrmLeads extends Page{
 			return;
 		}
 
-		$envio = WhatsappEscolaService::enviarTexto($idAdmin, $telefone, $mensagem);
-		if(!empty($envio['ok']) && $usuarioId > 0){
-			self::registrarHistorico(
+		$labelStatus = self::$labelsStatus[$statusNovo] ?? $statusNovo;
+		$modsEscola = ModuleGateHelper::getModulosEscola($idAdmin);
+		if (!in_array('WhatsApp', $modsEscola, true)) {
+			self::marcarStatusWaLead((int)$lead->id, 'pulado');
+			self::registrarHistoricoWaOpcional(
 				(int)$lead->id,
 				$usuarioId,
-				'whatsapp_automatico',
-				'Mensagem automática enviada ao mudar para "'.(self::$labelsStatus[$statusNovo] ?? $statusNovo).'".'
+				'WhatsApp automático não enviado ao mudar para "'.$labelStatus.'": escola sem módulo WhatsApp (Evolution).'
 			);
+			return;
 		}
+
+		$statusWa = WhatsappEscolaService::status($idAdmin);
+		if (empty($statusWa['conectado'])) {
+			self::marcarStatusWaLead((int)$lead->id, 'pulado');
+			$motivo = !empty($statusWa['erro'])
+				? (string)$statusWa['erro']
+				: 'WhatsApp/Evolution não conectado.';
+			self::registrarHistoricoWaOpcional(
+				(int)$lead->id,
+				$usuarioId,
+				'WhatsApp automático não enviado ao mudar para "'.$labelStatus.'": '.$motivo
+			);
+			return;
+		}
+
+		$envio = WhatsappEscolaService::enviarTexto($idAdmin, $telefone, $mensagem);
+		if (!empty($envio['ok'])) {
+			self::marcarStatusWaLead((int)$lead->id, 'enviado');
+			self::registrarHistoricoWaOpcional(
+				(int)$lead->id,
+				$usuarioId,
+				'Mensagem automática enviada ao mudar para "'.$labelStatus.'".'
+			);
+			return;
+		}
+
+		self::marcarStatusWaLead((int)$lead->id, 'erro');
+		$erroMsg = trim((string)($envio['message'] ?? 'Falha ao enviar'));
+		self::registrarHistoricoWaOpcional(
+			(int)$lead->id,
+			$usuarioId,
+			'Falha no WhatsApp automático ("'.$labelStatus.'"): '.$erroMsg
+		);
+	}
+
+	private static function marcarStatusWaLead(int $leadId, string $statusWa): void {
+		if ($leadId <= 0) {
+			return;
+		}
+		try {
+			(new Database('crm_leads'))->update('id = '.$leadId, ['status_wa' => $statusWa]);
+		} catch (\Throwable $e) {
+			// coluna/status legado — não interrompe o fluxo do CRM
+		}
+	}
+
+	private static function registrarHistoricoWaOpcional(int $leadId, int $usuarioId, string $observacao): void {
+		if ($leadId <= 0) {
+			return;
+		}
+		$uid = $usuarioId > 0 ? $usuarioId : (int)(parent::getIdAdmin()['usuario']['id'] ?? 0);
+		if ($uid <= 0) {
+			return;
+		}
+		self::registrarHistorico($leadId, $uid, 'whatsapp_automatico', $observacao);
 	}
 
 	/** Templates enxutos por status (null = não envia). */
