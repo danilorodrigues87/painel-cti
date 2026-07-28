@@ -11,6 +11,9 @@ use App\Common\Helpers\SocialPublishService;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\SocialPost;
 use App\Model\Entity\SocialPostMidia;
+use App\Model\Entity\SocialBiblioteca;
+use App\Model\Entity\SocialPublishLog;
+use App\Model\Entity\SocialWorkerRun;
 
 class SocialAgenda extends Page {
 
@@ -56,6 +59,9 @@ class SocialAgenda extends Page {
 		if ($acao === 'semana') {
 			return self::semana($post);
 		}
+		if ($acao === 'mes') {
+			return self::mes($post);
+		}
 		if ($acao === 'salvar') {
 			return self::salvar($post);
 		}
@@ -71,6 +77,18 @@ class SocialAgenda extends Page {
 		if ($acao === 'status_meta') {
 			return self::statusMeta();
 		}
+		if ($acao === 'status_worker') {
+			return self::statusWorker();
+		}
+		if ($acao === 'biblioteca_listar') {
+			return self::bibliotecaListar($post);
+		}
+		if ($acao === 'biblioteca_excluir') {
+			return self::bibliotecaExcluir((int)($post['id'] ?? 0));
+		}
+		if ($acao === 'historico') {
+			return self::historico();
+		}
 		return self::json(['success' => false, 'message' => 'Ação inválida.']);
 	}
 
@@ -79,6 +97,7 @@ class SocialAgenda extends Page {
 			return self::json(['success' => false, 'message' => 'Acesso negado.']);
 		}
 		$idAdmin = TenantHelper::getIdAdmin();
+		$user = SessionUser::getUserLogedData();
 		$file = $_FILES['arquivo'] ?? null;
 		if (!is_array($file)) {
 			return self::json(['success' => false, 'message' => 'Arquivo ausente.']);
@@ -87,6 +106,18 @@ class SocialAgenda extends Page {
 		if (!$saved) {
 			return self::json(['success' => false, 'message' => 'Upload inválido (use imagem ≤8MB ou vídeo ≤100MB).']);
 		}
+		$bibId = null;
+		if (SocialBiblioteca::tabelaExiste()) {
+			$bib = new SocialBiblioteca();
+			$bib->id_admin = $idAdmin;
+			$bib->titulo = trim((string)($file['name'] ?? '')) ?: null;
+			$bib->tipo = $saved['tipo'];
+			$bib->path_local = $saved['relative'];
+			$bib->mime = $saved['mime'];
+			$bib->bytes = $saved['bytes'];
+			$bib->created_by = (int)($user['usuario']['id'] ?? 0) ?: null;
+			$bibId = $bib->salvar();
+		}
 		return self::json([
 			'success' => true,
 			'path' => $saved['relative'],
@@ -94,12 +125,14 @@ class SocialAgenda extends Page {
 			'tipo' => $saved['tipo'],
 			'mime' => $saved['mime'],
 			'bytes' => $saved['bytes'],
+			'biblioteca_id' => $bibId,
 		]);
 	}
 
 	private static function statusMeta(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$ultima = SocialWorkerRun::ultima();
 		return self::json([
 			'success' => true,
 			'sql_meta' => EscolaIntegracoes::temColunasMeta(),
@@ -108,24 +141,29 @@ class SocialAgenda extends Page {
 			'ig' => $cfg instanceof EscolaIntegracoes ? (int)$cfg->meta_ig_ativo : 0,
 			'page_name' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_page_name ?? '') : '',
 			'ig_username' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_ig_username ?? '') : '',
+			'biblioteca_ok' => SocialBiblioteca::tabelaExiste(),
+			'historico_ok' => SocialPublishLog::tabelaExiste(),
+			'worker_ok' => SocialWorkerRun::tabelaExiste(),
+			'worker_ultima' => $ultima,
+			'cron_url' => rtrim((string)URL, '/').'/cron/social?token=SEU_SYSTEM_TOKEN',
 		]);
 	}
 
-	private static function semana(array $post): string {
-		$idAdmin = TenantHelper::getIdAdmin();
-		$inicio = trim((string)($post['inicio'] ?? ''));
-		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio)) {
-			// segunda da semana atual
-			$dt = new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo'));
-			$n = (int)$dt->format('N'); // 1=seg
-			$inicio = $dt->modify('-'.($n - 1).' days')->format('Y-m-d');
-		}
-		$ini = new \DateTimeImmutable($inicio.' 00:00:00', new \DateTimeZone('America/Sao_Paulo'));
-		$fim = $ini->modify('+6 days')->format('Y-m-d');
-		$inicio = $ini->format('Y-m-d');
+	private static function statusWorker(): string {
+		$ultima = SocialWorkerRun::ultima();
+		return self::json([
+			'success' => true,
+			'tabela_ok' => SocialWorkerRun::tabelaExiste(),
+			'ultima' => $ultima,
+			'cron_cli' => '*/5 * * * * php '.str_replace('\\', '/', dirname(__DIR__, 3)).'/worker/social.php',
+			'cron_http' => rtrim((string)URL, '/').'/cron/social?token='.(defined('SYSTEM_TOKEN') ? '***' : 'SYSTEM_TOKEN'),
+		]);
+	}
 
+	/** @param SocialPost[] $posts */
+	private static function mapPosts(array $posts, int $idAdmin): array {
 		$itens = [];
-		foreach (SocialPost::listSemana($idAdmin, $inicio, $fim) as $p) {
+		foreach ($posts as $p) {
 			$midias = [];
 			foreach (SocialPostMidia::listByPost((int)$p->id, $idAdmin) as $m) {
 				$midias[] = [
@@ -149,13 +187,40 @@ class SocialAgenda extends Page {
 				'midias' => $midias,
 			];
 		}
+		return $itens;
+	}
+
+	private static function semana(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$inicio = trim((string)($post['inicio'] ?? ''));
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $inicio)) {
+			$dt = new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo'));
+			$n = (int)$dt->format('N');
+			$inicio = $dt->modify('-'.($n - 1).' days')->format('Y-m-d');
+		}
+		$ini = new \DateTimeImmutable($inicio.' 00:00:00', new \DateTimeZone('America/Sao_Paulo'));
+		$fim = $ini->modify('+6 days')->format('Y-m-d');
+		$inicio = $ini->format('Y-m-d');
 
 		return self::json([
 			'success' => true,
 			'sql_ok' => true,
 			'inicio' => $inicio,
 			'fim' => $fim,
-			'itens' => $itens,
+			'itens' => self::mapPosts(SocialPost::listSemana($idAdmin, $inicio, $fim), $idAdmin),
+		]);
+	}
+
+	private static function mes(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$ym = trim((string)($post['mes'] ?? date('Y-m')));
+		if (!preg_match('/^\d{4}-\d{2}$/', $ym)) {
+			$ym = date('Y-m');
+		}
+		return self::json([
+			'success' => true,
+			'mes' => $ym,
+			'itens' => self::mapPosts(SocialPost::listMes($idAdmin, $ym), $idAdmin),
 		]);
 	}
 
@@ -264,7 +329,7 @@ class SocialAgenda extends Page {
 		$existentes = SocialPostMidia::listByPost((int)$ob->id, $idAdmin);
 		if ($listaMidias) {
 			foreach ($existentes as $m) {
-				if (!empty($m->path_local)) {
+				if (!empty($m->path_local) && !SocialBiblioteca::pathEmUso($idAdmin, (string)$m->path_local)) {
 					SocialMediaStorage::apagar((string)$m->path_local);
 				}
 				$m->excluir();
@@ -346,7 +411,7 @@ class SocialAgenda extends Page {
 			return self::json(['success' => false, 'message' => 'Não é possível cancelar.']);
 		}
 		foreach (SocialPostMidia::listByPost($id, $idAdmin) as $m) {
-			if (!empty($m->path_local)) {
+			if (!empty($m->path_local) && !SocialBiblioteca::pathEmUso($idAdmin, (string)$m->path_local)) {
 				SocialMediaStorage::apagar((string)$m->path_local);
 			}
 			$m->excluir();
@@ -369,7 +434,7 @@ class SocialAgenda extends Page {
 		$ob->agendado_em = date('Y-m-d H:i:s');
 		$ob->erro_msg = null;
 		$ob->salvar();
-		$r = SocialPublishService::publicarUm($ob);
+		$r = SocialPublishService::publicarUm($ob, 'manual');
 		return self::json([
 			'success' => !empty($r['ok']),
 			'message' => $r['message'] ?? '',
@@ -378,7 +443,56 @@ class SocialAgenda extends Page {
 
 	private static function rodarWorker(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$resumo = SocialPublishService::processar($idAdmin, 20);
-		return self::json(['success' => true, 'resumo' => $resumo]);
+		$resumo = SocialPublishService::processar($idAdmin, 20, 'manual');
+		return self::json(['success' => true, 'resumo' => $resumo, 'worker_ultima' => SocialWorkerRun::ultima()]);
+	}
+
+	private static function bibliotecaListar(array $post): string {
+		if (!SocialBiblioteca::tabelaExiste()) {
+			return self::json([
+				'success' => false,
+				'sql_ok' => false,
+				'message' => 'Execute database/social_fase_a_produto.sql',
+			]);
+		}
+		$idAdmin = TenantHelper::getIdAdmin();
+		$tipo = trim((string)($post['tipo'] ?? ''));
+		$tipo = ($tipo === 'image' || $tipo === 'video') ? $tipo : null;
+		$itens = [];
+		foreach (SocialBiblioteca::listByAdmin($idAdmin, $tipo, 120) as $b) {
+			$itens[] = [
+				'id' => (int)$b->id,
+				'titulo' => (string)($b->titulo ?? ''),
+				'tipo' => $b->tipo,
+				'path' => $b->path_local,
+				'url' => $b->urlPublica(),
+				'mime' => $b->mime,
+				'bytes' => $b->bytes,
+				'created_at' => $b->created_at,
+			];
+		}
+		return self::json(['success' => true, 'sql_ok' => true, 'itens' => $itens]);
+	}
+
+	private static function bibliotecaExcluir(int $id): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$ob = SocialBiblioteca::getById($id, $idAdmin);
+		if (!$ob) {
+			return self::json(['success' => false, 'message' => 'Mídia não encontrada.']);
+		}
+		$ob->excluir();
+		return self::json(['success' => true, 'message' => 'Removida da biblioteca.']);
+	}
+
+	private static function historico(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$posts = self::mapPosts(SocialPost::listHistorico($idAdmin, 60), $idAdmin);
+		$logs = SocialPublishLog::listByAdmin($idAdmin, 60);
+		return self::json([
+			'success' => true,
+			'posts' => $posts,
+			'logs' => $logs,
+			'sql_log_ok' => SocialPublishLog::tabelaExiste(),
+		]);
 	}
 }

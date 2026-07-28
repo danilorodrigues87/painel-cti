@@ -8,6 +8,8 @@ use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\MetaGraphHelper;
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\SocialAutomacao;
+use App\Model\Entity\SocialAutomacaoLog;
 
 class ConfigSocial extends Page {
 
@@ -60,6 +62,21 @@ class ConfigSocial extends Page {
 		if ($acao === 'desconectar') {
 			return self::desconectar();
 		}
+		if ($acao === 'listar_automacoes') {
+			return self::listarAutomacoes();
+		}
+		if ($acao === 'salvar_automacao') {
+			return self::salvarAutomacao($post);
+		}
+		if ($acao === 'excluir_automacao') {
+			return self::excluirAutomacao($post);
+		}
+		if ($acao === 'log_automacoes') {
+			return self::logAutomacoes();
+		}
+		if ($acao === 'subscribe_webhooks') {
+			return self::subscribeWebhooks();
+		}
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 	}
 
@@ -88,12 +105,17 @@ class ConfigSocial extends Page {
 			? rtrim((string)URL, '/').'/webhook/meta/'.$idAdmin.'/'.$wh
 			: '';
 
+		$webhookUrlGlobal = rtrim((string)URL, '/').'/webhook/meta';
+
 		return json_encode([
 			'success' => true,
 			'coluna_ok' => $colOk,
 			'app_ok' => MetaGraphHelper::appConfigurado(),
+			'auto_sql_ok' => SocialAutomacao::tabelaExiste(),
 			'meta_fb_ativo' => $cfg instanceof EscolaIntegracoes ? (int)$cfg->meta_fb_ativo : 0,
 			'meta_ig_ativo' => $cfg instanceof EscolaIntegracoes ? (int)$cfg->meta_ig_ativo : 0,
+			'meta_auto_ativo' => ($cfg instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaMetaAuto())
+				? (int)($cfg->meta_auto_ativo ?? 0) : 0,
 			'meta_page_id' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_page_id ?? '') : '',
 			'meta_page_name' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_page_name ?? '') : '',
 			'meta_ig_user_id' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_ig_user_id ?? '') : '',
@@ -103,6 +125,7 @@ class ConfigSocial extends Page {
 			'meta_pronto' => $cfg instanceof EscolaIntegracoes && $cfg->temMetaPronto(),
 			'meta_conectado_em' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_conectado_em ?? '') : '',
 			'webhook_url' => $webhookUrl,
+			'webhook_url_global' => $webhookUrlGlobal,
 		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 	}
 
@@ -121,6 +144,9 @@ class ConfigSocial extends Page {
 		}
 		$cfg->meta_fb_ativo = !empty($post['meta_fb_ativo']) ? 1 : 0;
 		$cfg->meta_ig_ativo = !empty($post['meta_ig_ativo']) ? 1 : 0;
+		if (EscolaIntegracoes::temColunaMetaAuto()) {
+			$cfg->meta_auto_ativo = !empty($post['meta_auto_ativo']) ? 1 : 0;
+		}
 		$pageId = trim((string)($post['meta_page_id'] ?? ''));
 		$igId = trim((string)($post['meta_ig_user_id'] ?? ''));
 		if ($pageId !== '') {
@@ -271,8 +297,98 @@ class ConfigSocial extends Page {
 		}
 		$cfg->salvarMeta($p['page_token']);
 
+		// Assina webhooks da Page (feed/messages) para keyword→DM
+		MetaGraphHelper::subscribePageApps((string)$p['page_id'], (string)$p['page_token']);
+
 		$n = count($pages['pages']);
 		$request->getRouter()->redirect('/painel/config/social?oauth=ok&pages='.$n);
 		return '';
+	}
+
+	private static function listarAutomacoes(): string {
+		if (!SocialAutomacao::tabelaExiste()) {
+			return json_encode([
+				'success' => false,
+				'sql_ok' => false,
+				'message' => 'Execute database/social_automacoes.sql no phpMyAdmin.',
+			]);
+		}
+		$idAdmin = TenantHelper::getIdAdmin();
+		$itens = [];
+		foreach (SocialAutomacao::listByAdmin($idAdmin) as $a) {
+			$itens[] = [
+				'id' => (int)$a->id,
+				'palavra_chave' => (string)$a->palavra_chave,
+				'match_modo' => (string)$a->match_modo,
+				'mensagem_dm' => (string)$a->mensagem_dm,
+				'canais' => (string)$a->canais,
+				'ativo' => (int)$a->ativo,
+			];
+		}
+		return json_encode(['success' => true, 'sql_ok' => true, 'itens' => $itens], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function salvarAutomacao(array $post): string {
+		if (!SocialAutomacao::tabelaExiste()) {
+			return json_encode(['success' => false, 'message' => 'Execute database/social_automacoes.sql']);
+		}
+		$idAdmin = TenantHelper::getIdAdmin();
+		$id = (int)($post['id'] ?? 0);
+		$kw = trim((string)($post['palavra_chave'] ?? ''));
+		$msg = trim((string)($post['mensagem_dm'] ?? ''));
+		if ($kw === '' || $msg === '') {
+			return json_encode(['success' => false, 'message' => 'Palavra-chave e mensagem obrigatórias.']);
+		}
+		$ob = $id > 0 ? SocialAutomacao::getById($id, $idAdmin) : new SocialAutomacao();
+		if ($id > 0 && !$ob) {
+			return json_encode(['success' => false, 'message' => 'Regra não encontrada.']);
+		}
+		$ob->id_admin = $idAdmin;
+		$ob->palavra_chave = $kw;
+		$ob->match_modo = (string)($post['match_modo'] ?? 'contem');
+		$ob->mensagem_dm = $msg;
+		$ob->canais = (string)($post['canais'] ?? 'ambos');
+		$ob->ativo = !empty($post['ativo']) ? 1 : 0;
+		$ob->salvar();
+		return json_encode(['success' => true, 'message' => 'Regra salva.', 'id' => (int)$ob->id]);
+	}
+
+	private static function excluirAutomacao(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$ob = SocialAutomacao::getById((int)($post['id'] ?? 0), $idAdmin);
+		if (!$ob) {
+			return json_encode(['success' => false, 'message' => 'Não encontrada.']);
+		}
+		$ob->excluir();
+		return json_encode(['success' => true, 'message' => 'Excluída.']);
+	}
+
+	private static function logAutomacoes(): string {
+		if (!SocialAutomacao::tabelaExiste()) {
+			return json_encode(['success' => true, 'itens' => []]);
+		}
+		$idAdmin = TenantHelper::getIdAdmin();
+		return json_encode([
+			'success' => true,
+			'itens' => SocialAutomacaoLog::listRecentes($idAdmin, 40),
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function subscribeWebhooks(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if (!$cfg instanceof EscolaIntegracoes) {
+			return json_encode(['success' => false, 'message' => 'Meta não configurado.']);
+		}
+		$token = $cfg->getMetaPageTokenDescriptografada();
+		$pageId = trim((string)($cfg->meta_page_id ?? ''));
+		if (!$token || $pageId === '') {
+			return json_encode(['success' => false, 'message' => 'Page/token ausentes.']);
+		}
+		$r = MetaGraphHelper::subscribePageApps($pageId, $token);
+		return json_encode([
+			'success' => !empty($r['ok']),
+			'message' => $r['message'] ?? '',
+		], JSON_UNESCAPED_UNICODE);
 	}
 }

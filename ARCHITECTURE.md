@@ -247,10 +247,13 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 
 - **App Meta:** um só da CTI (`.env`: `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_GRAPH_VERSION`). Escolas **conectam** Page + IG Professional (OAuth ou token Dev).
 - **Config:** `/painel/config/social` (Diretor + permissão Redes sociais) — tokens em `escola_integracoes` via `CryptoHelper`. SQL: `database/escola_integracoes_meta.sql`
-- **Agenda:** `/painel/social` — grade semanal, lote, formatos **`feed` | `story` | `reel` | `carousel`** (SQL: `database/social_posts.sql` + `database/social_posts_formato.sql`). Upload em `uploads/social/{id_admin}/`.
-- **Publicação:** Feed imagem FB+IG; Carrossel IG (e fotos FB); **Story/Reel só Instagram** (`media_type=STORIES|REELS`). Worker: `php worker/social.php [id_admin] [limite]`.
+- **Agenda (Fase A produto):** `/painel/social` — visão **semana/mês**, filtros status/formato, abas Biblioteca + Histórico. Formatos **`feed` | `story` | `reel` | `carousel`**. SQL: `database/social_posts.sql` + `social_posts_formato.sql` + **`social_fase_a_produto.sql`** (`social_biblioteca`, `social_publish_log`, `social_worker_runs`). Upload em `uploads/social/{id_admin}/` (também entra na biblioteca).
+- **Publicação:** Feed imagem FB+IG; Carrossel IG (e fotos FB); **Story/Reel só Instagram**. Arquivos da biblioteca **não** são apagados ao cancelar/publicar.
+- **Worker / cron:** `php worker/social.php [id_admin] [limite]` **ou** HTTP `GET/POST /cron/social?token={SYSTEM_TOKEN}`. Agenda mostra última execução (`social_worker_runs`). Sem cron/worker, posts ficam só agendados.
+- **Automações (Fase 2):** keyword em comentário → DM (private reply). SQL `database/social_automacoes.sql`. Toggle `meta_auto_ativo` + regras em Config Social. Webhook `POST /webhook/meta` (global, resolve escola por Page/IG id) ou `/webhook/meta/{idAdmin}/{token}`. Escopos extras: `instagram_manage_comments`, `instagram_manage_messages`, `pages_messaging`, `pages_manage_engagement`. Após OAuth: `subscribed_apps` na Page.
 - **Permissão:** slug `social` no plano **e** label `Redes sociais` no checklist do usuário (sem auto-grant Diretor).
-- **Webhook:** esqueleto Fase 1; keyword→DM = Fase 2. App Review Meta para Live.
+- **App Review Meta** obrigatório para Live (publicação + messaging/comments).
+- **Roadmap produto:** B aprovação editorial · C legendas IA + Insights Meta · D fluxos tipo ManyChat.
 
 ### 5.10 Documentação / Ajuda da plataforma
 

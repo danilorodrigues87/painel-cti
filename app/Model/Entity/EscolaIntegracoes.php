@@ -77,6 +77,7 @@ class EscolaIntegracoes {
 	public $meta_token_expires_at;
 	public $meta_webhook_token;
 	public $meta_conectado_em;
+	public $meta_auto_ativo = 0;
 	public $updated_at;
 
 	public static function temColunasCobranca(): bool {
@@ -530,6 +531,47 @@ class EscolaIntegracoes {
 		return $cache;
 	}
 
+	public static function temColunaMetaAuto(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('escola_integracoes'))->execute(
+				"SHOW COLUMNS FROM escola_integracoes LIKE 'meta_auto_ativo'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	/** Localiza escola pelo Page ID ou IG User ID (webhook global). */
+	public static function getByMetaPageOrIg(?string $pageId, ?string $igId): ?self {
+		if (!self::temColunasMeta()) {
+			return null;
+		}
+		$pageId = trim((string)$pageId);
+		$igId = trim((string)$igId);
+		$parts = [];
+		if ($pageId !== '') {
+			$parts[] = 'meta_page_id = "'.addslashes($pageId).'"';
+		}
+		if ($igId !== '') {
+			$parts[] = 'meta_ig_user_id = "'.addslashes($igId).'"';
+		}
+		if (!$parts) {
+			return null;
+		}
+		$row = (new Database('escola_integracoes'))->select(
+			'('.implode(' OR ', $parts).')',
+			null,
+			1
+		)->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
 	/**
 	 * @param ?string $pageTokenNovo null = manter
 	 */
@@ -555,6 +597,9 @@ class EscolaIntegracoes {
 			'meta_webhook_token' => $this->meta_webhook_token ?: null,
 			'meta_conectado_em' => $this->meta_conectado_em ?: null,
 		];
+		if (self::temColunaMetaAuto()) {
+			$dados['meta_auto_ativo'] = (int)$this->meta_auto_ativo ? 1 : 0;
+		}
 
 		if ($pageTokenNovo !== null && $pageTokenNovo !== '') {
 			$cript = CryptoHelper::encrypt($pageTokenNovo);

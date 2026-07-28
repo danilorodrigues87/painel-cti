@@ -36,14 +36,19 @@ class MetaGraphHelper {
 		return rtrim((string)URL, '/').'/painel/config/social/oauth/callback';
 	}
 
-	/** Escopos Fase 1 (publicação). */
+	/** Escopos publicação + automações (comentários → DM). Requer App Review para Live. */
 	public static function oauthScopes(): string {
 		return implode(',', [
 			'pages_show_list',
 			'pages_manage_posts',
 			'pages_read_engagement',
+			'pages_manage_metadata',
+			'pages_manage_engagement',
+			'pages_messaging',
 			'instagram_basic',
 			'instagram_content_publish',
+			'instagram_manage_comments',
+			'instagram_manage_messages',
 			'business_management',
 		]);
 	}
@@ -323,6 +328,91 @@ class MetaGraphHelper {
 			return $parent;
 		}
 		return self::aguardarEPublicarIg($igUserId, $pageToken, (string)($parent['data']['id'] ?? ''), 40);
+	}
+
+	/**
+	 * Assina a Page nos campos de webhook (feed/comments via Page + messaging).
+	 * @return array{ok:bool,message?:string}
+	 */
+	public static function subscribePageApps(string $pageId, string $pageToken): array {
+		$fields = 'feed,messages,message_deliveries,message_reads';
+		$r = self::post($pageId.'/subscribed_apps', [
+			'subscribed_fields' => $fields,
+		], $pageToken);
+		if (empty($r['ok'])) {
+			return ['ok' => false, 'message' => $r['message'] ?? 'Falha ao assinar webhooks da Page.'];
+		}
+		return ['ok' => true, 'message' => 'Page inscrita nos webhooks.'];
+	}
+
+	/**
+	 * Private reply Instagram (comentário → DM) via Page messages API.
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function privateReplyInstagram(string $pageId, string $pageToken, string $commentId, string $text): array {
+		return self::postJson($pageId.'/messages', [
+			'recipient' => ['comment_id' => $commentId],
+			'message' => ['text' => $text],
+		], $pageToken);
+	}
+
+	/**
+	 * Private reply Facebook Page (comentário → Messenger).
+	 * @return array{ok:bool,id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function privateReplyFacebook(string $commentId, string $pageToken, string $text): array {
+		return self::post($commentId.'/private_replies', [
+			'message' => $text,
+		], $pageToken);
+	}
+
+	/**
+	 * POST JSON (necessário para Messenger / IG private replies).
+	 * @return array{ok:bool,data?:array,message?:string,auth_error?:bool,id?:string}
+	 */
+	public static function postJson(string $path, array $body, string $accessToken): array {
+		$url = 'https://graph.facebook.com/'.self::graphVersion().'/'.ltrim($path, '/');
+		$url .= (strpos($url, '?') === false ? '?' : '&').'access_token='.rawurlencode($accessToken);
+		$ch = curl_init($url);
+		$json = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		curl_setopt_array($ch, [
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_TIMEOUT => 60,
+			CURLOPT_CUSTOMREQUEST => 'POST',
+			CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+			CURLOPT_POSTFIELDS => $json,
+		]);
+		$raw = curl_exec($ch);
+		$errno = curl_errno($ch);
+		$err = curl_error($ch);
+		$http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+		if ($errno) {
+			return ['ok' => false, 'message' => 'cURL: '.$err];
+		}
+		$data = json_decode((string)$raw, true);
+		if (!is_array($data)) {
+			return ['ok' => false, 'message' => 'Resposta inválida da Meta (HTTP '.$http.').'];
+		}
+		if (isset($data['error'])) {
+			$code = (int)($data['error']['code'] ?? 0);
+			$msg = (string)($data['error']['message'] ?? 'Erro Meta');
+			$auth = in_array($code, [190, 102, 463, 467], true)
+				|| stripos($msg, 'Session has expired') !== false
+				|| stripos($msg, 'Error validating access token') !== false;
+			return [
+				'ok' => false,
+				'message' => $msg.($code ? ' (#'.$code.')' : ''),
+				'auth_error' => $auth,
+			];
+		}
+		$id = isset($data['message_id']) ? (string)$data['message_id']
+			: (isset($data['id']) ? (string)$data['id'] : null);
+		$out = ['ok' => true, 'data' => $data];
+		if ($id) {
+			$out['id'] = $id;
+		}
+		return $out;
 	}
 
 	/**

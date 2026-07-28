@@ -3,12 +3,13 @@
 namespace App\Controller\Webhook;
 
 use App\Common\Helpers\MetaGraphHelper;
+use App\Common\Helpers\SocialAutomacaoService;
 use App\Model\Entity\EscolaIntegracoes;
 
 /**
  * Webhook Meta Graph.
  * GET: verificação hub.challenge
- * POST: eventos (Fase 2 — comments/automação; por enquanto só ack)
+ * POST: comentários → keyword → DM (private reply)
  */
 class Meta {
 
@@ -16,6 +17,30 @@ class Meta {
 	public static function verifyGlobal($request) {
 		$q = $request->getQueryParams() ?: [];
 		return self::hubChallenge($q);
+	}
+
+	/**
+	 * POST global — Meta App Dashboard costuma usar uma única Callback URL.
+	 * Resolve a escola pelo Page ID / IG User ID do payload.
+	 */
+	public static function receberGlobal($request) {
+		$method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+		if ($method === 'GET') {
+			return self::hubChallenge($request->getQueryParams() ?: []);
+		}
+
+		$raw = file_get_contents('php://input');
+		if (!self::validarAssinatura((string)$raw)) {
+			http_response_code(403);
+			return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
+		}
+
+		$payload = json_decode((string)$raw, true);
+		$resumo = is_array($payload)
+			? SocialAutomacaoService::processarPayload(null, $payload)
+			: ['processados' => 0];
+
+		return json_encode(['success' => true, 'resumo' => $resumo], JSON_UNESCAPED_UNICODE);
 	}
 
 	/** GET/POST /webhook/meta/{idAdmin}/{token} */
@@ -35,26 +60,32 @@ class Meta {
 			return json_encode(['success' => false, 'message' => 'Token inválido.']);
 		}
 
-		// Validação de assinatura (se App Secret configurado)
 		$raw = file_get_contents('php://input');
-		$sig = (string)($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '');
-		$secret = MetaGraphHelper::appSecret();
-		if ($secret !== '' && $sig !== '') {
-			$expected = 'sha256='.hash_hmac('sha256', (string)$raw, $secret);
-			if (!hash_equals($expected, $sig)) {
-				http_response_code(403);
-				return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
-			}
+		if (!self::validarAssinatura((string)$raw)) {
+			http_response_code(403);
+			return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
 		}
 
 		$payload = json_decode((string)$raw, true);
-		// Fase 2: processar comments → automações
-		// Por enquanto apenas confirma recebimento.
-		if (is_array($payload)) {
-			// noop
-		}
+		$resumo = is_array($payload)
+			? SocialAutomacaoService::processarPayload($idAdmin, $payload)
+			: ['processados' => 0];
 
-		return json_encode(['success' => true]);
+		return json_encode(['success' => true, 'resumo' => $resumo], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function validarAssinatura(string $raw): bool {
+		$sig = (string)($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '');
+		$secret = MetaGraphHelper::appSecret();
+		// Sem secret ou sem header: em produção o ideal é falhar; mantém compat Dev
+		if ($secret === '') {
+			return true;
+		}
+		if ($sig === '') {
+			return false;
+		}
+		$expected = 'sha256='.hash_hmac('sha256', $raw, $secret);
+		return hash_equals($expected, $sig);
 	}
 
 	private static function hubChallenge(array $q) {

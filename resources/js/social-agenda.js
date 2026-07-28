@@ -1,350 +1,506 @@
-var semanaInicio = null;
-var postsCache = [];
-var midiasPendentes = [];
-var diasNomes = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+(function () {
+  'use strict';
 
-function postSocial(data) {
-	return $.ajax({
-		url: url_base + 'painel/social',
-		method: 'POST',
-		dataType: 'json',
-		data: data
-	});
-}
+  var API = url_base + '/painel/social';
+  var UPLOAD = url_base + '/painel/social/upload';
+  var posts = [];
+  var view = 'semana';
+  var anchor = startOfWeek(new Date());
+  var modalInst = null;
+  var bibPickInst = null;
+  /** @type {{path:string,tipo:string}[]} */
+  var selectedMidias = [];
 
-function ymd(d) {
-	var y = d.getFullYear();
-	var m = String(d.getMonth() + 1).padStart(2, '0');
-	var day = String(d.getDate()).padStart(2, '0');
-	return y + '-' + m + '-' + day;
-}
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function startOfWeek(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var day = x.getDay();
+    var diff = day === 0 ? -6 : 1 - day;
+    x.setDate(x.getDate() + diff);
+    return x;
+  }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function fmtLabel(d) { return pad(d.getDate()) + '/' + pad(d.getMonth() + 1); }
+  function fmtDtLocal(iso) {
+    if (!iso) return '';
+    return String(iso).replace(' ', 'T').slice(0, 16);
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function badgeStatus(st) {
+    var map = { agendado: 'primary', publicado: 'success', erro: 'danger', rascunho: 'secondary', cancelado: 'dark', publicando: 'warning' };
+    return '<span class="badge bg-' + (map[st] || 'secondary') + '">' + esc(st) + '</span>';
+  }
+  function badgeFormato(f) {
+    var map = { feed: 'info', story: 'warning', reel: 'danger', carousel: 'secondary' };
+    return '<span class="badge bg-' + (map[f] || 'secondary') + '">' + esc(f || 'feed') + '</span>';
+  }
+  function guessTipo(pathOrMime) {
+    var s = String(pathOrMime || '').toLowerCase();
+    if (s.indexOf('video') === 0 || /\.(mp4|mov|m4v)(\?|$)/.test(s)) return 'video';
+    return 'image';
+  }
 
-function mondayOf(date) {
-	var d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-	var day = d.getDay();
-	var diff = day === 0 ? -6 : 1 - day;
-	d.setDate(d.getDate() + diff);
-	return d;
-}
+  function postApi(data) {
+    return $.ajax({
+      url: API,
+      method: 'POST',
+      data: data,
+      dataType: 'json'
+    });
+  }
 
-function addDays(d, n) {
-	var x = new Date(d.getTime());
-	x.setDate(x.getDate() + n);
-	return x;
-}
+  function filtrosPass(p) {
+    var st = ($('#filtro-status').val() || '').trim();
+    var fo = ($('#filtro-formato').val() || '').trim();
+    if (st && p.status !== st) return false;
+    if (fo && (p.formato || 'feed') !== fo) return false;
+    return true;
+  }
 
-function statusBadge(st) {
-	var map = {
-		rascunho: 'secondary',
-		agendado: 'primary',
-		publicando: 'warning',
-		publicado: 'success',
-		erro: 'danger',
-		cancelado: 'dark'
-	};
-	return '<span class="badge bg-' + (map[st] || 'secondary') + '">' + st + '</span>';
-}
+  function loadMetaAndWorker() {
+    postApi({ acao: 'status_meta' }).done(function (r) {
+      if (!r || !r.success) return;
+      if (!r.pronto) $('#alert-meta-off').removeClass('d-none');
+      else $('#alert-meta-off').addClass('d-none');
+      if (r.biblioteca_ok === false || r.historico_ok === false || r.worker_ok === false) {
+        $('#alert-sql-social').removeClass('d-none');
+      }
+    });
+    postApi({ acao: 'status_worker' }).done(function (r) {
+      if (!r || !r.success) {
+        $('#worker-status-txt').text('indisponível');
+        return;
+      }
+      var u = r.ultima;
+      var t = u
+        ? ('última ' + (u.created_at || '') + ' · ' + (u.origem || '') + ' · ok ' + (u.ok || 0) + ' / erros ' + (u.erro || 0) + ' (proc. ' + (u.processados || 0) + ')')
+        : 'ainda não executado';
+      $('#worker-status-txt').text(t);
+      var hint = '';
+      if (r.cron_cli) hint += 'CLI: <code class="small">' + esc(r.cron_cli) + '</code>';
+      if (r.cron_http) hint += (hint ? ' · ' : '') + 'HTTP: <code class="small">' + esc(r.cron_http) + '</code>';
+      $('#cron-hint').html(hint);
+    });
+  }
 
-function formatoBadge(f) {
-	var map = { feed: 'Feed', story: 'Story', reel: 'Reel', carousel: 'Carrossel' };
-	return '<span class="badge bg-info text-dark">' + (map[f] || f || 'Feed') + '</span>';
-}
+  function loadPeriodo() {
+    var data;
+    if (view === 'mes') {
+      data = { acao: 'mes', mes: anchor.getFullYear() + '-' + pad(anchor.getMonth() + 1) };
+    } else {
+      data = { acao: 'semana', inicio: ymd(anchor) };
+    }
+    postApi(data)
+      .done(function (r) {
+        if (r && r.sql_ok === false) {
+          $('#alert-sql-social').removeClass('d-none');
+          posts = [];
+          renderPeriodo();
+          renderLista();
+          return;
+        }
+        posts = ((r && r.itens) || []).filter(filtrosPass);
+        renderPeriodo();
+        renderLista();
+      })
+      .fail(function () {
+        $('#lista-posts').html('<li class="list-group-item text-danger">Falha ao carregar.</li>');
+      });
+  }
 
-function esc(s) {
-	return $('<div>').text(s == null ? '' : String(s)).html();
-}
+  function renderPeriodo() {
+    if (view === 'mes') {
+      $('#wrap-semana').addClass('d-none');
+      $('#wrap-mes').removeClass('d-none');
+      $('#label-periodo').text(pad(anchor.getMonth() + 1) + '/' + anchor.getFullYear());
+      renderMes();
+    } else {
+      $('#wrap-mes').addClass('d-none');
+      $('#wrap-semana').removeClass('d-none');
+      $('#label-periodo').text(fmtLabel(anchor) + ' — ' + fmtLabel(addDays(anchor, 6)));
+      renderSemana();
+    }
+  }
 
-function syncFormatoUi() {
-	var f = $('#post_formato').val();
-	var igOnly = f === 'story' || f === 'reel';
-	$('#aviso-formato-ig').toggleClass('d-none', !igOnly);
-	if (igOnly) {
-		$('#post_canais').val('instagram').prop('disabled', true);
-	} else {
-		$('#post_canais').prop('disabled', false);
-	}
-	var multi = f === 'carousel';
-	$('#post_arquivo').prop('multiple', multi);
-	if (f === 'reel') {
-		$('#post_arquivo').attr('accept', 'video/mp4,video/quicktime');
-	} else if (f === 'feed') {
-		$('#post_arquivo').attr('accept', 'image/jpeg,image/png,image/webp');
-	} else {
-		$('#post_arquivo').attr('accept', 'image/jpeg,image/png,image/webp,video/mp4,video/quicktime');
-	}
-}
+  function postsDoDia(ymdStr) {
+    return posts.filter(function (p) {
+      return String(p.agendado_em || '').slice(0, 10) === ymdStr;
+    });
+  }
 
-function renderPreviewMidias() {
-	var html = '';
-	midiasPendentes.forEach(function (m, i) {
-		html += '<div class="border rounded p-1 position-relative" style="width:72px">';
-		if (m.tipo === 'video') {
-			html += '<div class="small text-center py-3">▶</div>';
-		} else {
-			html += '<img src="' + esc(m.url) + '" alt="" style="width:64px;height:64px;object-fit:cover" class="rounded">';
-		}
-		html += '<button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 py-0 px-1 btn-rm-midia" data-i="' + i + '">×</button></div>';
-	});
-	$('#post_preview_list').html(html);
-}
+  function cardMini(p) {
+    return '<button type="button" class="btn btn-sm btn-light border text-start w-100 mb-1 post-chip" data-id="' + p.id + '">' +
+      badgeFormato(p.formato) + ' ' + badgeStatus(p.status) +
+      '<div class="small text-truncate">' + esc((p.caption || '').slice(0, 40) || '(sem legenda)') + '</div></button>';
+  }
 
-function carregarSemana() {
-	if (!semanaInicio) semanaInicio = mondayOf(new Date());
-	var inicio = ymd(semanaInicio);
-	$('#label-semana').text(inicio + ' → ' + ymd(addDays(semanaInicio, 6)));
+  function renderSemana() {
+    var dias = [];
+    var i;
+    for (i = 0; i < 7; i++) dias.push(addDays(anchor, i));
+    $('#thead-dias').html('<th>Seg</th><th>Ter</th><th>Qua</th><th>Qui</th><th>Sex</th><th>Sáb</th><th>Dom</th>');
+    var cells = dias.map(function (d) {
+      var key = ymd(d);
+      var list = postsDoDia(key);
+      return '<td class="p-1 align-top"><div class="small fw-bold mb-1">' + fmtLabel(d) + '</div>' +
+        (list.map(cardMini).join('') || '<span class="text-muted small">—</span>') + '</td>';
+    }).join('');
+    $('#tbody-semana').html('<tr>' + cells + '</tr>');
+  }
 
-	postSocial({ acao: 'semana', inicio: inicio }).done(function (res) {
-		if (!res || !res.success) {
-			if (res && res.sql_ok === false) $('#alert-sql-social').removeClass('d-none');
-			$('#tbody-semana').html('<tr><td colspan="7" class="text-danger p-3">' + esc((res && res.message) || 'Erro') + '</td></tr>');
-			return;
-		}
-		$('#alert-sql-social').addClass('d-none');
-		postsCache = res.itens || [];
-		renderGrade();
-		renderLista();
-	});
+  function renderMes() {
+    var ano = anchor.getFullYear();
+    var mes = anchor.getMonth();
+    var start = startOfWeek(new Date(ano, mes, 1));
+    var nomes = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    $('#thead-mes').html(nomes.map(function (n) { return '<th class="text-center small">' + n + '</th>'; }).join(''));
+    var rows = '';
+    var cur = new Date(start);
+    var w;
+    for (w = 0; w < 6; w++) {
+      rows += '<tr>';
+      var d;
+      for (d = 0; d < 7; d++) {
+        var key = ymd(cur);
+        var inMonth = cur.getMonth() === mes;
+        var list = postsDoDia(key);
+        rows += '<td class="p-1' + (inMonth ? '' : ' text-muted bg-light') + '" style="height:90px;min-width:90px">' +
+          '<div class="small fw-bold">' + cur.getDate() + '</div>' +
+          list.slice(0, 3).map(cardMini).join('') +
+          (list.length > 3 ? '<div class="small text-muted">+' + (list.length - 3) + '</div>' : '') +
+          '</td>';
+        cur = addDays(cur, 1);
+      }
+      rows += '</tr>';
+      if (cur.getMonth() !== mes && w >= 3) break;
+    }
+    $('#tbody-mes').html(rows);
+  }
 
-	postSocial({ acao: 'status_meta' }).done(function (res) {
-		if (res && res.success && !res.pronto) $('#alert-meta-off').removeClass('d-none');
-		else $('#alert-meta-off').addClass('d-none');
-	});
-}
+  function renderLista() {
+    if (!posts.length) {
+      $('#lista-posts').html('<li class="list-group-item text-muted">Nenhum post no período.</li>');
+      return;
+    }
+    $('#lista-posts').html(posts.map(function (p) {
+      return '<li class="list-group-item list-group-item-action post-chip" data-id="' + p.id + '" style="cursor:pointer">' +
+        '<div class="d-flex justify-content-between gap-2">' +
+        '<span>' + badgeFormato(p.formato) + ' ' + badgeStatus(p.status) + '</span>' +
+        '<small class="text-muted">' + esc(String(p.agendado_em || '').slice(0, 16)) + '</small></div>' +
+        '<div class="small text-truncate">' + esc((p.caption || '').slice(0, 80) || '(sem legenda)') + '</div></li>';
+    }).join(''));
+  }
 
-function renderGrade() {
-	var th = '<th style="width:4rem">Hora</th>';
-	for (var i = 0; i < 7; i++) {
-		var d = addDays(semanaInicio, i);
-		th += '<th class="small">' + diasNomes[i] + '<br><span class="text-muted">' + ymd(d).slice(5) + '</span></th>';
-	}
-	$('#thead-dias').html(th);
+  function showDetalhe(id) {
+    var p = posts.find(function (x) { return String(x.id) === String(id); });
+    if (!p) {
+      $('#painel-detalhe').html('<p class="text-muted small">Post não está na lista do período.</p>');
+      return;
+    }
+    var midia = (p.midias || []).map(function (m) {
+      var u = m.url || '';
+      return '<div class="small text-truncate"><a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(m.path || m.url || 'mídia') + '</a></div>';
+    }).join('');
+    var acoes = '';
+    if (p.status === 'agendado' || p.status === 'erro' || p.status === 'rascunho') {
+      acoes += '<button type="button" class="btn btn-sm btn-success me-1" id="btn-pub-agora" data-id="' + p.id + '">Publicar agora</button>';
+      acoes += '<button type="button" class="btn btn-sm btn-outline-danger" id="btn-cancelar" data-id="' + p.id + '">Cancelar</button>';
+    }
+    $('#painel-detalhe').html(
+      '<div class="mb-2">' + badgeFormato(p.formato) + ' ' + badgeStatus(p.status) + ' · ' + esc(p.canais || '') + '</div>' +
+      '<p class="small">' + esc(p.caption || '(sem legenda)') + '</p>' +
+      '<p class="small text-muted mb-1">Agendado: ' + esc(p.agendado_em || '—') + '</p>' +
+      (p.publicado_em ? '<p class="small text-muted mb-1">Publicado: ' + esc(p.publicado_em) + '</p>' : '') +
+      (p.erro_msg ? '<p class="small text-danger">' + esc(p.erro_msg) + '</p>' : '') +
+      midia +
+      '<div class="mt-2">' + acoes + '</div>'
+    );
+  }
 
-	var byDay = [[], [], [], [], [], [], []];
-	postsCache.forEach(function (p) {
-		if (!p.agendado_em) return;
-		var dt = p.agendado_em.replace(' ', 'T');
-		var d = new Date(dt);
-		var mon = mondayOf(d);
-		if (ymd(mon) !== ymd(semanaInicio)) return;
-		var idx = (d.getDay() + 6) % 7;
-		byDay[idx].push(p);
-	});
+  function syncFormatoUi() {
+    var f = $('#post_formato').val();
+    var igOnly = f === 'story' || f === 'reel';
+    $('#aviso-formato-ig').toggleClass('d-none', !igOnly);
+    if (igOnly) $('#post_canais').val('instagram').prop('disabled', true);
+    else $('#post_canais').prop('disabled', false);
+  }
 
-	var horas = {};
-	postsCache.forEach(function (p) {
-		if (!p.agendado_em) return;
-		horas[p.agendado_em.substr(11, 5)] = true;
-	});
-	var listaH = Object.keys(horas).sort();
-	if (!listaH.length) listaH = ['09:00', '12:00', '18:00'];
+  function renderSelectedPreview() {
+    $('#post_preview_list').html(selectedMidias.map(function (m, i) {
+      return '<span class="badge bg-secondary me-1">' + esc(m.tipo) + ': ' + esc(m.path || m.url_externa || '') +
+        ' <a href="#" class="text-white text-decoration-none bib-rm" data-i="' + i + '">×</a></span>';
+    }).join(''));
+  }
 
-	var html = '';
-	listaH.forEach(function (hora) {
-		html += '<tr><td class="small text-muted">' + esc(hora) + '</td>';
-		for (var i = 0; i < 7; i++) {
-			var cell = byDay[i].filter(function (p) {
-				return (p.agendado_em || '').substr(11, 5) === hora;
-			});
-			html += '<td class="p-1 align-top">';
-			cell.forEach(function (p) {
-				var thumb = (p.midias && p.midias[0] && p.midias[0].url && p.midias[0].tipo !== 'video')
-					? '<img src="' + esc(p.midias[0].url) + '" alt="" style="width:40px;height:40px;object-fit:cover" class="rounded me-1">'
-					: '';
-				html += '<button type="button" class="btn btn-sm btn-light border w-100 text-start mb-1 btn-post-item" data-id="' + p.id + '">' +
-					'<div class="d-flex align-items-start">' + thumb +
-					'<div class="small flex-grow-1">' + statusBadge(p.status) + ' ' + formatoBadge(p.formato) +
-					'<div class="text-truncate" style="max-width:9rem">' + esc((p.caption || '').slice(0, 40)) + '</div>' +
-					'<div class="text-muted">' + esc(p.canais) + '</div></div></div></button>';
-			});
-			html += '</td>';
-		}
-		html += '</tr>';
-	});
-	$('#tbody-semana').html(html || '<tr><td colspan="8" class="text-muted p-3">Nenhum post nesta semana.</td></tr>');
-}
+  function openModal() {
+    selectedMidias = [];
+    $('#post_id').val('');
+    $('#post_caption').val('');
+    $('#post_url').val('');
+    $('#post_lote').val('');
+    $('#post_arquivo').val('');
+    $('#post_formato').val('feed');
+    $('#post_canais').val('ambos').prop('disabled', false);
+    var now = new Date();
+    now.setMinutes(now.getMinutes() + 5 - (now.getMinutes() % 5));
+    $('#post_agendado').val(ymd(now) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes()));
+    syncFormatoUi();
+    $('#caption_count').text('0');
+    renderSelectedPreview();
+    if (!modalInst) modalInst = new bootstrap.Modal(document.getElementById('modalPost'));
+    modalInst.show();
+  }
 
-function renderLista() {
-	if (!postsCache.length) {
-		$('#lista-posts').html('<li class="list-group-item text-muted small">Nenhum post.</li>');
-		return;
-	}
-	var html = '';
-	postsCache.forEach(function (p) {
-		html += '<li class="list-group-item list-group-item-action btn-post-item py-2" data-id="' + p.id + '" style="cursor:pointer">' +
-			'<div class="d-flex justify-content-between"><span class="small">' + esc(p.agendado_em || '—') + '</span>' + statusBadge(p.status) + '</div>' +
-			'<div class="small">' + formatoBadge(p.formato) + ' · ' + esc(p.canais) + '</div>' +
-			'<div class="small text-truncate">' + esc(p.caption || '(sem legenda)') + '</div></li>';
-	});
-	$('#lista-posts').html(html);
-}
+  function renderBibGrid(target, items, pickMode) {
+    if (!items || !items.length) {
+      $(target).html('<div class="col-12 text-muted">Nenhum arquivo. Execute social_fase_a_produto.sql se a aba estiver vazia após upload.</div>');
+      return;
+    }
+    $(target).html(items.map(function (it) {
+      var u = it.url || '';
+      var isVid = (it.tipo || '') === 'video' || guessTipo(it.mime || it.path) === 'video';
+      var media = isVid
+        ? '<video src="' + esc(u) + '" class="w-100" style="height:100px;object-fit:cover" muted></video>'
+        : '<img src="' + esc(u) + '" class="w-100" style="height:100px;object-fit:cover" alt="">';
+      var btn = pickMode
+        ? '<button type="button" class="btn btn-sm btn-primary w-100 bib-pick" data-path="' + esc(it.path) + '" data-tipo="' + esc(it.tipo || 'image') + '">Usar</button>'
+        : '<button type="button" class="btn btn-sm btn-outline-danger w-100 bib-del" data-id="' + it.id + '">Excluir</button>';
+      return '<div class="col-6 col-md-3"><div class="border rounded p-1">' + media +
+        '<div class="small text-truncate mt-1">' + esc(it.titulo || it.path || '') + '</div>' + btn + '</div></div>';
+    }).join(''));
+  }
 
-function mostrarDetalhe(id) {
-	var p = postsCache.find(function (x) { return Number(x.id) === Number(id); });
-	if (!p) {
-		$('#painel-detalhe').html('<p class="text-muted small">Post não encontrado.</p>');
-		return;
-	}
-	var imgs = '';
-	(p.midias || []).forEach(function (m) {
-		if (m.url && m.tipo !== 'video') {
-			imgs += '<img src="' + esc(m.url) + '" class="img-fluid rounded border mb-1 me-1" style="max-height:100px" alt="">';
-		} else if (m.tipo === 'video') {
-			imgs += '<div class="badge bg-secondary mb-1">Vídeo</div> ';
-		}
-	});
-	var html = imgs +
-		'<div class="mb-2">' + statusBadge(p.status) + ' ' + formatoBadge(p.formato) +
-		' <span class="small text-muted">' + esc(p.canais) + '</span></div>' +
-		'<div class="small mb-2"><strong>Quando:</strong> ' + esc(p.agendado_em || '—') + '</div>' +
-		'<p class="small">' + esc(p.caption || '') + '</p>';
-	if (p.erro_msg) html += '<div class="alert alert-danger small py-2">' + esc(p.erro_msg) + '</div>';
-	if (p.fb_post_id) html += '<div class="small text-muted">FB: ' + esc(p.fb_post_id) + '</div>';
-	if (p.ig_media_id) html += '<div class="small text-muted">IG: ' + esc(p.ig_media_id) + '</div>';
-	html += '<div class="d-flex flex-wrap gap-1 mt-3">';
-	if (p.status === 'agendado' || p.status === 'erro' || p.status === 'rascunho') {
-		html += '<button type="button" class="btn btn-sm btn-success" id="btn-pub-agora" data-id="' + p.id + '">Publicar agora</button>';
-		html += '<button type="button" class="btn btn-sm btn-outline-danger" id="btn-cancelar-post" data-id="' + p.id + '">Cancelar</button>';
-	}
-	html += '</div>';
-	$('#painel-detalhe').html(html);
-}
+  function loadBiblioteca() {
+    postApi({ acao: 'biblioteca_listar' }).done(function (r) {
+      if (r && r.sql_ok === false) {
+        $('#alert-sql-social').removeClass('d-none');
+        $('#bib-grid').html('<div class="col-12 text-warning">' + esc(r.message || 'SQL pendente') + '</div>');
+        return;
+      }
+      renderBibGrid('#bib-grid', (r && r.itens) || [], false);
+    });
+  }
 
-function abrirModalNovo() {
-	$('#post_id').val('');
-	$('#post_caption').val('');
-	$('#caption_count').text('0');
-	$('#post_formato').val('feed');
-	$('#post_canais').val('ambos').prop('disabled', false);
-	$('#post_agendado').val('');
-	$('#post_lote').val('');
-	$('#post_url').val('');
-	$('#post_arquivo').val('');
-	midiasPendentes = [];
-	renderPreviewMidias();
-	syncFormatoUi();
-	var el = document.getElementById('modalPost');
-	if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).show();
-	else $(el).modal('show');
-}
+  function loadHistorico() {
+    postApi({ acao: 'historico' }).done(function (r) {
+      var postsH = (r && r.posts) || [];
+      var logs = (r && r.logs) || [];
+      $('#hist-posts').html(postsH.length ? postsH.map(function (p) {
+        return '<li class="list-group-item">' + badgeFormato(p.formato) + ' ' + badgeStatus(p.status) +
+          ' <small class="text-muted">' + esc(String(p.agendado_em || '').slice(0, 16)) + '</small>' +
+          '<div class="text-truncate">' + esc((p.caption || '').slice(0, 60)) + '</div></li>';
+      }).join('') : '<li class="list-group-item text-muted">Vazio</li>');
+      $('#hist-logs').html(logs.length ? logs.map(function (l) {
+        var ok = l.status === 'ok' || l.status === 'parcial';
+        return '<li class="list-group-item">' +
+          '<span class="badge bg-' + (ok ? 'success' : 'danger') + '">' + esc(l.status || '') + '</span> ' +
+          esc(l.canais || '') + ' · post #' + esc(l.id_post) +
+          ' <small class="text-muted">' + esc(l.created_at || '') + '</small>' +
+          (l.mensagem ? '<div class="text-danger">' + esc(l.mensagem) + '</div>' : '') +
+          '</li>';
+      }).join('') : '<li class="list-group-item text-muted">Vazio' + (r && r.sql_log_ok === false ? ' — execute social_fase_a_produto.sql' : '') + '</li>');
+    });
+  }
 
-function uploadArquivo(file) {
-	var fd = new FormData();
-	fd.append('arquivo', file);
-	return $.ajax({
-		url: url_base + 'painel/social/upload',
-		method: 'POST',
-		data: fd,
-		processData: false,
-		contentType: false,
-		dataType: 'json'
-	});
-}
+  function uploadOne(file) {
+    var fd = new FormData();
+    fd.append('arquivo', file);
+    return $.ajax({
+      url: UPLOAD,
+      method: 'POST',
+      data: fd,
+      processData: false,
+      contentType: false,
+      dataType: 'json'
+    });
+  }
 
-$(function () {
-	semanaInicio = mondayOf(new Date());
-	carregarSemana();
+  function uploadFiles(files) {
+    var list = Array.prototype.slice.call(files || []);
+    var chain = $.Deferred().resolve([]).promise();
+    list.forEach(function (file) {
+      chain = chain.then(function (acc) {
+        return uploadOne(file).then(function (r) {
+          if (r && r.success && r.path) {
+            acc.push({ path: r.path, tipo: r.tipo || guessTipo(r.mime || file.name), url_externa: '' });
+          }
+          return acc;
+        }, function () { return acc; });
+      });
+    });
+    return chain;
+  }
 
-	$('#btn-semana-prev').on('click', function () {
-		semanaInicio = addDays(semanaInicio, -7);
-		carregarSemana();
-	});
-	$('#btn-semana-next').on('click', function () {
-		semanaInicio = addDays(semanaInicio, 7);
-		carregarSemana();
-	});
-	$('#btn-novo-post').on('click', abrirModalNovo);
-	$('#post_formato').on('change', syncFormatoUi);
+  $(function () {
+    loadMetaAndWorker();
+    loadPeriodo();
 
-	$('#post_caption').on('input', function () {
-		$('#caption_count').text(String($(this).val() || '').length);
-	});
+    $('#btn-view-semana').on('click', function () {
+      view = 'semana';
+      $(this).addClass('active');
+      $('#btn-view-mes').removeClass('active');
+      anchor = startOfWeek(anchor);
+      loadPeriodo();
+    });
+    $('#btn-view-mes').on('click', function () {
+      view = 'mes';
+      $(this).addClass('active');
+      $('#btn-view-semana').removeClass('active');
+      anchor = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      loadPeriodo();
+    });
+    $('#btn-nav-prev').on('click', function () {
+      if (view === 'mes') anchor = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+      else anchor = addDays(anchor, -7);
+      loadPeriodo();
+    });
+    $('#btn-nav-next').on('click', function () {
+      if (view === 'mes') anchor = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+      else anchor = addDays(anchor, 7);
+      loadPeriodo();
+    });
+    $('#filtro-status,#filtro-formato').on('change', loadPeriodo);
 
-	$('#post_arquivo').on('change', function () {
-		var files = this.files ? Array.prototype.slice.call(this.files) : [];
-		if (!files.length) return;
-		var f = $('#post_formato').val();
-		var max = f === 'carousel' ? 10 : 1;
-		if (f === 'carousel' && midiasPendentes.length + files.length > 10) {
-			return Swal.fire('Carrossel', 'Máximo 10 mídias.', 'warning');
-		}
-		if (f !== 'carousel') midiasPendentes = [];
-		var chain = $.Deferred().resolve();
-		files.slice(0, max).forEach(function (file) {
-			chain = chain.then(function () {
-				return uploadArquivo(file).then(function (res) {
-					if (!res || !res.success) {
-						Swal.fire('Upload', (res && res.message) || 'Falha', 'error');
-						return;
-					}
-					midiasPendentes.push({ path: res.path, url: res.url, tipo: res.tipo || 'image' });
-					$('#post_url').val('');
-					renderPreviewMidias();
-				});
-			});
-		});
-		$(this).val('');
-	});
+    $('#tabs-social .nav-link').on('click', function () {
+      var tab = $(this).data('tab');
+      $('#tabs-social .nav-link').removeClass('active');
+      $(this).addClass('active');
+      $('#pane-agenda,#pane-biblioteca,#pane-historico').addClass('d-none');
+      $('#pane-' + tab).removeClass('d-none');
+      if (tab === 'biblioteca') loadBiblioteca();
+      if (tab === 'historico') loadHistorico();
+    });
 
-	$(document).on('click', '.btn-rm-midia', function () {
-		midiasPendentes.splice(Number($(this).data('i')), 1);
-		renderPreviewMidias();
-	});
+    $(document).on('click', '.post-chip', function () {
+      showDetalhe($(this).data('id'));
+    });
 
-	$('#btn-salvar-post').on('click', function () {
-		var loteLines = ($('#post_lote').val() || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
-		var midias = midiasPendentes.map(function (m) {
-			return { path: m.path, tipo: m.tipo };
-		});
-		var url = ($('#post_url').val() || '').trim();
-		if (!midias.length && url) {
-			var f = $('#post_formato').val();
-			midias.push({ url_externa: url, tipo: f === 'reel' ? 'video' : 'image' });
-		}
-		postSocial({
-			acao: 'salvar',
-			caption: $('#post_caption').val(),
-			formato: $('#post_formato').val(),
-			canais: $('#post_canais').val(),
-			agendado_em: $('#post_agendado').val(),
-			status: 'agendado',
-			midias: JSON.stringify(midias),
-			lote_horarios: JSON.stringify(loteLines)
-		}).done(function (res) {
-			if (!res || !res.success) return Swal.fire('Erro', (res && res.message) || 'Falha', 'error');
-			Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: res.message, showConfirmButton: false, timer: 2200 });
-			var el = document.getElementById('modalPost');
-			if (window.bootstrap && bootstrap.Modal) bootstrap.Modal.getOrCreateInstance(el).hide();
-			else $(el).modal('hide');
-			carregarSemana();
-		});
-	});
+    $('#btn-novo-post').on('click', openModal);
+    $('#post_formato').on('change', syncFormatoUi);
+    $('#post_caption').on('input', function () {
+      $('#caption_count').text(String($(this).val() || '').length);
+    });
+    $(document).on('click', '.bib-rm', function (e) {
+      e.preventDefault();
+      selectedMidias.splice(parseInt($(this).data('i'), 10), 1);
+      renderSelectedPreview();
+    });
 
-	$(document).on('click', '.btn-post-item', function () {
-		mostrarDetalhe($(this).data('id'));
-	});
-	$(document).on('click', '#btn-cancelar-post', function () {
-		var id = $(this).data('id');
-		Swal.fire({ title: 'Cancelar post?', showCancelButton: true, confirmButtonText: 'Sim' }).then(function (r) {
-			if (!r.isConfirmed) return;
-			postSocial({ acao: 'cancelar', id: id }).done(function () {
-				carregarSemana();
-				$('#painel-detalhe').html('<p class="text-muted small">Cancelado.</p>');
-			});
-		});
-	});
-	$(document).on('click', '#btn-pub-agora', function () {
-		var id = $(this).data('id');
-		postSocial({ acao: 'publicar_agora', id: id }).done(function (res) {
-			Swal.fire(res && res.success ? 'OK' : 'Falha', (res && res.message) || '', res && res.success ? 'success' : 'error');
-			carregarSemana();
-			mostrarDetalhe(id);
-		});
-	});
-	$('#btn-worker').on('click', function () {
-		postSocial({ acao: 'worker' }).done(function (res) {
-			var r = (res && res.resumo) || {};
-			Swal.fire('Worker', 'Processados: ' + (r.processados || 0) + ' · OK: ' + (r.ok || 0) + ' · Erro: ' + (r.erro || 0), 'info');
-			carregarSemana();
-		});
-	});
-});
+    $('#btn-abrir-bib').on('click', function () {
+      postApi({ acao: 'biblioteca_listar' }).done(function (r) {
+        renderBibGrid('#bib-pick-grid', (r && r.itens) || [], true);
+        if (!bibPickInst) bibPickInst = new bootstrap.Modal(document.getElementById('modalBibPick'));
+        bibPickInst.show();
+      });
+    });
+    $(document).on('click', '.bib-pick', function () {
+      selectedMidias.push({ path: String($(this).data('path') || ''), tipo: String($(this).data('tipo') || 'image'), url_externa: '' });
+      renderSelectedPreview();
+      if (bibPickInst) bibPickInst.hide();
+    });
+
+    $('#bib-upload').on('change', function () {
+      var files = this.files;
+      uploadFiles(files).done(function (paths) {
+        loadBiblioteca();
+        if (!paths.length) alert('Falha no upload.');
+      });
+      $(this).val('');
+    });
+    $(document).on('click', '.bib-del', function () {
+      var id = $(this).data('id');
+      if (!confirm('Excluir da biblioteca?')) return;
+      postApi({ acao: 'biblioteca_excluir', id: id }).done(function () { loadBiblioteca(); });
+    });
+
+    $('#btn-salvar-post').on('click', function () {
+      var formato = $('#post_formato').val();
+      var caption = $('#post_caption').val() || '';
+      var agendado = $('#post_agendado').val();
+      var url = ($('#post_url').val() || '').trim();
+      var loteRaw = ($('#post_lote').val() || '').trim();
+      var files = document.getElementById('post_arquivo').files;
+      var $btn = $(this).prop('disabled', true);
+
+      function finish(midias) {
+        if (url) midias.push({ path: '', url_externa: url, tipo: guessTipo(url) });
+        if (!midias.length) {
+          alert('Envie mídia, escolha da biblioteca ou informe URL HTTPS.');
+          $btn.prop('disabled', false);
+          return;
+        }
+        var lote = [];
+        if (loteRaw) {
+          loteRaw.split(/[\n,;]+/).forEach(function (h) {
+            h = h.trim();
+            if (h) lote.push(h);
+          });
+        }
+        var payload = {
+          acao: 'salvar',
+          formato: formato,
+          canais: $('#post_canais').val(),
+          caption: caption,
+          status: 'agendado',
+          agendado_em: agendado ? agendado.replace('T', ' ') : '',
+          midias: JSON.stringify(midias)
+        };
+        if (lote.length) payload.lote_horarios = JSON.stringify(lote);
+        postApi(payload)
+          .done(function (r) {
+            if (!r || !r.success) {
+              alert((r && r.message) || 'Erro ao salvar');
+              return;
+            }
+            if (modalInst) modalInst.hide();
+            loadPeriodo();
+            loadMetaAndWorker();
+          })
+          .fail(function () { alert('Falha na requisição'); })
+          .always(function () { $btn.prop('disabled', false); });
+      }
+
+      uploadFiles(files).done(function (uploaded) {
+        finish(selectedMidias.concat(uploaded));
+      }).fail(function () {
+        $btn.prop('disabled', false);
+        alert('Falha no upload');
+      });
+    });
+
+    $(document).on('click', '#btn-pub-agora', function () {
+      var id = $(this).data('id');
+      postApi({ acao: 'publicar_agora', id: id }).done(function (r) {
+        if (!r || !r.success) alert((r && r.message) || 'Falha');
+        loadPeriodo();
+        loadMetaAndWorker();
+      });
+    });
+    $(document).on('click', '#btn-cancelar', function () {
+      var id = $(this).data('id');
+      if (!confirm('Cancelar este post?')) return;
+      postApi({ acao: 'cancelar', id: id }).done(function () {
+        loadPeriodo();
+        $('#painel-detalhe').html('<p class="text-muted small mb-0">Cancelado.</p>');
+      });
+    });
+
+    $('#btn-worker').on('click', function () {
+      var $b = $(this).prop('disabled', true);
+      postApi({ acao: 'worker' })
+        .done(function (r) {
+          var s = r && r.resumo ? r.resumo : {};
+          alert(r && r.success
+            ? ('Processados: ' + (s.processados || 0) + ' · ok: ' + (s.ok || 0) + ' · erros: ' + (s.erro || 0))
+            : ((r && r.message) || 'Falha'));
+          loadPeriodo();
+          loadMetaAndWorker();
+        })
+        .always(function () { $b.prop('disabled', false); });
+    });
+  });
+})();

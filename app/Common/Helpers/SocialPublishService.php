@@ -3,26 +3,35 @@
 namespace App\Common\Helpers;
 
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\SocialBiblioteca;
 use App\Model\Entity\SocialPost;
 use App\Model\Entity\SocialPostMidia;
+use App\Model\Entity\SocialPublishLog;
+use App\Model\Entity\SocialWorkerRun;
 
 /**
- * Publica posts agendados via Graph API e limpa mídia local.
+ * Publica posts agendados via Graph API e limpa mídia local do post
+ * (arquivos da biblioteca são preservados).
  */
 class SocialPublishService {
+
+	/** Origem da execução atual (cli|cron|manual). */
+	private static string $origemAtual = 'worker';
 
 	/**
 	 * @return array{processados:int,ok:int,erro:int,detalhes:array}
 	 */
-	public static function processar(int $idAdmin = 0, int $limite = 10): array {
+	public static function processar(int $idAdmin = 0, int $limite = 10, string $origem = 'cli'): array {
+		self::$origemAtual = $origem;
 		$resumo = ['processados' => 0, 'ok' => 0, 'erro' => 0, 'detalhes' => []];
 		if (!SocialPost::tabelaExiste()) {
 			$resumo['detalhes'][] = 'Tabela social_posts ausente.';
+			SocialWorkerRun::registrar($origem, $idAdmin, $resumo);
 			return $resumo;
 		}
 		foreach (SocialPost::listProntosParaPublicar($limite, $idAdmin) as $post) {
 			$resumo['processados']++;
-			$r = self::publicarUm($post);
+			$r = self::publicarUm($post, $origem);
 			if (!empty($r['ok'])) {
 				$resumo['ok']++;
 			} else {
@@ -34,13 +43,17 @@ class SocialPublishService {
 				'message' => $r['message'] ?? '',
 			];
 		}
+		SocialWorkerRun::registrar($origem, $idAdmin, $resumo);
 		return $resumo;
 	}
 
 	/**
 	 * @return array{ok:bool,message?:string}
 	 */
-	public static function publicarUm(SocialPost $post): array {
+	public static function publicarUm(SocialPost $post, string $origem = ''): array {
+		if ($origem !== '') {
+			self::$origemAtual = $origem;
+		}
 		if (!$post->claimPublicando()) {
 			return ['ok' => false, 'message' => 'Já em processamento ou não agendado.'];
 		}
@@ -89,7 +102,6 @@ class SocialPublishService {
 		$querFb = $canais === 'facebook' || $canais === 'ambos';
 		$querIg = $canais === 'instagram' || $canais === 'ambos';
 
-		// Story/Reel: só Instagram nesta fase
 		if ($formato === 'story' || $formato === 'reel') {
 			$querFb = false;
 			$querIg = true;
@@ -139,17 +151,31 @@ class SocialPublishService {
 		$post->salvar();
 
 		foreach ($midias as $m) {
-			if (!empty($m->path_local)) {
+			if (!empty($m->path_local) && !self::pathNaBiblioteca((int)$post->id_admin, (string)$m->path_local)) {
 				SocialMediaStorage::apagar((string)$m->path_local);
 				$m->path_local = null;
 				$m->salvar();
 			}
 		}
 
-		return [
-			'ok' => true,
-			'message' => $erros ? 'Publicado parcialmente: '.implode(' | ', $erros) : 'Publicado.',
-		];
+		$msg = $erros ? 'Publicado parcialmente: '.implode(' | ', $erros) : 'Publicado.';
+		SocialPublishLog::registrar([
+			'id_admin' => (int)$post->id_admin,
+			'id_post' => (int)$post->id,
+			'origem' => self::$origemAtual,
+			'status' => $erros ? 'parcial' : 'ok',
+			'mensagem' => $msg,
+			'fb_post_id' => $post->fb_post_id,
+			'ig_media_id' => $post->ig_media_id,
+			'formato' => $formato,
+			'canais' => $canais,
+		]);
+
+		return ['ok' => true, 'message' => $msg];
+	}
+
+	private static function pathNaBiblioteca(int $idAdmin, string $path): bool {
+		return SocialBiblioteca::pathEmUso($idAdmin, $path);
 	}
 
 	/**
@@ -205,7 +231,6 @@ class SocialPublishService {
 			}
 			return ['ok' => true, 'id' => implode(',', array_filter($ids))];
 		}
-		// feed
 		$first = $itens[0];
 		if ($first['tipo'] !== 'image') {
 			return ['ok' => false, 'message' => 'Facebook feed: apenas imagem.'];
@@ -233,7 +258,6 @@ class SocialPublishService {
 		if ($formato === 'carousel') {
 			return MetaGraphHelper::publicarCarouselInstagram($igId, $token, $itens, $caption);
 		}
-		// feed imagem
 		return MetaGraphHelper::publicarImagemInstagram($igId, $token, $itens[0]['url'], $caption);
 	}
 
@@ -241,6 +265,15 @@ class SocialPublishService {
 		$post->status = 'erro';
 		$post->erro_msg = mb_substr($msg, 0, 500);
 		$post->salvar();
+		SocialPublishLog::registrar([
+			'id_admin' => (int)$post->id_admin,
+			'id_post' => (int)$post->id,
+			'origem' => self::$origemAtual,
+			'status' => 'erro',
+			'mensagem' => $msg,
+			'formato' => $post->formato ?? null,
+			'canais' => $post->canais ?? null,
+		]);
 		return ['ok' => false, 'message' => $msg];
 	}
 }

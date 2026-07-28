@@ -91,6 +91,30 @@ class SocialPost {
 		return $out;
 	}
 
+	/** @return self[] */
+	public static function listMes(int $idAdmin, string $anoMes): array {
+		if (!preg_match('/^\d{4}-\d{2}$/', $anoMes)) {
+			$anoMes = date('Y-m');
+		}
+		$inicio = $anoMes.'-01';
+		$fim = date('Y-m-t', strtotime($inicio.' 00:00:00'));
+		return self::listSemana($idAdmin, $inicio, $fim);
+	}
+
+	/** @return self[] */
+	public static function listHistorico(int $idAdmin, int $limite = 80): array {
+		$stmt = (new Database('social_posts'))->select(
+			'id_admin = '.(int)$idAdmin.' AND status IN ("publicado","erro","cancelado","agendado","publicando")',
+			'COALESCE(publicado_em, agendado_em, created_at) DESC',
+			(int)$limite
+		);
+		$out = [];
+		while ($r = $stmt->fetchObject(self::class)) {
+			$out[] = $r;
+		}
+		return $out;
+	}
+
 	public function salvar(): int {
 		$formato = in_array($this->formato, ['feed', 'story', 'reel', 'carousel'], true)
 			? $this->formato : 'feed';

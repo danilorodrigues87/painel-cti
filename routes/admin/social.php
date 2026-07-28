@@ -53,6 +53,12 @@ $obRouter->get('/webhook/meta', [
 	}
 ]);
 
+$obRouter->post('/webhook/meta', [
+	function ($request) {
+		return new Response(200, Webhook\Meta::receberGlobal($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/webhook/meta/{idAdmin}/{token}', [
 	function ($request, $idAdmin, $token) {
 		return new Response(200, Webhook\Meta::receber($request, $idAdmin, $token));
@@ -61,6 +67,18 @@ $obRouter->get('/webhook/meta/{idAdmin}/{token}', [
 
 $obRouter->post('/webhook/meta/{idAdmin}/{token}', [
 	function ($request, $idAdmin, $token) {
-		return new Response(200, Webhook\Meta::receber($request, $idAdmin, $token));
+		return new Response(200, Webhook\Meta::receber($request, $idAdmin, $token), 'application/json');
+	}
+]);
+
+// Cron HTTP do worker social (token = SYSTEM_TOKEN do .env)
+$obRouter->get('/cron/social', [
+	function ($request) {
+		return new Response(200, \App\Controller\Cron\Social::run($request), 'application/json');
+	}
+]);
+$obRouter->post('/cron/social', [
+	function ($request) {
+		return new Response(200, \App\Controller\Cron\Social::run($request), 'application/json');
 	}
 ]);
