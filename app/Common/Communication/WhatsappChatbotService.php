@@ -26,6 +26,12 @@ class WhatsappChatbotService {
 		if (!WhatsappConversa::temColunasChatbot()) {
 			return;
 		}
+
+		// Fluxos configuráveis (Fase A) — se tratar, não roda o menu de setores
+		if (WhatsappFlowRunner::aoReceberMensagem($conversa, $texto, $fromMe)) {
+			return;
+		}
+
 		if (!WhatsappSetor::tabelaExiste()) {
 			return;
 		}

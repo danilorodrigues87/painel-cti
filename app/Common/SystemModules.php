@@ -19,6 +19,7 @@ class SystemModules {
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
 		'ead'             => 'Cursos Online',
+		'vitrine'         => 'Vitrine de cursos',
 		'conquistas_ead'  => 'Conquistas EAD',
 		'certificacoes'   => 'Certificações',
 		'alunos'          => 'Alunos',

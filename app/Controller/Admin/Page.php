@@ -236,7 +236,7 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			$allPermittedModules[] = 'Conexão Meta';
 		}
 
-		// Progresso EAD / Alunos online / Vitrine: telas auxiliares liberadas com Cursos Online
+		// Progresso EAD / Alunos online: telas auxiliares liberadas com Cursos Online
 		if (in_array('Cursos Online', $allPermittedModules, true)) {
 			if (!in_array('Progresso EAD', $allPermittedModules, true)) {
 				$allPermittedModules[] = 'Progresso EAD';
@@ -244,12 +244,27 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (!in_array('Alunos online', $allPermittedModules, true)) {
 				$allPermittedModules[] = 'Alunos online';
 			}
-			if (!in_array('Vitrine', $allPermittedModules, true)) {
-				$allPermittedModules[] = 'Vitrine';
+		}
+
+		// Vitrine: permissão (checklist ou Diretor com EAD no plano) + conteúdo útil
+		$idAdminVitrine = (int)($userLogedData['usuario']['id_admin'] ?? 0);
+		$slugsEscolaVitrine = ModuleGateHelper::getSlugsEscola($idAdminVitrine);
+		$temPermVitrine = in_array('Vitrine de cursos', $allPermittedModules, true)
+			|| in_array('Vitrine', $allPermittedModules, true);
+		if (!$temPermVitrine
+			&& ($userLogedData['usuario']['nivel'] ?? '') === 'Diretor'
+			&& in_array('Cursos Online', $allPermittedModules, true)
+			&& in_array('vitrine', $slugsEscolaVitrine, true)) {
+			$temPermVitrine = true;
+		}
+		$allPermittedModules = array_values(array_filter(
+			$allPermittedModules,
+			static function ($l) {
+				return $l !== 'Vitrine' && $l !== 'Vitrine de cursos';
 			}
-			if (!in_array('Vitrine de cursos', $allPermittedModules, true)) {
-				$allPermittedModules[] = 'Vitrine de cursos';
-			}
+		));
+		if ($temPermVitrine && \App\Common\Helpers\LmsVitrineHelper::deveExibirParaEscola($idAdminVitrine)) {
+			$allPermittedModules[] = 'Vitrine de cursos';
 		}
 
 		$bloqueada = !empty($userLogedData['usuario']['assinatura_bloqueada']);

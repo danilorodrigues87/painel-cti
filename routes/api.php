@@ -1,9 +1,18 @@
-<?php 
-
-include __DIR__.'/api/v1/defaut.php';
-
-include __DIR__.'/api/v1/trilhas.php';
-
-include __DIR__.'/api/v1/auth.php';
-
-include __DIR__.'/api/v1/student.php';
+<?php 
+
+
+
+include __DIR__.'/api/v1/defaut.php';
+
+
+
+include __DIR__.'/api/v1/trilhas.php';
+
+
+
+include __DIR__.'/api/v1/auth.php';
+
+
+
+include __DIR__.'/api/v1/student.php';
+

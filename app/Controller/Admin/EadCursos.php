@@ -22,7 +22,18 @@ class EadCursos extends Page {
 	}
 
 	public static function index($request) {
-		$content = View::render('admin/modules/ead/index', []);
+		$idAdmin = TenantHelper::getIdAdmin();
+		$user = \App\Session\User\Login::getUserLogedData();
+		$acesso = $user['usuario']['acesso'] ?? [];
+		$nivel = (string)($user['usuario']['nivel'] ?? '');
+		$mostraVitrine = \App\Common\Helpers\LmsVitrineHelper::deveExibirParaEscola($idAdmin)
+			&& (
+				\App\Common\Helpers\ModuleGateHelper::podeAcessar('Vitrine de cursos', $idAdmin, is_array($acesso) ? $acesso : [])
+				|| ($nivel === 'Diretor' && \App\Common\Helpers\ModuleGateHelper::podeAcessar('Cursos Online', $idAdmin, is_array($acesso) ? $acesso : []))
+			);
+		$content = View::render('admin/modules/ead/index', [
+			'vitrine_banner_class' => $mostraVitrine ? '' : 'd-none',
+		]);
 		return parent::getPanel('Cursos Online', $content, 'portal_ead', $request);
 	}
 

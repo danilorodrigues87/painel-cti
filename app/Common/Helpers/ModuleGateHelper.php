@@ -54,13 +54,16 @@ class ModuleGateHelper {
 	}
 
 	/**
-	 * Plano com `ead` também libera o submódulo `conquistas_ead` (checkbox separado).
+	 * Plano com `ead` também libera submódulos `conquistas_ead` e `vitrine` (checkboxes separados no usuário).
 	 * @param string[] $slugs
 	 * @return string[]
 	 */
 	private static function expandirSlugsDependentes(array $slugs): array {
 		if (in_array('ead', $slugs, true) && !in_array('conquistas_ead', $slugs, true)) {
 			$slugs[] = 'conquistas_ead';
+		}
+		if (in_array('ead', $slugs, true) && !in_array('vitrine', $slugs, true)) {
+			$slugs[] = 'vitrine';
 		}
 		return array_values(array_unique($slugs));
 	}

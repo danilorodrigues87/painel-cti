@@ -230,8 +230,11 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 - Módulo/plano: slug `whatsapp` → label `WhatsApp` (Diretor liberado automático)
 - Inbox: `/painel/whatsapp` — conversas, assumir, transferir setor, responder
 - Setores + atendentes (Diretor na aba do inbox)
-- Chatbot: menu numérico de setores → fila → humano (`WhatsappChatbotService`)
-- Webhook grava msgs e dispara chatbot
+- Chatbot legado: menu numérico de setores → fila → humano (`WhatsappChatbotService`) — **fallback** se nenhum fluxo casar
+- **Fluxos do bot (Fase A + B):** `/painel/whatsapp/fluxos` — SQL `database/whatsapp_fluxos.sql` (`whatsapp_fluxos`, `whatsapp_fluxo_sessoes`, `whatsapp_fluxo_logs`). Motor `WhatsappFlowRunner`:
+  - **Fase A:** triggers (keyword / primeira msg / saudação), passos texto/mídia/pergunta/opções numéricas/condição/delay/setor/humano/fim. Sem botões nativos nem canvas n8n. Opt-out: `sair`/`parar`; `menu` volta ao menu de setores.
+  - **Fase B:** variáveis `{{nome}}` / `{{ultima_resposta}}`; nós `criar_lead` (CRM) e `set_var`; timeout por fluxo (`settings.timeout_horas` / `timeout_acao`: humano|encerrar — checado ao receber msg + ação `processar_timeouts`); templates prontos (`WhatsappFlowTemplates`); simulador dry-run no editor (ação `simular`, sem WA/CRM real).
+- Webhook grava msgs e dispara chatbot → FlowRunner → fallback menu
 - Ops: `docs/OPERACAO_WHATSAPP.md`
 
 ### 5.7 Validação de e-mail nos cadastros
@@ -252,6 +255,7 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 
 - **Entitlement:** `lms_matricula_ead` ativa + curso `publicado=1` + escola dona do curso **ou** licença vitrine ativa. Matrícula comercial **não** libera EAD.
 - **Painel:** `/painel/ead` (cursos), `/painel/ead/curso/{id}` (editor + aba Alunos), `/painel/ead/vitrine`; Config IA `/painel/config/ia`
+- **Vitrine (menu):** slug `vitrine` / label `Vitrine de cursos` no catálogo de permissões (plano com `ead` expande `vitrine`). Menu e banner só aparecem se houver curso compartilhado de outra escola **ou** licença ativa da escola; sem isso redireciona para `/painel/ead`.
 - **Editor:** curso independente; matricular/desmatricular EAD; opcional vitrine (preço mensal). JS: `ead-cursos.js`, `ead-editor.js`, `ead-vitrine.js`
 - **Trilhas:** `ativo` + filtros busca/categoria/status; nova matrícula só ativas
 - **SQL extra:** `lms_ead_independente.sql`, `lms_vitrine.sql` (opcional limpar: `lms_ead_limpar_exemplos.sql`)
@@ -554,6 +558,8 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | Automação aniversariantes por e-mail | Feito |
 | Evolution API: .env + QR/status/teste + webhook + tabelas | Feito (base Fase 3) |
 | Inbox + setores + chatbot menu | Feito (Fase 3b) |
+| WhatsApp fluxos configuráveis (editor simples) | Feito (Fase A) |
+| WhatsApp fluxos Fase B (simulador, templates, lead CRM, timeout, set_var) | Feito |
 | Branding CTI UI + logo escola em impressos + rodapé | Feito (Fase A) |
 | WA a partir de aluno/resp/lead + observações aluno + campanhas grupo recorrentes | Feito (Fase B) |
 | Modelo de contrato por escola + frase certificado | Feito (Fase C) — SQL `database/escolas_modelo_contrato.sql` |

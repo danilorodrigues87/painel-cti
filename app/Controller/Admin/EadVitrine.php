@@ -21,6 +21,11 @@ class EadVitrine extends Page {
 	}
 
 	public static function index($request) {
+		$idAdmin = TenantHelper::getIdAdmin();
+		if (!\App\Common\Helpers\LmsVitrineHelper::deveExibirParaEscola($idAdmin)) {
+			$request->getRouter()->redirect('/painel/ead');
+			return '';
+		}
 		$content = View::render('admin/modules/ead/vitrine', []);
 		return parent::getPanel('Vitrine de cursos', $content, 'portal_ead', $request);
 	}
