@@ -185,6 +185,8 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - Tarefas estilo Trello (`crm_tarefas_*`)
 - **WhatsApp no CRM:** um botão “WhatsApp” → `iniciarAtendimentoWa` — com módulo + Evolution conectada abre o Inbox; sem plano/desconectado abre **WhatsApp Web** (`wa.me`)
 - Auto-mensagem ao mudar status (`novo` / `em_atendimento` / `matriculado`): Evolution via `WhatsappEscolaService::enviarTexto`; se escola sem módulo ou desconectada, registra no histórico e `status_wa=pulado` (não tenta enviar)
+- **Relatórios CRM (Diretor):** `/painel/crm/relatorios` — KPIs, por status, por funil, motivos de perda, origens (filtro por período de cadastro). Menu só para Diretor com permissão Leads.
+- **Roadmap relatório de tarefas:** cards Kanban (`crm_tarefas_cartoes`) sem status/data de conclusão padronizados — planejar: contagem por lista, cards criados no período, checklists % concluídos, tempo médio na lista (exige `updated_at`/histórico de movimento ou campos novos).
 
 ### 5.4 Agenda Laboratório v2 (feita)
 Arquitetura:
@@ -303,7 +305,9 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 
 - SQL: `database/platform_help.sql` (`platform_help_categorias`, `platform_help_artigos`).
 - Master: `/master/documentacao` — CRUD categorias/artigos + URL de vídeo (YouTube/Vimeo embed).
-- Escola (logado): `/painel/ajuda` e `/painel/ajuda/{slug}`.
+- **Tutoriais padrão:** botão **Carregar tutoriais padrão** no Master → `App\Common\Help\PlatformHelpSeed` (categorias + artigos de todos os módulos). `video_url` fica vazio; reaplicar **não** apaga vídeo já preenchido.
+- **SQL para phpMyAdmin:** abra `database/export_platform_help_tutoriais.php` no navegador (gera/baixa `database/platform_help_tutoriais.sql`) ou rode `php database/export_platform_help_tutoriais.php`. Pré-requisito: `database/platform_help.sql`.
+- Escola (logado): `/painel/ajuda` e `/painel/ajuda/{slug}` — placeholder “Vídeo em breve” quando não há URL.
 - Público: `/ajuda` e `/ajuda/{slug}` (mesmo conteúdo publicado).
 - Menu **Ajuda** entra nos módulos padrão após aceite dos termos.
 

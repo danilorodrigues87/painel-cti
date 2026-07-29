@@ -53,7 +53,7 @@ class WhatsappFluxos extends Page {
 
 		switch ($acao) {
 			case 'listar':
-				return self::listar();
+				return self::listar($post);
 			case 'salvar':
 				return self::salvar($post);
 			case 'excluir':
@@ -80,10 +80,19 @@ class WhatsappFluxos extends Page {
 		}
 	}
 
-	private static function listar(): string {
+	private static function listar(array $post = []): string {
 		$idAdmin = TenantHelper::getIdAdmin();
+		$page = max(1, (int)($post['page'] ?? 1));
+		$limit = 20;
+		$todos = WhatsappFluxo::listar($idAdmin);
+		$total = count($todos);
+		$pages = max(1, (int)ceil($total / $limit));
+		if ($page > $pages) {
+			$page = $pages;
+		}
+		$slice = array_slice($todos, ($page - 1) * $limit, $limit);
 		$itens = [];
-		foreach (WhatsappFluxo::listar($idAdmin) as $f) {
+		foreach ($slice as $f) {
 			$def = $f->definicaoArray();
 			$itens[] = [
 				'id'         => (int)$f->id,
@@ -97,7 +106,16 @@ class WhatsappFluxos extends Page {
 				'updated_at' => (string)$f->updated_at,
 			];
 		}
-		return self::json(['success' => true, 'itens' => $itens]);
+		return self::json([
+			'success' => true,
+			'itens' => $itens,
+			'pagination' => [
+				'page' => $page,
+				'pages' => $pages,
+				'total' => $total,
+				'limit' => $limit,
+			],
+		]);
 	}
 
 	private static function aplicarTemplate(array $post): string {

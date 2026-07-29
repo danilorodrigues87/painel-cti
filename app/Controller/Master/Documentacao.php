@@ -5,6 +5,7 @@ namespace App\Controller\Master;
 use App\Utils\View;
 use App\Model\Entity\PlatformHelpCategoria;
 use App\Model\Entity\PlatformHelpArtigo;
+use App\Common\Help\PlatformHelpSeed;
 
 class Documentacao extends Page {
 
@@ -157,6 +158,19 @@ class Documentacao extends Page {
 			}
 			$ob->excluir();
 			return json_encode(['success' => true, 'message' => 'Artigo excluído.']);
+		}
+
+		if ($acao === 'seed_tutoriais') {
+			try {
+				$r = PlatformHelpSeed::aplicar();
+				return json_encode([
+					'success' => true,
+					'message' => 'Tutoriais aplicados: '.$r['created'].' criado(s), '.$r['updated'].' atualizado(s), '.$r['cats'].' categoria(s). Vídeos vazios preservados se já preenchidos.',
+					'resultado' => $r,
+				], JSON_UNESCAPED_UNICODE);
+			} catch (\Throwable $e) {
+				return json_encode(['success' => false, 'message' => $e->getMessage()]);
+			}
 		}
 
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);

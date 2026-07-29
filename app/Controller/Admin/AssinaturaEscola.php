@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\SaasAssinaturaService;
 use App\Common\Helpers\MercadoPagoCtiHelper;
+use App\Common\Helpers\DateTimeHelper;
 use App\Common\Gateways\MercadoPago\Pix;
 use App\Model\Entity\EscolasAssinantes;
 use App\Model\Entity\PlanosAssinatura;
@@ -60,7 +61,7 @@ class AssinaturaEscola extends Page {
 		$acao = $post['acao'] ?? '';
 
 		if ($acao === 'carregar') {
-			return self::carregar();
+			return self::carregar($post);
 		}
 
 		if (!self::assertDiretor($request, true)) {
@@ -77,7 +78,7 @@ class AssinaturaEscola extends Page {
 		}
 	}
 
-	private static function carregar(): string {
+	private static function carregar(array $post = []): string {
 		$idAdmin = TenantHelper::getIdAdmin();
 		if ($idAdmin <= 0) {
 			return json_encode(['success' => false, 'message' => 'Escola não identificada.']);
@@ -120,11 +121,17 @@ class AssinaturaEscola extends Page {
 			$trialAte = EscolasAssinantes::temColunaTrialAte() ? ($escola->trial_ate ?? null) : null;
 		}
 
-		$results = SaasFatura::get(
-			'id_admin = '.(int)$idAdmin,
-			'competencia DESC, id DESC',
-			'12'
-		);
+		$where = 'id_admin = '.(int)$idAdmin;
+		$page = max(1, (int)($post['page'] ?? 1));
+		$limit = 12;
+		$rowCount = SaasFatura::get($where, null, null, 'COUNT(*) as q')->fetch(\PDO::FETCH_ASSOC);
+		$total = (int)($rowCount['q'] ?? 0);
+		$pages = max(1, (int)ceil($total / $limit));
+		if ($page > $pages) {
+			$page = $pages;
+		}
+		$offset = ($page - 1) * $limit;
+		$results = SaasFatura::get($where, 'competencia DESC, id DESC', $offset.','.$limit);
 		$faturas = [];
 		$aberta = null;
 		while ($f = $results->fetchObject(SaasFatura::class)) {
@@ -135,7 +142,22 @@ class AssinaturaEscola extends Page {
 			}
 		}
 
+		// Se a aberta não está nesta página, busca a mais recente em aberto
+		if ($aberta === null) {
+			$stAb = SaasFatura::get(
+				$where.' AND status IN ("aberta","vencida")',
+				'vencimento ASC, id ASC',
+				'1'
+			);
+			if ($fAb = $stAb->fetchObject(SaasFatura::class)) {
+				$aberta = SaasAssinaturaService::formatar($fAb, $escola instanceof EscolasAssinantes ? $escola : null);
+			}
+		}
+
 		$user = SessionUser::getUserLogedData();
+		$proxVenc = $escola instanceof EscolasAssinantes
+			? ($escola->assinatura_proximo_vencimento ?? null)
+			: null;
 
 		return json_encode([
 			'success'   => true,
@@ -153,19 +175,41 @@ class AssinaturaEscola extends Page {
 				'assinatura_status'            => $escola instanceof EscolasAssinantes && EscolasAssinantes::temColunasAssinatura()
 					? (string)($escola->assinatura_status ?? 'ativa')
 					: 'ativa',
-				'assinatura_proximo_vencimento'=> $escola instanceof EscolasAssinantes
-					? ($escola->assinatura_proximo_vencimento ?? null)
-					: null,
+				'assinatura_proximo_vencimento'=> $proxVenc,
+				'assinatura_proximo_vencimento_br' => self::dataBrSafe($proxVenc),
 				'escola_ativa'                 => $escola instanceof EscolasAssinantes ? $escola->isAtiva() : false,
 				'em_trial'                     => $emTrial,
 				'trial_ate'                    => $trialAte,
+				'trial_ate_br'                 => self::dataBrSafe($trialAte),
 				'grace_dias'                   => SaasAssinaturaService::GRACE_DIAS,
 				'so_leitura'                   => (($user['usuario']['nivel'] ?? '') !== 'Diretor'),
 				'bloqueada'                    => !empty($user['usuario']['assinatura_bloqueada']),
 			],
 			'aberta'  => $aberta,
 			'faturas' => $faturas,
+			'pagination' => [
+				'page' => $page,
+				'pages' => $pages,
+				'total' => $total,
+				'limit' => $limit,
+			],
 		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function dataBrSafe($data): ?string {
+		if ($data === null || $data === '') {
+			return null;
+		}
+		try {
+			$s = (string)$data;
+			$br = DateTimeHelper::databr($s);
+			if (strlen($s) > 10) {
+				$br .= ' '.substr(DateTimeHelper::extrairHorario($s), 0, 5);
+			}
+			return $br;
+		} catch (\Throwable $e) {
+			return (string)$data;
+		}
 	}
 
 	private static function atualizarPix(array $post): string {

@@ -525,6 +525,9 @@ class SaasAssinaturaService {
 		}
 		$copia = trim((string)($f->pix_copia_cola ?? ''));
 		$qrImg = self::pixQrImageSrc($f);
+		$venc = (string)$f->vencimento;
+		$pago = $f->pago_em ?? null;
+		$emailEm = $f->email_enviado_em ?? null;
 		return [
 			'id'             => (int)$f->id,
 			'id_admin'       => (int)$f->id_admin,
@@ -533,15 +536,34 @@ class SaasAssinaturaService {
 			'competencia'    => (string)$f->competencia,
 			'valor'          => round((float)$f->valor, 2),
 			'valor_br'       => number_format((float)$f->valor, 2, ',', '.'),
-			'vencimento'     => (string)$f->vencimento,
+			'vencimento'     => $venc,
+			'vencimento_br'  => self::formatarDataBr($venc),
 			'status'         => (string)$f->status,
 			'mp_payment_id'  => (string)($f->mp_payment_id ?? ''),
 			'pix_copia_cola' => $copia,
 			'pix_qr_src'     => $qrImg,
-			'pago_em'        => $f->pago_em,
-			'email_enviado_em' => $f->email_enviado_em ?? null,
+			'pago_em'        => $pago,
+			'pago_em_br'     => self::formatarDataBr($pago, true),
+			'email_enviado_em' => $emailEm,
+			'email_enviado_em_br' => self::formatarDataBr($emailEm, true),
 			'tem_pix'        => $copia !== '',
 		];
+	}
+
+	private static function formatarDataBr($data, bool $comHora = false): ?string {
+		if ($data === null || $data === '') {
+			return null;
+		}
+		try {
+			$s = (string)$data;
+			$br = \App\Common\Helpers\DateTimeHelper::databr($s);
+			if ($comHora && strlen($s) > 10) {
+				$br .= ' '.substr(\App\Common\Helpers\DateTimeHelper::extrairHorario($s), 0, 5);
+			}
+			return $br;
+		} catch (\Throwable $e) {
+			return (string)$data;
+		}
 	}
 
 	/** data URI do MP ou URL gerada a partir do copia-e-cola */

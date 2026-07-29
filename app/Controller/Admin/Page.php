@@ -107,8 +107,15 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
         // Verifica se há subseções e se alguma delas está na lista de itens permitidos
         if (isset($module['subsections'])) {
+            $userNivel = SessionUser::getUserLogedData()['usuario']['nivel'] ?? '';
             foreach ($module['subsections']['items'] as $subSection) {
-                $labelsPermitidos = [$subSection['label']];
+                if (!empty($subSection['diretor_only']) && $userNivel !== 'Diretor') {
+                    continue;
+                }
+
+                $labelsPermitidos = !empty($subSection['requires_label'])
+                    ? [(string)$subSection['requires_label']]
+                    : [$subSection['label']];
                 if ($subSection['label'] === 'Agendamentos') {
                     $labelsPermitidos[] = 'Laboratório';
                 }

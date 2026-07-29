@@ -5,6 +5,37 @@ let campanhaPacingTimer = null;
 let campanhaPacing = null;
 let campanhaTemPendentes = false;
 let campanhaProcessandoFila = false;
+let campanhaPagina = 1;
+
+function renderPaginacaoAjax($el, pag, onPage){
+	pag = pag || {};
+	const pages = parseInt(pag.pages, 10) || 1;
+	const page = parseInt(pag.page, 10) || 1;
+	const total = parseInt(pag.total, 10) || 0;
+	if(pages <= 1){
+		$el.empty();
+		return;
+	}
+	let html = '<ul class="pagination pagination-sm mb-0 justify-content-end">';
+	html += '<li class="page-item'+(page <= 1 ? ' disabled' : '')+'"><a class="page-link" href="#" data-p="'+(page-1)+'">«</a></li>';
+	for(let i = 1; i <= pages; i++){
+		if(pages > 9 && Math.abs(i - page) > 3 && i !== 1 && i !== pages){
+			if(i === 2 || i === pages - 1) html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+			continue;
+		}
+		html += '<li class="page-item'+(i === page ? ' active' : '')+'"><a class="page-link" href="#" data-p="'+i+'">'+i+'</a></li>';
+	}
+	html += '<li class="page-item'+(page >= pages ? ' disabled' : '')+'"><a class="page-link" href="#" data-p="'+(page+1)+'">»</a></li>';
+	html += '</ul>';
+	if(total) html = '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><small class="text-muted">'+total+' registro(s)</small>'+html+'</div>';
+	$el.html(html);
+	$el.find('a.page-link[data-p]').on('click', function(e){
+		e.preventDefault();
+		const p = parseInt($(this).data('p'), 10);
+		if(!p || p < 1 || p > pages || p === page) return;
+		onPage(p);
+	});
+}
 
 function badgeStatus(status){
 	const mapa = {
@@ -419,9 +450,11 @@ function pararAutoFila(){
 
 function carregarCampanhas(opts){
 	opts = opts || {};
+	if(opts.page) campanhaPagina = opts.page;
 	$.post(url_base + CAMPANHAS_URL, {
 		acao: 'listar',
-		canal: $('#filtro-canal').val() || ''
+		canal: $('#filtro-canal').val() || '',
+		page: campanhaPagina
 	}, function(res){
 		if(!res || !res.success){
 			if(!opts.silencioso){
@@ -430,6 +463,14 @@ function carregarCampanhas(opts){
 			return;
 		}
 		renderizarLista(res.campanhas);
+		if(res.pagination){
+			campanhaPagina = res.pagination.page || campanhaPagina;
+			renderPaginacaoAjax($('#paginacao-campanhas'), res.pagination, function(p){
+				carregarCampanhas({ page: p });
+			});
+		} else {
+			$('#paginacao-campanhas').empty();
+		}
 		campanhaTemPendentes = (res.campanhas || []).some(function(c){
 			// Grupos: recorrente enquanto "enviando" (mesmo com fila da rodada vazia)
 			if(c.status === 'enviando' && c.eh_grupos) return true;
@@ -663,7 +704,7 @@ $(function(){
 	atualizarUiCanal();
 
 	$('#campanha_canal').on('change', atualizarUiCanal);
-	$('#filtro-canal').on('change', carregarCampanhas);
+	$('#filtro-canal').on('change', function(){ campanhaPagina = 1; carregarCampanhas(); });
 	$('#segmento_tipo').on('change', atualizarUiSegmento);
 	$('#btn-sync-grupos-wa').on('click', syncGruposWa);
 

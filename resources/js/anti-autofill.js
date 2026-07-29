@@ -94,7 +94,7 @@
 			'<input type="text" name="email" tabindex="-1" autocomplete="email">' +
 			'<input type="text" name="username" tabindex="-1" autocomplete="username">' +
 			'<input type="password" name="password" tabindex="-1" autocomplete="current-password">';
-		document.body.insertBefore(wrap, document.body.firstChild);
+		document.body.appendChild(wrap);
 	}
 
 	function boot() {

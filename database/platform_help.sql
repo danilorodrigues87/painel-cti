@@ -1,5 +1,10 @@
 -- Central de documentação / ajuda da plataforma (editável no Master)
 -- Cole no phpMyAdmin
+--
+-- Tutoriais completos (textos + vídeo vazio):
+--   1) Abra no navegador: database/export_platform_help_tutoriais.php  (baixa o .sql)
+--   2) Cole o arquivo gerado database/platform_help_tutoriais.sql no phpMyAdmin
+--   OU no Master → Documentação → "Carregar tutoriais padrão"
 
 CREATE TABLE IF NOT EXISTS `platform_help_categorias` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,

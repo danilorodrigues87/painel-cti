@@ -6,9 +6,40 @@
 	var passos = []; // { id, type, config, next }
 	var uid = 0;
 	var simMsgs = [];
+	var paginaFluxos = 1;
 
 	function esc(s) {
 		return $('<div>').text(s == null ? '' : String(s)).html();
+	}
+
+	function renderPaginacao($el, pag, onPage) {
+		pag = pag || {};
+		var pages = parseInt(pag.pages, 10) || 1;
+		var page = parseInt(pag.page, 10) || 1;
+		var total = parseInt(pag.total, 10) || 0;
+		if (pages <= 1) {
+			$el.empty();
+			return;
+		}
+		var html = '<ul class="pagination pagination-sm mb-0 justify-content-end">';
+		html += '<li class="page-item' + (page <= 1 ? ' disabled' : '') + '"><a class="page-link" href="#" data-p="' + (page - 1) + '">«</a></li>';
+		for (var i = 1; i <= pages; i++) {
+			if (pages > 9 && Math.abs(i - page) > 3 && i !== 1 && i !== pages) {
+				if (i === 2 || i === pages - 1) html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+				continue;
+			}
+			html += '<li class="page-item' + (i === page ? ' active' : '') + '"><a class="page-link" href="#" data-p="' + i + '">' + i + '</a></li>';
+		}
+		html += '<li class="page-item' + (page >= pages ? ' disabled' : '') + '"><a class="page-link" href="#" data-p="' + (page + 1) + '">»</a></li>';
+		html += '</ul>';
+		if (total) html = '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><small class="text-muted">' + total + ' registro(s)</small>' + html + '</div>';
+		$el.html(html);
+		$el.find('a.page-link[data-p]').on('click', function (e) {
+			e.preventDefault();
+			var p = parseInt($(this).data('p'), 10);
+			if (!p || p < 1 || p > pages || p === page) return;
+			onPage(p);
+		});
 	}
 
 	function novoId() {
@@ -389,28 +420,33 @@
 			$box.html('<p class="text-muted small mb-0">Nenhum template disponível.</p>');
 			return;
 		}
-		var html = '<div class="row g-2">';
+		var html = '<p class="small text-muted mb-2">Cada template ensina um padrão diferente. Crie inativo → edite → teste no <em>simulador</em> → ative. Não ative dois com o mesmo gatilho (ex.: dois de saudação).</p>'
+			+ '<div class="row g-2">';
 		list.forEach(function (t) {
-			html += '<div class="col-md-6">'
+			html += '<div class="col-md-4 col-lg-3">'
 				+ '<div class="border rounded p-2 h-100 d-flex flex-column">'
-				+ '<strong>' + esc(t.nome) + '</strong>'
-				+ '<p class="small text-muted mb-2 flex-grow-1">' + esc(t.descricao || '') + '</p>'
-				+ '<button type="button" class="btn btn-sm btn-outline-primary align-self-start btn-aplicar-tpl" data-id="' + esc(t.id) + '">Usar template</button>'
+				+ '<strong class="small">' + esc(t.nome) + '</strong>'
+				+ '<p class="small text-muted mb-2 flex-grow-1" style="font-size:.8rem">' + esc(t.descricao || '') + '</p>'
+				+ '<button type="button" class="btn btn-sm btn-outline-primary align-self-start btn-aplicar-tpl" data-id="' + esc(t.id) + '">Usar</button>'
 				+ '</div></div>';
 		});
 		html += '</div>';
 		$box.html(html);
 	}
 
-	function carregarLista() {
-		$.post(url_base + API, { acao: 'listar' }, function (res) {
+	function carregarLista(page) {
+		if (page) paginaFluxos = page;
+		$.post(url_base + API, { acao: 'listar', page: paginaFluxos }, function (res) {
 			var $tb = $('#tbody-fluxos').empty();
 			if (!res || !res.success) {
 				$tb.append('<tr><td colspan="5" class="text-danger text-center py-4">' + esc((res && res.message) || 'Falha') + '</td></tr>');
+				$('#paginacao-fluxos').empty();
 				return;
 			}
 			if (!res.itens.length) {
 				$tb.append('<tr><td colspan="5" class="text-muted text-center py-4">Nenhum fluxo. Use um template ou crie o primeiro.</td></tr>');
+				$('#paginacao-fluxos').empty();
+				window.__waFluxosCache = [];
 				return;
 			}
 			res.itens.forEach(function (f) {
@@ -428,6 +464,8 @@
 				);
 			});
 			window.__waFluxosCache = res.itens;
+			if (res.pagination) paginaFluxos = res.pagination.page || paginaFluxos;
+			renderPaginacao($('#paginacao-fluxos'), res.pagination, carregarLista);
 		}, 'json');
 	}
 

@@ -112,3 +112,22 @@ $obRouter->post('/painel/crm/funis/delete',[
 		return new Response(200,Admin\CrmLeads::excluirFunil($request));
 	}
 ]);
+
+// Relatórios CRM (Diretor)
+$obRouter->get('/painel/crm/relatorios',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\CrmRelatorios::index($request));
+	}
+]);
+
+$obRouter->post('/painel/crm/relatorios',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\CrmRelatorios::getInfo($request));
+	}
+]);

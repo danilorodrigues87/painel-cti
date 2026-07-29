@@ -1,5 +1,6 @@
 const ASSINATURA_ESCOLA_URL = 'painel/assinatura';
 let faturaAbertaId = null;
+let faturaPagina = 1;
 
 function esc(s){
 	return $('<div>').text(s == null ? '' : String(s)).html();
@@ -8,6 +9,36 @@ function esc(s){
 function badgeStatus(st){
 	const map = { aberta: 'warning', pago: 'success', vencida: 'danger', cancelada: 'secondary' };
 	return '<span class="badge bg-'+(map[st]||'secondary')+'">'+esc(st)+'</span>';
+}
+
+function renderPaginacaoAjax($el, pag, onPage){
+	pag = pag || {};
+	const pages = parseInt(pag.pages, 10) || 1;
+	const page = parseInt(pag.page, 10) || 1;
+	const total = parseInt(pag.total, 10) || 0;
+	if(pages <= 1){
+		$el.empty();
+		return;
+	}
+	let html = '<ul class="pagination pagination-sm mb-0 justify-content-end">';
+	html += '<li class="page-item'+(page <= 1 ? ' disabled' : '')+'"><a class="page-link" href="#" data-p="'+(page-1)+'">«</a></li>';
+	for(let i = 1; i <= pages; i++){
+		if(pages > 9 && Math.abs(i - page) > 3 && i !== 1 && i !== pages){
+			if(i === 2 || i === pages - 1) html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+			continue;
+		}
+		html += '<li class="page-item'+(i === page ? ' active' : '')+'"><a class="page-link" href="#" data-p="'+i+'">'+i+'</a></li>';
+	}
+	html += '<li class="page-item'+(page >= pages ? ' disabled' : '')+'"><a class="page-link" href="#" data-p="'+(page+1)+'">»</a></li>';
+	html += '</ul>';
+	if(total) html = '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2"><small class="text-muted">'+total+' fatura(s)</small>'+html+'</div>';
+	$el.html(html);
+	$el.find('a.page-link[data-p]').on('click', function(e){
+		e.preventDefault();
+		const p = parseInt($(this).data('p'), 10);
+		if(!p || p < 1 || p > pages || p === page) return;
+		onPage(p);
+	});
 }
 
 function setAberta(f){
@@ -23,7 +54,7 @@ function setAberta(f){
 	$('#badge-fatura-status').attr('class', 'badge bg-'+(f.status === 'vencida' ? 'danger' : 'warning')).text(f.status);
 	$('#fat-competencia').text(f.competencia || '—');
 	$('#fat-valor').text('R$ '+(f.valor_br || '0,00'));
-	$('#fat-vencimento').text(f.vencimento || '—');
+	$('#fat-vencimento').text(f.vencimento_br || f.vencimento || '—');
 	const pix = f.pix_copia_cola || '';
 	$('#fat-pix').val(pix);
 	const qrSrc = f.pix_qr_src || (pix
@@ -52,16 +83,17 @@ function renderHistorico(faturas){
 			'<tr>'
 			+'<td>'+esc(f.competencia)+'</td>'
 			+'<td>R$ '+esc(f.valor_br)+'</td>'
-			+'<td>'+esc(f.vencimento)+'</td>'
+			+'<td>'+esc(f.vencimento_br || f.vencimento)+'</td>'
 			+'<td>'+badgeStatus(f.status)+'</td>'
-			+'<td>'+esc(f.pago_em || '—')+'</td>'
+			+'<td>'+esc(f.pago_em_br || f.pago_em || '—')+'</td>'
 			+'</tr>'
 		);
 	});
 }
 
-function carregar(){
-	$.post(url_base + ASSINATURA_ESCOLA_URL, { acao: 'carregar' }, function(res){
+function carregar(page){
+	if(page) faturaPagina = page;
+	$.post(url_base + ASSINATURA_ESCOLA_URL, { acao: 'carregar', page: faturaPagina }, function(res){
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) || 'Falha ao carregar.', 'error');
 			return;
@@ -69,6 +101,7 @@ function carregar(){
 		if(!res.tabela_ok){
 			$('#alert-assinatura').removeClass('d-none').text(res.message || 'Assinatura indisponível.');
 			$('#lista-faturas-escola').html('<tr><td colspan="5" class="text-center text-muted py-4">—</td></tr>');
+			$('#paginacao-faturas').empty();
 			setAberta(null);
 			return;
 		}
@@ -80,7 +113,7 @@ function carregar(){
 
 		if(r.em_trial){
 			$('#alert-assinatura').removeClass('d-none alert-warning').addClass('alert-info')
-				.text('Você está em período de trial'+(r.trial_ate ? (' até '+r.trial_ate) : '')+'. Cobrança começa após o trial.');
+				.text('Você está em período de trial'+(r.trial_ate_br || r.trial_ate ? (' até '+(r.trial_ate_br || r.trial_ate)) : '')+'. Cobrança começa após o trial.');
 		} else if(r.bloqueada || r.assinatura_status === 'suspensa' || !r.escola_ativa){
 			$('#alert-assinatura').removeClass('d-none alert-info').addClass('alert-warning')
 				.text('Assinatura suspensa. Regularize o pagamento abaixo para liberar o painel.');
@@ -98,6 +131,12 @@ function carregar(){
 
 		setAberta(res.aberta || null);
 		renderHistorico(res.faturas || []);
+		if(res.pagination){
+			faturaPagina = res.pagination.page || faturaPagina;
+			renderPaginacaoAjax($('#paginacao-faturas'), res.pagination, carregar);
+		} else {
+			$('#paginacao-faturas').empty();
+		}
 	}, 'json').fail(function(){
 		Swal.fire('Erro', 'Falha de comunicação.', 'error');
 	});

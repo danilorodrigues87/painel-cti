@@ -1,10 +1,17 @@
 <h1 class="mt-4">Documentação da plataforma</h1>
 <p class="text-muted">Artigos e vídeos exibidos em <code>/painel/ajuda</code> e <code>/ajuda</code>.</p>
 
-<div class="mb-3 d-flex gap-2">
+<div class="mb-3 d-flex flex-wrap gap-2">
 	<button type="button" class="btn btn-primary btn-sm" id="btn-nova-cat">+ Categoria</button>
+	<button type="button" class="btn btn-success btn-sm" id="btn-seed-tutoriais" title="Cria/atualiza tutoriais escritos; não apaga URL de vídeo já preenchida">Carregar tutoriais padrão</button>
 	<a class="btn btn-outline-secondary btn-sm" href="{{URL}}/ajuda" target="_blank" rel="noopener">Ver página pública</a>
 </div>
+<p class="small text-muted">
+	Tutoriais: use o botão acima <strong>ou</strong> gere SQL em
+	<code>database/export_platform_help_tutoriais.php</code> e cole
+	<code>platform_help_tutoriais.sql</code> no phpMyAdmin.
+	Depois edite cada artigo e cole a URL do YouTube/Vimeo.
+</p>
 
 {{categorias_html}}
 
@@ -54,4 +61,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/master-documentacao.js?v=20260727a"></script>
+<script src="{{URL}}/resources/js/master-documentacao.js?v=20260729a"></script>

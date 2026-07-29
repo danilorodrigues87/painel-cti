@@ -122,4 +122,22 @@ $(function () {
 			location.reload();
 		});
 	});
+
+	$('#btn-seed-tutoriais').on('click', function () {
+		Swal.fire({
+			title: 'Carregar tutoriais padrão?',
+			html: 'Cria/atualiza categorias e artigos escritos de todos os módulos.<br><small>URLs de vídeo já preenchidas <strong>não</strong> serão apagadas.</small>',
+			icon: 'question',
+			showCancelButton: true,
+			confirmButtonText: 'Carregar'
+		}).then(function (r) {
+			if (!r.isConfirmed) return;
+			postDoc({ acao: 'seed_tutoriais' }).done(function (res) {
+				if (!res || !res.success) return Swal.fire('Erro', (res && res.message) || 'Falha', 'error');
+				Swal.fire('Pronto', res.message || 'Tutoriais aplicados.', 'success').then(function () {
+					location.reload();
+				});
+			});
+		});
+	});
 });

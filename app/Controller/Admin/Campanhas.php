@@ -84,7 +84,16 @@ class Campanhas extends Page {
 		// Avança a fila se o intervalo de grupos já liberou (não depende só do botão/cron)
 		self::tickFilaLeve($idAdmin);
 
-		$results = EntityCampanhas::get($where, 'id DESC', '50');
+		$page = max(1, (int)($postVars['page'] ?? 1));
+		$limit = 20;
+		$rowCount = EntityCampanhas::get($where, null, null, 'COUNT(*) as q')->fetch(\PDO::FETCH_ASSOC);
+		$total = (int)($rowCount['q'] ?? 0);
+		$pages = max(1, (int)ceil($total / $limit));
+		if ($page > $pages) {
+			$page = $pages;
+		}
+		$offset = ($page - 1) * $limit;
+		$results = EntityCampanhas::get($where, 'id DESC', $offset.','.$limit);
 
 		$lista = [];
 		while ($row = $results->fetchObject(EntityCampanhas::class)) {
@@ -95,6 +104,12 @@ class Campanhas extends Page {
 			'success'   => true,
 			'campanhas' => $lista,
 			'pacing'    => CampanhaWorker::infoPacingGrupo($idAdmin),
+			'pagination' => [
+				'page' => $page,
+				'pages' => $pages,
+				'total' => $total,
+				'limit' => $limit,
+			],
 		]);
 	}
 

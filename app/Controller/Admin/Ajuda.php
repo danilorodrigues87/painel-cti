@@ -59,6 +59,10 @@ class Ajuda extends Page {
 				$html .= '<li class="list-group-item">'
 					.'<a href="'.$base.'/'.rawurlencode((string)$a->slug).'">'
 					.htmlspecialchars((string)$a->titulo, ENT_QUOTES, 'UTF-8').'</a>';
+				$temVideo = trim((string)($a->video_url ?? '')) !== '';
+				$html .= $temVideo
+					? ' <span class="badge bg-success">Vídeo</span>'
+					: ' <span class="badge bg-secondary">Vídeo em breve</span>';
 				if (!empty($a->resumo)) {
 					$html .= '<div class="small text-muted">'.htmlspecialchars((string)$a->resumo, ENT_QUOTES, 'UTF-8').'</div>';
 				}
@@ -86,6 +90,12 @@ class Ajuda extends Page {
 			$vt = htmlspecialchars((string)($a->video_titulo ?: 'Vídeo'), ENT_QUOTES, 'UTF-8');
 			$html .= '<div class="ratio ratio-16x9 mb-4 border rounded overflow-hidden">'
 				.'<iframe src="'.htmlspecialchars($embed, ENT_QUOTES, 'UTF-8').'" title="'.$vt.'" allowfullscreen loading="lazy"></iframe></div>';
+		} else {
+			$vt = htmlspecialchars((string)($a->video_titulo ?: 'Tutorial em vídeo'), ENT_QUOTES, 'UTF-8');
+			$html .= '<div class="ratio ratio-16x9 mb-4 border rounded bg-light d-flex align-items-center justify-content-center text-center p-3">'
+				.'<div><div class="text-muted mb-1"><i class="fas fa-video fa-2x"></i></div>'
+				.'<strong>'.$vt.'</strong>'
+				.'<div class="small text-muted mt-1">Vídeo em breve — o guia escrito abaixo já está disponível.</div></div></div>';
 		}
 		$html .= '<div class="ajuda-corpo">'.(string)($a->corpo ?? '').'</div>';
 		$html .= '<p class="mt-4"><a href="'.$base.'">&larr; Voltar à lista</a></p>';

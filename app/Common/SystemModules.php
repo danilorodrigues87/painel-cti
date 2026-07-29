@@ -217,6 +217,12 @@ class SystemModules {
 					[
 						'label' => 'Tarefas',
 						'link' => URL.'/painel/crm/tarefas'
+					],
+					[
+						'label' => 'Relatórios CRM',
+						'link' => URL.'/painel/crm/relatorios',
+						'diretor_only' => true,
+						'requires_label' => 'Leads',
 					]
 				]
 			]

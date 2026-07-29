@@ -264,14 +264,32 @@
       var u = it.url || '';
       var isVid = (it.tipo || '') === 'video' || guessTipo(it.mime || it.path) === 'video';
       var media = isVid
-        ? '<video src="' + esc(u) + '" class="w-100" style="height:100px;object-fit:cover" muted></video>'
-        : '<img src="' + esc(u) + '" class="w-100" style="height:100px;object-fit:cover" alt="">';
+        ? '<video src="' + esc(u) + '" class="w-100 bib-thumb" style="height:100px;object-fit:cover;cursor:pointer" muted data-url="' + esc(u) + '" data-tipo="video" data-titulo="' + esc(it.titulo || it.path || '') + '"></video>'
+        : '<img src="' + esc(u) + '" class="w-100 bib-thumb" style="height:100px;object-fit:cover;cursor:pointer" alt="" data-url="' + esc(u) + '" data-tipo="image" data-titulo="' + esc(it.titulo || it.path || '') + '">';
       var btn = pickMode
         ? '<button type="button" class="btn btn-sm btn-primary w-100 bib-pick" data-path="' + esc(it.path) + '" data-tipo="' + esc(it.tipo || 'image') + '">Usar</button>'
-        : '<button type="button" class="btn btn-sm btn-outline-danger w-100 bib-del" data-id="' + it.id + '">Excluir</button>';
+        : '<div class="btn-group w-100">'
+          + '<button type="button" class="btn btn-sm btn-outline-secondary bib-ver" data-url="' + esc(u) + '" data-tipo="' + esc(isVid ? 'video' : 'image') + '" data-titulo="' + esc(it.titulo || it.path || '') + '">Ver</button>'
+          + '<button type="button" class="btn btn-sm btn-outline-danger bib-del" data-id="' + it.id + '">Excluir</button>'
+          + '</div>';
       return '<div class="col-6 col-md-3"><div class="border rounded p-1">' + media +
         '<div class="small text-truncate mt-1">' + esc(it.titulo || it.path || '') + '</div>' + btn + '</div></div>';
     }).join(''));
+  }
+
+  var bibPreviewModal = null;
+  function abrirBibPreview(url, tipo, titulo) {
+    if (!url) return;
+    $('#bib-preview-titulo').text(titulo || 'Visualizar');
+    if (tipo === 'video') {
+      $('#bib-preview-body').html('<video src="' + esc(url) + '" class="w-100" style="max-height:70vh" controls autoplay></video>');
+    } else {
+      $('#bib-preview-body').html('<img src="' + esc(url) + '" class="img-fluid" style="max-height:70vh" alt="">');
+    }
+    if (!bibPreviewModal) {
+      bibPreviewModal = new bootstrap.Modal(document.getElementById('modalBibPreview'));
+    }
+    bibPreviewModal.show();
   }
 
   function loadBiblioteca() {
@@ -415,6 +433,16 @@
       var id = $(this).data('id');
       if (!confirm('Excluir da biblioteca?')) return;
       postApi({ acao: 'biblioteca_excluir', id: id }).done(function () { loadBiblioteca(); });
+    });
+
+    $(document).on('click', '.bib-ver, .bib-thumb', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      abrirBibPreview($(this).data('url'), $(this).data('tipo'), $(this).data('titulo'));
+    });
+
+    $('#modalBibPreview').on('hidden.bs.modal', function () {
+      $('#bib-preview-body').empty();
     });
 
     $('#btn-salvar-post').on('click', function () {
