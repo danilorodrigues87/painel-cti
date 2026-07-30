@@ -246,6 +246,7 @@ class CaixaCarrinho extends Page{
 		}
 
 		$valorTotalBr = NumeroHelper::moedaBr($total);
+		$dataPagamento = date('Y-m-d\TH:i');
 
 		$form = '
 		<form id="form-carrinho" method="post">
@@ -279,7 +280,7 @@ class CaixaCarrinho extends Page{
 
 					<div class="form-group col-md-6">
 						<label>Data de pagamento</label>
-						<input type="datetime-local" name="data_pagamento" value="'.DateTimeHelper::agora().'" class="form-control">
+						<input type="datetime-local" name="data_pagamento" value="'.$dataPagamento.'" class="form-control">
 					</div>
 
 					<div class="form-group col-md-6">

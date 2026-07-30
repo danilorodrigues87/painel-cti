@@ -83,22 +83,9 @@
 		}
 	}
 
-	function injectTrap() {
-		if (document.getElementById('painel-autofill-trap')) return;
-		if (!document.body) return;
-		var wrap = document.createElement('div');
-		wrap.id = 'painel-autofill-trap';
-		wrap.className = 'painel-autofill-trap';
-		wrap.setAttribute('aria-hidden', 'true');
-		wrap.innerHTML =
-			'<input type="text" name="email" tabindex="-1" autocomplete="email">' +
-			'<input type="text" name="username" tabindex="-1" autocomplete="username">' +
-			'<input type="password" name="password" tabindex="-1" autocomplete="current-password">';
-		document.body.appendChild(wrap);
-	}
-
 	function boot() {
-		injectTrap();
+		// Sem honeypot de e-mail/senha: no mobile o navegador força esses inputs
+		// a aparecerem (topo ou rodapé), mesmo com CSS de ocultação.
 		scan(document);
 		if (typeof MutationObserver !== 'undefined') {
 			var obs = new MutationObserver(function (mutations) {

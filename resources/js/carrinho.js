@@ -98,6 +98,30 @@ $(document).on("submit", "#form-carrinho-add-avulso", function(event){
 	});
 });
 
+function abrirModalCarrinho(){
+	const el = document.getElementById('modalCarrinhoPagamento');
+	if(!el){
+		return;
+	}
+	if(typeof bootstrap !== 'undefined' && bootstrap.Modal){
+		bootstrap.Modal.getOrCreateInstance(el).show();
+		return;
+	}
+	$(el).modal('show');
+}
+
+function fecharModalCarrinho(){
+	const el = document.getElementById('modalCarrinhoPagamento');
+	if(!el){
+		return;
+	}
+	if(typeof bootstrap !== 'undefined' && bootstrap.Modal){
+		bootstrap.Modal.getOrCreateInstance(el).hide();
+		return;
+	}
+	$(el).modal('hide');
+}
+
 // Abre o modal de pagamento do carrinho
 function abrirPagamentoCarrinho(){
 	$.ajax({
@@ -106,7 +130,15 @@ function abrirPagamentoCarrinho(){
 		dataType: "json",
 		success: function(result){
 			$('#body_carrinho_pagamento').html(result);
-			$('#modalCarrinhoPagamento').modal('show');
+			calcularTrocoCarrinho();
+			abrirModalCarrinho();
+		},
+		error: function(){
+			Swal.fire({
+				title: "Ops...",
+				text: "Não foi possível abrir o pagamento do carrinho.",
+				icon: "error"
+			});
 		}
 	});
 }
@@ -126,7 +158,7 @@ $(document).on("submit", "#form-carrinho", function(event){
 			if(response.erro){
 				$("#response-carrinho").html('<div class="alert alert-danger">'+response.erro+'</div>');
 			} else {
-				$('#modalCarrinhoPagamento').modal('hide');
+				fecharModalCarrinho();
 				Swal.fire({
 					title: "Pagamento registrado!",
 					text: "Total recebido: R$ "+response.total,
