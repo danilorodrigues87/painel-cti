@@ -138,6 +138,20 @@ $obRouter->post('/painel/config/ia', [
 	}
 ]);
 
+$obRouter->get('/painel/config/assistente', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\ConfigAssistente::index($request));
+	}
+]);
+
+$obRouter->post('/painel/config/assistente', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\ConfigAssistente::getInfo($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/painel/config/bunny', [
 	'middlewares' => ['required-admin-login'],
 	function ($request) {

@@ -1,0 +1,94 @@
+<h1 class="mt-4">Agent API / OpenClaw</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Chaves Master + ativação por escola</li>
+</ol>
+
+<div class="alert alert-warning {{alert_sql_class}}">
+	Execute <code>database/agent_api.sql</code> e <code>database/agent_escola_config.sql</code> no phpMyAdmin.
+</div>
+
+<div class="card mb-4">
+	<div class="card-header"><i class="fa-solid fa-key me-1"></i> Chaves Master</div>
+	<div class="card-body">
+		<p class="text-muted small">
+			Agente principal do SaaS. Base: <code id="api-base">{{api_base}}</code>
+		</p>
+		<div class="row g-2 align-items-end mb-3">
+			<div class="col-md-6">
+				<label class="form-label" for="key-nome">Nome</label>
+				<input type="text" class="form-control" id="key-nome" value="Master OpenClaw" maxlength="120">
+			</div>
+			<div class="col-md-3">
+				<button type="button" class="btn btn-primary" id="btn-criar-master">Gerar chave Master</button>
+			</div>
+		</div>
+		<div id="plain-box" class="alert alert-success d-none">
+			<strong>Copie agora:</strong>
+			<code id="plain-key" class="user-select-all"></code>
+		</div>
+		<div class="table-responsive">
+			<table class="table table-sm align-middle">
+				<thead>
+					<tr><th>Nome</th><th>Prefixo</th><th>Ativa</th><th>Último uso</th><th></th></tr>
+				</thead>
+				<tbody id="keys-tbody">
+					<tr><td colspan="5" class="text-muted">Carregando…</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="card mb-4">
+	<div class="card-header"><i class="fa-solid fa-school me-1"></i> Escolas com Assistente IA</div>
+	<div class="card-body">
+		<p class="text-muted small mb-3">
+			Só escolas com o módulo no plano. Gere a Agent API aqui, ative/desative e revele LLM/Telegram cadastrados pelo Diretor para colar no OpenClaw.
+		</p>
+		<div class="table-responsive">
+			<table class="table table-sm align-middle">
+				<thead>
+					<tr>
+						<th>Escola</th>
+						<th>id</th>
+						<th>LLM</th>
+						<th>Telegram</th>
+						<th>Agent API</th>
+						<th>Ativo</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody id="escolas-tbody">
+					<tr><td colspan="7" class="text-muted">Carregando…</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="modalEscola" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="modal-escola-titulo">Escola</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<div id="modal-escola-body" class="small"></div>
+				<div id="modal-secrets" class="d-none mt-3">
+					<label class="form-label">LLM key</label>
+					<code id="sec-llm" class="d-block user-select-all mb-2"></code>
+					<label class="form-label">Telegram token</label>
+					<code id="sec-tg" class="d-block user-select-all"></code>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-outline-primary" id="btn-gerar-escola">Gerar Agent API</button>
+				<button type="button" class="btn btn-outline-warning" id="btn-revelar">Revelar segredos</button>
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/master-agent-api.js?v=20260730b"></script>

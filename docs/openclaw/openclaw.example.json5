@@ -1,0 +1,41 @@
+// Exemplo de configuração OpenClaw (json5) — ajuste tokens e URLs.
+// Documentação: https://docs.openclaw.ai/
+
+{
+  agents: {
+    defaults: {
+      model: { primary: "google/gemini-2.0-flash" },
+      skills: ["painel-cti"],
+    },
+    entries: {
+      // Agente principal (dono do SaaS)
+      master: {
+        skills: ["painel-cti"],
+        // Env / secrets no gateway:
+        // PAINEL_CTI_BASE=https://seudominio.com/api/v1/agent
+        // PAINEL_CTI_API_KEY=cti_ak_MASTER...
+      },
+      // Subagente por escola (repetir por unidade)
+      escola_1: {
+        skills: ["painel-cti"],
+        // PAINEL_CTI_API_KEY=cti_ak_ESCOLA...
+      },
+    },
+  },
+
+  channels: {
+    telegram: {
+      enabled: true,
+      // Preferir bot por agente; pairing obrigatório
+      dmPolicy: "pairing",
+      // botToken do agente master (ou configure por entry conforme sua versão OpenClaw)
+    },
+  },
+
+  // Cutucões futuros: hooks do gateway
+  hooks: {
+    enabled: true,
+    path: "/hooks",
+    // token: "..." // dedicado — não reutilizar gateway.auth
+  },
+}

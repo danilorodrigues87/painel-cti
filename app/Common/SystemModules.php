@@ -15,6 +15,7 @@ class SystemModules {
 		'campanhas'       => 'Campanhas',
 		'whatsapp'        => 'WhatsApp',
 		'social'          => 'Redes sociais',
+		'assistente_ia'   => 'Assistente IA',
 		'dados_escola'    => 'Dados da escola',
 		'categorias'      => 'Categorias',
 		'trilhas'         => 'Trilhas',
@@ -338,6 +339,10 @@ class SystemModules {
 					[
 						'label' => 'IA Pedagógica',
 						'link' => URL.'/painel/config/ia'
+					],
+					[
+						'label' => 'Assistente IA',
+						'link' => URL.'/painel/config/assistente'
 					],
 					[
 						'label' => 'Bunny Stream',

@@ -3,7 +3,7 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-28 (Fase 1 segurança)  
+**Última atualização:** 2026-07-30 (Agent API / OpenClaw Fase 1)  
 **Repo:** `painel-cti`  
 **DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
@@ -322,7 +322,24 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - Anexos só por rota autenticada: `/painel/suporte/anexo/{id}` e `/master/chamados/anexo/{id}`.
 - Entities: `Chamado`, `ChamadoMensagem`; helpers: `ChamadoHelper`, `ChamadoAnexoHelper`.
 
-Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
+### 5.12 Agent API / OpenClaw (Fase 1+)
+
+API **read-only** para agentes externos (OpenClaw na VPS): Master (todas as escolas) + chave por escola.
+
+- **SQL:** `database/agent_api.sql` (`agent_api_keys`, `agent_api_audit`) + `database/agent_escola_config.sql` (LLM OpenClaw + Telegram por escola)
+- **Rotas:** `/api/v1/agent/*` — middleware `agent-api-key` (Bearer `cti_ak_…`); rate limit 60/min; escola exige módulo `assistente_ia` **e** `agent_escola_config.agent_ativo=1`
+- **Módulo plano:** slug `assistente_ia` → label **Assistente IA** (Diretor auto-grant se o plano liberar)
+- **Segredos distintos:**
+  - **IA Pedagógica** (`escola_integracoes.ai_*`, `/painel/config/ia`) — portal EAD
+  - **LLM OpenClaw** (`agent_escola_config.llm_*`, `/painel/config/assistente`) — agente Telegram/VPS
+  - Podem ser a mesma chave de API na prática; configs são independentes (botão “usar dados da pedagógica” só pré-preenche)
+- **UI Escola (Diretor):** cadastra LLM OpenClaw + token/username Telegram — **não** gera Agent API
+- **UI Master:** `/master/agent-api` — chave Master; por escola: gerar/revogar Agent API, ativar/desativar, revelar segredos para colar no OpenClaw
+- **Analytics:** `AgentAnalyticsHelper` (resumo, agenda, inadimplentes, a receber, CRM, matrículas, WA)
+- **Docs:** `docs/openclaw/`
+- **Próximo:** cutucões (hooks) + chat na plataforma + sync automático VPS (opcional)
+
+Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 
 ---
 
@@ -342,6 +359,7 @@ Contrato API (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` co
 | Agenda | `AgendaHelper.php`, controllers `Agenda*` |
 | CRM | `CrmLeads.php`, `resources/js/crm.js` |
 | Suporte / chamados | `Controller/Admin/Suporte.php`, `Controller/Master/Chamados.php`, `Chamado*.php`, `resources/js/suporte.js` |
+| Agent API / OpenClaw | `routes/api/v1/agent.php`, `Controller/Api/Agent/Analytics.php`, `AgentApiKey.php`, `AgentAnalyticsHelper.php`, `docs/openclaw/` |
 | URL AJAX | `resources/js/url-base.js` |
 
 ---
@@ -539,6 +557,8 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 
 **Chamados de suporte (novo):** colar `database/chamados_suporte.sql`.
 
+**Agent API / OpenClaw (Fase 1):** colar `database/agent_api.sql` e `database/agent_escola_config.sql`. Liberar slug `assistente_ia` no plano das escolas.
+
 ---
 
 ## 8. Roadmap (planejado × feito)
@@ -547,6 +567,7 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | Item | Status |
 |------|--------|
 | Chamados de suporte (escola ↔ Master) | Feito |
+| Agent API / OpenClaw Fase 1 (read-only + chaves Master/escola) | Feito — SQL `database/agent_api.sql` |
 | CRM Kanban + tarefas + histórico | Feito |
 | Agenda laboratório v2 + diário | Feito |
 | Sync de permissões em tempo real (sessão) | Feito |

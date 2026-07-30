@@ -228,6 +228,10 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('vendas', $slugsEscola, true)) {
 				$allPermittedModules[] = 'PDV';
 			}
+			// Assistente IA (OpenClaw / Agent API): só Diretor + plano
+			if (in_array('assistente_ia', $slugsEscola, true)) {
+				$allPermittedModules[] = 'Assistente IA';
+			}
 			// IA Pedagógica / Bunny Stream: só Diretor + Cursos Online (respeita checklist; não força EAD)
 			if (in_array('ead', $slugsEscola, true)
 				&& in_array('Cursos Online', $allPermittedModules, true)) {

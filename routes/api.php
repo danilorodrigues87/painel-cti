@@ -16,3 +16,5 @@ include __DIR__.'/api/v1/auth.php';
 
 include __DIR__.'/api/v1/student.php';
 
+include __DIR__.'/api/v1/agent.php';
+

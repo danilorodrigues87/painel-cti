@@ -78,7 +78,7 @@ class ModuleGateHelper {
 	 */
 	public static function getModulosDisponiveisParaEscola(int $idAdmin): array {
 		$labels = self::getModulosEscola($idAdmin);
-		$somenteDiretor = ['Dados da escola', 'Assinatura'];
+		$somenteDiretor = ['Dados da escola', 'Assinatura', 'Assistente IA'];
 		return array_values(array_filter($labels, static function ($l) use ($somenteDiretor) {
 			return !in_array($l, $somenteDiretor, true);
 		}));
