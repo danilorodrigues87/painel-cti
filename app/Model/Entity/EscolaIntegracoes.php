@@ -45,9 +45,10 @@ class EscolaIntegracoes {
 	public $evolution_status = 'disconnected';
 	public $evolution_ativo = 0;
 	public $evolution_numero;
-	public $whatsapp_delay_segundos = 5;
-	public $whatsapp_max_hora = 40;
+	public $whatsapp_delay_segundos = 60;
+	public $whatsapp_max_hora = 20;
 	public $whatsapp_grupo_delay_segundos = 3600;
+	public $whatsapp_variar_texto = 0;
 	public $whatsapp_horario_inicio;
 	public $whatsapp_horario_fim;
 	public $whatsapp_dias = '1,2,3,4,5';
@@ -193,6 +194,26 @@ class EscolaIntegracoes {
 				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
 			);
 			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'whatsapp_grupo_delay_segundos'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public static function temColunaWhatsappVariarTexto(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'whatsapp_variar_texto'");
 			$cache = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$cache = false;
@@ -698,8 +719,8 @@ class EscolaIntegracoes {
 			$dados['evolution_status'] = $this->evolution_status ?: 'disconnected';
 			$dados['evolution_ativo'] = (int)$this->evolution_ativo;
 			$dados['evolution_numero'] = $this->evolution_numero;
-			$dados['whatsapp_delay_segundos'] = (int)($this->whatsapp_delay_segundos ?? 5);
-			$dados['whatsapp_max_hora'] = (int)($this->whatsapp_max_hora ?? 40);
+			$dados['whatsapp_delay_segundos'] = max(30, (int)($this->whatsapp_delay_segundos ?? 60));
+			$dados['whatsapp_max_hora'] = max(1, (int)($this->whatsapp_max_hora ?? 20));
 			if (self::temColunaWhatsappGrupoDelay()) {
 				$dados['whatsapp_grupo_delay_segundos'] = max(60, (int)($this->whatsapp_grupo_delay_segundos ?? 3600));
 			}
@@ -709,6 +730,10 @@ class EscolaIntegracoes {
 				$dados['whatsapp_dias'] = $this->whatsapp_dias ?: '1,2,3,4,5';
 				$dados['whatsapp_msg_fora'] = $this->whatsapp_msg_fora;
 			}
+		}
+
+		if (self::temColunaWhatsappVariarTexto()) {
+			$dados['whatsapp_variar_texto'] = !empty($this->whatsapp_variar_texto) ? 1 : 0;
 		}
 
 		$existente = self::getByIdAdmin((int)$this->id_admin);

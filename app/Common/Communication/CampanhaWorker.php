@@ -3,6 +3,8 @@
 namespace App\Common\Communication;
 
 use App\Common\Helpers\CampanhaSegmentoHelper;
+use App\Common\Helpers\WhatsappPacingHelper;
+use App\Common\Helpers\WhatsappTextoVariacaoHelper;
 use App\Model\Entity\Campanhas;
 use App\Model\Entity\CampanhaFila;
 use App\Model\Entity\CrmLeads;
@@ -96,13 +98,17 @@ class CampanhaWorker {
 					break;
 				}
 
-				$delay = self::delayGrupoSegundos($idAdmin);
+				$delayBase = self::delayGrupoSegundos($idAdmin);
 				$espera = 0;
 				if (!empty($campanha->agendada_para)) {
 					$espera = max(0, strtotime($campanha->agendada_para) - time());
 				}
 				if ($espera <= 0) {
-					$espera = self::esperaPacingCampanha($campanhaId, $idAdmin, $delay);
+					$espera = self::esperaPacingCampanha(
+						$campanhaId,
+						$idAdmin,
+						WhatsappPacingHelper::delayGrupoComJitter($delayBase)
+					);
 				}
 
 				while ($espera > 0) {
@@ -192,8 +198,13 @@ class CampanhaWorker {
 		$stats = ['enviados' => 0, 'erros' => 0, 'motivo' => null];
 
 		if ($canal === 'whatsapp') {
-			$delay = ($config instanceof EscolaIntegracoes) ? max(1, (int)($config->whatsapp_delay_segundos ?? 5)) : 5;
-			$maxHora = ($config instanceof EscolaIntegracoes) ? max(1, (int)($config->whatsapp_max_hora ?? 40)) : 40;
+			$delayConfig = ($config instanceof EscolaIntegracoes)
+				? (int)($config->whatsapp_delay_segundos ?? WhatsappPacingHelper::DEFAULT_DELAY_1A1)
+				: WhatsappPacingHelper::DEFAULT_DELAY_1A1;
+			$delay = max(WhatsappPacingHelper::FLOOR_DELAY_1A1, $delayConfig);
+			$maxHora = ($config instanceof EscolaIntegracoes)
+				? max(1, (int)($config->whatsapp_max_hora ?? WhatsappPacingHelper::DEFAULT_MAX_HORA))
+				: WhatsappPacingHelper::DEFAULT_MAX_HORA;
 			$statusWa = WhatsappEscolaService::status($escolaId);
 			if (empty($statusWa['conectado'])) {
 				$stats['motivo'] = 'whatsapp_desconectado';
@@ -312,6 +323,9 @@ class CampanhaWorker {
 				$texto = CampanhaSegmentoHelper::textoParaWhatsapp(
 					CampanhaSegmentoHelper::aplicarVariaveis((string)($campanha->mensagem ?? ''), $vars)
 				);
+				if (WhatsappTextoVariacaoHelper::escolaQuerVariar($escolaId)) {
+					$texto = WhatsappTextoVariacaoHelper::variar($escolaId, $texto);
+				}
 				$segmento = json_decode($campanha->segmento ?? '{}', true) ?: [];
 				$midia = is_array($segmento['midia'] ?? null) ? $segmento['midia'] : null;
 				$envio = WhatsappEscolaService::enviarCampanha(
@@ -327,17 +341,19 @@ class CampanhaWorker {
 				$corpo = CampanhaSegmentoHelper::aplicarVariaveis($campanha->mensagem, $vars);
 				$ok = $email->sendEmail($item->contato, $assunto, $corpo);
 				$erroMsg = $email->getError() ?: 'Falha no envio.';
+				$texto = null;
 			}
 
 			if ($ok) {
-				$item->marcarEnviado();
+				$item->marcarEnviado($canal === 'whatsapp' ? $texto : null);
 				$resumo['enviados']++;
 				$stats['enviados']++;
 				if ($isGrupo) {
 					$grupoEnviadoNestaRun = true;
 					$podeEnviarGrupo = false;
-					// Próximo envio de grupo só após o intervalo configurado
-					$campanha->agendada_para = date('Y-m-d H:i:s', time() + $delayGrupoSeg);
+					// Próximo envio de grupo: intervalo configurado + jitter ±20%
+					$proxGrupo = WhatsappPacingHelper::delayGrupoComJitter($delayGrupoSeg);
+					$campanha->agendada_para = date('Y-m-d H:i:s', time() + $proxGrupo);
 					$campanha->atualizar();
 				}
 			} else {
@@ -353,8 +369,13 @@ class CampanhaWorker {
 			$campanha->recalcularTotais();
 
 			// Delay só para 1:1 / e-mail — grupos usam pacing via agendada_para
-			if ($aplicarDelay && $delay > 0 && !$isGrupo) {
-				sleep($delay);
+			if ($aplicarDelay && !$isGrupo) {
+				$sleepSeg = $canal === 'whatsapp'
+					? WhatsappPacingHelper::delayCampanha1a1($delay)
+					: max(1, $delay);
+				if ($sleepSeg > 0) {
+					sleep($sleepSeg);
+				}
 			}
 		}
 

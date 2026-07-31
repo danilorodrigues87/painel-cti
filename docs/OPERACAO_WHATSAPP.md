@@ -38,6 +38,17 @@ WHERE id = SEU_ID_ADMIN;
 4. Cliente escolhe → conversa vai para a **fila do setor**  
 5. Atendente **Assumir** → responde no inbox  
 
+## Pacing anti-bloqueio (campanhas)
+
+- Intervalo 1:1: mínimo **30s**, padrão **60s**, com jitter ±20% a cada envio.
+- Máx./hora: padrão **20**.
+- Grupos/listas: intervalo em minutos (padrão 60) + jitter ±20% em `agendada_para`.
+- Ao **Iniciar** campanha WhatsApp 1:1, o worker já aplica delay (sem rajada).
+- Opcional: **variar textos** (`whatsapp_variar_texto`) usa a IA de Configurações de IA + fallback local.
+- SQL: `database/whatsapp_anti_ban.sql` (`whatsapp_variar_texto`, `campanha_fila.mensagem_enviada`).
+
+Configurar limites em **Comunicação**; toggle de variação também em **Configurações de IA**.
+
 ## Multi-número (futuro)
 
 Tabela `whatsapp_numeros` já existe; hoje sincroniza 1 registro *Principal* ao conectar.

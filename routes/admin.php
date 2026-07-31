@@ -54,6 +54,8 @@ include __DIR__.'/admin/campanhas.php';
 
 include __DIR__.'/admin/evolution.php';
 
+include __DIR__.'/admin/telegram.php';
+
 include __DIR__.'/admin/whatsapp.php';
 
 include __DIR__.'/admin/ead.php';

@@ -305,18 +305,34 @@
 								<label class="form-check-label" for="evolution_ativo">Marcar WhatsApp ativo nesta escola</label>
 							</div>
 							<div class="row g-2 mb-3">
+								<div class="col-12">
+									<div class="alert alert-info small mb-2 py-2">
+										<strong>Anti-bloqueio:</strong> intervalo mínimo 30s entre mensagens 1:1 (recomendado 60s).
+										Máximo sugerido: 20/hora. O sistema aplica variação aleatória (±20%) no intervalo.
+										Variação de texto das campanhas: <a href="{{URL}}/painel/config/ia">Configurações de IA</a>.
+									</div>
+								</div>
 								<div class="col-6">
-									<label class="form-label" for="whatsapp_delay_segundos">Intervalo (seg)</label>
-									<input type="number" class="form-control" id="whatsapp_delay_segundos" value="5" min="1" max="120">
+									<label class="form-label" for="whatsapp_delay_segundos">Intervalo 1:1 (seg)</label>
+									<input type="number" class="form-control" id="whatsapp_delay_segundos" value="60" min="30" max="300">
+									<div class="form-text">Mín. 30s. Padrão: 60s.</div>
 								</div>
 								<div class="col-6">
 									<label class="form-label" for="whatsapp_max_hora">Máx./hora</label>
-									<input type="number" class="form-control" id="whatsapp_max_hora" value="40" min="1" max="200">
+									<input type="number" class="form-control" id="whatsapp_max_hora" value="20" min="1" max="100">
+									<div class="form-text">Padrão: 20.</div>
 								</div>
 								<div class="col-6">
 									<label class="form-label" for="whatsapp_grupo_delay_minutos">Intervalo grupos (min)</label>
 									<input type="number" class="form-control" id="whatsapp_grupo_delay_minutos" value="60" min="1" max="1440" title="Tempo mínimo entre envios para grupos/listas">
-									<div class="form-text">Campanhas em grupo/lista. Padrão: 60 min.</div>
+									<div class="form-text">Campanhas em grupo/lista (+ jitter). Padrão: 60 min.</div>
+								</div>
+								<div class="col-12" id="wrap-variar-texto-wa">
+									<div class="form-check form-switch">
+										<input class="form-check-input" type="checkbox" id="whatsapp_variar_texto" value="1">
+										<label class="form-check-label" for="whatsapp_variar_texto">Variar textos de campanha (anti-template)</label>
+									</div>
+									<div class="form-text">Usa a IA de <a href="{{URL}}/painel/config/ia">Configurações de IA</a>. Também editável lá.</div>
 								</div>
 								<div class="col-6">
 									<label class="form-label" for="whatsapp_horario_inicio">Expediente início</label>

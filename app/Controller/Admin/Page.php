@@ -228,15 +228,21 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('vendas', $slugsEscola, true)) {
 				$allPermittedModules[] = 'PDV';
 			}
-			// Assistente IA (OpenClaw / Agent API): só Diretor + plano
+			// Configurações de IA: Diretor + (EAD pedagógica | assistente_ia | whatsapp)
+			$temConfigIa = false;
 			if (in_array('assistente_ia', $slugsEscola, true)) {
-				$allPermittedModules[] = 'Assistente IA';
+				$temConfigIa = true;
 			}
-			// IA Pedagógica / Bunny Stream: só Diretor + Cursos Online (respeita checklist; não força EAD)
+			if (in_array('whatsapp', $slugsEscola, true)) {
+				$temConfigIa = true;
+			}
 			if (in_array('ead', $slugsEscola, true)
 				&& in_array('Cursos Online', $allPermittedModules, true)) {
-				$allPermittedModules[] = 'IA Pedagógica';
+				$temConfigIa = true;
 				$allPermittedModules[] = 'Bunny Stream';
+			}
+			if ($temConfigIa) {
+				$allPermittedModules[] = 'Configurações de IA';
 			}
 		}
 

@@ -216,6 +216,7 @@ class Campanhas extends Page {
 			$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
 			$tipoSegmento = $postVars['segmento_tipo'] ?? 'alunos_matriculados';
 			$statusLead = $postVars['status_lead'] ?? '';
+			$parcelasAtrasoMin = self::normalizarParcelasAtrasoMin($postVars['parcelas_atraso_min'] ?? 1);
 
 			if ($canal === 'email' && ($assunto === '' || $mensagem === '')) {
 				return json_encode(['success' => false, 'message' => 'Preencha assunto e mensagem do e-mail.']);
@@ -234,6 +235,9 @@ class Campanhas extends Page {
 				'tipo'        => $tipoSegmento,
 				'status_lead' => $statusLead,
 			];
+			if ($tipoSegmento === 'inadimplentes') {
+				$segmento['parcelas_atraso_min'] = $parcelasAtrasoMin;
+			}
 			if ($tipoSegmento === 'whatsapp_grupos') {
 				$destinos = self::parseDestinosGrupos($postVars);
 				if (empty($destinos)) {
@@ -356,7 +360,9 @@ class Campanhas extends Page {
 			if ($isGrupo) {
 				CampanhaWorker::reabastecerFilaGrupos($ob);
 			}
-			$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 3, false);
+			// WhatsApp 1:1: aplicar delay (anti-rajada); grupos usam pacing próprio
+			$aplicarDelay = ($canal === 'whatsapp' && !$isGrupo);
+			$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 3, $aplicarDelay);
 			$ob = EntityCampanhas::getById($id, $idAdmin);
 			$ob->recalcularTotais();
 			$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
@@ -410,8 +416,9 @@ class Campanhas extends Page {
 		$ob->agendada_para = null;
 		$ob->atualizar();
 
-		// Grupos: 1ª mensagem agora; depois reenvia nos mesmos grupos no intervalo até Encerrar
-		$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 2, false);
+		// Grupos: 1ª mensagem agora; 1:1 WhatsApp com delay (anti-rajada)
+		$aplicarDelay = ($canal === 'whatsapp' && !$isGrupo);
+		$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 2, $aplicarDelay);
 
 		$ob = EntityCampanhas::getById($id, $idAdmin);
 		$ob->recalcularTotais();
@@ -544,10 +551,25 @@ class Campanhas extends Page {
 			'tipo'        => $postVars['segmento_tipo'] ?? 'alunos_matriculados',
 			'status_lead' => $postVars['status_lead'] ?? '',
 		];
+		if (($seg['tipo'] ?? '') === 'inadimplentes') {
+			$seg['parcelas_atraso_min'] = self::normalizarParcelasAtrasoMin($postVars['parcelas_atraso_min'] ?? 1);
+		}
 		if (($seg['tipo'] ?? '') === 'whatsapp_grupos') {
 			$seg['destinos'] = self::parseDestinosGrupos($postVars);
 		}
 		return $seg;
+	}
+
+	/** 1–6 = mínimo de parcelas em atraso (N ou mais). */
+	private static function normalizarParcelasAtrasoMin($valor): int {
+		$n = (int)$valor;
+		if ($n < 1) {
+			return 1;
+		}
+		if ($n > 6) {
+			return 6;
+		}
+		return $n;
 	}
 
 	private static function parseDestinosGrupos(array $postVars): array {

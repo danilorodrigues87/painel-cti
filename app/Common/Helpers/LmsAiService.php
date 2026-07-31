@@ -48,6 +48,41 @@ class LmsAiService {
 		return $text !== null ? $text : self::stubReply($messages, true);
 	}
 
+	/**
+	 * Chat usando credencial salva (ignora toggle pedagógico ai_ativo).
+	 * Retorna null se sem chave ou API falhou (sem stub).
+	 */
+	public static function chatComCredencial(int $idAdmin, array $messages, string $systemPrompt = ''): ?string {
+		self::$lastError = null;
+		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if (!$cfg instanceof EscolaIntegracoes) {
+			self::$lastError = 'Sem integração.';
+			return null;
+		}
+		$key = $cfg->getAiApiKeyDescriptografada();
+		if ($key === null || $key === '') {
+			self::$lastError = 'Sem API key de IA.';
+			return null;
+		}
+		$provider = (string)($cfg->ai_provider ?: 'openai');
+		$model = trim((string)($cfg->ai_model ?: ''));
+		if ($model === '') {
+			$model = $provider === 'gemini' ? 'gemini-2.0-flash' : 'gpt-4o-mini';
+		}
+
+		if ($provider === 'gemini') {
+			$text = self::callGemini($key, $model, $messages, $systemPrompt);
+			if ($text !== null) {
+				return $text;
+			}
+			if (stripos($model, '1.5') !== false) {
+				return self::callGemini($key, 'gemini-2.0-flash', $messages, $systemPrompt);
+			}
+			return null;
+		}
+		return self::callOpenAiCompatible($key, $model, $messages, $systemPrompt, null);
+	}
+
 	private static function stubReply(array $messages, bool $configuredButFailed): string {
 		$last = '';
 		foreach (array_reverse($messages) as $m) {
@@ -60,9 +95,9 @@ class LmsAiService {
 		if ($configuredButFailed) {
 			$hint = 'A chave de IA está salva, mas a chamada à API falhou'
 				.(self::$lastError ? ' ('.self::$lastError.')' : '')
-				.'. Verifique o modelo em Configurações → IA Pedagógica (ex.: gemini-2.0-flash ou gpt-4o-mini).';
+				.'. Verifique o modelo em Configurações → Configurações de IA (ex.: gemini-2.0-flash ou gpt-4o-mini).';
 		} else {
-			$hint = 'Configure a IA em Configurações → IA Pedagógica (ativar + chave API).';
+			$hint = 'Configure a IA em Configurações → Configurações de IA (ativar + chave API).';
 		}
 		return "Entendi: \"{$snip}\".\n\n(Resposta simulada — {$hint})\n\nPode continuar; estou no personagem do exercício.";
 	}
@@ -220,7 +255,7 @@ class LmsAiService {
 		if (!is_array($json)) {
 			$json = [
 				'overallScore' => 75,
-				'summary' => 'Avaliação automática (IA indisponível). Configure/verifique o modelo em IA Pedagógica.',
+				'summary' => 'Avaliação automática (IA indisponível). Configure/verifique o modelo em Configurações de IA.',
 				'strengths' => ['Participação na conversa'],
 				'improvements' => ['Aprofundar argumentos'],
 				'mistakes' => [],

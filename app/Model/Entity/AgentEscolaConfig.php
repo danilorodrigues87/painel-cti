@@ -6,8 +6,8 @@ use App\Model\Db\Database;
 use App\Common\Helpers\CryptoHelper;
 
 /**
- * Segredos OpenClaw por escola (LLM do agente + Telegram).
- * Independente de escola_integracoes.ai_* (IA Pedagógica).
+ * Segredos OpenClaw por escola (Telegram + espelho LLM).
+ * Fonte da verdade da chave: escola_integracoes.ai_* (Configurações de IA).
  */
 class AgentEscolaConfig {
 

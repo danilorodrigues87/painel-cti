@@ -311,18 +311,29 @@ class CampanhaSegmentoHelper {
 	}
 
 	private static function inadimplentes(int $idAdmin, array $segmento, string $canal): array {
-		$diasMin = max(1, (int)($segmento['dias_atraso_min'] ?? 1));
+		$parcelasMin = (int)($segmento['parcelas_atraso_min'] ?? 1);
+		if ($parcelasMin < 1) {
+			$parcelasMin = 1;
+		}
+		if ($parcelasMin > 6) {
+			$parcelasMin = 6;
+		}
+		// Compat: se só veio dias_atraso_min antigo e não parcelas, mantém piso de 1 dia
+		$diasMin = max(0, (int)($segmento['dias_atraso_min'] ?? 0));
+		if ($diasMin <= 0) {
+			$diasMin = 1; // vencida há pelo menos 1 dia (= antes de hoje)
+		}
 		$dataLimite = date('Y-m-d', strtotime('-'.$diasMin.' days'));
 		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 
 		$sql = '
-			SELECT DISTINCT
+			SELECT
 				u.id,
 				u.nome,
 				'.$campo.' AS contato,
-				c.descricao AS curso,
-				c.valor,
-				c.vencimento
+				COUNT(*) AS qtd_atraso,
+				MIN(c.vencimento) AS primeiro_venc,
+				SUBSTRING_INDEX(GROUP_CONCAT(c.descricao ORDER BY c.vencimento ASC SEPARATOR " · "), " · ", 1) AS curso
 			FROM caixa c
 			INNER JOIN matriculas m ON m.id = c.id_ref AND m.id_admin = c.id_admin
 			INNER JOIN usuarios u ON u.id = m.id_aluno AND u.id_admin = c.id_admin
@@ -333,21 +344,36 @@ class CampanhaSegmentoHelper {
 			  AND m.status = 0
 			  AND '.$campo.' IS NOT NULL
 			  AND '.$campo.' != ""
-			ORDER BY c.vencimento ASC
+			GROUP BY u.id, u.nome, '.$campo.'
+			HAVING COUNT(*) >= :parcelas_min
+			ORDER BY qtd_atraso DESC, primeiro_venc ASC
 		';
 
 		$stmt = self::pdo()->prepare($sql);
-		$stmt->execute(['id_admin' => $idAdmin, 'data_limite' => $dataLimite]);
+		$stmt->execute([
+			'id_admin' => $idAdmin,
+			'data_limite' => $dataLimite,
+			'parcelas_min' => $parcelasMin,
+		]);
 		$linhas = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
 
 		$lista = [];
 		foreach ($linhas as $row) {
+			$qtd = (int)($row['qtd_atraso'] ?? 0);
+			$desde = !empty($row['primeiro_venc'])
+				? date('d/m/Y', strtotime($row['primeiro_venc']))
+				: '';
+			$cursoBase = trim((string)($row['curso'] ?? ''));
 			$lista[] = [
 				'destinatario_tipo' => 'aluno',
 				'destinatario_id'   => (int)$row['id'],
 				'nome'              => $row['nome'],
 				'contato'           => trim((string)($row['contato'] ?? '')),
-				'curso'             => ($row['curso'] ?? '').' (venc. '.date('d/m/Y', strtotime($row['vencimento'])).')',
+				'curso'             => trim(
+					($cursoBase !== '' ? $cursoBase.' — ' : '')
+					.$qtd.' parcela'.($qtd === 1 ? '' : 's').' em atraso'
+					.($desde !== '' ? ' (desde '.$desde.')' : '')
+				),
 			];
 		}
 

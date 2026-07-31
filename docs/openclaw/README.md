@@ -1,20 +1,22 @@
 # OpenClaw ↔ Painel CTI (Agent API)
 
+> **Legado / opcional.** O caminho principal do Assistente é o **agente Telegram nativo** no painel (`docs/OPERACAO_TELEGRAM_AGENT.md`). OpenClaw na VPS continua suportado via Agent API + espelho `llm_*`.
+
 ## Pré-requisitos
 
 1. SQL: `database/agent_api.sql` + `database/agent_escola_config.sql`
 2. Liberar módulo `assistente_ia` no plano da escola
-3. **Diretor** em Configurações → Assistente IA: LLM OpenClaw + Telegram
-4. **Master** em `/master/agent-api`: gerar Agent API da escola + ativar
+3. **Diretor** em Configurações → **Configurações de IA**: credenciais + Telegram
+4. **Master** em `/master/agent-api`: gerar Agent API da escola + ativar (só se for usar OpenClaw externo)
 
-## Dois tipos de chave de IA (não misturar)
+## Credenciais de IA
 
 | Config | Onde | Uso |
 |--------|------|-----|
-| IA Pedagógica | `/painel/config/ia` | Tutor/roleplay no portal EAD |
-| LLM OpenClaw | `/painel/config/assistente` | Agente na VPS / Telegram |
+| Credenciais compartilhadas | `/painel/config/ia` (`escola_integracoes.ai_*`) | EAD, Assistente nativo, variação WA |
+| Espelho LLM OpenClaw | `agent_escola_config.llm_*` (preenchido ao salvar) | Colar no OpenClaw na VPS |
 
-Podem usar a mesma key Gemini/OpenAI; o painel trata como configs separadas.
+Para o bot nativo no Telegram, veja `docs/OPERACAO_TELEGRAM_AGENT.md`.
 
 ## Auth Agent API
 
@@ -29,21 +31,4 @@ Base: `{URL}/api/v1/agent`
 
 ## Endpoints (read-only)
 
-Ver `SKILL.md`. Exemplos:
-
-```bash
-# Master
-curl -H "Authorization: Bearer MASTER" ".../api/v1/agent/escolas/1/resumo"
-
-# Escola
-curl -H "Authorization: Bearer ESCOLA" ".../api/v1/agent/resumo"
-```
-
-## Fluxo operacional
-
-1. Escola cadastra LLM + bot Telegram no painel  
-2. Master abre a escola → **Revelar segredos** + **Gerar Agent API**  
-3. Master cola no OpenClaw: Agent key, LLM key, `botToken`, binding `escola_{id}`  
-4. Pairing no Telegram  
-
-Ver `openclaw.example.json5`.
+Ver `SKILL.md`.

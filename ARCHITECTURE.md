@@ -3,7 +3,7 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-30 (Agent API / OpenClaw Fase 1)  
+**Última atualização:** 2026-07-31 (Agente Telegram nativo Fase 2)  
 **Repo:** `painel-cti`  
 **DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
@@ -90,7 +90,7 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - Exemplos: `Diretor`, `Financeiro`, `Cliente` (aluno), etc.
 - Telas **Comunicação** e **Campanhas**: acesso automático para `Diretor` em `Page::getPanel` (Comunicação não entra mais no checklist de funcionários — só Diretor).
 - **Redes sociais:** **não** é auto-grant do Diretor — exige label `Redes sociais` em `usuarios.acesso` (interseção com o plano). **Conexão Meta** (submenu Config) aparece só se Diretor **e** já tem `Redes sociais`.
-- Catálogo de permissões: removidos mortos `Vouchers`, `Vendas`, `Recorrente`, `Escolas` e `Comunicação` (checklist). Slug `ead` → **Cursos Online**; slug `conquistas_ead` → **Conquistas EAD** (checkbox separado quando o plano tem `ead`). Menu EAD respeita `usuarios.acesso` para todos os níveis (incluindo Diretor). Progresso EAD (tela auxiliar) e IA Pedagógica (só Diretor) acompanham **Cursos Online**. Diretor ainda recebe automático: Comunicação, Campanhas, WhatsApp, Assinatura, Dados da escola (+ Modelo de contrato / Pagamentos se o plano liberar).
+- Catálogo de permissões: removidos mortos `Vouchers`, `Vendas`, `Recorrente`, `Escolas` e `Comunicação` (checklist). Slug `ead` → **Cursos Online**; slug `conquistas_ead` → **Conquistas EAD** (checkbox separado quando o plano tem `ead`). Menu EAD respeita `usuarios.acesso` para todos os níveis (incluindo Diretor). Progresso EAD (tela auxiliar) e **Configurações de IA** (só Diretor; se plano tiver EAD, `assistente_ia` ou `whatsapp`) acompanham os módulos liberados. Diretor ainda recebe automático: Comunicação, Campanhas, WhatsApp, Assinatura, Dados da escola (+ Modelo de contrato / Pagamentos se o plano liberar).
 - **Termos de Uso (LGPD):** gate em `Page::getPanel` até aceite da versão vigente (`TermosDeUso::VERSAO`). Texto em view; aceite usa só o usuário da sessão. SQL opcional: `database/usuarios_termos_versao.sql` (`termos_aceito_em`, `termos_versao`). Sem as colunas, mantém só flag `termos_uso`.
 - **Ajuda:** menu padrão (após aceite dos termos) → `/painel/ajuda`; pública `/ajuda`. Conteúdo editável no Master.
 
@@ -307,6 +307,7 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - Master: `/master/documentacao` — CRUD categorias/artigos + URL de vídeo (YouTube/Vimeo embed).
 - **Tutoriais padrão:** botão **Carregar tutoriais padrão** no Master → `App\Common\Help\PlatformHelpSeed` (categorias + artigos de todos os módulos). `video_url` fica vazio; reaplicar **não** apaga vídeo já preenchido.
 - **SQL para phpMyAdmin:** abra `database/export_platform_help_tutoriais.php` no navegador (gera/baixa `database/platform_help_tutoriais.sql`) ou rode `php database/export_platform_help_tutoriais.php`. Pré-requisito: `database/platform_help.sql`.
+- **Assistente IA / OpenClaw (ajuda):** `database/platform_help_assistente_ia.sql` — categoria + 5 artigos (também no seed `PlatformHelpSeed`).
 - Escola (logado): `/painel/ajuda` e `/painel/ajuda/{slug}` — placeholder “Vídeo em breve” quando não há URL.
 - Público: `/ajuda` e `/ajuda/{slug}` (mesmo conteúdo publicado).
 - Menu **Ajuda** entra nos módulos padrão após aceite dos termos.
@@ -322,22 +323,22 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - Anexos só por rota autenticada: `/painel/suporte/anexo/{id}` e `/master/chamados/anexo/{id}`.
 - Entities: `Chamado`, `ChamadoMensagem`; helpers: `ChamadoHelper`, `ChamadoAnexoHelper`.
 
-### 5.12 Agent API / OpenClaw (Fase 1+)
+### 5.12 Agent API + Agente Telegram nativo
 
-API **read-only** para agentes externos (OpenClaw na VPS): Master (todas as escolas) + chave por escola.
+API **read-only** para agentes externos (OpenClaw na VPS — **legado/opcional**) e **agente Telegram nativo** no painel (caminho principal).
 
-- **SQL:** `database/agent_api.sql` (`agent_api_keys`, `agent_api_audit`) + `database/agent_escola_config.sql` (LLM OpenClaw + Telegram por escola)
-- **Rotas:** `/api/v1/agent/*` — middleware `agent-api-key` (Bearer `cti_ak_…`); rate limit 60/min; escola exige módulo `assistente_ia` **e** `agent_escola_config.agent_ativo=1`
-- **Módulo plano:** slug `assistente_ia` → label **Assistente IA** (Diretor auto-grant se o plano liberar)
-- **Segredos distintos:**
-  - **IA Pedagógica** (`escola_integracoes.ai_*`, `/painel/config/ia`) — portal EAD
-  - **LLM OpenClaw** (`agent_escola_config.llm_*`, `/painel/config/assistente`) — agente Telegram/VPS
-  - Podem ser a mesma chave de API na prática; configs são independentes (botão “usar dados da pedagógica” só pré-preenche)
-- **UI Escola (Diretor):** cadastra LLM OpenClaw + token/username Telegram — **não** gera Agent API
-- **UI Master:** `/master/agent-api` — chave Master; por escola: gerar/revogar Agent API, ativar/desativar, revelar segredos para colar no OpenClaw
-- **Analytics:** `AgentAnalyticsHelper` (resumo, agenda, inadimplentes, a receber, CRM, matrículas, WA)
-- **Docs:** `docs/openclaw/`
-- **Próximo:** cutucões (hooks) + chat na plataforma + sync automático VPS (opcional)
+- **SQL:** `database/agent_api.sql` + `database/agent_escola_config.sql` + `database/telegram_agent_nativo.sql` (histórico + offset poll)
+- **Agent API:** `/api/v1/agent/*` — middleware `agent-api-key`; escola exige `assistente_ia` + `agent_ativo=1` (Master)
+- **Agente nativo:**
+  - Webhook: `POST /webhook/telegram/{idAdmin}/{token}` (`TelegramBotApi::webhookToken`)
+  - Worker: `php worker/telegram_agent.php` (long-poll quando sem HTTPS)
+  - Core: `TelegramAgentService` + `TelegramBotApi` + `AgentTelegramMensagem`
+  - Pré-requisitos escola: módulo `assistente_ia`, `llm_ativo`, token bot, **Chat ID allowlist**, chave `escola_integracoes.ai_*`
+  - Tools: `AgentAnalyticsHelper` (interno, sem Bearer); LLM via `LmsAiService::chatComCredencial`
+  - Rate limit: 30 msgs/h/chat; histórico 8 msgs
+- **Configurações de IA** (`/painel/config/ia`): credenciais + toggles + ativar/remover webhook + teste
+- **UI Master Agent API:** permanece para integrações externas
+- **Docs:** `docs/OPERACAO_TELEGRAM_AGENT.md` · OpenClaw legado em `docs/openclaw/`
 
 Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 
@@ -359,7 +360,8 @@ Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /cours
 | Agenda | `AgendaHelper.php`, controllers `Agenda*` |
 | CRM | `CrmLeads.php`, `resources/js/crm.js` |
 | Suporte / chamados | `Controller/Admin/Suporte.php`, `Controller/Master/Chamados.php`, `Chamado*.php`, `resources/js/suporte.js` |
-| Agent API / OpenClaw | `routes/api/v1/agent.php`, `Controller/Api/Agent/Analytics.php`, `AgentApiKey.php`, `AgentAnalyticsHelper.php`, `docs/openclaw/` |
+| Agent API / Telegram nativo | `TelegramAgentService.php`, `TelegramBotApi.php`, `Webhook/Telegram.php`, `worker/telegram_agent.php`, `docs/OPERACAO_TELEGRAM_AGENT.md` |
+| Agent API (HTTP) | `routes/api/v1/agent.php`, `Controller/Api/Agent/Analytics.php`, `AgentApiKey.php`, `AgentAnalyticsHelper.php`, `docs/openclaw/` |
 | URL AJAX | `resources/js/url-base.js` |
 
 ---
@@ -469,6 +471,8 @@ ALTER TABLE escola_integracoes ADD COLUMN evolution_ativo TINYINT(1) NOT NULL DE
 ALTER TABLE escola_integracoes ADD COLUMN evolution_numero VARCHAR(30) NULL;
 ALTER TABLE escola_integracoes ADD COLUMN whatsapp_delay_segundos INT UNSIGNED NOT NULL DEFAULT 5;
 ALTER TABLE escola_integracoes ADD COLUMN whatsapp_max_hora INT UNSIGNED NOT NULL DEFAULT 40;
+-- Anti-ban (Fase 1): defaults recomendados 60s / 20/h; ver database/whatsapp_anti_ban.sql
+-- (piso 30s e jitter são aplicados no código; coluna whatsapp_variar_texto + campanha_fila.mensagem_enviada)
 
 CREATE TABLE IF NOT EXISTS whatsapp_conversas (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -557,7 +561,8 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 
 **Chamados de suporte (novo):** colar `database/chamados_suporte.sql`.
 
-**Agent API / OpenClaw (Fase 1):** colar `database/agent_api.sql` e `database/agent_escola_config.sql`. Liberar slug `assistente_ia` no plano das escolas.
+**Agent API / OpenClaw (Fase 1):** colar `database/agent_api.sql` e `database/agent_escola_config.sql`. Liberar slug `assistente_ia` no plano das escolas.  
+**Agente Telegram nativo (Fase 2):** colar `database/telegram_agent_nativo.sql`.
 
 ---
 
@@ -568,6 +573,7 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 |------|--------|
 | Chamados de suporte (escola ↔ Master) | Feito |
 | Agent API / OpenClaw Fase 1 (read-only + chaves Master/escola) | Feito — SQL `database/agent_api.sql` |
+| Agente Telegram nativo Fase 2 (webhook + worker + allowlist) | Feito — SQL `database/telegram_agent_nativo.sql` |
 | CRM Kanban + tarefas + histórico | Feito |
 | Agenda laboratório v2 + diário | Feito |
 | Sync de permissões em tempo real (sessão) | Feito |

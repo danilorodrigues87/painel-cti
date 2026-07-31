@@ -73,6 +73,7 @@ function atualizarUiSegmento(){
 	const tipo = $('#segmento_tipo').val();
 	const grupos = tipo === 'whatsapp_grupos';
 	$('#wrap-status-lead').toggle(tipo === 'leads');
+	$('#wrap-inadimplentes').toggle(tipo === 'inadimplentes');
 	$('#wrap-grupos-wa').toggleClass('d-none', !grupos);
 	if(grupos){
 		$('#campanha_canal').val('whatsapp');
@@ -302,6 +303,7 @@ function coletarFormulario(){
 		mensagem: $('#campanha_mensagem').val(),
 		segmento_tipo: $('#segmento_tipo').val(),
 		status_lead: $('#status_lead').val(),
+		parcelas_atraso_min: $('#parcelas_atraso_min').val() || '1',
 		destinos_json: JSON.stringify(coletarDestinosGrupos()),
 		midia_tipo: $('#campanha_midia_tipo').val() || '',
 		remover_midia: $('#campanha_remover_midia').val() || '0'
@@ -330,12 +332,14 @@ function limparFormulario(){
 	$('#campanha_mensagem').val('');
 	$('#segmento_tipo').val('alunos_matriculados');
 	$('#status_lead').val('');
+	$('#parcelas_atraso_min').val('1');
 	$('#preview-resultado').text('');
 	$('#titulo-modal-campanha').text('Nova campanha');
 	$('#btn-salvar-campanha').html('<i class="fas fa-save"></i> Salvar rascunho');
-	$('#campanha_canal, #segmento_tipo, #status_lead').prop('disabled', false);
+	$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_min').prop('disabled', false);
 	$('#wrap-grupos-wa').find('input,button').prop('disabled', false);
 	$('#wrap-status-lead').hide();
+	$('#wrap-inadimplentes').hide();
 	$('#lista-grupos-wa').html('<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>');
 	limparMidiaSelecionada(false);
 	atualizarUiCanal();
@@ -610,10 +614,18 @@ function abrirDetalhes(id){
 			}
 		}
 
+		const seg = c.segmento || {};
+		let segExtra = '';
+		if(seg.tipo === 'inadimplentes'){
+			const n = parseInt(seg.parcelas_atraso_min, 10) || 1;
+			segExtra = '<p><strong>Filtro:</strong> '+n+' ou mais parcela'+(n === 1 ? '' : 's')+' em atraso</p>';
+		}
+
 		$('#body-detalhes-campanha').html(`
 			<p><strong>Canal:</strong> ${escHtml(c.canal_label || c.canal)}</p>
 			<p><strong>Assunto:</strong> ${escHtml(res.assunto || '—')}</p>
 			<p><strong>Status:</strong> <span class="badge bg-${badgeStatus(c.status)}">${escHtml(c.status_label)}</span></p>
+			${segExtra}
 			<p><strong>Progresso:</strong> ${c.eh_grupos
 				? (c.enviados+' reenvios realizados (recorrente até Encerrar)')
 				: (c.enviados+' enviados, '+c.erros+' erros, '+c.pendentes+' pendentes de '+c.total)}</p>
@@ -656,13 +668,14 @@ function editarCampanha(id){
 		$('#campanha_mensagem').val(res.mensagem || c.mensagem || '');
 		$('#segmento_tipo').val(seg.tipo || 'alunos_matriculados');
 		$('#status_lead').val(seg.status_lead || '');
+		$('#parcelas_atraso_min').val(String(seg.parcelas_atraso_min || 1));
 		$('#titulo-modal-campanha').text(emCurso
 			? 'Ajustar mensagem/mídia ('+(c.status === 'pausada' ? 'pausada' : 'em envio')+')'
 			: 'Editar campanha');
 		$('#btn-salvar-campanha').html(emCurso
 			? '<i class="fas fa-save"></i> Salvar mensagem/mídia'
 			: '<i class="fas fa-save"></i> Salvar rascunho');
-		$('#campanha_canal, #segmento_tipo, #status_lead').prop('disabled', emCurso);
+		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_min').prop('disabled', emCurso);
 		window._campanhaArquivo = null;
 		window._campanhaMidiaExistente = c.midia || seg.midia || null;
 		$('#campanha_remover_midia').val('0');

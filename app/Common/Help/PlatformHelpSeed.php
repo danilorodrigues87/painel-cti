@@ -163,6 +163,7 @@ class PlatformHelpSeed {
 			['titulo' => 'Vendas e estoque', 'slug' => 'vendas-estoque', 'ordem' => 100],
 			['titulo' => 'Agenda', 'slug' => 'agenda', 'ordem' => 110],
 			['titulo' => 'Configurações', 'slug' => 'configuracoes', 'ordem' => 120],
+			['titulo' => 'Assistente IA', 'slug' => 'assistente-ia', 'ordem' => 125],
 			['titulo' => 'Suporte', 'slug' => 'suporte', 'ordem' => 130],
 			['titulo' => 'Portal do aluno', 'slug' => 'portal-aluno', 'ordem' => 140],
 		];
@@ -184,6 +185,7 @@ class PlatformHelpSeed {
 			self::artVendas(),
 			self::artAgenda(),
 			self::artConfig(),
+			self::artAssistenteIa(),
 			self::artSuporte(),
 			self::artPortalAluno(),
 		] as $grupo) {
@@ -977,19 +979,120 @@ class PlatformHelpSeed {
 			],
 			[
 				'cat' => 'configuracoes',
-				'titulo' => 'IA Pedagógica',
+				'titulo' => 'Configurações de IA',
 				'slug' => 'ia-pedagogica',
-				'resumo' => 'Configuração da IA usada no portal EAD (diretor).',
+				'resumo' => 'Uma chave compartilhada: pedagógica (EAD), Assistente (Telegram) e variação WhatsApp.',
 				'ordem' => 40,
 				'corpo' => self::wrap(
-					'A IA pedagógica apoia o aluno no Ascend, quando o plano inclui o recurso.',
+					'Em <strong>Configurações de IA</strong> você cadastra <strong>uma</strong> chave (provedor + modelo + API key) e liga os recursos liberados no plano.',
 					[
-						'Abra <strong>Configurações → IA Pedagógica</strong> (Diretor).',
-						'Ative/ajuste conforme as opções da tela.',
-						'Oriente o uso responsável com os alunos.',
+						'Abra <strong>Configurações → Configurações de IA</strong> (Diretor).',
+						'Preencha provedor, modelo e API key (compartilhados).',
+						'Se o plano tiver EAD: ative <strong>IA Pedagógica</strong> para tutor/role play no portal do aluno.',
+						'Se o plano tiver Assistente IA: ative o uso da IA no assistente e cadastre o bot do Telegram.',
+						'Se o plano tiver WhatsApp: opcionalmente ative <strong>Variar textos das campanhas</strong>.',
 					],
-					'',
-					'Configurações → IA Pedagógica'
+					'<p>A Agent API (acesso aos dados) continua sendo gerada pelo <strong>suporte CTI / Master</strong>.</p>',
+					'Configurações → Configurações de IA'
+				),
+			],
+		];
+	}
+
+	private static function artAssistenteIa(): array {
+		return [
+			[
+				'cat' => 'assistente-ia',
+				'titulo' => 'O que é o Assistente IA',
+				'slug' => 'assistente-ia-visao-geral',
+				'resumo' => 'Assistente operacional (OpenClaw) que consulta dados da escola e responde no Telegram.',
+				'ordem' => 10,
+				'corpo' => self::wrap(
+					'O <strong>Assistente IA</strong> consulta o painel em modo somente leitura — agenda do dia, inadimplentes, CRM, WhatsApp, etc. — e pode responder pelo Telegram (OpenClaw legado; agente nativo em breve).',
+					[
+						'O módulo precisa estar liberado no <strong>plano</strong> da escola (slug <code>assistente_ia</code>).',
+						'O Diretor configura a <strong>chave de IA compartilhada</strong> e o <strong>bot do Telegram</strong> em Configurações → Configurações de IA.',
+						'A <strong>Agent API</strong> (acesso aos dados do painel) é gerada e ativada pelo <strong>suporte CTI / Master</strong> — a escola não gera essa chave.',
+						'A mesma chave de IA pode alimentar o portal EAD e o assistente (toggles separados).',
+					],
+					'<p><strong>Segurança:</strong> cada escola usa a própria Agent API. A chave Master do SaaS não deve ser usada no bot da escola.</p>',
+					'Configurações → Configurações de IA'
+				),
+			],
+			[
+				'cat' => 'assistente-ia',
+				'titulo' => 'Configurar IA e Telegram (Diretor)',
+				'slug' => 'assistente-ia-configurar-escola',
+				'resumo' => 'Como o Diretor cadastra a IA compartilhada e o token do bot no painel.',
+				'ordem' => 20,
+				'corpo' => self::wrap(
+					'Nesta tela você guarda, de forma segura, a chave de IA e o bot do Telegram — o suporte CTI usa isso para ligar o assistente (OpenClaw legado).',
+					[
+						'Abra <strong>Configurações → Configurações de IA</strong> (apenas Diretor, com o módulo no plano).',
+						'Em <strong>Credenciais compartilhadas</strong>: provedor, modelo e API key.',
+						'Ative <strong>Usar IA compartilhada no Assistente</strong>.',
+						'Em <strong>Telegram</strong>: crie o bot no <code>@BotFather</code>, cole o token, o username e, se quiser, o Chat ID autorizado.',
+						'Clique em <strong>Salvar</strong>. Tokens já salvos aparecem mascarados; deixe o campo em branco para manter.',
+					],
+					'<ul><li>Não compartilhe tokens em grupos ou WhatsApp.</li><li>A Agent API continua sendo criada pelo suporte CTI após você salvar.</li></ul>',
+					'Configurações → Configurações de IA'
+				),
+			],
+			[
+				'cat' => 'assistente-ia',
+				'titulo' => 'Uma tela de IA, vários recursos',
+				'slug' => 'assistente-ia-vs-pedagogica',
+				'resumo' => 'Credenciais únicas com toggles por módulo do plano.',
+				'ordem' => 30,
+				'corpo' => self::wrap(
+					'O painel usa <strong>uma</strong> configuração de chave de IA, com interruptores por recurso liberado no plano.',
+					[
+						'<strong>IA Pedagógica</strong>: tutor e role play no <strong>portal do aluno (EAD)</strong>.',
+						'<strong>Assistente IA</strong>: Telegram / agente operacional (consulta agenda, financeiro, CRM).',
+						'<strong>Variar textos WhatsApp</strong>: anti-template em campanhas.',
+						'Tudo em <em>Configurações → Configurações de IA</em>.',
+					],
+					'<p>A Agent API (Master) continua separada da chave Gemini/OpenAI.</p>',
+					'Configurações → Configurações de IA'
+				),
+			],
+			[
+				'cat' => 'assistente-ia',
+				'titulo' => 'Ativação pelo suporte CTI e segurança das chaves',
+				'slug' => 'assistente-ia-ativacao-seguranca',
+				'resumo' => 'Agent API por escola, ativação Master e por que não se usa uma chave única para todos.',
+				'ordem' => 40,
+				'corpo' => self::wrap(
+					'Depois que o Diretor salva LLM e Telegram, o suporte CTI gera a <strong>Agent API</strong> da escola e liga o subagente no OpenClaw.',
+					[
+						'No painel Master (equipe CTI): <strong>Agent API</strong> → abrir a escola → gerar chave → revelar segredos (LLM/Telegram) → configurar na VPS.',
+						'O assistente só responde na API se estiver <strong>Ativo</strong> no Master e o módulo estiver no plano.',
+						'<strong>Uma escola = uma Agent API key.</strong> Isso evita que um bot ou vazamento de uma unidade acesse dados de outra.',
+						'A chave Master do SaaS é só para o agente do dono CTI — não deve ir no bot Telegram da escola.',
+						'Se precisar pausar: o Master desativa o assistente da escola (a API passa a negar acesso).',
+					],
+					'<ul><li>Nunca reutilize a mesma Agent API em duas escolas.</li><li>Em caso de suspeita de vazamento, peça ao suporte para revogar a chave e gerar outra.</li></ul>',
+					'Suporte CTI · Master → Agent API'
+				),
+			],
+			[
+				'cat' => 'assistente-ia',
+				'titulo' => 'O que o Assistente pode consultar',
+				'slug' => 'assistente-ia-consultas',
+				'resumo' => 'Consultas somente leitura: agenda, inadimplentes, CRM, matrículas, WhatsApp e mais.',
+				'ordem' => 50,
+				'corpo' => self::wrap(
+					'A Agent API é <strong>somente leitura</strong>: o assistente analisa e responde; não dá baixa, não altera matrícula e não envia WhatsApp pelo painel.',
+					[
+						'<strong>Resumo do dia:</strong> matrículas ativas, recebido hoje, a receber na semana, CRM e indicadores rápidos.',
+						'<strong>Agenda:</strong> aulas/agendamentos de hoje.',
+						'<strong>Financeiro:</strong> inadimplentes (mês/semana/hoje) e títulos a receber.',
+						'<strong>CRM:</strong> leads e conversão no período.',
+						'<strong>Matrículas:</strong> ativas e novas no mês.',
+						'<strong>WhatsApp:</strong> fila, não lidas e conversas abertas (quando o módulo existir).',
+					],
+					'<p>Exemplos de perguntas: “Quem tem aula hoje?”, “Quanto está inadimplente esta semana?”, “Como está o funil de leads?”.</p>',
+					'Telegram do Assistente IA (após ativação)'
 				),
 			],
 		];

@@ -337,12 +337,8 @@ class SystemModules {
 						'link' => URL.'/painel/config/pagamentos'
 					],
 					[
-						'label' => 'IA Pedagógica',
+						'label' => 'Configurações de IA',
 						'link' => URL.'/painel/config/ia'
-					],
-					[
-						'label' => 'Assistente IA',
-						'link' => URL.'/painel/config/assistente'
 					],
 					[
 						'label' => 'Bunny Stream',

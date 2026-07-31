@@ -112,13 +112,33 @@ class CampanhaFila {
 		return (new Database('campanha_fila'))->execute($sql);
 	}
 
-	public function marcarEnviado(): void {
-		(new Database('campanha_fila'))->update('id = '.(int)$this->id, [
+	public function marcarEnviado(?string $mensagemEnviada = null): void {
+		$dados = [
 			'status'     => 'enviado',
 			'tentativas' => (int)$this->tentativas + 1,
 			'enviado_em' => date('Y-m-d H:i:s'),
 			'erro_msg'   => null,
-		]);
+		];
+		if ($mensagemEnviada !== null && self::temColunaMensagemEnviada()) {
+			$dados['mensagem_enviada'] = $mensagemEnviada;
+		}
+		(new Database('campanha_fila'))->update('id = '.(int)$this->id, $dados);
+	}
+
+	public static function temColunaMensagemEnviada(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('campanha_fila'))->execute(
+				"SHOW COLUMNS FROM campanha_fila LIKE 'mensagem_enviada'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
 	}
 
 	public function marcarErro(string $mensagem): void {

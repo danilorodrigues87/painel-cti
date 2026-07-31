@@ -102,6 +102,18 @@
 								<option value="perdido">Perdido</option>
 							</select>
 						</div>
+						<div class="col-md-6" id="wrap-inadimplentes" style="display:none;">
+							<label class="form-label" for="parcelas_atraso_min">Parcelas em atraso (mínimo)</label>
+							<select class="form-control" id="parcelas_atraso_min">
+								<option value="1">1 ou mais</option>
+								<option value="2">2 ou mais</option>
+								<option value="3">3 ou mais</option>
+								<option value="4">4 ou mais</option>
+								<option value="5">5 ou mais</option>
+								<option value="6">6 ou mais</option>
+							</select>
+							<div class="form-text">Só entram alunos com pelo menos essa quantidade de mensalidades vencidas em aberto.</div>
+						</div>
 						<div class="col-12 d-none" id="wrap-grupos-wa">
 							<div class="d-flex justify-content-between align-items-center mb-2">
 								<label class="form-label mb-0">Grupos e listas</label>
@@ -185,4 +197,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260729d"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260731c"></script>

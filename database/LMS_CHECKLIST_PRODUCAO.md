@@ -63,7 +63,7 @@ SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
 3. Inclua `ASCEND_URL=https://aluno.SEU-DOMINIO` (link do e-mail de recuperar senha).
 4. SMTP da escola (Config → Comunicação) ou SMTP_* do sistema — necessário para esqueci-senha.
 5. Módulo `ead` liberado no plano da escola.
-6. **Configurações → IA Pedagógica:** provider + chave + modelo  
+6. **Configurações → Configurações de IA:** provider + chave + modelo (+ toggle pedagógica) 
    - Gemini: `gemini-2.0-flash` (evitar `gemini-1.5-flash` se a API rejeitar)  
    - OpenAI: `gpt-4o-mini` ou equivalente
 7. Publicar ao menos 1 curso em **Cursos Online** (`publicado=1`).
