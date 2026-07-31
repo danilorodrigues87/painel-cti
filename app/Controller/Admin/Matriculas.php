@@ -100,6 +100,10 @@ class Matriculas extends Page{
 			$total = $dados->qtd_parcelas * $dados->valor;
 			$statusMat = (int)$dados->status;
 			$status = MatriculaStatusHelper::labelStatus($statusMat);
+			$ehBolsista = EntityMatri::temColunaBolsista() && !empty($dados->bolsista);
+			$colValor = $ehBolsista
+				? '<span class="badge bg-info text-dark">Bolsista</span>'
+				: '<span>R$ '.NumeroHelper::moedaBr($total).'</span>';
 			if ($statusMat === MatriculaStatusHelper::STATUS_ANDAMENTO) {
 				$btnEncerrar = '<li>
         <a class="dropdown-item" href="#" onclick="encerrar_contrato('.$dados->id.'); return false;">
@@ -114,7 +118,7 @@ class Matriculas extends Page{
         <td>'.$dados->id.'</td>
         <td>'.$nomeAluno.'</td>
         <td>'.$nomeTrilha.'</td>
-        <td><span>R$ '.NumeroHelper::moedaBr($total).'</span></td>
+        <td>'.$colValor.'</td>
         <td>'.$status.'</td>
         <td>
         <div class="dropdown">
@@ -304,6 +308,18 @@ $form = '<form id="form" method="post">
 <span id="obs" style="font-size: 12px;"></span>
 </div>
 
+<div class="form-group col-md-12">
+<div class="form-check form-switch">
+<input type="checkbox" class="form-check-input" value="1" name="bolsista" id="bolsista" onclick="syncBolsistaMatricula()" ' . (
+	(isset($dados['bolsista']) && (int)$dados['bolsista'] === 1) ? 'checked' : ''
+) . (!EntityMatri::temColunaBolsista() ? ' disabled' : '') . '>
+<label class="form-check-label" for="bolsista"><strong>Aluno bolsista</strong> — não gera débitos / carnê</label>
+</div>
+'.(!EntityMatri::temColunaBolsista()
+	? '<div class="form-text text-warning">Execute <code>database/matriculas_bolsista.sql</code> no phpMyAdmin para liberar esta opção.</div>'
+	: '<div class="form-text" id="hint-bolsista">Com bolsa, o valor fica zerado e nenhuma parcela é lançada no caixa. As parcelas indicam só a duração do curso.</div>').'
+</div>
+
 <div class="form-group col-md-3">
 <label>Aulas Sem</label>
 <input name="aulas_semanais" type="number" min="1" max="20" class="form-control" value="' . (isset($dados['aulas_semanais']) ? $dados['aulas_semanais'] : '') . '" required>
@@ -311,7 +327,9 @@ $form = '<form id="form" method="post">
 
 <div class="form-group col-md-3">
 <label>Valor Mensal</label>
-<input id="valor" name="valor" type="text" class="form-control" value="' . (isset($dados['valor']) ? $dados['valor'] : '') . '" required>
+<input id="valor" name="valor" type="text" class="form-control" value="' . (isset($dados['valor']) ? $dados['valor'] : '') . '"' . (
+	(isset($dados['bolsista']) && (int)$dados['bolsista'] === 1) ? '' : ' required'
+) . '>
 </div>
 
 <div class="form-group col-md-3">
@@ -399,7 +417,10 @@ $form = '<form id="form" method="post">
 <button type="submit" class="btn btn-primary">Salvar</button>
 </div>
 </form>
-<script>if (typeof syncDescontoComTipoParcelamento === "function") { syncDescontoComTipoParcelamento(); }</script>
+<script>
+if (typeof syncDescontoComTipoParcelamento === "function") { syncDescontoComTipoParcelamento(); }
+if (typeof syncBolsistaMatricula === "function") { syncBolsistaMatricula(); }
+</script>
 
 ';
 
@@ -431,6 +452,7 @@ public static function setNovaMatricula($request) {
  $inicio = $postVars['inicio'] ?? '';
  $fim = $postVars['final'] ?? '';
  $pontualidade = !empty($postVars['pontualidade']) ? 1 : 0;
+ $bolsista = !empty($postVars['bolsista']) ? 1 : 0;
 
 $resposta = [
         "filtro" => null
@@ -451,20 +473,34 @@ $resposta = [
  $primeiro_mes = filter_var($postVars['primeiromes'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $primeiro_ano = filter_var($postVars['primeiroano'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $tipo_parcelamento = trim(strip_tags((string)($postVars['tipo_parcelamento'] ?? 'Carnê Simples')));
- if ($tipo_parcelamento === 'Carnê com Pix'
- 	&& \App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin)) {
-   // Gateway: sem desconto de pontualidade
-   $pontualidade = 0;
- } else {
-   $tipo_parcelamento = 'Carnê Simples';
- }
 
-// Substitui a vírgula por ponto no valor
-$valor = str_replace(',', '.', (string)($postVars['valor'] ?? '0'));
-// Sanitiza o valor como um número float
-$valor = filter_var($valor, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-// Converte para float
-$valor = floatval($valor);
+ if ($bolsista) {
+  if (!EntityMatri::temColunaBolsista()) {
+   $resposta['erro'] = 'Execute database/matriculas_bolsista.sql no phpMyAdmin para matricular bolsista.';
+   return json_encode($resposta);
+  }
+  $valor = 0.0;
+  $pontualidade = 0;
+  $tipo_parcelamento = 'Carnê Simples';
+  if ((int)$qtd_parcelas < 1) {
+   $qtd_parcelas = 1;
+  }
+ } else {
+  if ($tipo_parcelamento === 'Carnê com Pix'
+  	&& \App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin)) {
+    // Gateway: sem desconto de pontualidade
+    $pontualidade = 0;
+  } else {
+    $tipo_parcelamento = 'Carnê Simples';
+  }
+
+  // Substitui a vírgula por ponto no valor
+  $valor = str_replace(',', '.', (string)($postVars['valor'] ?? '0'));
+  // Sanitiza o valor como um número float
+  $valor = filter_var($valor, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
+  // Converte para float
+  $valor = floatval($valor);
+ }
 
 
 if($id_aluno == '' or $id_aluno ==0){
@@ -472,7 +508,7 @@ if($id_aluno == '' or $id_aluno ==0){
     return json_encode($resposta);
 }
 
- if($valor <= 0){
+ if(!$bolsista && $valor <= 0){
   $resposta ["erro"] = 'Defina o valor da mensalidade';
     return json_encode($resposta);
 }
@@ -502,6 +538,7 @@ if (!empty($postVars['id'])) {
   $obMatricula->primeiro_mes = $primeiro_mes;
   $obMatricula->primeiro_ano = $primeiro_ano;
   $obMatricula->desconto_pontualidade = $pontualidade;
+  $obMatricula->bolsista = $bolsista;
   $obMatricula->inicio = $inicio;
   $obMatricula->fim = $fim;
   $obMatricula->tipo_parcelamento = $tipo_parcelamento;
@@ -526,6 +563,7 @@ if (!empty($postVars['id'])) {
   $obMatricula->primeiro_mes = $primeiro_mes;
   $obMatricula->primeiro_ano = $primeiro_ano;
   $obMatricula->desconto_pontualidade = $pontualidade;
+  $obMatricula->bolsista = $bolsista;
   $obMatricula->inicio = $inicio;
   $obMatricula->fim = $fim;
   $obMatricula->tipo_parcelamento = $tipo_parcelamento;
@@ -725,7 +763,12 @@ $curso .='<spam>Dia(s) de aula(s) escolhido(s): <b>'.$dados['dia_semana'].'</b> 
 
 $curso .='<span>Termino previsto para dia <b>'.$termino->format('d/m/Y').'</b></span><br>';
 
-if($dados['qtd_parcelas'] > 1){
+$ehBolsista = EntityMatri::temColunaBolsista() && !empty($dados['bolsista']);
+if ($ehBolsista) {
+  $forma_pagamento = '<span>Forma de pagamento: <b>BOLSISTA</b> — isento de mensalidades (sem geração de carnê/débitos).</span><br>';
+  $forma_pagamento .= '<span>Duração prevista: <b>'.$dados['qtd_parcelas'].' meses</b>.</span><br>';
+  $pontualidade = '';
+} elseif($dados['qtd_parcelas'] > 1){
 
    $forma_pagamento = '<span>Forma de pagamento <b>Parcelado em '.$dados['qtd_parcelas'].' vezes</b>';
    $forma_pagamento .= '</span><span> sendo a primeira parcela no dia <b>'.$primeira_parcela.'</b><br>';

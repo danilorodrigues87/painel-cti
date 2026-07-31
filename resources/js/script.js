@@ -1,7 +1,59 @@
 
 
+// Bolsista: valor 0, sem carnê; parcelas = duração do curso
+function syncBolsistaMatricula() {
+  var bolsista = document.getElementById('bolsista');
+  var valor1 = document.getElementById('valor');
+  var pont = document.getElementById('pontualidade');
+  var tipo = document.getElementById('tipo_parcelamento');
+  var hint = document.getElementById('hint-bolsista');
+  if (!bolsista || bolsista.disabled) {
+    return;
+  }
+  var on = !!bolsista.checked;
+  if (on) {
+    if (valor1) {
+      valor1.value = '0';
+      valor1.removeAttribute('required');
+      valor1.setAttribute('readonly', 'readonly');
+    }
+    if (pont) {
+      pont.checked = false;
+      pont.disabled = true;
+    }
+    if (tipo) {
+      tipo.value = 'Carnê Simples';
+      tipo.disabled = true;
+    }
+    if (hint) {
+      hint.textContent = 'Bolsista: nenhum débito será gerado. “Parcelas” = duração do curso em meses.';
+    }
+    if (typeof jQuery !== 'undefined') {
+      $('#obs').text('Matrícula bolsista — sem carnê no caixa.');
+    }
+  } else {
+    if (valor1) {
+      valor1.removeAttribute('readonly');
+      valor1.setAttribute('required', 'required');
+    }
+    if (tipo) {
+      tipo.disabled = false;
+    }
+    if (hint) {
+      hint.textContent = 'Com bolsa, o valor fica zerado e nenhuma parcela é lançada no caixa. As parcelas indicam só a duração do curso.';
+    }
+    if (typeof syncDescontoComTipoParcelamento === 'function') {
+      syncDescontoComTipoParcelamento();
+    }
+  }
+}
+
 // Desconto pontualidade só no Carnê Simples (não no Mercado Pago / PIX)
 function syncDescontoComTipoParcelamento() {
+  var bolsista = document.getElementById('bolsista');
+  if (bolsista && bolsista.checked) {
+    return;
+  }
   var tipo = document.getElementById('tipo_parcelamento');
   var checkbox = document.getElementById('pontualidade');
   var hint = document.getElementById('hint-desconto-pontualidade');

@@ -131,6 +131,7 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - Códigos: `0` andamento · `1` encerrado · `3` cancelado
 - **Ativa** (única definição): `status = 0 AND (fim IS NULL OR fim >= CURDATE())` — filtro Alunos, dashboard, agenda, campanhas, `StudentEntitlement`
 - Ao listar Matrículas/Carnês/extrato: `encerrarVencidasTenant()` marca `status=1` se `fim < hoje`
+- **Bolsista:** coluna `matriculas.bolsista` (`database/matriculas_bolsista.sql`) — matrícula sem carnê/débitos no `caixa`; valor 0; “parcelas” = duração do curso
 - **Cancelar:** `status=3` + baixa administrativa nas parcelas abertas (`status=1`, `valor_pago=0`, `tipo_pagamento=Cancelamento`) — **não apaga** carnê
 - **Encerrar** (botão): só `status=1`, sem mexer no caixa
 - Higiene legado (opt-in): `database/matricula_status_higiene.sql` (preview → apply no phpMyAdmin)

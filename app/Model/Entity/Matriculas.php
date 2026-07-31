@@ -31,7 +31,23 @@ class Matriculas{
 	$matriculado_em,
 	$tipo_parcelamento,
 	$desconto_pontualidade = 0,
+	$bolsista = 0,
 	$status = 0;
+
+	private static $colunaBolsista = null;
+
+	public static function temColunaBolsista(): bool {
+		if (self::$colunaBolsista !== null) {
+			return self::$colunaBolsista;
+		}
+		try {
+			$row = (new Database())->execute("SHOW COLUMNS FROM `matriculas` LIKE 'bolsista'")->fetch(\PDO::FETCH_ASSOC);
+			self::$colunaBolsista = !empty($row);
+		} catch (\Throwable $e) {
+			self::$colunaBolsista = false;
+		}
+		return self::$colunaBolsista;
+	}
 
 	
 
@@ -40,7 +56,7 @@ class Matriculas{
 
 		//INSERIR OSDADOS PARA O BANCO DE DADOS
 		$obDatabase = new Database('matriculas');
-		$this->id = $obDatabase->insert([
+		$dadosInsert = [
 
 			'id_aluno' => $this->id_aluno,
 			'id_admin' => $this->id_admin,
@@ -63,7 +79,16 @@ class Matriculas{
 			'desconto_pontualidade' => $this->desconto_pontualidade,
 			'status' => $this->status,
 
-		]);
+		];
+		if (self::temColunaBolsista()) {
+			$dadosInsert['bolsista'] = !empty($this->bolsista) ? 1 : 0;
+		}
+		$this->id = $obDatabase->insert($dadosInsert);
+
+		// Bolsista: matrícula ativa sem gerar carnê/débitos
+		if (!empty($this->bolsista)) {
+			return true;
+		}
 
 		
 		if(!$this->id_responsavel){
@@ -169,7 +194,7 @@ class Matriculas{
 	public function atualizar(){
 
 		//ATUALIZA OS DADOS PARA O BANCO DE DADOS
-		return (new Database('matriculas'))->update('id = '.$this->id,[
+		$dadosUpdate = [
 
 			'id_aluno' => $this->id_aluno,
 			'id_responsavel' => $this->id_responsavel,
@@ -190,7 +215,11 @@ class Matriculas{
 			'desconto_pontualidade' => $this->desconto_pontualidade,
 			'status' => $this->status,
 
-		]);
+		];
+		if (self::temColunaBolsista()) {
+			$dadosUpdate['bolsista'] = !empty($this->bolsista) ? 1 : 0;
+		}
+		return (new Database('matriculas'))->update('id = '.$this->id, $dadosUpdate);
 
 	}
 
