@@ -15,7 +15,7 @@ use App\Model\Entity\SocialWorkerRun;
  */
 class SocialPublishService {
 
-	/** Origem da execução atual (cli|cron|manual). */
+	/** Origem da execução atual (cli|cron|manual|poll). */
 	private static string $origemAtual = 'worker';
 
 	/**
@@ -26,7 +26,9 @@ class SocialPublishService {
 		$resumo = ['processados' => 0, 'ok' => 0, 'erro' => 0, 'detalhes' => []];
 		if (!SocialPost::tabelaExiste()) {
 			$resumo['detalhes'][] = 'Tabela social_posts ausente.';
-			SocialWorkerRun::registrar($origem, $idAdmin, $resumo);
+			if ($origem !== 'poll') {
+				SocialWorkerRun::registrar($origem, $idAdmin, $resumo);
+			}
 			return $resumo;
 		}
 		foreach (SocialPost::listProntosParaPublicar($limite, $idAdmin) as $post) {
@@ -43,7 +45,10 @@ class SocialPublishService {
 				'message' => $r['message'] ?? '',
 			];
 		}
-		SocialWorkerRun::registrar($origem, $idAdmin, $resumo);
+		// Poll silencioso: só registra se processou algo (evita poluir "última execução")
+		if ($origem !== 'poll' || $resumo['processados'] > 0) {
+			SocialWorkerRun::registrar($origem, $idAdmin, $resumo);
+		}
 		return $resumo;
 	}
 

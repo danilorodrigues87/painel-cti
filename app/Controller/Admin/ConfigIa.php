@@ -8,7 +8,6 @@ use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Communication\TelegramAgentService;
 use App\Common\Communication\TelegramBotApi;
-use App\Model\Entity\AgentApiKey;
 use App\Model\Entity\AgentEscolaConfig;
 use App\Model\Entity\AgentTelegramMensagem;
 use App\Model\Entity\EscolaIntegracoes;
@@ -155,7 +154,6 @@ class ConfigIa extends Page {
 		}
 
 		$assistente = [
-			'agent_ativo' => false,
 			'llm_ativo' => false,
 			'telegram_ia_ativo' => true,
 			'telegram_ia_coluna_ok' => AgentEscolaConfig::temColunaTelegramIa(),
@@ -165,7 +163,6 @@ class ConfigIa extends Page {
 			'telegram_token_salvo' => false,
 			'telegram_token_mask' => '',
 			'telegram_pronto' => false,
-			'agent_api_pronta' => false,
 			'tabela_ok' => AgentEscolaConfig::tabelaExiste(),
 		];
 
@@ -173,7 +170,6 @@ class ConfigIa extends Page {
 			$agent = AgentEscolaConfig::getByIdAdmin($idAdmin);
 			if ($agent instanceof AgentEscolaConfig) {
 				$pub = $agent->toEscolaPublicArray();
-				$assistente['agent_ativo'] = !empty($pub['agent_ativo']);
 				$assistente['llm_ativo'] = !empty($pub['llm_ativo']);
 				$assistente['telegram_ia_ativo'] = !empty($pub['telegram_ia_ativo']);
 				$assistente['telegram_ia_coluna_ok'] = !empty($pub['telegram_ia_coluna_ok']);
@@ -184,11 +180,6 @@ class ConfigIa extends Page {
 				$assistente['telegram_token_mask'] = (string)($pub['telegram_token_mask'] ?? '');
 				$assistente['telegram_pronto'] = !empty($pub['telegram_pronto']);
 			}
-			$keys = AgentApiKey::tabelaExiste() ? AgentApiKey::listarEscola($idAdmin) : [];
-			$keysAtivas = array_values(array_filter($keys, static function ($k) {
-				return !empty($k['ativo']);
-			}));
-			$assistente['agent_api_pronta'] = !empty($keysAtivas) && !empty($assistente['agent_ativo']);
 		}
 
 		$variarTexto = 0;
@@ -339,7 +330,7 @@ class ConfigIa extends Page {
 			]);
 		}
 
-		// Assistente: Telegram + flag llm_ativo + espelho llm_* (OpenClaw legado)
+		// Assistente: Telegram nativo + flag llm_ativo (+ espelho llm_* na mesma tabela)
 		if ($ctx['assistente']) {
 			if (!AgentEscolaConfig::tabelaExiste()) {
 				return json_encode([

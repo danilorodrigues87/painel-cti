@@ -989,10 +989,10 @@ class PlatformHelpSeed {
 						'Abra <strong>Configurações → Configurações de IA</strong> (Diretor).',
 						'Preencha provedor, modelo e API key (compartilhados).',
 						'Se o plano tiver EAD: ative <strong>IA Pedagógica</strong> para tutor/role play no portal do aluno.',
-						'Se o plano tiver Assistente IA: ative o uso da IA no assistente e cadastre o bot do Telegram.',
+						'Se o plano tiver Assistente IA: ative o Assistente no Telegram, informe o bot e o Chat ID autorizado.',
 						'Se o plano tiver WhatsApp: opcionalmente ative <strong>Variar textos das campanhas</strong>.',
 					],
-					'<p>A Agent API (acesso aos dados) continua sendo gerada pelo <strong>suporte CTI / Master</strong>.</p>',
+					'<p>O Assistente no Telegram é nativo do painel — não depende de serviços externos além do próprio Telegram.</p>',
 					'Configurações → Configurações de IA'
 				),
 			],
@@ -1005,17 +1005,17 @@ class PlatformHelpSeed {
 				'cat' => 'assistente-ia',
 				'titulo' => 'O que é o Assistente IA',
 				'slug' => 'assistente-ia-visao-geral',
-				'resumo' => 'Assistente operacional (OpenClaw) que consulta dados da escola e responde no Telegram.',
+				'resumo' => 'Bot Telegram nativo que consulta dados da escola em modo somente leitura.',
 				'ordem' => 10,
 				'corpo' => self::wrap(
-					'O <strong>Assistente IA</strong> consulta o painel em modo somente leitura — agenda do dia, inadimplentes, CRM, WhatsApp, etc. — e pode responder pelo Telegram (OpenClaw legado; agente nativo em breve).',
+					'O <strong>Assistente IA</strong> é um bot do Telegram integrado ao painel. Ele consulta agenda, inadimplentes, CRM, WhatsApp e outros indicadores — sempre em modo somente leitura.',
 					[
 						'O módulo precisa estar liberado no <strong>plano</strong> da escola (slug <code>assistente_ia</code>).',
-						'O Diretor configura a <strong>chave de IA compartilhada</strong> e o <strong>bot do Telegram</strong> em Configurações → Configurações de IA.',
-						'A <strong>Agent API</strong> (acesso aos dados do painel) é gerada e ativada pelo <strong>suporte CTI / Master</strong> — a escola não gera essa chave.',
-						'A mesma chave de IA pode alimentar o portal EAD e o assistente (toggles separados).',
+						'O Diretor configura tudo em <strong>Configurações → Configurações de IA</strong>: chave compartilhada, bot do Telegram e Chat ID autorizado.',
+						'Por padrão o bot responde com <strong>palavras-chave</strong> (sem gastar tokens). A IA em perguntas livres é opcional.',
+						'Independente da <strong>IA Pedagógica</strong> do portal EAD (mesmo que compartilhem a mesma API key).',
 					],
-					'<p><strong>Segurança:</strong> cada escola usa a própria Agent API. A chave Master do SaaS não deve ser usada no bot da escola.</p>',
+					'<p><strong>Segurança:</strong> só os Chat IDs cadastrados recebem resposta. Não compartilhe o token do bot.</p>',
 					'Configurações → Configurações de IA'
 				),
 			],
@@ -1023,18 +1023,19 @@ class PlatformHelpSeed {
 				'cat' => 'assistente-ia',
 				'titulo' => 'Configurar IA e Telegram (Diretor)',
 				'slug' => 'assistente-ia-configurar-escola',
-				'resumo' => 'Como o Diretor cadastra a IA compartilhada e o token do bot no painel.',
+				'resumo' => 'Como o Diretor liga o bot nativo: credenciais, token e Chat ID.',
 				'ordem' => 20,
 				'corpo' => self::wrap(
-					'Nesta tela você guarda, de forma segura, a chave de IA e o bot do Telegram — o suporte CTI usa isso para ligar o assistente (OpenClaw legado).',
+					'Nesta tela você ativa o Assistente e cadastra o bot do Telegram com segurança.',
 					[
-						'Abra <strong>Configurações → Configurações de IA</strong> (apenas Diretor, com o módulo no plano).',
+						'Abra <strong>Configurações → Configurações de IA</strong> (Diretor, com o módulo no plano).',
 						'Em <strong>Credenciais compartilhadas</strong>: provedor, modelo e API key.',
-						'Ative <strong>Usar IA compartilhada no Assistente</strong>.',
-						'Em <strong>Telegram</strong>: crie o bot no <code>@BotFather</code>, cole o token, o username e, se quiser, o Chat ID autorizado.',
-						'Clique em <strong>Salvar</strong>. Tokens já salvos aparecem mascarados; deixe o campo em branco para manter.',
+						'Ative <strong>Ativar Assistente no Telegram</strong>.',
+						'Opcional: ligue <strong>Usar IA em perguntas livres</strong> (gasta tokens). Desligado = só /resumo, /agenda, etc.',
+						'Crie o bot no <code>@BotFather</code>, cole o token, o username e o <strong>Chat ID autorizado</strong> (obrigatório; use @userinfobot).',
+						'Clique em <strong>Salvar</strong>, depois <strong>Enviar teste</strong>. Em produção HTTPS: <strong>Ativar webhook</strong>.',
 					],
-					'<ul><li>Não compartilhe tokens em grupos ou WhatsApp.</li><li>A Agent API continua sendo criada pelo suporte CTI após você salvar.</li></ul>',
+					'<ul><li>Não compartilhe tokens em grupos ou WhatsApp.</li><li>Em XAMPP (sem HTTPS), use o worker <code>php worker/telegram_agent.php</code>.</li></ul>',
 					'Configurações → Configurações de IA'
 				),
 			],
@@ -1048,31 +1049,31 @@ class PlatformHelpSeed {
 					'O painel usa <strong>uma</strong> configuração de chave de IA, com interruptores por recurso liberado no plano.',
 					[
 						'<strong>IA Pedagógica</strong>: tutor e role play no <strong>portal do aluno (EAD)</strong>.',
-						'<strong>Assistente IA</strong>: Telegram / agente operacional (consulta agenda, financeiro, CRM).',
+						'<strong>Assistente IA</strong>: bot Telegram nativo (consulta agenda, financeiro, CRM).',
 						'<strong>Variar textos WhatsApp</strong>: anti-template em campanhas.',
 						'Tudo em <em>Configurações → Configurações de IA</em>.',
 					],
-					'<p>A Agent API (Master) continua separada da chave Gemini/OpenAI.</p>',
+					'<p>Ativar só a pedagógica <strong>não</strong> liga o bot do Telegram — e vice-versa.</p>',
 					'Configurações → Configurações de IA'
 				),
 			],
 			[
 				'cat' => 'assistente-ia',
-				'titulo' => 'Ativação pelo suporte CTI e segurança das chaves',
+				'titulo' => 'Segurança do bot e Chat ID',
 				'slug' => 'assistente-ia-ativacao-seguranca',
-				'resumo' => 'Agent API por escola, ativação Master e por que não se usa uma chave única para todos.',
+				'resumo' => 'Allowlist de chats, token do bot e boas práticas.',
 				'ordem' => 40,
 				'corpo' => self::wrap(
-					'Depois que o Diretor salva LLM e Telegram, o suporte CTI gera a <strong>Agent API</strong> da escola e liga o subagente no OpenClaw.',
+					'O Assistente só responde a chats autorizados. Isso protege os dados da escola.',
 					[
-						'No painel Master (equipe CTI): <strong>Agent API</strong> → abrir a escola → gerar chave → revelar segredos (LLM/Telegram) → configurar na VPS.',
-						'O assistente só responde na API se estiver <strong>Ativo</strong> no Master e o módulo estiver no plano.',
-						'<strong>Uma escola = uma Agent API key.</strong> Isso evita que um bot ou vazamento de uma unidade acesse dados de outra.',
-						'A chave Master do SaaS é só para o agente do dono CTI — não deve ir no bot Telegram da escola.',
-						'Se precisar pausar: o Master desativa o assistente da escola (a API passa a negar acesso).',
+						'Cadastre o <strong>Chat ID</strong> em Configurações de IA (vários IDs separados por vírgula).',
+						'Descubra o ID falando com <code>@userinfobot</code> (ou equivalente) no Telegram.',
+						'O token do bot fica criptografado no painel — nunca envie por WhatsApp.',
+						'Em produção, use <strong>webhook HTTPS</strong>. Em local, use o worker long-poll.',
+						'Para pausar: desative <strong>Ativar Assistente no Telegram</strong> e salve (ou remova o webhook).',
 					],
-					'<ul><li>Nunca reutilize a mesma Agent API em duas escolas.</li><li>Em caso de suspeita de vazamento, peça ao suporte para revogar a chave e gerar outra.</li></ul>',
-					'Suporte CTI · Master → Agent API'
+					'<ul><li>Não reutilize o mesmo bot em duas escolas.</li><li>Se suspeitar de vazamento do token, revogue no @BotFather e cadastre um novo.</li></ul>',
+					'Configurações → Configurações de IA'
 				),
 			],
 			[
@@ -1082,7 +1083,7 @@ class PlatformHelpSeed {
 				'resumo' => 'Consultas somente leitura: agenda, inadimplentes, CRM, matrículas, WhatsApp e mais.',
 				'ordem' => 50,
 				'corpo' => self::wrap(
-					'A Agent API é <strong>somente leitura</strong>: o assistente analisa e responde; não dá baixa, não altera matrícula e não envia WhatsApp pelo painel.',
+					'O Assistente é <strong>somente leitura</strong>: analisa e responde; não dá baixa, não altera matrícula e não envia WhatsApp pelo painel.',
 					[
 						'<strong>Resumo do dia:</strong> matrículas ativas, recebido hoje, a receber na semana, CRM e indicadores rápidos.',
 						'<strong>Agenda:</strong> aulas/agendamentos de hoje.',
@@ -1091,8 +1092,8 @@ class PlatformHelpSeed {
 						'<strong>Matrículas:</strong> ativas e novas no mês.',
 						'<strong>WhatsApp:</strong> fila, não lidas e conversas abertas (quando o módulo existir).',
 					],
-					'<p>Exemplos de perguntas: “Quem tem aula hoje?”, “Quanto está inadimplente esta semana?”, “Como está o funil de leads?”.</p>',
-					'Telegram do Assistente IA (após ativação)'
+					'<p>Comandos sem IA: <code>/resumo</code>, <code>/agenda</code>, <code>/ajuda</code> e outros listados no próprio bot.</p>',
+					'Telegram do Assistente IA'
 				),
 			],
 		];

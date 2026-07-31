@@ -72,7 +72,7 @@ class SocialAgenda extends Page {
 			return self::publicarAgora((int)($post['id'] ?? 0));
 		}
 		if ($acao === 'worker') {
-			return self::rodarWorker();
+			return self::rodarWorker($post);
 		}
 		if ($acao === 'status_meta') {
 			return self::statusMeta();
@@ -151,12 +151,16 @@ class SocialAgenda extends Page {
 
 	private static function statusWorker(): string {
 		$ultima = SocialWorkerRun::ultima();
+		$cronCli = '*/5 * * * * php '.str_replace('\\', '/', dirname(__DIR__, 3)).'/worker/social.php';
 		return self::json([
 			'success' => true,
 			'tabela_ok' => SocialWorkerRun::tabelaExiste(),
 			'ultima' => $ultima,
-			'cron_cli' => '*/5 * * * * php '.str_replace('\\', '/', dirname(__DIR__, 3)).'/worker/social.php',
-			'cron_http' => rtrim((string)URL, '/').'/cron/social?token='.(defined('SYSTEM_TOKEN') ? '***' : 'SYSTEM_TOKEN'),
+			'cron_cli' => $cronCli,
+			'cron_http' => rtrim((string)URL, '/').'/cron/social?token='.(defined('SYSTEM_TOKEN') && SYSTEM_TOKEN !== '' ? '***' : 'SYSTEM_TOKEN'),
+			'hint' => empty($ultima)
+				? 'Com a agenda aberta, posts já devidos são publicados automaticamente a cada ~45s. Em produção, configure também o cron do servidor para publicar com o painel fechado.'
+				: 'Com a agenda aberta, posts devidos saem a cada ~45s. Cron no servidor garante publicação com o painel fechado.',
 		]);
 	}
 
@@ -441,10 +445,24 @@ class SocialAgenda extends Page {
 		]);
 	}
 
-	private static function rodarWorker(): string {
+	private static function rodarWorker(array $postVars = []): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$resumo = SocialPublishService::processar($idAdmin, 20, 'manual');
-		return self::json(['success' => true, 'resumo' => $resumo, 'worker_ultima' => SocialWorkerRun::ultima()]);
+		$silencioso = !empty($postVars['silencioso']);
+		$limite = (int)($postVars['limite'] ?? ($silencioso ? 5 : 20));
+		if ($limite < 1) {
+			$limite = 1;
+		}
+		if ($limite > 20) {
+			$limite = 20;
+		}
+		$origem = $silencioso ? 'poll' : 'manual';
+		$resumo = SocialPublishService::processar($idAdmin, $limite, $origem);
+		return self::json([
+			'success' => true,
+			'silencioso' => $silencioso,
+			'resumo' => $resumo,
+			'worker_ultima' => SocialWorkerRun::ultima(),
+		]);
 	}
 
 	private static function bibliotecaListar(array $post): string {

@@ -3,7 +3,7 @@
 ## O que faz
 
 Bot por escola que responde no Telegram com:
-- IA compartilhada (`Configurações de IA`)
+- IA compartilhada (`Configurações de IA`) — opcional para texto livre
 - Dados somente leitura (`AgentAnalyticsHelper`: resumo, agenda, inadimplentes, CRM, etc.)
 - Allowlist de Chat ID (obrigatório)
 
@@ -12,7 +12,7 @@ Não dá baixa, não matricula, não envia WhatsApp.
 ## SQL
 
 ```sql
--- Após agent_escola_config.sql
+-- database/agent_escola_config.sql
 -- database/telegram_agent_nativo.sql
 -- Se já tinha rodado a versão antiga, só a coluna IA:
 -- database/telegram_agent_ia_opcional.sql
@@ -22,7 +22,7 @@ Não dá baixa, não matricula, não envia WhatsApp.
 
 1. Plano com módulo `assistente_ia`
 2. **Configurações → Configurações de IA**
-3. Credenciais de IA + **Ativar Assistente**
+3. Credenciais de IA + **Ativar Assistente no Telegram**
 4. Token do `@BotFather` + **Chat ID autorizado** (obrigatório)
 5. Salvar
 6. **Enviar teste** para validar
@@ -67,7 +67,3 @@ Comandos: ver `/ajuda` no bot.
 - Só chats listados em `telegram_chat_id` (vírgula = vários)
 - Máx. 30 mensagens de usuário / hora / chat
 - Histórico curto (8 msgs) em `agent_telegram_mensagens`
-
-## OpenClaw
-
-Continua opcional (Agent API Master). O bot nativo **não** depende da Agent API.

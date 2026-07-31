@@ -1,14 +1,14 @@
--- Config OpenClaw por escola (LLM do agente + Telegram)
--- Separado da IA Pedagógica (escola_integracoes.ai_*).
--- Colar no phpMyAdmin após database/agent_api.sql
+-- Config do Assistente Telegram nativo por escola (token, allowlist, flags)
+-- Fonte da chave LLM: escola_integracoes.ai_* (Configurações de IA)
+-- Colar no phpMyAdmin
 
 CREATE TABLE IF NOT EXISTS `agent_escola_config` (
   `id_admin` INT UNSIGNED NOT NULL,
-  `agent_ativo` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Master liga/desliga o assistente da escola',
+  `agent_ativo` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'legado; bot nativo usa llm_ativo',
   `llm_ativo` TINYINT(1) NOT NULL DEFAULT 0,
   `llm_provider` VARCHAR(32) NULL DEFAULT NULL,
   `llm_model` VARCHAR(64) NULL DEFAULT NULL,
-  `llm_api_key` TEXT NULL COMMENT 'CryptoHelper — chave LLM do OpenClaw (não é IA Pedagógica)',
+  `llm_api_key` TEXT NULL COMMENT 'CryptoHelper — espelho opcional da chave (fonte: escola_integracoes.ai_*)',
   `telegram_bot_token` TEXT NULL COMMENT 'CryptoHelper',
   `telegram_bot_username` VARCHAR(64) NULL DEFAULT NULL,
   `telegram_chat_id` VARCHAR(64) NULL DEFAULT NULL COMMENT 'opcional: chat/grupo autorizado',

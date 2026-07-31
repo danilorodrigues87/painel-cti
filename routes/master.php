@@ -115,20 +115,6 @@ $obRouter->post('/master/documentacao', [
 	}
 ]);
 
-$obRouter->get('/master/agent-api', [
-	'middlewares' => ['required-master-login'],
-	function ($request) {
-		return new Response(200, Master\AgentApi::index($request));
-	}
-]);
-
-$obRouter->post('/master/agent-api', [
-	'middlewares' => ['required-master-login'],
-	function ($request) {
-		return new Response(200, Master\AgentApi::getInfo($request), 'application/json');
-	}
-]);
-
 $obRouter->get('/master/perfil', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

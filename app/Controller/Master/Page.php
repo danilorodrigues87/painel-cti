@@ -30,7 +30,6 @@ class Page {
 			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',
 			'current_portal'       => $menuAtivo === 'portal' ? 'active' : '',
 			'current_documentacao' => $menuAtivo === 'documentacao' ? 'active' : '',
-			'current_agent'        => $menuAtivo === 'agent' ? 'active' : '',
 			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',
 		]);
 

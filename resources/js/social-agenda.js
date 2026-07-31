@@ -10,6 +10,8 @@
   var bibPickInst = null;
   /** @type {{path:string,tipo:string}[]} */
   var selectedMidias = [];
+  var pollBusy = false;
+  var POLL_MS = 45000;
 
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
   function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
@@ -80,11 +82,25 @@
         ? ('última execução em ' + (u.created_at || '') + ' · publicados ' + (u.ok || 0) + ' · erros ' + (u.erro || 0))
         : 'ainda não houve execução automática';
       $('#worker-status-txt').text(t);
-      $('#cron-hint').empty();
-      if (!u && r.cron_http) {
-        $('#cron-hint').text('Se as publicações não saírem sozinhas, fale com o suporte.');
-      }
+      $('#cron-hint').text(r.hint || 'Com a agenda aberta, posts devidos saem a cada ~45s. Em produção, configure o cron do servidor.');
     });
+  }
+
+  /** Poll seguro: um request por vez, lote pequeno, só refresca UI se processou algo. */
+  function pollPublicarDevidos() {
+    if (pollBusy || document.hidden) return;
+    pollBusy = true;
+    postApi({ acao: 'worker', silencioso: 1, limite: 5 })
+      .done(function (r) {
+        if (!r || !r.success) return;
+        var s = r.resumo || {};
+        var n = (s.ok || 0) + (s.erro || 0);
+        if (n > 0) {
+          loadPeriodo();
+          loadMetaAndWorker();
+        }
+      })
+      .always(function () { pollBusy = false; });
   }
 
   function loadPeriodo() {
@@ -356,6 +372,11 @@
   $(function () {
     loadMetaAndWorker();
     loadPeriodo();
+    setTimeout(pollPublicarDevidos, 3000);
+    setInterval(pollPublicarDevidos, POLL_MS);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) pollPublicarDevidos();
+    });
 
     $('#btn-view-semana').on('click', function () {
       view = 'semana';

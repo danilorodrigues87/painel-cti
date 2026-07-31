@@ -295,7 +295,7 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - **Config:** `/painel/config/social` (Diretor + permissão Redes sociais) — tokens em `escola_integracoes` via `CryptoHelper`. SQL: `database/escola_integracoes_meta.sql`
 - **Agenda (Fase A produto):** `/painel/social` — visão **semana/mês**, filtros status/formato, abas Biblioteca + Histórico. Formatos **`feed` | `story` | `reel` | `carousel`**. SQL: `database/social_posts.sql` + `social_posts_formato.sql` + **`social_fase_a_produto.sql`** (`social_biblioteca`, `social_publish_log`, `social_worker_runs`). Upload em `uploads/social/{id_admin}/` (também entra na biblioteca).
 - **Publicação:** Feed imagem FB+IG; Carrossel IG (e fotos FB); **Story/Reel só Instagram**. Arquivos da biblioteca **não** são apagados ao cancelar/publicar.
-- **Worker / cron:** `php worker/social.php [id_admin] [limite]` **ou** HTTP `GET/POST /cron/social?token={SYSTEM_TOKEN}`. Agenda mostra última execução (`social_worker_runs`). Sem cron/worker, posts ficam só agendados.
+- **Worker / cron:** `php worker/social.php [id_admin] [limite]` **ou** HTTP `GET/POST /cron/social?token={SYSTEM_TOKEN}`. Agenda mostra última execução (`social_worker_runs`). **Poll na agenda aberta** (~45s, origem `poll`, lote ≤5): publica posts já devidos sem depender do botão; `claimPublicando` evita double-publish; registro em `social_worker_runs` só se processou algo. Cron no servidor continua sendo a fonte de verdade com o painel fechado. Agendamento nativo Meta (`scheduled_publish_time`) fica para o futuro.
 - **Automações (Fase 2):** keyword em comentário → DM (private reply). SQL `database/social_automacoes.sql`. Toggle `meta_auto_ativo` + regras em Config Social. Webhook `POST /webhook/meta` (global, resolve escola por Page/IG id) ou `/webhook/meta/{idAdmin}/{token}`. Escopos extras: `instagram_manage_comments`, `instagram_manage_messages`, `pages_messaging`, `pages_manage_engagement`. Após OAuth: `subscribed_apps` na Page.
 - **Permissão:** slug `social` no plano **e** label `Redes sociais` no checklist do usuário (sem auto-grant Diretor).
 - **App Review Meta** obrigatório para Live (publicação + messaging/comments).
@@ -307,7 +307,7 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - Master: `/master/documentacao` — CRUD categorias/artigos + URL de vídeo (YouTube/Vimeo embed).
 - **Tutoriais padrão:** botão **Carregar tutoriais padrão** no Master → `App\Common\Help\PlatformHelpSeed` (categorias + artigos de todos os módulos). `video_url` fica vazio; reaplicar **não** apaga vídeo já preenchido.
 - **SQL para phpMyAdmin:** abra `database/export_platform_help_tutoriais.php` no navegador (gera/baixa `database/platform_help_tutoriais.sql`) ou rode `php database/export_platform_help_tutoriais.php`. Pré-requisito: `database/platform_help.sql`.
-- **Assistente IA / OpenClaw (ajuda):** `database/platform_help_assistente_ia.sql` — categoria + 5 artigos (também no seed `PlatformHelpSeed`).
+- **Assistente IA / Telegram (ajuda):** categoria + artigos no seed `PlatformHelpSeed` (e SQL `database/platform_help_assistente_ia.sql` / atualização nativa).
 - Escola (logado): `/painel/ajuda` e `/painel/ajuda/{slug}` — placeholder “Vídeo em breve” quando não há URL.
 - Público: `/ajuda` e `/ajuda/{slug}` (mesmo conteúdo publicado).
 - Menu **Ajuda** entra nos módulos padrão após aceite dos termos.
@@ -323,22 +323,21 @@ vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
 - Anexos só por rota autenticada: `/painel/suporte/anexo/{id}` e `/master/chamados/anexo/{id}`.
 - Entities: `Chamado`, `ChamadoMensagem`; helpers: `ChamadoHelper`, `ChamadoAnexoHelper`.
 
-### 5.12 Agent API + Agente Telegram nativo
+### 5.12 Agente Telegram nativo (Assistente IA)
 
-API **read-only** para agentes externos (OpenClaw na VPS — **legado/opcional**) e **agente Telegram nativo** no painel (caminho principal).
+Bot Telegram **nativo** no painel (somente leitura): consultas de agenda, financeiro, CRM, etc.
 
-- **SQL:** `database/agent_api.sql` + `database/agent_escola_config.sql` + `database/telegram_agent_nativo.sql` (histórico + offset poll)
-- **Agent API:** `/api/v1/agent/*` — middleware `agent-api-key`; escola exige `assistente_ia` + `agent_ativo=1` (Master)
-- **Agente nativo:**
-  - Webhook: `POST /webhook/telegram/{idAdmin}/{token}` (`TelegramBotApi::webhookToken`)
-  - Worker: `php worker/telegram_agent.php` (long-poll quando sem HTTPS)
-  - Core: `TelegramAgentService` + `TelegramBotApi` + `AgentTelegramMensagem`
-  - Pré-requisitos escola: módulo `assistente_ia`, `llm_ativo`, token bot, **Chat ID allowlist**, chave `escola_integracoes.ai_*`
-  - Tools: `AgentAnalyticsHelper` (interno, sem Bearer); LLM via `LmsAiService::chatComCredencial`
-  - Rate limit: 30 msgs/h/chat; histórico 8 msgs
-- **Configurações de IA** (`/painel/config/ia`): credenciais + toggles + ativar/remover webhook + teste
-- **UI Master Agent API:** permanece para integrações externas
-- **Docs:** `docs/OPERACAO_TELEGRAM_AGENT.md` · OpenClaw legado em `docs/openclaw/`
+- **SQL:** `database/agent_escola_config.sql` + `database/telegram_agent_nativo.sql` (+ `telegram_agent_ia_opcional.sql` se já tinha a tabela)
+- **Webhook:** `POST /webhook/telegram/{idAdmin}/{token}` (`TelegramBotApi::webhookToken`)
+- **Worker (local/sem HTTPS):** `php worker/telegram_agent.php`
+- **Core:** `TelegramAgentService` + `TelegramBotApi` + `AgentTelegramMensagem` + `AgentAnalyticsHelper`
+- **Pré-requisitos escola:** módulo `assistente_ia` no plano, `llm_ativo`, token bot, **Chat ID allowlist**, chave em `escola_integracoes.ai_*`
+- **IA opcional:** `telegram_ia_ativo` — desligado = só palavras-chave; ligado = também LLM (`LmsAiService`)
+- **Rate limit:** 30 msgs/h/chat; histórico curto (8 msgs)
+- **Config:** `/painel/config/ia` — credenciais + Telegram + ativar/remover webhook
+- **Docs:** `docs/OPERACAO_TELEGRAM_AGENT.md`
+
+> OpenClaw / Agent API HTTP foram removidos do produto. Tabelas `agent_api_*` (se existirem) são legado e podem ser descartadas.
 
 Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 
@@ -360,8 +359,7 @@ Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /cours
 | Agenda | `AgendaHelper.php`, controllers `Agenda*` |
 | CRM | `CrmLeads.php`, `resources/js/crm.js` |
 | Suporte / chamados | `Controller/Admin/Suporte.php`, `Controller/Master/Chamados.php`, `Chamado*.php`, `resources/js/suporte.js` |
-| Agent API / Telegram nativo | `TelegramAgentService.php`, `TelegramBotApi.php`, `Webhook/Telegram.php`, `worker/telegram_agent.php`, `docs/OPERACAO_TELEGRAM_AGENT.md` |
-| Agent API (HTTP) | `routes/api/v1/agent.php`, `Controller/Api/Agent/Analytics.php`, `AgentApiKey.php`, `AgentAnalyticsHelper.php`, `docs/openclaw/` |
+| Assistente Telegram nativo | `TelegramAgentService.php`, `TelegramBotApi.php`, `Webhook/Telegram.php`, `worker/telegram_agent.php`, `AgentAnalyticsHelper.php`, `docs/OPERACAO_TELEGRAM_AGENT.md` |
 | URL AJAX | `resources/js/url-base.js` |
 
 ---
@@ -561,8 +559,7 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 
 **Chamados de suporte (novo):** colar `database/chamados_suporte.sql`.
 
-**Agent API / OpenClaw (Fase 1):** colar `database/agent_api.sql` e `database/agent_escola_config.sql`. Liberar slug `assistente_ia` no plano das escolas.  
-**Agente Telegram nativo (Fase 2):** colar `database/telegram_agent_nativo.sql`.
+**Assistente Telegram nativo:** colar `database/agent_escola_config.sql` + `database/telegram_agent_nativo.sql`. Liberar slug `assistente_ia` no plano das escolas.
 
 ---
 
@@ -572,8 +569,7 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | Item | Status |
 |------|--------|
 | Chamados de suporte (escola ↔ Master) | Feito |
-| Agent API / OpenClaw Fase 1 (read-only + chaves Master/escola) | Feito — SQL `database/agent_api.sql` |
-| Agente Telegram nativo Fase 2 (webhook + worker + allowlist) | Feito — SQL `database/telegram_agent_nativo.sql` |
+| Agente Telegram nativo (Assistente IA) | Feito — SQL `agent_escola_config` + `telegram_agent_nativo` |
 | CRM Kanban + tarefas + histórico | Feito |
 | Agenda laboratório v2 + diário | Feito |
 | Sync de permissões em tempo real (sessão) | Feito |

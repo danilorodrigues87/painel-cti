@@ -13,7 +13,7 @@ use App\Model\Db\Database;
 use PDO;
 
 /**
- * KPIs / listas read-only para Agent API (sem sessão).
+ * KPIs / listas read-only para o Assistente Telegram (sem sessão web).
  */
 class AgentAnalyticsHelper {
 

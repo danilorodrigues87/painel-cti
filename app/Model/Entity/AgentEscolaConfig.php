@@ -6,8 +6,8 @@ use App\Model\Db\Database;
 use App\Common\Helpers\CryptoHelper;
 
 /**
- * Segredos OpenClaw por escola (Telegram + espelho LLM).
- * Fonte da verdade da chave: escola_integracoes.ai_* (Configurações de IA).
+ * Config do Assistente Telegram nativo por escola (token, allowlist, flags).
+ * Fonte da verdade da chave LLM: escola_integracoes.ai_* (Configurações de IA).
  */
 class AgentEscolaConfig {
 
@@ -166,11 +166,11 @@ class AgentEscolaConfig {
 		return true;
 	}
 
-	/** Master liga/desliga o assistente (Agent API da escola). */
+	/** Liga/desliga flag agent_ativo (legado; bot nativo usa llm_ativo). */
 	public static function setAgentAtivo(int $idAdmin, bool $ativo): bool {
 		self::$ultimoErro = null;
 		if (!self::tabelaExiste() || $idAdmin <= 0) {
-			self::$ultimoErro = 'Config OpenClaw indisponível.';
+			self::$ultimoErro = 'Config do Assistente indisponível.';
 			return false;
 		}
 		$db = new Database('agent_escola_config');

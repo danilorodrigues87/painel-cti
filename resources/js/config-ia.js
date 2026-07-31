@@ -82,7 +82,6 @@ function carregarIa() {
 		} else {
 			$('#tg_token_hint').text('Deixe em branco para manter o token já salvo. Crie o bot no @BotFather.');
 		}
-		$('#st-agent').text(a.agent_api_pronta ? 'pronta (Master)' : (a.agent_ativo ? 'ativa sem chave' : 'opcional / Master'));
 		$('#st-tg').text(a.telegram_pronto ? 'token ok' : (a.telegram_token_salvo ? 'token ok' : 'pendente'));
 
 		preencherTelegramNativo(res.telegram_nativo);
