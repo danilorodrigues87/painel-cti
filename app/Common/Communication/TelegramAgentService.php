@@ -20,6 +20,7 @@ class TelegramAgentService {
 
 	/**
 	 * Processa um update do Telegram (webhook ou getUpdates).
+	 * Palavras-chave respondem sem IA. Texto livre só usa IA se telegram_ia_ativo=1.
 	 * @return array{ok:bool,skipped?:bool,message?:string}
 	 */
 	public static function processarUpdate(int $idAdmin, array $update): array {
@@ -27,7 +28,6 @@ class TelegramAgentService {
 		if (!is_array($message)) {
 			return ['ok' => true, 'skipped' => true, 'message' => 'sem_mensagem'];
 		}
-		// Ignora mensagens do próprio bot / edits
 		if (!empty($message['from']['is_bot'])) {
 			return ['ok' => true, 'skipped' => true];
 		}
@@ -58,15 +58,36 @@ class TelegramAgentService {
 			return ['ok' => true, 'skipped' => true, 'message' => 'rate_limit'];
 		}
 
-		// Comandos simples
-		$lower = mb_strtolower($text);
-		if ($lower === '/start' || $lower === '/ajuda' || $lower === 'ajuda') {
-			$api->sendMessage($chatId, self::textoAjuda());
-			return ['ok' => true];
+		// 1) Palavras-chave / comandos — sempre sem IA
+		$porKeyword = self::responderPalavraChave($idAdmin, $text);
+		if ($porKeyword !== null) {
+			$api->sendMessage($chatId, $porKeyword);
+			return ['ok' => true, 'message' => 'keyword'];
+		}
+
+		// 2) Texto livre
+		if (!$cfg->iaLivreAtiva()) {
+			$api->sendMessage(
+				$chatId,
+				"A IA está desligada nesta escola.\n\n"
+				."Use uma palavra-chave da lista — digite /ajuda para ver os comandos."
+			);
+			return ['ok' => true, 'message' => 'ia_desligada'];
+		}
+
+		$ai = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$key = ($ai instanceof EscolaIntegracoes) ? $ai->getAiApiKeyDescriptografada() : null;
+		if (!$key) {
+			$api->sendMessage(
+				$chatId,
+				"IA ligada, mas falta a chave em Configurações de IA.\n"
+				."Enquanto isso, use /ajuda e as palavras-chave."
+			);
+			return ['ok' => true, 'message' => 'sem_chave_ia'];
 		}
 
 		AgentTelegramMensagem::salvar($idAdmin, $chatId, 'user', $text);
-		$api->sendMessage($chatId, 'Consultando os dados da escola…');
+		$api->sendMessage($chatId, 'Consultando com a IA…');
 
 		$dados = self::montarContextoDados($idAdmin, $text);
 		$historico = AgentTelegramMensagem::ultimas($idAdmin, $chatId, self::HISTORICO);
@@ -76,7 +97,6 @@ class TelegramAgentService {
 		foreach ($historico as $h) {
 			$messages[] = ['role' => $h['role'], 'content' => $h['content']];
 		}
-		// Garante que a última pergunta está presente
 		if (empty($messages) || end($messages)['content'] !== $text) {
 			$messages[] = ['role' => 'user', 'content' => $text];
 		}
@@ -85,14 +105,14 @@ class TelegramAgentService {
 		if ($resposta === null || trim($resposta) === '') {
 			$resposta = 'Não consegui consultar a IA agora'
 				.(LmsAiService::getLastError() ? ' ('.LmsAiService::getLastError().')' : '')
-				.'. Verifique a chave em Configurações de IA ou tente de novo.';
+				.'. Tente /resumo ou /ajuda (sem IA).';
 		}
 
 		$resposta = trim($resposta);
 		AgentTelegramMensagem::salvar($idAdmin, $chatId, 'assistant', $resposta);
 		$api->sendMessage($chatId, $resposta);
 
-		return ['ok' => true];
+		return ['ok' => true, 'message' => 'ia'];
 	}
 
 	/**
@@ -124,10 +144,14 @@ class TelegramAgentService {
 		if ($chatAllow === '') {
 			return ['ok' => false, 'message' => 'Cadastre o Chat ID autorizado.'];
 		}
-		$ai = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		$key = ($ai instanceof EscolaIntegracoes) ? $ai->getAiApiKeyDescriptografada() : null;
-		if (!$key) {
-			return ['ok' => false, 'message' => 'Configure a chave de IA em Configurações de IA.'];
+		// Chave de IA só é obrigatória se a IA livre estiver ligada
+		if ($cfg->iaLivreAtiva()) {
+			$ai = EscolaIntegracoes::getByIdAdmin($idAdmin);
+			$key = ($ai instanceof EscolaIntegracoes) ? $ai->getAiApiKeyDescriptografada() : null;
+			if (!$key) {
+				// Ainda pode usar keywords; gate "pronto" parcial — liberamos o bot
+				// (texto livre avisará falta de chave)
+			}
 		}
 		return ['ok' => true, 'config' => $cfg];
 	}
@@ -149,14 +173,202 @@ class TelegramAgentService {
 	}
 
 	public static function textoAjuda(): string {
-		return "Olá! Sou o assistente operacional da escola (somente consulta).\n\n"
-			."Posso ajudar com:\n"
-			."• Resumo do dia (matrículas, recebido, a receber)\n"
-			."• Agenda de hoje\n"
-			."• Inadimplentes / a receber\n"
-			."• CRM (funil de leads)\n\n"
-			."Não faço baixas, matrículas nem envio de WhatsApp.\n"
-			."Pergunte em português, por exemplo: \"quantos inadimplentes este mês?\"";
+		return "Sou o assistente operacional da escola (somente consulta).\n\n"
+			."Como funciona\n"
+			."• Digite uma palavra-chave abaixo — a resposta vem direto do painel, sem gastar tokens de IA.\n"
+			."• Se a IA estiver ligada, você também pode perguntar em linguagem natural (ex.: \"como está o financeiro hoje?\").\n"
+			."• Não faço baixas, matrículas nem envio de WhatsApp.\n\n"
+			."Palavras-chave (sem IA)\n"
+			."/ajuda — esta mensagem\n"
+			."/resumo — visão geral do dia\n"
+			."/agenda — aulas de hoje\n"
+			."/inadimplentes — títulos em atraso (mês)\n"
+			."/inadimplentes semana — atraso da semana\n"
+			."/receber — a receber (semana)\n"
+			."/receber mes — a receber no mês\n"
+			."/crm — funil de leads\n"
+			."/matriculas — matrículas ativas\n"
+			."/whatsapp — fila do inbox\n\n"
+			."Também aceito sem barra: resumo, agenda, crm, etc.";
+	}
+
+	/**
+	 * Resposta por palavra-chave (sem IA). Null = não é keyword.
+	 */
+	public static function responderPalavraChave(int $idAdmin, string $text): ?string {
+		$raw = trim($text);
+		$norm = mb_strtolower($raw);
+		$norm = preg_replace('/\s+/u', ' ', $norm) ?? $norm;
+		// Remove @botusername se vier em comando
+		$norm = preg_replace('/^(\/[a-z_]+)@[a-z0-9_]+/u', '$1', $norm) ?? $norm;
+
+		if ($norm === '/start' || $norm === '/ajuda' || $norm === 'ajuda' || $norm === 'help' || $norm === '/help') {
+			return self::textoAjuda();
+		}
+
+		if ($norm === '/resumo' || $norm === 'resumo' || $norm === '/hoje' || $norm === 'hoje') {
+			return self::formatarResumo($idAdmin);
+		}
+		if ($norm === '/agenda' || $norm === 'agenda' || $norm === '/aulas' || $norm === 'aulas') {
+			return self::formatarAgenda($idAdmin);
+		}
+		if (preg_match('#^(/inadimplentes|inadimplentes|/atraso|atraso)(\s+(mes|mês|semana|hoje))?$#u', $norm, $m)) {
+			$periodo = 'mes';
+			$extra = isset($m[3]) ? trim((string)$m[3]) : '';
+			if ($extra === 'semana') {
+				$periodo = 'semana';
+			} elseif ($extra === 'hoje') {
+				$periodo = 'hoje';
+			}
+			return self::formatarInadimplentes($idAdmin, $periodo);
+		}
+		if (preg_match('#^(/receber|receber|/areceber|a receber)(\s+(mes|mês|semana|hoje))?$#u', $norm, $m)) {
+			$periodo = 'semana';
+			$extra = isset($m[3]) ? trim((string)$m[3]) : '';
+			if ($extra === 'mes' || $extra === 'mês') {
+				$periodo = 'mes';
+			} elseif ($extra === 'hoje') {
+				$periodo = 'hoje';
+			}
+			return self::formatarAReceber($idAdmin, $periodo);
+		}
+		if ($norm === '/crm' || $norm === 'crm' || $norm === '/leads' || $norm === 'leads' || $norm === 'funil') {
+			return self::formatarCrm($idAdmin);
+		}
+		if ($norm === '/matriculas' || $norm === 'matriculas' || $norm === '/matricula' || $norm === 'matricula') {
+			return self::formatarMatriculas($idAdmin);
+		}
+		if ($norm === '/whatsapp' || $norm === 'whatsapp' || $norm === '/wa' || $norm === 'inbox') {
+			return self::formatarWhatsapp($idAdmin);
+		}
+
+		return null;
+	}
+
+	private static function formatarResumo(int $idAdmin): string {
+		$r = AgentAnalyticsHelper::resumo($idAdmin);
+		$inad = $r['inadimplentes_mes'] ?? [];
+		$linhas = [
+			'Resumo — '.($r['data'] ?? date('Y-m-d')),
+			'',
+			'Matrículas ativas: '.(int)($r['matriculas_ativas'] ?? 0),
+			'Alunos cadastrados: '.(int)($r['alunos_cadastrados'] ?? 0),
+			'Recebido hoje: '.($r['recebido_hoje_br'] ?? 'R$ 0,00'),
+			'A receber (semana): '.($r['a_receber_semana_br'] ?? 'R$ 0,00'),
+			'Inadimplentes (mês): '.(int)($inad['qtd_titulos'] ?? 0).' título(s) — '.($inad['total_br'] ?? 'R$ 0,00'),
+			'Agenda hoje: '.(int)($r['agenda_hoje']['qtd'] ?? 0).' aula(s)',
+		];
+		$crm = $r['crm'] ?? [];
+		if (!empty($crm)) {
+			$linhas[] = 'CRM leads: '.(int)($crm['total'] ?? 0).' (conversão '.($crm['conversao_pct'] ?? 0).'%)';
+		}
+		$wa = $r['whatsapp'] ?? [];
+		if (!empty($wa['disponivel'])) {
+			$linhas[] = 'WhatsApp fila: '.(int)($wa['fila'] ?? 0).' | não lidas: '.(int)($wa['nao_lidas'] ?? 0);
+		}
+		$linhas[] = '';
+		$linhas[] = 'Sem IA · /ajuda para mais comandos';
+		return implode("\n", $linhas);
+	}
+
+	private static function formatarAgenda(int $idAdmin): string {
+		$a = AgentAnalyticsHelper::agendaHoje($idAdmin, 25);
+		if (empty($a['disponivel'])) {
+			return "Agenda indisponível neste momento.";
+		}
+		$qtd = (int)($a['qtd'] ?? 0);
+		$linhas = ['Agenda de hoje — '.$qtd.' aula(s)', ''];
+		$itens = $a['itens'] ?? [];
+		if (empty($itens)) {
+			$linhas[] = 'Nenhuma aula listada para hoje.';
+		} else {
+			$i = 1;
+			foreach ($itens as $it) {
+				$aluno = trim((string)($it['aluno'] ?? '')) ?: ('Aluno #'.(int)($it['id_aluno'] ?? 0));
+				$status = trim((string)($it['status'] ?? ''));
+				$linhas[] = $i.'. '.$aluno.($status !== '' ? ' ('.$status.')' : '');
+				$i++;
+				if ($i > 25) {
+					break;
+				}
+			}
+			if ($qtd > count($itens)) {
+				$linhas[] = '… e mais '.($qtd - count($itens));
+			}
+		}
+		$linhas[] = '';
+		$linhas[] = 'Sem IA · /ajuda';
+		return implode("\n", $linhas);
+	}
+
+	private static function formatarInadimplentes(int $idAdmin, string $periodo): string {
+		$d = AgentAnalyticsHelper::inadimplentesLista($idAdmin, $periodo, 15);
+		$rotulo = ['mes' => 'mês', 'semana' => 'semana', 'hoje' => 'hoje'][$periodo] ?? $periodo;
+		$linhas = [
+			'Inadimplentes ('.$rotulo.')',
+			'Títulos: '.(int)($d['qtd_titulos'] ?? 0).' · Total: '.($d['total_br'] ?? 'R$ 0,00'),
+			'',
+		];
+		$itens = $d['itens'] ?? [];
+		if (empty($itens)) {
+			$linhas[] = 'Nenhum título neste período.';
+		} else {
+			foreach ($itens as $it) {
+				$venc = !empty($it['vencimento']) ? date('d/m/Y', strtotime((string)$it['vencimento'])) : '—';
+				$desc = trim((string)($it['descricao'] ?? '')) ?: 'Título';
+				$linhas[] = '• '.$desc.' — '.($it['valor_br'] ?? '').' (venc. '.$venc.')';
+			}
+			if ((int)($d['qtd_titulos'] ?? 0) > count($itens)) {
+				$linhas[] = '… lista resumida (top '.count($itens).')';
+			}
+		}
+		$linhas[] = '';
+		$linhas[] = 'Sem IA · /inadimplentes semana | /ajuda';
+		return implode("\n", $linhas);
+	}
+
+	private static function formatarAReceber(int $idAdmin, string $periodo): string {
+		$d = AgentAnalyticsHelper::aReceber($idAdmin, $periodo);
+		$rotulo = ['mes' => 'mês', 'semana' => 'semana', 'hoje' => 'hoje'][$periodo] ?? $periodo;
+		return "A receber (".$rotulo.")\n"
+			."Títulos: ".(int)($d['qtd_titulos'] ?? 0)."\n"
+			."Total: ".($d['total_br'] ?? 'R$ 0,00')."\n\n"
+			."Sem IA · /receber mes | /ajuda";
+	}
+
+	private static function formatarCrm(int $idAdmin): string {
+		$c = AgentAnalyticsHelper::crmCards($idAdmin);
+		$linhas = [
+			'CRM — funil de leads',
+			'Total: '.(int)($c['total'] ?? 0).' · Conversão: '.($c['conversao_pct'] ?? 0).'%',
+			'',
+		];
+		foreach (($c['por_status'] ?? []) as $s) {
+			$linhas[] = '• '.($s['label'] ?? $s['slug']).': '.(int)($s['qtd'] ?? 0);
+		}
+		$linhas[] = '';
+		$linhas[] = 'Sem IA · /ajuda';
+		return implode("\n", $linhas);
+	}
+
+	private static function formatarMatriculas(int $idAdmin): string {
+		$m = AgentAnalyticsHelper::matriculasResumo($idAdmin);
+		return "Matrículas\n"
+			."Ativas: ".(int)($m['ativas'] ?? 0)."\n"
+			."Novas no mês: ".(int)($m['novas_mes'] ?? 0)."\n\n"
+			."Sem IA · /ajuda";
+	}
+
+	private static function formatarWhatsapp(int $idAdmin): string {
+		$w = AgentAnalyticsHelper::whatsapp($idAdmin);
+		if (empty($w['disponivel'])) {
+			return "WhatsApp inbox indisponível nesta escola.\n\nSem IA · /ajuda";
+		}
+		return "WhatsApp inbox\n"
+			."Fila: ".(int)($w['fila'] ?? 0)."\n"
+			."Não lidas: ".(int)($w['nao_lidas'] ?? 0)."\n"
+			."Abertas: ".(int)($w['abertas'] ?? 0)."\n\n"
+			."Sem IA · /ajuda";
 	}
 
 	/**

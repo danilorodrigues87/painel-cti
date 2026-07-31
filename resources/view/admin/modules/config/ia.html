@@ -62,8 +62,8 @@
 	</div>
 	<div class="card-body">
 		<p class="small mb-2">
-			O bot responde no Telegram usando a IA compartilhada e consultas somente leitura do painel
-			(resumo, agenda, inadimplentes, CRM). A <strong>Agent API</strong> (integrações externas / OpenClaw) continua opcional e é gerida pelo Master.
+			O bot consulta o painel em modo somente leitura. Por padrão responde com <strong>palavras-chave</strong> (sem gastar tokens).
+			A IA é opcional para perguntas em linguagem natural. A <strong>Agent API</strong> (OpenClaw) continua opcional no Master.
 		</p>
 		<ul class="small text-muted mb-3" id="status-assistente-list">
 			<li>Assistente nativo: <span id="st-nativo">—</span></li>
@@ -71,11 +71,16 @@
 			<li>Bot Telegram: <span id="st-tg">—</span></li>
 		</ul>
 		<div id="alert-tg-historico-sql" class="alert alert-warning small d-none">
-			Execute <code>database/telegram_agent_nativo.sql</code> no phpMyAdmin (histórico + offset do worker).
+			Execute <code>database/telegram_agent_nativo.sql</code> (e, se já tinha rodado antes, <code>database/telegram_agent_ia_opcional.sql</code>) no phpMyAdmin.
 		</div>
-		<div class="form-check form-switch mb-3">
+		<div class="form-check form-switch mb-2">
 			<input class="form-check-input" type="checkbox" id="assistente_ativo">
 			<label class="form-check-label" for="assistente_ativo">Ativar Assistente no Telegram</label>
+		</div>
+		<div class="form-check form-switch mb-3">
+			<input class="form-check-input" type="checkbox" id="telegram_ia_ativo">
+			<label class="form-check-label" for="telegram_ia_ativo">Usar IA em perguntas livres</label>
+			<div class="form-text">Desligado = só palavras-chave (/resumo, /agenda…). Ligado = também responde com a IA compartilhada (gasta tokens).</div>
 		</div>
 		<div class="mb-3">
 			<label class="form-label" for="telegram_bot_token">Bot token</label>
@@ -128,4 +133,4 @@
 
 <button type="button" class="btn btn-primary mb-4" id="btn-salvar-ia">Salvar</button>
 
-<script src="{{URL}}/resources/js/config-ia.js?v=20260731d"></script>
+<script src="{{URL}}/resources/js/config-ia.js?v=20260731e"></script>

@@ -67,6 +67,13 @@ function carregarIa() {
 
 		var a = res.assistente || {};
 		$('#assistente_ativo').prop('checked', !!a.llm_ativo);
+		$('#telegram_ia_ativo').prop('checked', a.telegram_ia_ativo !== false);
+		if (a.telegram_ia_coluna_ok === false) {
+			$('#telegram_ia_ativo').prop('disabled', true);
+			$('#alert-tg-historico-sql').removeClass('d-none');
+		} else {
+			$('#telegram_ia_ativo').prop('disabled', false);
+		}
 		$('#telegram_bot_username').val(a.telegram_bot_username || '');
 		$('#telegram_chat_id').val(a.telegram_chat_id || '');
 		$('#telegram_notas').val(a.telegram_notas || '');
@@ -111,6 +118,7 @@ $(function () {
 			ai_api_key: $('#ai_api_key').val() || '',
 			ai_ativo: $('#ai_ativo').is(':checked') ? '1' : '0',
 			assistente_ativo: $('#assistente_ativo').is(':checked') ? '1' : '0',
+			telegram_ia_ativo: $('#telegram_ia_ativo').is(':checked') ? '1' : '0',
 			telegram_bot_token: $('#telegram_bot_token').val() || '',
 			telegram_bot_username: $('#telegram_bot_username').val() || '',
 			telegram_chat_id: $('#telegram_chat_id').val() || '',

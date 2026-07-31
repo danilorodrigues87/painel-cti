@@ -157,6 +157,8 @@ class ConfigIa extends Page {
 		$assistente = [
 			'agent_ativo' => false,
 			'llm_ativo' => false,
+			'telegram_ia_ativo' => true,
+			'telegram_ia_coluna_ok' => AgentEscolaConfig::temColunaTelegramIa(),
 			'telegram_bot_username' => '',
 			'telegram_chat_id' => '',
 			'telegram_notas' => '',
@@ -173,6 +175,8 @@ class ConfigIa extends Page {
 				$pub = $agent->toEscolaPublicArray();
 				$assistente['agent_ativo'] = !empty($pub['agent_ativo']);
 				$assistente['llm_ativo'] = !empty($pub['llm_ativo']);
+				$assistente['telegram_ia_ativo'] = !empty($pub['telegram_ia_ativo']);
+				$assistente['telegram_ia_coluna_ok'] = !empty($pub['telegram_ia_coluna_ok']);
 				$assistente['telegram_bot_username'] = (string)($pub['telegram_bot_username'] ?? '');
 				$assistente['telegram_chat_id'] = (string)($pub['telegram_chat_id'] ?? '');
 				$assistente['telegram_notas'] = (string)($pub['telegram_notas'] ?? '');
@@ -351,6 +355,7 @@ class ConfigIa extends Page {
 				$agent->id_admin = $idAdmin;
 			}
 			$agent->llm_ativo = $assistenteAtivo;
+			$agent->telegram_ia_ativo = !empty($post['telegram_ia_ativo']) ? 1 : 0;
 			$agent->llm_provider = $cfg->ai_provider ?: null;
 			$agent->llm_model = $cfg->ai_model ?: null;
 			$agent->telegram_bot_username = trim((string)($post['telegram_bot_username'] ?? ''));

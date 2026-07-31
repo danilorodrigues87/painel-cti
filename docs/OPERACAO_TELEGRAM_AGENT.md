@@ -14,6 +14,8 @@ Não dá baixa, não matricula, não envia WhatsApp.
 ```sql
 -- Após agent_escola_config.sql
 -- database/telegram_agent_nativo.sql
+-- Se já tinha rodado a versão antiga, só a coluna IA:
+-- database/telegram_agent_ia_opcional.sql
 ```
 
 ## Configuração (Diretor)
@@ -50,6 +52,13 @@ Cron sugerido (a cada minuto):
 ```
 
 Se o webhook estiver ativo, `getUpdates` falha — use **Remover webhook** antes do poll.
+
+## Como responde
+
+1. **Palavras-chave** (`/resumo`, `/agenda`, `/ajuda`…) — sempre **sem IA** (economiza tokens).
+2. **Texto livre** — só se o switch **Usar IA em perguntas livres** estiver ligado.
+
+Comandos: ver `/ajuda` no bot.
 
 ## Segurança
 

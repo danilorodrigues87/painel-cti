@@ -24,6 +24,8 @@ class AgentEscolaConfig {
 	public $telegram_bot_username;
 	public $telegram_chat_id;
 	public $telegram_notas;
+	public $telegram_update_offset = 0;
+	public $telegram_ia_ativo = 1;
 	public $atualizado_em;
 	public $criado_em;
 
@@ -57,6 +59,30 @@ class AgentEscolaConfig {
 	public static function isAgentAtivo(int $idAdmin): bool {
 		$cfg = self::getByIdAdmin($idAdmin);
 		return $cfg instanceof self && (int)$cfg->agent_ativo === 1;
+	}
+
+	public static function temColunaTelegramIa(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('agent_escola_config'))->execute(
+				"SHOW COLUMNS FROM agent_escola_config LIKE 'telegram_ia_ativo'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	/** IA livre ligada? Sem coluna = true (comportamento antigo). */
+	public function iaLivreAtiva(): bool {
+		if (!self::temColunaTelegramIa()) {
+			return true;
+		}
+		return (int)($this->telegram_ia_ativo ?? 1) === 1;
 	}
 
 	public function getLlmApiKeyDescriptografada(): ?string {
@@ -105,6 +131,9 @@ class AgentEscolaConfig {
 			'telegram_chat_id' => $this->telegram_chat_id ? trim((string)$this->telegram_chat_id) : null,
 			'telegram_notas' => $this->telegram_notas ? mb_substr(trim((string)$this->telegram_notas), 0, 255) : null,
 		];
+		if (self::temColunaTelegramIa()) {
+			$dados['telegram_ia_ativo'] = !empty($this->telegram_ia_ativo) ? 1 : 0;
+		}
 
 		if ($llmKeyNova !== null && $llmKeyNova !== '') {
 			$cript = CryptoHelper::encrypt($llmKeyNova);
@@ -174,6 +203,8 @@ class AgentEscolaConfig {
 			'telegram_notas' => (string)($this->telegram_notas ?? ''),
 			'telegram_token_salvo' => $tgPlain !== null && $tgPlain !== '',
 			'telegram_token_mask' => self::maskSecret($tgPlain),
+			'telegram_ia_ativo' => $this->iaLivreAtiva(),
+			'telegram_ia_coluna_ok' => self::temColunaTelegramIa(),
 			'llm_pronto' => (int)$this->llm_ativo === 1 && $llmPlain,
 			'telegram_pronto' => $tgPlain !== null && $tgPlain !== '',
 		];
