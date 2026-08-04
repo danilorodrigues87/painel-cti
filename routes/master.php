@@ -80,6 +80,20 @@ $obRouter->post('/master/portal-branding', [
 	}
 ]);
 
+$obRouter->get('/master/bunny', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Bunny::index($request));
+	}
+]);
+
+$obRouter->post('/master/bunny', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Bunny::api($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

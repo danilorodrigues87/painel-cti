@@ -122,7 +122,7 @@ class Auth {
 		$portal = rtrim((string)(
 			Environment::get('ASCEND_URL')
 			?: getenv('ASCEND_URL')
-			?: 'http://localhost:8081'
+			?: 'http://localhost:8080'
 		), '/');
 
 		$expiresIn = 3600;

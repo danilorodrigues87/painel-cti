@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use App\Common\Environment;
 
 /**
- * CORS para o portal do aluno (API /api/v1/student).
+ * CORS para portal do aluno e L-Editor (API /api/v1/student e /api/v1/editor).
  * Headers e preflight ficam aqui — não no index.php.
  * Só Origins listados em STUDENT_CORS_ORIGINS (ou localhost em dev).
  */
@@ -45,7 +45,9 @@ class CorsStudent {
 	}
 
 	public static function isStudentApiUri(string $uri): bool {
-		return str_starts_with('/'.ltrim($uri, '/'), '/api/v1/student');
+		$path = '/'.ltrim($uri, '/');
+		return str_starts_with($path, '/api/v1/student')
+			|| str_starts_with($path, '/api/v1/editor');
 	}
 
 	public function handle($request, $next) {

@@ -14,6 +14,10 @@ use App\Model\Entity\LmsMaterial;
 use App\Model\Entity\LmsAtividade;
 use App\Model\Entity\LmsQuestao;
 use App\Model\Entity\LmsRoleplayCenario;
+use App\Model\Entity\LmsEditorToken;
+use App\Model\Entity\LmsAulaCena;
+use App\Model\Entity\PlataformaBunny;
+use App\Common\Environment;
 
 class EadCursos extends Page {
 
@@ -91,6 +95,7 @@ class EadCursos extends Page {
 			'buscar_alunos' => 'buscarAlunos',
 			'matricular_ead' => 'matricularEad',
 			'desmatricular_ead' => 'desmatricularEad',
+			'abrir_editor' => 'abrirEditor',
 		];
 
 		if (!isset($map[$acao])) {
@@ -119,12 +124,21 @@ class EadCursos extends Page {
 				'vitrine_preco_mensal' => (float)($c->vitrine_preco_mensal ?? 0),
 			];
 		}
+		$bunnySql = LmsVideo::temColunasBunny();
+		$bunnyStream = BunnyStreamHelper::pronto($idAdmin);
+		$bunnyMotivo = null;
+		if (!$bunnySql) {
+			$bunnyMotivo = 'Execute database/lms_videos_bunny.sql no phpMyAdmin.';
+		} elseif (!$bunnyStream) {
+			$bunnyMotivo = PlataformaBunny::get()->streamDiagnostico() ?: 'Bunny Stream incompleto no Master.';
+		}
 		return self::json([
 			'success' => true,
 			'sql_ok' => true,
 			'matricula_ead_ok' => \App\Model\Entity\LmsMatriculaEad::tabelaExiste(),
 			'xp_ok' => \App\Common\Helpers\LmsXpHelper::tabelasExistem(),
-			'bunny_ok' => BunnyStreamHelper::pronto($idAdmin) && LmsVideo::temColunasBunny(),
+			'bunny_ok' => $bunnyStream && $bunnySql,
+			'bunny_motivo' => $bunnyMotivo,
 			'itens' => $itens,
 		]);
 	}
@@ -310,12 +324,24 @@ class EadCursos extends Page {
 		$mod = LmsHelper::garantirModuloPadrao($idCurso, $idAdmin);
 		$aulas = [];
 		foreach (LmsAula::listByModulo((int)$mod->id, $idAdmin) as $a) {
+			$tipo = LmsAula::temColunaInterativa()
+				? (string)($a->tipo_conteudo ?? 'video')
+				: 'video';
+			$cenas = 0;
+			if ($tipo === 'interativa' && LmsAulaCena::tabelaExiste()) {
+				$cenas = count(LmsAulaCena::listByAula((int)$a->id, $idAdmin));
+			}
 			$aulas[] = [
 				'id' => (int)$a->id,
 				'titulo' => $a->titulo,
 				'descricao' => $a->descricao,
 				'ordem' => (int)$a->ordem,
 				'bloqueado' => (int)$a->bloqueado,
+				'tipo_conteudo' => $tipo,
+				'interativa_status' => LmsAula::temColunaInterativa()
+					? (string)($a->interativa_status ?? 'rascunho')
+					: null,
+				'cenas' => $cenas,
 				'videos' => count(LmsVideo::listByAula((int)$a->id, $idAdmin)),
 				'materiais' => count(LmsMaterial::listByAula((int)$a->id, $idAdmin)),
 				'atividades' => count(LmsAtividade::listByAula((int)$a->id, $idAdmin)),
@@ -407,9 +433,19 @@ class EadCursos extends Page {
 			];
 		}
 
+		$bunnySql = LmsVideo::temColunasBunny();
+		$bunnyStream = BunnyStreamHelper::pronto($idAdmin);
+		$bunnyMotivo = null;
+		if (!$bunnySql) {
+			$bunnyMotivo = 'Execute database/lms_videos_bunny.sql no phpMyAdmin.';
+		} elseif (!$bunnyStream) {
+			$bunnyMotivo = PlataformaBunny::get()->streamDiagnostico() ?: 'Bunny Stream incompleto no Master.';
+		}
+
 		return self::json([
 			'success' => true,
-			'bunny_ok' => BunnyStreamHelper::pronto($idAdmin) && LmsVideo::temColunasBunny(),
+			'bunny_ok' => $bunnyStream && $bunnySql,
+			'bunny_motivo' => $bunnyMotivo,
 			'aula' => [
 				'id' => (int)$aula->id,
 				'id_modulo' => (int)$aula->id_modulo,
@@ -476,37 +512,10 @@ class EadCursos extends Page {
 	}
 
 	private static function salvarVideo(array $post): string {
-		$idAdmin = TenantHelper::getIdAdmin();
-		$idAula = (int)($post['id_aula'] ?? 0);
-		$aula = LmsAula::getByIdAdmin($idAula, $idAdmin);
-		if (!$aula) {
-			return self::json(['success' => false, 'message' => 'Aula não encontrada.']);
-		}
-		$url = trim((string)($post['url'] ?? ''));
-		if ($url === '') {
-			return self::json(['success' => false, 'message' => 'URL do vídeo obrigatória.']);
-		}
-		$id = (int)($post['id'] ?? 0);
-		$v = $id > 0 ? LmsVideo::getByIdAdmin($id, $idAdmin) : new LmsVideo();
-		if ($id > 0 && !$v) {
-			return self::json(['success' => false, 'message' => 'Vídeo não encontrado.']);
-		}
-		$provider = (string)($post['provider'] ?? 'youtube');
-		if (!in_array($provider, ['youtube', 'private', 'bunny'], true)) {
-			$provider = 'youtube';
-		}
-		if ($provider === 'bunny') {
-			return self::json(['success' => false, 'message' => 'Use o fluxo de upload Bunny para vídeos protegidos.']);
-		}
-		$v->id_aula = $idAula;
-		$v->id_admin = $idAdmin;
-		$v->titulo = trim((string)($post['titulo'] ?? ''));
-		$v->url = LmsHelper::normalizeVideoUrl($url, $provider);
-		$v->provider = $provider;
-		$v->duracao_min = (int)($post['duracao_min'] ?? 0);
-		$v->ordem = (int)($post['ordem'] ?? 0);
-		$newId = $v->salvar();
-		return self::json(['success' => true, 'message' => 'Vídeo salvo.', 'id' => $newId]);
+		return self::json([
+			'success' => false,
+			'message' => 'YouTube/URL externa não é mais aceito. Envie o vídeo pelo Bunny.',
+		]);
 	}
 
 	private static function excluirVideo(array $post): string {
@@ -529,7 +538,11 @@ class EadCursos extends Page {
 			return self::json(['success' => false, 'message' => 'Execute database/lms_videos_bunny.sql']);
 		}
 		if (!BunnyStreamHelper::pronto($idAdmin)) {
-			return self::json(['success' => false, 'message' => 'Configure Bunny em Configurações → Bunny Stream.']);
+			$motivo = PlataformaBunny::get()->streamDiagnostico() ?: 'Bunny Stream incompleto.';
+			return self::json([
+				'success' => false,
+				'message' => 'Bunny Stream não configurado no Master. '.$motivo,
+			]);
 		}
 		$idAula = (int)($post['id_aula'] ?? 0);
 		$aula = LmsAula::getByIdAdmin($idAula, $idAdmin);
@@ -822,5 +835,43 @@ class EadCursos extends Page {
 		}
 		$rp->excluir();
 		return self::json(['success' => true, 'message' => 'Role play excluído.']);
+	}
+
+	/** One-time token → ASCEND_URL/editor/auth?token=PLAIN */
+	private static function abrirEditor(array $post): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$idUsuario = TenantHelper::getUsuarioId();
+		if ($idAdmin <= 0 || $idUsuario <= 0) {
+			return self::json(['success' => false, 'message' => 'Sessão inválida.']);
+		}
+		$idCurso = !empty($post['id_curso']) ? (int)$post['id_curso'] : null;
+		if ($idCurso !== null && $idCurso > 0) {
+			$curso = LmsCurso::getByIdAdmin($idCurso, $idAdmin);
+			if (!$curso) {
+				return self::json(['success' => false, 'message' => 'Curso não encontrado.']);
+			}
+		} else {
+			$idCurso = null;
+		}
+
+		try {
+			$plain = LmsEditorToken::criar($idAdmin, $idUsuario, $idCurso);
+		} catch (\Throwable $e) {
+			return self::json([
+				'success' => false,
+				'message' => 'Execute o SQL database/lms_aulas_interativas.sql no phpMyAdmin.',
+			]);
+		}
+
+		$base = rtrim((string)(
+			Environment::get('ASCEND_URL')
+			?: getenv('ASCEND_URL')
+			?: 'http://localhost:8080'
+		), '/');
+
+		return self::json([
+			'success' => true,
+			'url' => $base.'/editor/auth?token='.rawurlencode($plain),
+		]);
 	}
 }

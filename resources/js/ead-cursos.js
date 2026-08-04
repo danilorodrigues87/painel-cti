@@ -48,7 +48,10 @@ function carregarListaEad() {
 				'<td>' + (item.aulas || 0) + '</td>' +
 				'<td>' + badgeStatus(item.status) + '</td>' +
 				'<td>' + vit + '</td>' +
-				'<td><a class="btn btn-sm btn-primary" href="' + url_base + 'painel/ead/curso/' + item.id_curso + '">Editar</a></td>' +
+				'<td class="text-nowrap">' +
+				'<a class="btn btn-sm btn-primary me-1" href="' + url_base + 'painel/ead/curso/' + item.id_curso + '">Metadados</a>' +
+				'<button type="button" class="btn btn-sm btn-outline-secondary btn-abrir-editor" data-id="' + item.id_curso + '">Abrir editor</button>' +
+				'</td>' +
 				'</tr>';
 		});
 		$('#ead-tbody').html(html);
@@ -59,6 +62,21 @@ function carregarListaEad() {
 
 $(function () {
 	carregarListaEad();
+	$(document).on('click', '.btn-abrir-editor', function () {
+		var id = $(this).data('id');
+		var $b = $(this).prop('disabled', true);
+		postEad({ acao: 'abrir_editor', id_curso: id }).done(function (res) {
+			if (!res || !res.success || !res.url) {
+				Swal.fire('Erro', (res && res.message) || 'Não foi possível abrir o editor.', 'error');
+				return;
+			}
+			window.open(res.url, '_blank');
+		}).fail(function () {
+			Swal.fire('Erro', 'Falha de rede.', 'error');
+		}).always(function () {
+			$b.prop('disabled', false);
+		});
+	});
 	$('#btn-novo-curso').on('click', function () {
 		Swal.fire({
 			title: 'Novo curso EAD',

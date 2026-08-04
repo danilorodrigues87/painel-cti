@@ -341,10 +341,6 @@ class SystemModules {
 						'link' => URL.'/painel/config/ia'
 					],
 					[
-						'label' => 'Bunny Stream',
-						'link' => URL.'/painel/config/bunny'
-					],
-					[
 						'label' => 'Conexão Meta',
 						'link' => URL.'/painel/config/social'
 					],

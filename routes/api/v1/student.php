@@ -168,6 +168,13 @@ $obRouter->post('/api/v1/student/courses/{courseId}/lessons/{lessonId}/complete'
 	}
 ]);
 
+$obRouter->post('/api/v1/student/courses/{courseId}/lessons/{lessonId}/interactive-progress', [
+	'middlewares' => $studentAuth,
+	function ($request, $courseId, $lessonId) use ($respond) {
+		return $respond(Student\Portal::interactiveProgress($request, $courseId, $lessonId));
+	}
+]);
+
 $obRouter->post('/api/v1/student/study/heartbeat', [
 	'middlewares' => $studentAuth,
 	function ($request) use ($respond) {
@@ -221,6 +228,15 @@ $obRouter->get('/api/v1/student/courses/{courseId}/lessons/{lessonId}/videos/{vi
 	'middlewares' => $studentAuth,
 	function ($request, $courseId, $lessonId, $videoId) use ($respond) {
 		return $respond(Student\Portal::playVideo($request, $courseId, $lessonId, $videoId));
+	}
+]);
+
+// Proxy Bunny Storage (áudio/imagem L-Editor) — token assinado.
+// SEM middleware 'api' (ele força Content-Type JSON e quebra <audio>).
+$obRouter->get('/api/v1/student/bunny-file', [
+	'middlewares' => ['cors-student'],
+	function ($request) {
+		return Student\Media::bunnyFile($request);
 	}
 ]);
 

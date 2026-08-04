@@ -4,6 +4,7 @@ namespace App\Http;
 
 use \Closure;
 use \Exception;
+use \Throwable;
 use \ReflectionFunction;
 use \App\Http\Middleware\Queue as MiddlewareQueue;
 use \App\Http\Middleware\CorsStudent;
@@ -208,7 +209,7 @@ class Router{
 			//RETORNA A EXECUÇÃO DA FILA DE MIDDLEWARES
 			return (new MiddlewareQueue($route['middlewares'],$route['controller'],$args))->next($this->request);
 
-		} catch (Exception $e) {
+		} catch (\Throwable $e) {
 			// 404/405 da API aluno ainda precisam de CORS (middleware não chega a rodar)
 			if (CorsStudent::isStudentApiUri($this->getUri())) {
 				CorsStudent::applyHeaders();
@@ -227,13 +228,12 @@ class Router{
 		switch ($this->contentType) {
 			case 'application/json':
 				return [
-					'erro' => $message
+					'message' => $message,
+					'erro' => $message,
 				];
-				break;
 			
 			default:
 				return $message;
-				break;
 		}
 	}
 

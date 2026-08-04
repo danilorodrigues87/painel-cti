@@ -239,7 +239,6 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 			if (in_array('ead', $slugsEscola, true)
 				&& in_array('Cursos Online', $allPermittedModules, true)) {
 				$temConfigIa = true;
-				$allPermittedModules[] = 'Bunny Stream';
 			}
 			if ($temConfigIa) {
 				$allPermittedModules[] = 'Configurações de IA';

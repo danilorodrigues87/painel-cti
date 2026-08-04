@@ -342,6 +342,78 @@ class Portal {
 		]);
 	}
 
+	/**
+	 * Progresso de aula interativa (cenas).
+	 * Body: { passo, maxPasso?, concluida? }
+	 */
+	public static function interactiveProgress($request, $courseId, $lessonId) {
+		$u = self::user($request);
+		$curso = StudentEntitlement::cursoDoAluno($courseId, (int)$u->id, (int)$u->id_admin, !ctype_digit((string)$courseId));
+		if (!$curso) {
+			return self::err('Curso não encontrado ou sem acesso.', 404);
+		}
+		$aula = self::aulaDoCurso($curso, (int)$lessonId);
+		if (!$aula) {
+			return self::err('Aula não encontrada.', 404);
+		}
+
+		$body = $request->getPostVars() ?: [];
+		if (!is_array($body)) {
+			$body = [];
+		}
+		$passo = (int)($body['passo'] ?? $body['step'] ?? 0);
+		$maxPasso = (int)($body['maxPasso'] ?? $body['max_passo'] ?? $passo);
+		$concluida = !empty($body['concluida']) || !empty($body['completed']) ? 1 : 0;
+
+		try {
+			\App\Model\Entity\LmsAulaInterativaProgresso::upsert(
+				(int)$u->id,
+				(int)$aula->id,
+				$passo,
+				$maxPasso,
+				$concluida
+			);
+		} catch (\Throwable $e) {
+			return self::err('Progresso interativo indisponível neste servidor.', 501);
+		}
+
+		$completePayload = null;
+		if ($concluida) {
+			$completePayload = self::completeLesson($request, $courseId, $lessonId);
+			// Se complete falhar (ex.: agenda), ainda salvamos o progresso interativo
+			$decoded = json_decode($completePayload['json'] ?? '{}', true);
+			if (($completePayload['code'] ?? 200) >= 400) {
+				return self::ok([
+					'ok' => true,
+					'progressSaved' => true,
+					'lessonCompleted' => false,
+					'completeError' => is_array($decoded) ? ($decoded['message'] ?? 'Falha ao concluir aula') : 'Falha ao concluir aula',
+					'passo' => $passo,
+					'maxPasso' => $maxPasso,
+					'concluida' => 1,
+				]);
+			}
+			return self::ok([
+				'ok' => true,
+				'progressSaved' => true,
+				'lessonCompleted' => true,
+				'complete' => is_array($decoded) ? $decoded : null,
+				'passo' => $passo,
+				'maxPasso' => $maxPasso,
+				'concluida' => 1,
+			]);
+		}
+
+		return self::ok([
+			'ok' => true,
+			'progressSaved' => true,
+			'lessonCompleted' => false,
+			'passo' => $passo,
+			'maxPasso' => $maxPasso,
+			'concluida' => 0,
+		]);
+	}
+
 	public static function accessWindow($request) {
 		$u = self::user($request);
 		$idTrilha = LmsAgendaAcessoHelper::idTrilhaAgendaAluno((int)$u->id, (int)$u->id_admin);

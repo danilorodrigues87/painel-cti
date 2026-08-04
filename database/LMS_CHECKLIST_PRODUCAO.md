@@ -28,9 +28,11 @@ Colar no phpMyAdmin **nesta ordem**. Scripts idempotentes parcialmente: se uma c
 | 14 | `database/lms_portal_presenca.sql` | Presença no portal (Alunos online) |
 | 15 | `database/portal_aluno_branding.sql` | Logo/hero do portal (Master branding) |
 | 16 | `database/lms_aula_anotacoes.sql` | Anotações privadas do aluno por aula |
-| 17 | `database/escola_integracoes_bunny.sql` | Credenciais Bunny Stream por escola |
+| 17 | `database/escola_integracoes_bunny.sql` | *(legado)* Colunas Bunny por escola — **não usar**; credenciais agora são globais |
 | 18 | `database/lms_videos_bunny.sql` | Provider `bunny` + status de upload/processamento |
-| 19 | `database/financeiro_acordos.sql` | Extrato consolidado: acordos + `caixa.id_acordo` (renegociação) |
+| 19 | `database/lms_aulas_interativas.sql` | Aulas interativas (L-Editor): `tipo_conteudo`, `lms_aula_cenas`, progresso |
+| 20 | `database/plataforma_bunny.sql` | **Bunny global (Master):** Stream + Storage; `media_url`/`narracao_url` TEXT; `media_bunny_video_id` |
+| 21 | `database/financeiro_acordos.sql` | Extrato consolidado: acordos + `caixa.id_acordo` (renegociação) |
 
 Confirmação rápida:
 
@@ -54,6 +56,9 @@ SHOW TABLES LIKE 'lms_aula_anotacoes';
 SHOW TABLES LIKE 'portal_aluno_branding';
 SHOW COLUMNS FROM escola_integracoes LIKE 'bunny_ativo';
 SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
+SHOW TABLES LIKE 'lms_aula_cenas';
+SHOW TABLES LIKE 'plataforma_bunny';
+SHOW COLUMNS FROM lms_aula_cenas LIKE 'media_bunny_video_id';
 ```
 
 ## 2. Painel CTI (backend)
@@ -112,8 +117,9 @@ npm run build
 - [ ] Tempo de estudo sobe ao deixar o player aberto (heartbeat ~30s)
 - [ ] Comentários na aula: postar / responder / excluir o próprio
 - [ ] Anotações na aula: digitar → “Salvo na nuvem”; reabrir em outro browser mantém o texto
-- [ ] Configurações → Bunny Stream: salvar keys + Testar conexão
-- [ ] Editor EAD: upload Bunny (se ativo) e YouTube URL; player Ascend Bunny sem acelerar/avançar
+- [ ] **Master → Bunny:** salvar Stream + Storage + Testar conexão (conta global)
+- [ ] Editor EAD: upload Bunny (YouTube desativado); player Ascend Bunny sem acelerar/avançar
+- [ ] L-Editor: upload imagem/áudio → Storage CDN; vídeo → Stream; sem data URL com JWT
 - [ ] Busca no Topbar: cursos / aulas / professores (dropdown)
 - [ ] Continuar/Começar: não abre aula bloqueada por sequência
 - [ ] Esqueci senha: recebe e-mail → `/reset-password?token=…` → login

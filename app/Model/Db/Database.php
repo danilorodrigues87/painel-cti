@@ -83,7 +83,7 @@ public function select($where = null, $order = null, $limit = null, $fields = '*
     // DADOS DA QUERY
     $where = is_string($where) && strlen($where) ? 'WHERE ' . $where : '';
     $order = is_string($order) && strlen($order) ? 'ORDER BY ' . $order : '';
-    $limit = is_string($limit) && strlen($limit) ? 'LIMIT ' . $limit : '';
+		$limit = ($limit !== null && $limit !== '') ? 'LIMIT ' . $limit : '';
     $innerJoin = is_string($innerJoin) && strlen($innerJoin) ? $innerJoin : '';
     $group = is_string($group) && strlen($group) ? 'GROUP BY ' . $group : '';
 

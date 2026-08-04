@@ -17,6 +17,7 @@ function toastErr(msg) {
 
 var estadoAula = null;
 var bunnyOk = false;
+var bunnyMotivo = '';
 
 function idCurso() {
 	return parseInt($('#id_curso').val() || '0', 10);
@@ -120,9 +121,17 @@ function listarAulas() {
 		if (!res || !res.success) return;
 		var html = '';
 		(res.aulas || []).forEach(function (a) {
+			var meta = '';
+			if (a.tipo_conteudo === 'interativa') {
+				meta = '<span class="badge bg-primary me-1">Interativa</span>' +
+					'<small class="text-muted">' + (a.cenas || 0) + ' cena(s)' +
+					(a.interativa_status ? ' · ' + a.interativa_status : '') + '</small>';
+			} else {
+				meta = '<small class="text-muted">' + a.videos + ' vídeos · ' + a.materiais + ' mats · ' + a.atividades + ' ativ.</small>';
+			}
 			html += '<button type="button" class="list-group-item list-group-item-action aula-item" data-id="' + a.id + '">' +
 				'<div class="fw-semibold">' + $('<div>').text(a.titulo).html() + '</div>' +
-				'<small class="text-muted">' + a.videos + ' vídeos · ' + a.materiais + ' mats · ' + a.atividades + ' ativ.</small>' +
+				meta +
 				'</button>';
 		});
 		$('#lista-aulas').html(html || '<div class="text-muted small p-2">Nenhuma aula ainda.</div>');
@@ -134,6 +143,7 @@ function abrirAula(id) {
 		if (!res || !res.success) return toastErr(res && res.message);
 		estadoAula = res;
 		bunnyOk = !!res.bunny_ok;
+		bunnyMotivo = res.bunny_motivo || '';
 		$('#aula-placeholder').addClass('d-none');
 		$('#painel-aula').removeClass('d-none');
 		var a = res.aula;
@@ -309,92 +319,52 @@ function abrirDialogoVideo(v) {
 		toastErr('Vídeos Bunny não são editáveis — exclua e envie de novo.');
 		return;
 	}
-	var bunnyOpt = bunnyOk
-		? '<option value="bunny">Bunny (upload protegido)</option>'
-		: '';
+	if (edit && v.provider === 'youtube') {
+		toastErr('YouTube foi desativado. Exclua este vídeo e envie pelo Bunny.');
+		return;
+	}
+	if (!bunnyOk) {
+		Swal.fire({
+			icon: 'warning',
+			title: 'Bunny Stream incompleto',
+			html: (bunnyMotivo
+				? '<p class="mb-2">' + $('<div>').text(bunnyMotivo).html() + '</p>'
+				: '<p class="mb-2">Os vídeos das aulas usam <strong>Bunny Stream</strong> (não o Storage).</p>') +
+				'<p class="mb-0 small text-muted">Configure em <strong>Master → Bunny</strong>: Ativar Stream, Library ID, CDN Hostname, API AccessKey e Token Authentication Key. O badge Stream deve ficar <strong>Pronto</strong>.</p>'
+		});
+		return;
+	}
 	Swal.fire({
-		title: edit ? 'Editar vídeo' : 'Novo vídeo',
+		title: edit ? 'Editar vídeo' : 'Novo vídeo (Bunny)',
 		html:
-			'<select id="sw-v-provider" class="swal2-select">' +
-			'<option value="youtube">YouTube (URL)</option>' +
-			bunnyOpt +
-			'</select>' +
+			'<p class="small text-muted mb-2">Somente upload Bunny (protegido). YouTube não é mais aceito.</p>' +
 			'<input id="sw-v-titulo" class="swal2-input" placeholder="Título">' +
-			'<input id="sw-v-url" class="swal2-input" placeholder="URL YouTube">' +
-			'<input id="sw-v-file" class="swal2-file" type="file" accept="video/mp4,video/webm,video/*" style="display:none">' +
-			'<input id="sw-v-min" class="swal2-input" type="number" placeholder="Minutos" value="0">' +
+			'<input id="sw-v-file" class="swal2-file" type="file" accept="video/mp4,video/webm,video/*">' +
 			'<div id="sw-v-progress" class="small text-muted mt-2" style="display:none"></div>',
 		didOpen: function () {
-			var $prov = $('#sw-v-provider');
-			function syncProv() {
-				var p = $prov.val();
-				if (p === 'bunny') {
-					$('#sw-v-url').hide();
-					$('#sw-v-file').show();
-					$('#sw-v-min').hide();
-				} else {
-					$('#sw-v-url').show();
-					$('#sw-v-file').hide();
-					$('#sw-v-min').show();
-				}
-			}
-			$prov.on('change', syncProv);
 			if (edit) {
-				$prov.val(v.provider === 'bunny' ? 'bunny' : 'youtube').prop('disabled', true);
 				$('#sw-v-titulo').val(v.titulo || '');
-				$('#sw-v-url').val(v.url || '');
-				$('#sw-v-min').val(v.duracao_min || 0);
 			}
-			syncProv();
 		},
 		showCancelButton: true,
-		confirmButtonText: 'Salvar',
+		confirmButtonText: 'Enviar',
 		preConfirm: function () {
-			var provider = ($('#sw-v-provider').val() || 'youtube');
 			var titulo = ($('#sw-v-titulo').val() || '').trim();
-			if (provider === 'bunny') {
-				var fileEl = document.getElementById('sw-v-file');
-				var file = fileEl && fileEl.files && fileEl.files[0];
-				if (!file) {
-					Swal.showValidationMessage('Selecione o arquivo de vídeo.');
-					return false;
-				}
-				if (file.size > 800 * 1024 * 1024) {
-					Swal.showValidationMessage('Arquivo muito grande (máx. ~800 MB neste fluxo).');
-					return false;
-				}
-				return { provider: 'bunny', titulo: titulo, file: file };
-			}
-			var url = ($('#sw-v-url').val() || '').trim();
-			if (!url) {
-				Swal.showValidationMessage('Informe a URL do vídeo.');
+			var fileEl = document.getElementById('sw-v-file');
+			var file = fileEl && fileEl.files && fileEl.files[0];
+			if (!file) {
+				Swal.showValidationMessage('Selecione o arquivo de vídeo.');
 				return false;
 			}
-			return {
-				provider: 'youtube',
-				titulo: titulo,
-				url: url,
-				duracao_min: parseInt($('#sw-v-min').val(), 10) || 0
-			};
+			if (file.size > 800 * 1024 * 1024) {
+				Swal.showValidationMessage('Arquivo muito grande (máx. ~800 MB neste fluxo).');
+				return false;
+			}
+			return { provider: 'bunny', titulo: titulo, file: file };
 		}
 	}).then(function (r) {
 		if (!r.isConfirmed || !r.value) return;
-		if (r.value.provider === 'bunny') {
-			enviarVideoBunny(r.value.titulo, r.value.file);
-			return;
-		}
-		var payload = $.extend({
-			acao: 'salvar_video',
-			id_aula: idAula(),
-			ordem: edit ? (v.ordem || 0) : $('#lista-videos li').length,
-			provider: 'youtube'
-		}, r.value);
-		if (edit) payload.id = v.id;
-		postEad(payload).done(function (res) {
-			if (!res || !res.success) return toastErr(res && res.message);
-			toastOk(res.message);
-			abrirAula(idAula());
-		});
+		enviarVideoBunny(r.value.titulo, r.value.file);
 	});
 }
 

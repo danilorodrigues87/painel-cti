@@ -964,17 +964,17 @@ class PlatformHelpSeed {
 				'cat' => 'configuracoes',
 				'titulo' => 'Bunny Stream (vídeos EAD)',
 				'slug' => 'bunny-stream',
-				'resumo' => 'Biblioteca de vídeo para aulas online.',
+				'resumo' => 'Biblioteca de vídeo para aulas online (conta global).',
 				'ordem' => 30,
 				'corpo' => self::wrap(
-					'O Bunny Stream hospeda os vídeos das aulas EAD.',
+					'O Bunny Stream hospeda os vídeos das aulas EAD (conta única da plataforma). YouTube não é mais aceito.',
 					[
-						'Abra <strong>Configurações → Bunny Stream</strong> (quando liberado).',
-						'Confirme as credenciais conforme orientação do suporte CTI.',
-						'No editor do curso, anexe os vídeos às aulas.',
+						'Peça ao suporte CTI / Master para configurar em <strong>Master → Bunny</strong> (Stream + Storage).',
+						'No editor do curso, anexe os vídeos às aulas pelo Bunny.',
+						'No L-Editor, imagens/áudios vão para Storage; vídeos de cena para Stream.',
 					],
 					'',
-					'Configurações → Bunny Stream'
+					'Master → Bunny'
 				),
 			],
 			[

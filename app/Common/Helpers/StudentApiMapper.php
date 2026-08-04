@@ -6,9 +6,11 @@ use App\Model\Entity\User;
 use App\Model\Entity\LmsCurso;
 use App\Model\Entity\LmsModulo;
 use App\Model\Entity\LmsAula;
+use App\Model\Entity\LmsAulaCena;
 use App\Model\Entity\LmsVideo;
 use App\Model\Entity\LmsMaterial;
 use App\Model\Entity\LmsProgressoAula;
+use App\Model\Entity\LmsAulaInterativaProgresso;
 use App\Model\Entity\LmsAtividade;
 use App\Model\Entity\LmsQuestao;
 use App\Model\Entity\LmsRoleplayCenario;
@@ -224,6 +226,9 @@ class StudentApiMapper {
 				$lessonPayload['cycle'] = $ciclo;
 				$lessonPayload['lockReason'] = $lockReason;
 				$lessonPayload['lockMessage'] = $lockMessage;
+				if (!empty($lessonPayload['contentType']) && $lessonPayload['contentType'] === 'interactive') {
+					$lessonPayload['interactiveProgress'] = self::interactiveProgressPayload($idAluno, (int)$aula->id);
+				}
 				$lessons[] = $lessonPayload;
 
 				$aulaCurriculum = [];
@@ -411,52 +416,57 @@ class StudentApiMapper {
 	}
 
 	public static function lesson(LmsAula $aula, int $moduleId, int $idAdmin, bool $completed, bool $locked): array {
+		$isInteractive = LmsAula::temColunaInterativa()
+			&& (string)($aula->tipo_conteudo ?? 'video') === 'interativa';
+
 		$videos = [];
 		$totalMin = 0;
-		foreach (LmsVideo::listByAula((int)$aula->id, $idAdmin) as $v) {
-			$totalMin += (int)$v->duracao_min;
-			$provider = (string)($v->provider ?: 'youtube');
-			if ($provider === 'bunny') {
-				$status = (string)($v->bunny_status ?? '');
-				if ($status !== 'ready' && !empty($v->bunny_video_id)) {
-					$status = BunnyStreamHelper::sincronizarStatusVideo($v, $idAdmin);
-				}
-				if ($status !== 'ready' || empty($v->bunny_video_id)) {
-					// Expõe status para o portal mostrar "processando" em vez de "sem vídeo"
-					if (!empty($v->bunny_video_id)) {
-						$videos[] = [
-							'id' => (string)$v->id,
-							'title' => (string)($v->titulo ?: 'Vídeo'),
-							'url' => null,
-							'provider' => 'bunny',
-							'bunnyStatus' => $status ?: 'processing',
-							'durationMinutes' => (int)$v->duracao_min,
-							'order' => (int)$v->ordem,
-						];
+		if (!$isInteractive) {
+			foreach (LmsVideo::listByAula((int)$aula->id, $idAdmin) as $v) {
+				$totalMin += (int)$v->duracao_min;
+				$provider = (string)($v->provider ?: 'youtube');
+				if ($provider === 'bunny') {
+					$status = (string)($v->bunny_status ?? '');
+					if ($status !== 'ready' && !empty($v->bunny_video_id)) {
+						$status = BunnyStreamHelper::sincronizarStatusVideo($v, $idAdmin);
 					}
+					if ($status !== 'ready' || empty($v->bunny_video_id)) {
+						// Expõe status para o portal mostrar "processando" em vez de "sem vídeo"
+						if (!empty($v->bunny_video_id)) {
+							$videos[] = [
+								'id' => (string)$v->id,
+								'title' => (string)($v->titulo ?: 'Vídeo'),
+								'url' => null,
+								'provider' => 'bunny',
+								'bunnyStatus' => $status ?: 'processing',
+								'durationMinutes' => (int)$v->duracao_min,
+								'order' => (int)$v->ordem,
+							];
+						}
+						continue;
+					}
+					// URL permanente não é exposta — Ascend chama /play
+					$videos[] = [
+						'id' => (string)$v->id,
+						'title' => (string)($v->titulo ?: 'Vídeo'),
+						'url' => null,
+						'provider' => 'bunny',
+						'bunnyStatus' => 'ready',
+						'durationMinutes' => (int)$v->duracao_min,
+						'order' => (int)$v->ordem,
+					];
 					continue;
 				}
-				// URL permanente não é exposta — Ascend chama /play
+				$url = LmsHelper::normalizeVideoUrl((string)$v->url, $provider);
 				$videos[] = [
 					'id' => (string)$v->id,
 					'title' => (string)($v->titulo ?: 'Vídeo'),
-					'url' => null,
-					'provider' => 'bunny',
-					'bunnyStatus' => 'ready',
+					'url' => $url,
+					'provider' => $provider,
 					'durationMinutes' => (int)$v->duracao_min,
 					'order' => (int)$v->ordem,
 				];
-				continue;
 			}
-			$url = LmsHelper::normalizeVideoUrl((string)$v->url, $provider);
-			$videos[] = [
-				'id' => (string)$v->id,
-				'title' => (string)($v->titulo ?: 'Vídeo'),
-				'url' => $url,
-				'provider' => $provider,
-				'durationMinutes' => (int)$v->duracao_min,
-				'order' => (int)$v->ordem,
-			];
 		}
 		$resources = [];
 		foreach (LmsMaterial::listByAula((int)$aula->id, $idAdmin) as $m) {
@@ -468,7 +478,7 @@ class StudentApiMapper {
 			];
 		}
 		$first = $videos[0] ?? null;
-		return [
+		$out = [
 			'id' => (string)$aula->id,
 			'moduleId' => (string)$moduleId,
 			'title' => (string)$aula->titulo,
@@ -481,6 +491,75 @@ class StudentApiMapper {
 			'locked' => $locked,
 			'order' => (int)$aula->ordem,
 			'resources' => $resources,
+		];
+
+		if ($isInteractive) {
+			$out['contentType'] = 'interactive';
+			$out['voice'] = (string)($aula->voz_narracao ?: 'alloy');
+			$out['interactiveStatus'] = (string)($aula->interativa_status ?? 'rascunho');
+			$out['videos'] = [];
+			$out['videoUrl'] = null;
+			$out['videoProvider'] = null;
+			$scenes = [];
+			// Sempre inclui cenas por enquanto (também rascunho); filtrar por publicada se precisar depois.
+			foreach (LmsAulaCena::listByAula((int)$aula->id, $idAdmin) as $cena) {
+				$interacao = $cena->interacao;
+				if (is_string($interacao)) {
+					$decoded = json_decode($interacao, true);
+					$interacao = is_array($decoded) ? $decoded : [];
+				}
+				if (!is_array($interacao)) {
+					$interacao = [];
+				}
+				$src = (string)$cena->media_url;
+				$bunnyVid = trim((string)($cena->media_bunny_video_id ?? ''));
+				if ($bunnyVid !== '') {
+					$play = \App\Common\Helpers\BunnyStreamHelper::urlPlayback($idAdmin, $bunnyVid, 7200);
+					if (!empty($play['playbackUrl'])) {
+						$src = (string)$play['playbackUrl'];
+					}
+				}
+				$item = [
+					'id' => (string)$cena->id,
+					'media' => [
+						'kind' => (string)($cena->media_kind ?: 'image'),
+						'src' => $src,
+					],
+					'autoAdvance' => !empty($cena->auto_advance),
+					'instruction' => (string)($cena->instrucao ?? ''),
+					'tone' => (string)($cena->tone ?: 'light'),
+					'interaction' => $interacao,
+				];
+				if (!empty($cena->narracao_url)) {
+					$narr = (string)$cena->narracao_url;
+					$item['narrationUrl'] = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($narr);
+				}
+				if ($bunnyVid !== '') {
+					$item['mediaBunnyVideoId'] = $bunnyVid;
+				}
+				$scenes[] = $item;
+			}
+			$out['scenes'] = $scenes;
+		}
+
+		return $out;
+	}
+
+	/** Progresso de cenas da aula interativa (null se sem registro). */
+	public static function interactiveProgressPayload(int $idAluno, int $idAula): ?array {
+		try {
+			$row = LmsAulaInterativaProgresso::get($idAluno, $idAula);
+		} catch (\Throwable $e) {
+			return null;
+		}
+		if (!$row instanceof LmsAulaInterativaProgresso) {
+			return null;
+		}
+		return [
+			'passo' => (int)$row->passo,
+			'maxPasso' => (int)$row->max_passo,
+			'concluida' => (int)$row->concluida === 1,
+			'updatedAt' => $row->atualizado_em ? (string)$row->atualizado_em : null,
 		];
 	}
 

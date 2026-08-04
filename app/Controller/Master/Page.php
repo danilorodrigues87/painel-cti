@@ -29,6 +29,7 @@ class Page {
 			'current_assinaturas'  => $menuAtivo === 'assinaturas' ? 'active' : '',
 			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',
 			'current_portal'       => $menuAtivo === 'portal' ? 'active' : '',
+			'current_bunny'        => $menuAtivo === 'bunny' ? 'active' : '',
 			'current_documentacao' => $menuAtivo === 'documentacao' ? 'active' : '',
 			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',
 		]);

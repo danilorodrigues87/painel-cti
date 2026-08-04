@@ -23,8 +23,12 @@ SHOW TABLES LIKE 'lms_ranking_diario';
 SHOW TABLES LIKE 'lms_portal_presenca';
 SHOW TABLES LIKE 'lms_aula_anotacoes';
 SHOW TABLES LIKE 'portal_aluno_branding';
+SHOW TABLES LIKE 'plataforma_bunny';
+SHOW TABLES LIKE 'lms_aula_cenas';
 SHOW COLUMNS FROM escola_integracoes LIKE 'bunny_ativo';
 SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
+SHOW COLUMNS FROM lms_aula_cenas LIKE 'media_bunny_video_id';
+SHOW COLUMNS FROM lms_aula_cenas LIKE 'narracao_url';
 
 -- 2) Colunas de fluxo de avaliação
 SHOW COLUMNS FROM lms_atividade_tentativas LIKE 'status';

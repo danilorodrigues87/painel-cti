@@ -2,38 +2,42 @@
 
 namespace App\Common\Helpers;
 
-use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\PlataformaBunny;
 
 /**
- * Integração Bunny Stream por escola (keys em escola_integracoes).
+ * Bunny Stream — credenciais globais (Master / plataforma_bunny).
+ * O parâmetro $idAdmin é mantido por compatibilidade nas assinaturas e ignorado.
  */
 class BunnyStreamHelper {
 
 	private const API = 'https://video.bunnycdn.com';
 
-	public static function config(int $idAdmin): ?EscolaIntegracoes {
-		if (!EscolaIntegracoes::temColunasBunny()) {
-			return null;
-		}
-		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		return $cfg instanceof EscolaIntegracoes ? $cfg : null;
+	public static function cfg(): PlataformaBunny {
+		return PlataformaBunny::get();
 	}
 
-	public static function pronto(int $idAdmin): bool {
-		$cfg = self::config($idAdmin);
-		return $cfg !== null && $cfg->temBunnyAtivo();
+	/** @deprecated Use cfg(); mantido para callers antigos */
+	public static function config(int $idAdmin = 0): ?PlataformaBunny {
+		if (!PlataformaBunny::tabelaExiste()) {
+			return null;
+		}
+		return self::cfg();
+	}
+
+	public static function pronto(int $idAdmin = 0): bool {
+		return self::cfg()->streamPronto();
 	}
 
 	/**
 	 * @return array{ok:bool,videoId?:string,message?:string}
 	 */
 	public static function criarVideo(int $idAdmin, string $titulo): array {
-		$cfg = self::config($idAdmin);
-		if (!$cfg || !$cfg->temBunnyAtivo()) {
-			return ['ok' => false, 'message' => 'Bunny não configurado nesta escola.'];
+		$cfg = self::cfg();
+		if (!$cfg->streamPronto()) {
+			return ['ok' => false, 'message' => 'Bunny Stream não configurado no Master.'];
 		}
-		$libraryId = trim((string)$cfg->bunny_library_id);
-		$key = $cfg->getBunnyApiKeyDescriptografada();
+		$libraryId = trim((string)$cfg->stream_library_id);
+		$key = $cfg->getStreamApiKey();
 		if ($libraryId === '' || !$key) {
 			return ['ok' => false, 'message' => 'Library ID ou AccessKey ausentes.'];
 		}
@@ -55,16 +59,15 @@ class BunnyStreamHelper {
 	}
 
 	/**
-	 * Assinatura para upload TUS/PUT (AuthorizationSignature).
-	 * @return array{ok:bool,libraryId?:string,videoId?:string,expires?:int,signature?:string,message?:string}
+	 * @return array{ok:bool,libraryId?:string,videoId?:string,expires?:int,signature?:string,message?:string,putUrl?:string,accessKey?:string,uploadUrl?:string}
 	 */
 	public static function assinaturaUpload(int $idAdmin, string $videoId): array {
-		$cfg = self::config($idAdmin);
-		if (!$cfg || !$cfg->temBunnyAtivo()) {
-			return ['ok' => false, 'message' => 'Bunny não configurado.'];
+		$cfg = self::cfg();
+		if (!$cfg->streamPronto()) {
+			return ['ok' => false, 'message' => 'Bunny Stream não configurado no Master.'];
 		}
-		$libraryId = trim((string)$cfg->bunny_library_id);
-		$key = $cfg->getBunnyApiKeyDescriptografada();
+		$libraryId = trim((string)$cfg->stream_library_id);
+		$key = $cfg->getStreamApiKey();
 		$videoId = trim($videoId);
 		if ($libraryId === '' || !$key || $videoId === '') {
 			return ['ok' => false, 'message' => 'Dados Bunny incompletos.'];
@@ -84,15 +87,53 @@ class BunnyStreamHelper {
 	}
 
 	/**
-	 * @return array{ok:bool,status?:string,length?:int,encodeProgress?:int,message?:string}
+	 * Upload binário server-side (L-Editor / PHP).
+	 * @return array{ok:bool,message?:string}
+	 */
+	public static function uploadArquivo(int $idAdmin, string $videoId, string $tmpPath, string $contentType = 'application/octet-stream'): array {
+		$auth = self::assinaturaUpload($idAdmin, $videoId);
+		if (empty($auth['ok']) || empty($auth['putUrl']) || empty($auth['accessKey'])) {
+			return ['ok' => false, 'message' => $auth['message'] ?? 'Assinatura inválida.'];
+		}
+		$raw = @file_get_contents($tmpPath);
+		if ($raw === false) {
+			return ['ok' => false, 'message' => 'Não foi possível ler o arquivo temporário.'];
+		}
+		$ch = curl_init((string)$auth['putUrl']);
+		curl_setopt_array($ch, [
+			CURLOPT_CUSTOMREQUEST => 'PUT',
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_TIMEOUT => 600,
+			CURLOPT_HTTPHEADER => [
+				'AccessKey: '.$auth['accessKey'],
+				'Content-Type: '.$contentType,
+			],
+			CURLOPT_POSTFIELDS => $raw,
+		]);
+		$resp = curl_exec($ch);
+		$errno = curl_errno($ch);
+		$err = curl_error($ch);
+		$http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		curl_close($ch);
+		if ($errno) {
+			return ['ok' => false, 'message' => 'cURL: '.$err];
+		}
+		if ($http < 200 || $http >= 300) {
+			return ['ok' => false, 'message' => 'Upload Stream HTTP '.$http.($resp ? ': '.substr((string)$resp, 0, 200) : '')];
+		}
+		return ['ok' => true];
+	}
+
+	/**
+	 * @return array{ok:bool,status?:string,length?:int,encodeProgress?:int,message?:string,bunnyCode?:int,durationMinutes?:int,title?:string}
 	 */
 	public static function statusVideo(int $idAdmin, string $videoId): array {
-		$cfg = self::config($idAdmin);
-		if (!$cfg || !$cfg->temBunnyAtivo()) {
-			return ['ok' => false, 'message' => 'Bunny não configurado.'];
+		$cfg = self::cfg();
+		if (!$cfg->streamPronto()) {
+			return ['ok' => false, 'message' => 'Bunny Stream não configurado no Master.'];
 		}
-		$libraryId = trim((string)$cfg->bunny_library_id);
-		$key = $cfg->getBunnyApiKeyDescriptografada();
+		$libraryId = trim((string)$cfg->stream_library_id);
+		$key = $cfg->getStreamApiKey();
 		$videoId = trim($videoId);
 		if ($libraryId === '' || !$key || $videoId === '') {
 			return ['ok' => false, 'message' => 'Dados Bunny incompletos.'];
@@ -106,7 +147,6 @@ class BunnyStreamHelper {
 			return ['ok' => false, 'message' => $res['message'] ?? 'Falha ao consultar status.'];
 		}
 		$data = $res['data'] ?? [];
-		// status: 0=created,1=uploaded,2=processing,3=transcoding,4=finished,5=error,6=uploadFailed
 		$code = (int)($data['status'] ?? 0);
 		$map = [
 			0 => 'uploading',
@@ -117,7 +157,7 @@ class BunnyStreamHelper {
 			5 => 'error',
 			6 => 'error',
 		];
-		$length = (int)($data['length'] ?? 0); // seconds
+		$length = (int)($data['length'] ?? 0);
 		return [
 			'ok' => true,
 			'status' => $map[$code] ?? 'processing',
@@ -133,12 +173,12 @@ class BunnyStreamHelper {
 	 * @return array{ok:bool,message?:string}
 	 */
 	public static function excluirVideo(int $idAdmin, string $videoId): array {
-		$cfg = self::config($idAdmin);
-		if (!$cfg || !$cfg->temBunnyAtivo()) {
-			return ['ok' => true]; // nada a fazer no Bunny
+		$cfg = self::cfg();
+		if (!$cfg->streamPronto()) {
+			return ['ok' => true];
 		}
-		$libraryId = trim((string)$cfg->bunny_library_id);
-		$key = $cfg->getBunnyApiKeyDescriptografada();
+		$libraryId = trim((string)$cfg->stream_library_id);
+		$key = $cfg->getStreamApiKey();
 		$videoId = trim($videoId);
 		if ($libraryId === '' || !$key || $videoId === '') {
 			return ['ok' => true];
@@ -155,39 +195,34 @@ class BunnyStreamHelper {
 	}
 
 	/**
-	 * URL HLS assinada para o player Ascend.
-	 * Usa Token Authentication do Bunny Stream (Security da Library):
-	 * SHA256_HEX(token_security_key + video_id + expires) — NÃO o formato Advanced do Pull Zone.
-	 *
 	 * @return array{ok:bool,playbackUrl?:string,expiresAt?:int,libraryId?:string,videoId?:string,message?:string}
 	 */
 	public static function urlPlayback(int $idAdmin, string $videoId, int $ttlSec = 7200): array {
-		$cfg = self::config($idAdmin);
-		if (!$cfg) {
-			return ['ok' => false, 'message' => 'Integração Bunny indisponível (rode o SQL de colunas Bunny).'];
+		$cfg = self::cfg();
+		if (!PlataformaBunny::tabelaExiste()) {
+			return ['ok' => false, 'message' => 'Execute database/plataforma_bunny.sql no phpMyAdmin.'];
 		}
-		if ((int)($cfg->bunny_ativo ?? 0) !== 1) {
-			return ['ok' => false, 'message' => 'Bunny Stream desativado na escola dona do curso.'];
+		if ((int)($cfg->stream_ativo ?? 0) !== 1) {
+			return ['ok' => false, 'message' => 'Bunny Stream desativado no Master.'];
 		}
 
-		$host = trim((string)($cfg->bunny_cdn_hostname ?? ''));
+		$host = trim((string)($cfg->stream_cdn_hostname ?? ''));
 		$host = preg_replace('#^https?://#i', '', $host);
 		$host = rtrim((string)$host, '/');
-		$libraryId = trim((string)($cfg->bunny_library_id ?? ''));
+		$libraryId = trim((string)($cfg->stream_library_id ?? ''));
 		$videoId = trim($videoId);
-		$tokenKey = $cfg->getBunnyTokenKeyDescriptografada();
+		$tokenKey = $cfg->getStreamTokenKey();
 
 		if ($host === '') {
-			return ['ok' => false, 'message' => 'CDN Hostname Bunny ausente na escola dona do curso.'];
+			return ['ok' => false, 'message' => 'CDN Hostname Bunny ausente (Master → Bunny).'];
 		}
 		if ($videoId === '') {
 			return ['ok' => false, 'message' => 'Video ID Bunny ausente.'];
 		}
-		// Blob criptografado existe mas não abre (APP_KEY diferente / chave corrompida)
-		if (trim((string)($cfg->bunny_token_key ?? '')) !== '' && !$tokenKey) {
+		if (trim((string)($cfg->stream_token_key ?? '')) !== '' && !$tokenKey) {
 			return [
 				'ok' => false,
-				'message' => 'Token Key Bunny não pôde ser lido — cole de novo em Configurações → Bunny Stream e salve.',
+				'message' => 'Token Key Bunny não pôde ser lido — cole de novo no Master → Bunny e salve.',
 			];
 		}
 
@@ -195,7 +230,6 @@ class BunnyStreamHelper {
 		$plainUrl = 'https://'.$host.'/'.$videoId.'/playlist.m3u8';
 
 		if (!$tokenKey) {
-			// Token Auth desligado na library OU chave ainda não salva
 			return [
 				'ok' => true,
 				'playbackUrl' => $plainUrl,
@@ -205,7 +239,6 @@ class BunnyStreamHelper {
 			];
 		}
 
-		// Docs Stream: SHA256_HEX(security_key + video_id + expiration)
 		$token = hash('sha256', $tokenKey.$videoId.(string)$expires);
 		$playbackUrl = $plainUrl.'?token='.$token.'&expires='.$expires;
 
@@ -218,9 +251,6 @@ class BunnyStreamHelper {
 		];
 	}
 
-	/**
-	 * Atualiza bunny_status no banco consultando a API (útil se o poll do editor parou cedo).
-	 */
 	public static function sincronizarStatusVideo(\App\Model\Entity\LmsVideo $v, int $idAdmin): string {
 		if (($v->provider ?? '') !== 'bunny' || empty($v->bunny_video_id)) {
 			return (string)($v->bunny_status ?? '');
@@ -241,18 +271,17 @@ class BunnyStreamHelper {
 	}
 
 	/**
-	 * Testa AccessKey listando a library.
 	 * @return array{ok:bool,message?:string,name?:string}
 	 */
-	public static function testar(int $idAdmin): array {
-		$cfg = self::config($idAdmin);
-		if (!$cfg) {
-			return ['ok' => false, 'message' => 'Execute database/escola_integracoes_bunny.sql'];
+	public static function testar(int $idAdmin = 0): array {
+		if (!PlataformaBunny::tabelaExiste()) {
+			return ['ok' => false, 'message' => 'Execute database/plataforma_bunny.sql'];
 		}
-		$libraryId = trim((string)$cfg->bunny_library_id);
-		$key = $cfg->getBunnyApiKeyDescriptografada();
+		$cfg = self::cfg();
+		$libraryId = trim((string)$cfg->stream_library_id);
+		$key = $cfg->getStreamApiKey();
 		if ($libraryId === '' || !$key) {
-			return ['ok' => false, 'message' => 'Informe Library ID e AccessKey.'];
+			return ['ok' => false, 'message' => 'Informe Library ID e AccessKey no Master.'];
 		}
 		$res = self::request(
 			'GET',
@@ -264,7 +293,7 @@ class BunnyStreamHelper {
 		}
 		return [
 			'ok' => true,
-			'message' => 'Conexão OK.',
+			'message' => 'Conexão Stream OK.',
 			'name' => (string)($res['data']['Name'] ?? $res['data']['name'] ?? 'Library'),
 		];
 	}
