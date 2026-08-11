@@ -163,6 +163,53 @@
   #listar {
     color: #000 !important;
   }
+
+  /* Tema escuro: forçar impressão econômica (fundo branco, texto preto) */
+  html[data-bs-theme="dark"],
+  html[data-bs-theme="dark"] body,
+  html[data-bs-theme="dark"] #layoutSidenav_content,
+  html[data-bs-theme="dark"] #layoutSidenav_content main,
+  html[data-bs-theme="dark"] .card,
+  html[data-bs-theme="dark"] .card-body,
+  html[data-bs-theme="dark"] #listar {
+    background: #fff !important;
+    background-color: #fff !important;
+    color: #000 !important;
+  }
+  html[data-bs-theme="dark"] #listar.text-muted,
+  html[data-bs-theme="dark"] #listar .text-muted,
+  html[data-bs-theme="dark"] #listar .relatorio-financeiro-impressao,
+  html[data-bs-theme="dark"] #listar .relatorio-financeiro-impressao * {
+    color: #000 !important;
+  }
+  html[data-bs-theme="dark"] #listar .relatorio-financeiro-impressao,
+  html[data-bs-theme="dark"] #listar .relatorio-cabecalho,
+  html[data-bs-theme="dark"] #listar .relatorio-rodape,
+  html[data-bs-theme="dark"] #listar .relatorio-financeiro-conteudo,
+  html[data-bs-theme="dark"] #listar .table-responsive {
+    background: #fff !important;
+    background-color: #fff !important;
+    box-shadow: none !important;
+  }
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table,
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table > :not(caption) > * > *,
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table td,
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table th,
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table thead th,
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table tbody td {
+    --bs-table-bg: #fff !important;
+    --bs-table-color: #000 !important;
+    --bs-table-striped-bg: #f5f5f5 !important;
+    --bs-table-striped-color: #000 !important;
+    --bs-table-border-color: #ccc !important;
+    background-color: #fff !important;
+    color: #000 !important;
+    border-color: #ccc !important;
+  }
+  html[data-bs-theme="dark"] .relatorio-financeiro-tabela.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: #f5f5f5 !important;
+    color: #000 !important;
+  }
 }
 </style>
 
@@ -186,4 +233,4 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.js"></script>
 <script src="{{URL}}/resources/js/recibo-acoes.js"></script>
-<script src="{{URL}}/resources/js/relatorio.js?v=20260811g"></script>
+<script src="{{URL}}/resources/js/relatorio.js?v=20260811h"></script>

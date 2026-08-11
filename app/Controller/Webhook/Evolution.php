@@ -6,6 +6,7 @@ use App\Common\Communication\EvolutionApiService;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Communication\WhatsappChatbotService;
 use App\Common\Communication\WhatsappMediaStorage;
+use App\Common\Environment;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
 use App\Model\Entity\WhatsappNumero;
@@ -17,6 +18,7 @@ class Evolution {
 		$esperado = EvolutionApiService::webhookToken($idAdmin);
 
 		if (!hash_equals($esperado, (string)$token)) {
+			self::logWebhook($idAdmin, 'token_invalido', []);
 			return json_encode(['success' => false, 'message' => 'Token inválido.']);
 		}
 
@@ -27,9 +29,14 @@ class Evolution {
 			$payload = is_array($post) ? $post : [];
 		}
 
-		$event = strtolower((string)($payload['event'] ?? $payload['type'] ?? ''));
+		$event = self::normalizarEvento((string)($payload['event'] ?? $payload['type'] ?? ''));
 		$data = $payload['data'] ?? $payload;
 		$instanceName = (string)($payload['instance'] ?? $payload['instanceName'] ?? '');
+
+		self::logWebhook($idAdmin, $event ?: 'sem_evento', [
+			'instance' => $instanceName,
+			'has_data' => is_array($data),
+		]);
 
 		if (strpos($event, 'connection') !== false || isset($data['state']) || isset($data['connection'])) {
 			$estado = EvolutionApiService::extrairEstado(is_array($data) ? $data : $payload);
@@ -42,13 +49,43 @@ class Evolution {
 			WhatsappEscolaService::atualizarStatusConexao($idAdmin, $estado ?: 'unknown', $numero);
 		}
 
-		if (strpos($event, 'messages.upsert') !== false || strpos($event, 'messages_upsert') !== false) {
-			self::processarMensagens($idAdmin, $data, $instanceName);
-		} elseif (isset($data['key']) || isset($data['message'])) {
+		if (self::eventoEhMensagem($event, $data, $payload)) {
 			self::processarMensagens($idAdmin, $data, $instanceName);
 		}
 
 		return json_encode(['success' => true]);
+	}
+
+	private static function normalizarEvento(string $event): string {
+		$event = strtolower(trim($event));
+		return str_replace(['-', ' '], ['.', ''], $event);
+	}
+
+	private static function eventoEhMensagem(string $event, $data, array $payload): bool {
+		if ($event !== '' && strpos($event, 'messages') !== false && strpos($event, 'upsert') !== false) {
+			return true;
+		}
+		if (!is_array($data)) {
+			return false;
+		}
+		if (isset($data['messages']) || isset($data['key']) || isset($data['message'])) {
+			return true;
+		}
+		if (isset($data[0]) && is_array($data[0]) && (isset($data[0]['key']) || isset($data[0]['message']))) {
+			return true;
+		}
+		return isset($payload['key']) || isset($payload['message']);
+	}
+
+	private static function logWebhook(int $idAdmin, string $evento, array $extra = []): void {
+		if (!(bool)Environment::get('EVOLUTION_WEBHOOK_DEBUG', false) && $evento !== 'token_invalido') {
+			return;
+		}
+		$linha = '[EvolutionWebhook] id_admin='.$idAdmin.' event='.$evento;
+		if ($extra) {
+			$linha .= ' '.json_encode($extra, JSON_UNESCAPED_UNICODE);
+		}
+		error_log($linha);
 	}
 
 	private static function processarMensagens(int $idAdmin, $data, string $instanceName = ''): void {
@@ -76,21 +113,14 @@ class Evolution {
 
 			$key = $msg['key'] ?? [];
 			$fromMe = !empty($key['fromMe']);
-			$remoteJid = (string)($key['remoteJid'] ?? $msg['remoteJid'] ?? '');
-			if ($remoteJid === '' || strpos($remoteJid, '@g.us') !== false) {
+			$remoteJid = self::resolverRemoteJid($msg);
+			if ($remoteJid === '') {
 				continue;
 			}
 
-			// LID (privacidade WhatsApp): tenta JID alternativo com telefone real
-			if (strpos($remoteJid, '@lid') !== false) {
-				$alt = (string)($key['remoteJidAlt'] ?? $msg['remoteJidAlt'] ?? $key['participant'] ?? '');
-				if ($alt !== '' && strpos($alt, '@g.us') === false) {
-					$remoteJid = $alt;
-				}
-			}
-
-			$telefone = EvolutionApiService::normalizarTelefone(explode('@', $remoteJid)[0]);
+			$telefone = self::jidParaTelefone($remoteJid);
 			if ($telefone === '') {
+				self::logWebhook($idAdmin, 'telefone_vazio', ['jid' => $remoteJid]);
 				continue;
 			}
 
@@ -142,6 +172,62 @@ class Evolution {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
 			}
 		}
+	}
+
+	/** Resolve JID do contato (inclui fallback para @lid / privacidade). */
+	private static function resolverRemoteJid(array $msg): string {
+		$key = $msg['key'] ?? [];
+		$remoteJid = (string)($key['remoteJid'] ?? $msg['remoteJid'] ?? '');
+		if ($remoteJid === '' || strpos($remoteJid, '@g.us') !== false) {
+			return '';
+		}
+
+		if (strpos($remoteJid, '@s.whatsapp.net') !== false) {
+			return $remoteJid;
+		}
+
+		$candidatos = [
+			$key['remoteJidAlt'] ?? null,
+			$msg['remoteJidAlt'] ?? null,
+			$key['participant'] ?? null,
+			$msg['participant'] ?? null,
+			$key['senderPn'] ?? null,
+			$msg['senderPn'] ?? null,
+			$msg['sender'] ?? null,
+		];
+
+		foreach ($candidatos as $alt) {
+			if (!is_string($alt) || trim($alt) === '') {
+				continue;
+			}
+			$alt = trim($alt);
+			if (strpos($alt, '@g.us') !== false) {
+				continue;
+			}
+			if (strpos($alt, '@') !== false) {
+				return $alt;
+			}
+			$norm = EvolutionApiService::normalizarTelefone($alt);
+			if ($norm !== '') {
+				return $norm.'@s.whatsapp.net';
+			}
+		}
+
+		// Último recurso: mantém @lid para registrar conversa (Evolution pode sincronizar depois)
+		if (strpos($remoteJid, '@lid') !== false) {
+			return $remoteJid;
+		}
+
+		return $remoteJid;
+	}
+
+	private static function jidParaTelefone(string $remoteJid): string {
+		$parte = explode('@', $remoteJid)[0] ?? '';
+		if (strpos($remoteJid, '@lid') !== false) {
+			$digitos = preg_replace('/\D+/', '', $parte) ?? '';
+			return $digitos !== '' ? ('lid:'.$digitos) : '';
+		}
+		return EvolutionApiService::normalizarTelefone($parte);
 	}
 
 	/** Normaliza payload Evolution (array, objeto único ou data.messages). */

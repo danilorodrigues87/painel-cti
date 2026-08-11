@@ -195,10 +195,8 @@ function preencherWhatsapp(w, opts){
 	if(w.erro && !(waPareando && String(w.status || '') === 'not_created')){
 		msgs.push(w.erro);
 	}
-	if(msgs.length){
-		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join('<br>'));
-	} else {
-		$('#alert-whatsapp-sql').addClass('d-none').empty();
+	if (w.conectado && w.webhook_ok === false) {
+		msgs.push('Webhook não configurado na Evolution — mensagens de clientes podem não chegar. Clique em “Conectar / QR” ou “Atualizar status”.');
 	}
 
 	atualizarBadgeWa(w);
@@ -218,7 +216,6 @@ function preencherWhatsapp(w, opts){
 	if(w.grupo_delay_ok === false){
 		$('#whatsapp_grupo_delay_minutos').prop('disabled', true);
 		msgs.push('Para intervalo de grupos, execute o SQL da coluna whatsapp_grupo_delay_segundos.');
-		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join('<br>'));
 	} else {
 		$('#whatsapp_grupo_delay_minutos').prop('disabled', false);
 	}
@@ -230,7 +227,12 @@ function preencherWhatsapp(w, opts){
 	}
 	if(!w.horario_ok){
 		msgs.push('Para horário de expediente, execute o SQL das colunas whatsapp_horario_* (veja checklist).');
+	}
+
+	if(msgs.length){
 		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join('<br>'));
+	} else {
+		$('#alert-whatsapp-sql').addClass('d-none').empty();
 	}
 
 	// Só altera o QR se a resposta trouxe um código novo (status sempre manda null)
@@ -370,21 +372,32 @@ function whatsappTestar(){
 function whatsappDesconectar(){
 	Swal.fire({
 		title: 'Desconectar WhatsApp?',
-		html: 'Desconecta a sessão do aparelho.<br><small class="text-muted">Para trocar de número com certeza, use o botão <strong>Trocar número</strong>.</small>',
+		html: 'Escolha como desconectar:<br>'
+			+ '<small class="text-muted"><strong>Só desconectar</strong> — encerra a sessão no aparelho.<br>'
+			+ '<strong>Remover instância</strong> — apaga na Evolution (recomendado se não conseguir reconectar).</small>',
 		icon: 'warning',
+		showDenyButton: true,
 		showCancelButton: true,
 		confirmButtonText: 'Só desconectar',
+		denyButtonText: 'Remover instância',
 		cancelButtonText: 'Cancelar'
 	}).then(function(r){
-		if(!r.isConfirmed) return;
-		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_desconectar', apagar_instancia: 0 }, function(res){
+		if (r.isDismissed) return;
+		var apagar = r.isDenied ? 1 : 0;
+		$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_desconectar', apagar_instancia: apagar }, function(res){
 			if(!res || !res.success){
-				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha.', 'error');
+				Swal.fire({
+					title: 'Erro',
+					html: (res && res.message) ? res.message : 'Falha ao desconectar.',
+					icon: 'error',
+					footer: apagar ? '' : 'Tente “Remover instância” ou “Trocar número”.'
+				});
 				return;
 			}
-			mostrarQr(null);
+			pararPareamentoWa();
+			mostrarQr(null, false);
 			whatsappStatus();
-			Swal.fire('OK', res.message, 'success');
+			Swal.fire(apagar ? 'Removido' : 'OK', res.message, apagar ? 'success' : (res.warning ? 'warning' : 'success'));
 		}, 'json');
 	});
 }

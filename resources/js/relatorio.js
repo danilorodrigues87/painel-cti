@@ -79,11 +79,27 @@ function listar(filtro=null,page=1) {
 })
 }
 
+/** Força fundo branco e texto preto no clone (ignora tema escuro do painel). */
+function aplicarCoresClarasPdf(root) {
+    root.querySelectorAll('*').forEach(function (el) {
+        if (el.tagName === 'IMG') return;
+        el.style.setProperty('color', '#000', 'important');
+        el.style.setProperty('background-color', '#fff', 'important');
+        el.style.setProperty('background', '#fff', 'important');
+        el.style.setProperty('border-color', '#ccc', 'important');
+        el.style.setProperty('box-shadow', 'none', 'important');
+    });
+    root.querySelectorAll('.table-striped tbody tr:nth-child(odd) td, .table-striped tbody tr:nth-child(odd) th').forEach(function (el) {
+        el.style.setProperty('background-color', '#f5f5f5', 'important');
+        el.style.setProperty('color', '#000', 'important');
+    });
+}
+
 /** Clone pronto para PDF: fundo branco, sem botões, cabeçalho/rodapé visíveis. */
 function prepararRelatorioParaImpressao(node) {
     var clone = node.cloneNode(true);
 
-    clone.querySelectorAll('.relatorio-acoes, .no-print, .d-print-none, .btn-group, button, .btn').forEach(function (el) {
+    clone.querySelectorAll('.relatorio-acoes, .no-print, .d-print-none, .btn-group, button, .btn, script').forEach(function (el) {
         el.remove();
     });
 
@@ -91,21 +107,7 @@ function prepararRelatorioParaImpressao(node) {
         el.style.display = 'flex';
     });
 
-    clone.style.background = '#fff';
-    clone.style.color = '#000';
-
-    clone.querySelectorAll('.relatorio-financeiro-tabela, table, thead, tbody, tr, th, td').forEach(function (el) {
-        el.style.background = '#fff';
-        el.style.backgroundColor = '#fff';
-        el.style.color = '#000';
-        el.style.borderColor = '#ccc';
-    });
-
-    clone.querySelectorAll('.table-striped tbody tr:nth-child(odd) td').forEach(function (el) {
-        el.style.background = '#f5f5f5';
-        el.style.backgroundColor = '#f5f5f5';
-        el.style.color = '#000';
-    });
+    aplicarCoresClarasPdf(clone);
 
     return clone;
 }
@@ -118,10 +120,23 @@ function gerarPdf() {
     var conteudoClone = prepararRelatorioParaImpressao(conteudoCompleto);
 
     var wrapper = document.createElement("div");
+    wrapper.className = 'relatorio-pdf-export';
     wrapper.style.background = '#fff';
     wrapper.style.color = '#000';
     wrapper.style.padding = '8px';
+
+    var stylePdf = document.createElement('style');
+    stylePdf.textContent =
+        '.relatorio-pdf-export, .relatorio-pdf-export * {' +
+        'color: #000 !important; background: #fff !important; background-color: #fff !important;' +
+        'border-color: #ccc !important; box-shadow: none !important;' +
+        '}' +
+        '.relatorio-pdf-export .table-striped > tbody > tr:nth-of-type(odd) > * {' +
+        'background-color: #f5f5f5 !important; color: #000 !important;' +
+        '}';
+    wrapper.appendChild(stylePdf);
     wrapper.appendChild(conteudoClone);
+    aplicarCoresClarasPdf(wrapper);
 
     var opt = {
         margin: [8, 8, 8, 8],

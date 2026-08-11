@@ -180,9 +180,34 @@ class EvolutionApiService {
 	}
 
 	public function setWebhook(string $instance, string $webhookUrl): ?array {
-		return $this->request('POST', '/webhook/set/'.rawurlencode($instance), [
+		$res = $this->request('POST', '/webhook/set/'.rawurlencode($instance), [
 			'webhook' => self::payloadWebhook($webhookUrl),
 		]);
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+
+		// Evolution v2 — payload alternativo
+		return $this->request('POST', '/webhook/set/'.rawurlencode($instance), [
+			'enabled'  => true,
+			'url'      => $webhookUrl,
+			'webhookByEvents' => false,
+			'webhookBase64'   => true,
+			'events'   => [
+				'MESSAGES_UPSERT',
+				'CONNECTION_UPDATE',
+				'QRCODE_UPDATED',
+				'SEND_MESSAGE',
+			],
+		]);
+	}
+
+	public function getWebhook(string $instance): ?array {
+		$res = $this->request('GET', '/webhook/find/'.rawurlencode($instance));
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+		return $this->request('GET', '/webhook/'.rawurlencode($instance));
 	}
 
 	private static function payloadWebhook(string $webhookUrl): array {
@@ -425,7 +450,23 @@ class EvolutionApiService {
 	}
 
 	public function deleteInstance(string $instance): ?array {
-		return $this->request('DELETE', '/instance/delete/'.rawurlencode($instance));
+		$tentativas = [
+			['DELETE', '/instance/delete/'.rawurlencode($instance), null],
+			['DELETE', '/instance/'.rawurlencode($instance), null],
+			['POST', '/instance/delete', ['instanceName' => $instance]],
+		];
+
+		$ultimo = null;
+		foreach ($tentativas as [$method, $path, $body]) {
+			$ultimo = $body !== null
+				? $this->request($method, $path, $body)
+				: $this->request($method, $path);
+			if ($this->lastHttpCode < 400 || $this->lastHttpCode === 404) {
+				return $ultimo;
+			}
+		}
+
+		return $ultimo;
 	}
 
 	/**
