@@ -29,6 +29,7 @@ SHOW COLUMNS FROM escola_integracoes LIKE 'bunny_ativo';
 SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
 SHOW COLUMNS FROM lms_aula_cenas LIKE 'media_bunny_video_id';
 SHOW COLUMNS FROM lms_aula_cenas LIKE 'narracao_url';
+SHOW COLUMNS FROM lms_aula_cenas LIKE 'ocultar_instrucao';
 
 -- 2) Colunas de fluxo de avaliação
 SHOW COLUMNS FROM lms_atividade_tentativas LIKE 'status';

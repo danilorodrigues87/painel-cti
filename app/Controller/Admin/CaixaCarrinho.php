@@ -343,6 +343,7 @@ class CaixaCarrinho extends Page{
 		);
 
 		$totalCalculado = 0;
+		$idsPagos = [];
 
 		while ($obItem = $results->fetchObject(EntityCaixaCarrinho::class)) {
 
@@ -381,6 +382,7 @@ class CaixaCarrinho extends Page{
 				$obUpdate->tipo_pagamento = $tipo_pagamento;
 				$obUpdate->status         = FinanceiroAlunoHelper::STATUS_PAGO;
 				$obUpdate->atualizar();
+				$idsPagos[] = (int)$obCaixa->id;
 
 			} else {
 
@@ -404,6 +406,9 @@ class CaixaCarrinho extends Page{
 				$obCaixa->nosso_numero   = '';
 				$obCaixa->status         = FinanceiroAlunoHelper::STATUS_PAGO;
 				$obCaixa->lancarMovimentacao();
+				if (!empty($obCaixa->id)) {
+					$idsPagos[] = (int)$obCaixa->id;
+				}
 			}
 		}
 
@@ -418,6 +423,7 @@ class CaixaCarrinho extends Page{
 		$resposta['sucesso'] = true;
 		$resposta['total']   = NumeroHelper::moedaBr($totalCalculado);
 		$resposta['filtro']  = 'hoje';
+		$resposta['recibo_ids'] = $idsPagos;
 
 		return json_encode($resposta);
 	}

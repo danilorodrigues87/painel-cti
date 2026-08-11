@@ -210,7 +210,8 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 #### Campanhas
 - Tabelas: `campanhas`, `campanha_fila`
 - UI: `/painel/campanhas`
-- Worker: `worker/campanhas.php` + botão “Processar fila”
+- Worker: `worker/campanhas.php` **ou** HTTP `GET/POST /cron/campanhas?token={SYSTEM_TOKEN}` (HostGator — não depende de login)
+- Fallback com painel aberto: `campanha-heartbeat.js` + botão “Processar fila”
 - Segmentos (`CampanhaSegmentoHelper`): matriculados, ex-alunos, aniversariantes do mês, leads, inadimplentes
 - Variáveis: `{nome}`, `{email}`, `{curso}`, `{escola}`
 
@@ -699,8 +700,11 @@ Detalhe: `database/LMS_CHECKLIST_PRODUCAO.md`
 ## 10. Workers e operação
 
 ```bash
-# Fila de campanhas (produção: cron * * * * *)
+# Fila de campanhas (produção: cron * * * * *  OU  /cron/campanhas?token=SYSTEM_TOKEN)
 php worker/campanhas.php [id_admin] [limite]
+
+# Social FB/IG (produção: */5  OU  /cron/social?token=SYSTEM_TOKEN)
+php worker/social.php [id_admin] [limite]
 
 # Cobrança diária mensalidades alunos (produção: 0 8 * * *)
 php worker/cobranca.php [id_admin]

@@ -33,6 +33,7 @@ Colar no phpMyAdmin **nesta ordem**. Scripts idempotentes parcialmente: se uma c
 | 19 | `database/lms_aulas_interativas.sql` | Aulas interativas (L-Editor): `tipo_conteudo`, `lms_aula_cenas`, progresso |
 | 20 | `database/plataforma_bunny.sql` | **Bunny global (Master):** Stream + Storage; `media_url`/`narracao_url` TEXT; `media_bunny_video_id` |
 | 21 | `database/financeiro_acordos.sql` | Extrato consolidado: acordos + `caixa.id_acordo` (renegociação) |
+| 22 | `database/lms_ocultar_instrucao.sql` | Coluna `lms_aula_cenas.ocultar_instrucao` (esconder InstructionBox) |
 
 Confirmação rápida:
 
@@ -59,6 +60,7 @@ SHOW COLUMNS FROM lms_videos LIKE 'bunny_video_id';
 SHOW TABLES LIKE 'lms_aula_cenas';
 SHOW TABLES LIKE 'plataforma_bunny';
 SHOW COLUMNS FROM lms_aula_cenas LIKE 'media_bunny_video_id';
+SHOW COLUMNS FROM lms_aula_cenas LIKE 'ocultar_instrucao';
 ```
 
 ## 2. Painel CTI (backend)

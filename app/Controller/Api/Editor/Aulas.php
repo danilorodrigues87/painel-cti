@@ -161,6 +161,7 @@ class Aulas {
 				],
 				'autoAdvance' => !empty($cena->auto_advance),
 				'instruction' => (string)($cena->instrucao ?? ''),
+				'hideInstructionBox' => LmsAulaCena::temColunaOcultarInstrucao() && !empty($cena->ocultar_instrucao),
 				'tone' => (string)($cena->tone ?: 'light'),
 				'interaction' => $interacao,
 			];
@@ -272,6 +273,7 @@ class Aulas {
 				'media_url' => $src,
 				'auto_advance' => !empty($sc['autoAdvance'] ?? $sc['auto_advance'] ?? false),
 				'instrucao' => (string)($sc['instruction'] ?? $sc['instrucao'] ?? ''),
+				'ocultar_instrucao' => !empty($sc['hideInstructionBox'] ?? $sc['ocultar_instrucao'] ?? false),
 				'tone' => (string)($sc['tone'] ?? 'light'),
 				'interacao' => $interacao,
 				'narracao_url' => $narracao,

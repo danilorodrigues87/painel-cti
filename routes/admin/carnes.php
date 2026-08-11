@@ -70,6 +70,16 @@ $obRouter->post('/painel/carnes/save',[
 
 
 
+//ROTA COMPROVANTE EM LOTE (carrinho)
+$obRouter->get('/painel/carnes/recibo-lote',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\Carnes::reciboLote($request));
+	}
+]);
+
 //ROTA VER DETALHES DO TITULO
 $obRouter->get('/painel/carnes/recibo/{id}',[
 	'middlewares' => [

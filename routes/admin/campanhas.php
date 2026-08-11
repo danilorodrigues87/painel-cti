@@ -16,3 +16,15 @@ $obRouter->post('/painel/campanhas',[
 		return new Response(200, Admin\Campanhas::getInfo($request));
 	}
 ]);
+
+// Cron HTTP do worker de campanhas (token = SYSTEM_TOKEN do .env)
+$obRouter->get('/cron/campanhas', [
+	function ($request) {
+		return new Response(200, \App\Controller\Cron\Campanhas::run($request), 'application/json');
+	}
+]);
+$obRouter->post('/cron/campanhas', [
+	function ($request) {
+		return new Response(200, \App\Controller\Cron\Campanhas::run($request), 'application/json');
+	}
+]);

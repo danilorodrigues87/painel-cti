@@ -586,6 +586,148 @@
     return $content;
 }
 
+/**
+ * Comprovante de várias baixas do carrinho (ids=1,2,3).
+ */
+public static function reciboLote($request, $larguraPapel = '58mm') {
+	$id_admin = parent::getIdAdminInt();
+	$q = $request->getQueryParams() ?: [];
+	$raw = (string)($q['ids'] ?? '');
+	$ids = [];
+	foreach (preg_split('/[,\s]+/', $raw) as $p) {
+		$id = (int)$p;
+		if ($id > 0 && TenantHelper::pertenceCaixa($id, $id_admin)) {
+			$ids[$id] = $id;
+		}
+	}
+	$ids = array_values($ids);
+	if (!$ids) {
+		return 'Nenhum título válido para impressão.';
+	}
+	if (count($ids) === 1) {
+		return self::recibo($request, $ids[0], $larguraPapel);
+	}
+
+	$rows = [];
+	$total = 0.0;
+	$tipoPagamento = '';
+	$dataPagamento = '';
+	foreach ($ids as $id) {
+		$ob = Caixa::getCaixaById($id);
+		if (!$ob) {
+			continue;
+		}
+		$dados = (array)$ob;
+		$valor = (float)($dados['valor_pago'] ?? 0);
+		$total += $valor;
+		if ($tipoPagamento === '' && !empty($dados['tipo_pagamento'])) {
+			$tipoPagamento = (string)$dados['tipo_pagamento'];
+		}
+		if ($dataPagamento === '' && !empty($dados['data_pagamento'])) {
+			$dataPagamento = (string)$dados['data_pagamento'];
+		}
+		$desc = trim((string)($dados['descricao'] ?? 'Item'));
+		if ($desc === '') {
+			$desc = 'Mensalidade';
+		}
+		$rows[] = [
+			'id' => (int)$dados['id'],
+			'desc' => mb_strtoupper($desc),
+			'valor' => $valor,
+		];
+	}
+	if (!$rows) {
+		return 'Nenhum título válido para impressão.';
+	}
+
+	$userLogedData = SessionUser::getUserLogedData();
+	$escola = $userLogedData['escola'] ?? [];
+	$logoUrl = htmlspecialchars(BrandingHelper::urlLogoEscola($escola['logo'] ?? null), ENT_QUOTES, 'UTF-8');
+	$nomeEscola = htmlspecialchars((string)($escola['nome'] ?? 'Escola'), ENT_QUOTES, 'UTF-8');
+	$cnpjEscola = htmlspecialchars((string)($escola['cpf_cnpj'] ?? ''), ENT_QUOTES, 'UTF-8');
+	$siteEscola = trim((string)($escola['site'] ?? ''));
+	if ($siteEscola === '') {
+		$siteEscola = 'www.ctieducacional.com.br';
+	}
+	$siteEscola = htmlspecialchars($siteEscola, ENT_QUOTES, 'UTF-8');
+
+	$linhas = '';
+	foreach ($rows as $r) {
+		$linhas .= '
+                <tr>
+                    <td>'.htmlspecialchars(mb_substr($r['desc'], 0, 40), ENT_QUOTES, 'UTF-8').'</td>
+                    <td class="right">R$ '.NumeroHelper::moedaBr($r['valor']).'</td>
+                </tr>';
+	}
+	$idsLabel = htmlspecialchars(implode(', ', array_column($rows, 'id')), ENT_QUOTES, 'UTF-8');
+
+	$reciboHtml = '
+    <style>
+    @page { size: 58mm auto; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; font-size: 11px; color: #000; }
+    body { width: 48mm; margin: 0; padding: 0; overflow: hidden; }
+    .center { text-align: center; width: 100%; }
+    .right { text-align: right; }
+    .line { border-top: 1px dashed #000; margin: 4px 0; width: 100%; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    td { padding: 1px 0; word-wrap: break-word; }
+    .small { font-size: 10px; }
+    strong { font-weight: bold; }
+    </style>
+    <body>
+        <div class="center">
+            <img src="'.$logoUrl.'" alt="" style="max-width:42mm;max-height:18mm;object-fit:contain;"><br>
+            <strong>'.$nomeEscola.'</strong><br>
+            '.($cnpjEscola !== '' ? 'CNPJ: '.$cnpjEscola : '').'
+        </div>
+        <div class="line"></div>
+        <div>
+            Recibos: <strong>'.$idsLabel.'</strong><br>
+            Data: '.DateTimeHelper::databr($dataPagamento).'<br>
+            Hora: '.DateTimeHelper::extrairHorario($dataPagamento).'
+        </div>
+        <div class="line"></div>
+        <table>
+            <thead>
+                <tr>
+                    <th align="left">Item</th>
+                    <th align="right">Valor</th>
+                </tr>
+            </thead>
+            <tbody>'.$linhas.'
+            </tbody>
+        </table>
+        <div class="line"></div>
+        <table>
+            <tr>
+                <td><strong>Total</strong></td>
+                <td class="right"><strong>R$ '.NumeroHelper::moedaBr($total).'</strong></td>
+            </tr>
+            <tr>
+                <td class="small">Forma de Pgto:</td>
+                <td class="right small">'.htmlspecialchars($tipoPagamento, ENT_QUOTES, 'UTF-8').'</td>
+            </tr>
+        </table>
+        <div class="line"></div>
+        <div class="small center">
+            Referente a baixa de mensalidade(s).<br>
+            Documento sem valor fiscal.
+        </div>
+        <div class="line"></div>
+        <div class="center small">
+            Obrigado pela preferência!<br>
+            <strong>'.$siteEscola.'</strong>
+        </div>
+        <br>
+        <div class="center">.</div>
+    </body>';
+
+	return View::render('admin/modules/carnes/recibo', [
+		'title' => 'Comprovante de pagamento',
+		'show-recibo' => $reciboHtml,
+	]);
+}
+
 
 public static function registrarPagamento($request){
 

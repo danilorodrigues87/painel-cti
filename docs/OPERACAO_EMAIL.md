@@ -65,6 +65,27 @@ Reinicie Apache após alterar `.env` (XAMPP: Stop/Start Apache).
 
 ## E) Cron / Agendador
 
+### HostGator / cPanel (produção — recomendado)
+
+No **Cron Jobs** do cPanel, use URL HTTP com `SYSTEM_TOKEN` do `.env` (não depende de login no painel):
+
+```cron
+# Campanhas (e-mail + WhatsApp) — a cada minuto
+* * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+
+# Social (Facebook/Instagram) — a cada 5 minutos
+*/5 * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/social?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+```
+
+Alternativa CLI (se o hosting permitir `php` no cron):
+
+```cron
+* * * * * /usr/bin/php /home/USUARIO/painel-cti/worker/campanhas.php >> /home/USUARIO/logs/cti-campanhas.log 2>&1
+*/5 * * * * /usr/bin/php /home/USUARIO/painel-cti/worker/social.php >> /home/USUARIO/logs/cti-social.log 2>&1
+```
+
+Sem esses crons, a fila só anda com o painel aberto (`campanha-heartbeat.js`) ou com a agenda social aberta.
+
 ### Linux (produção)
 
 ```cron

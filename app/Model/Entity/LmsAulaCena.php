@@ -15,6 +15,7 @@ class LmsAulaCena extends LmsBase {
 	public $media_bunny_video_id;
 	public $auto_advance = 0;
 	public $instrucao;
+	public $ocultar_instrucao = 0;
 	public $tone = 'light';
 	public $interacao;
 	public $narracao_url;
@@ -48,6 +49,21 @@ class LmsAulaCena extends LmsBase {
 		try {
 			$db = new Database();
 			$stmt = $db->execute("SHOW COLUMNS FROM lms_aula_cenas LIKE 'media_bunny_video_id'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaOcultarInstrucao(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM lms_aula_cenas LIKE 'ocultar_instrucao'");
 			$ok = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$ok = false;
@@ -137,6 +153,9 @@ class LmsAulaCena extends LmsBase {
 						return $t !== '' ? $t : null;
 					})($scene['narracao_url'] ?? null),
 				];
+				if (self::temColunaOcultarInstrucao()) {
+					$row['ocultar_instrucao'] = !empty($scene['ocultar_instrucao']) ? 1 : 0;
+				}
 				if (self::temColunaBunnyVideoId()) {
 					$vid = trim((string)($scene['media_bunny_video_id'] ?? ''));
 					$row['media_bunny_video_id'] = $vid !== '' ? $vid : null;

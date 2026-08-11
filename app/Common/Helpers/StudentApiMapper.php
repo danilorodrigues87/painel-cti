@@ -527,6 +527,7 @@ class StudentApiMapper {
 					],
 					'autoAdvance' => !empty($cena->auto_advance),
 					'instruction' => (string)($cena->instrucao ?? ''),
+					'hideInstructionBox' => LmsAulaCena::temColunaOcultarInstrucao() && !empty($cena->ocultar_instrucao),
 					'tone' => (string)($cena->tone ?: 'light'),
 					'interaction' => $interacao,
 				];

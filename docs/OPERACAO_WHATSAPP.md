@@ -60,3 +60,13 @@ Tabela `whatsapp_numeros` já existe; hoje sincroniza 1 registro *Principal* ao 
 - Áudio: microfone (grava e envia) ou escolha de arquivo se o navegador bloquear o mic.
 - Recebimento: webhook com `base64=true`; arquivos em `uploads/whatsapp/{id_admin}/...`.
 - Após atualizar o código, clique **Conectar / QR** uma vez em Comunicação para reaplicar o webhook com base64.
+
+## Cron de campanhas WhatsApp (produção)
+
+Campanhas WA usam a mesma fila de e-mail. Com o painel fechado, configure:
+
+```cron
+* * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+```
+
+Detalhes em `docs/OPERACAO_EMAIL.md` (seção Cron / HostGator).

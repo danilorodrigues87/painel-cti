@@ -159,10 +159,21 @@ $(document).on("submit", "#form-carrinho", function(event){
 				$("#response-carrinho").html('<div class="alert alert-danger">'+response.erro+'</div>');
 			} else {
 				fecharModalCarrinho();
+				var ids = Array.isArray(response.recibo_ids) ? response.recibo_ids.filter(function(id){ return id > 0; }) : [];
+				var reciboUrl = ids.length
+					? (url_base + 'painel/carnes/recibo-lote?ids=' + ids.join(','))
+					: '';
 				Swal.fire({
 					title: "Pagamento registrado!",
 					text: "Total recebido: R$ "+response.total,
-					icon: "success"
+					icon: "success",
+					showCancelButton: !!reciboUrl,
+					confirmButtonText: reciboUrl ? "Imprimir comprovante" : "OK",
+					cancelButtonText: "Fechar"
+				}).then(function(result){
+					if(reciboUrl && (result.isConfirmed || result.value)){
+						window.open(reciboUrl, '_blank');
+					}
 				});
 				atualizarWidgetCarrinho();
 				// Recarrega a listagem atual de carnês
