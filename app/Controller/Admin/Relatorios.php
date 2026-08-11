@@ -9,6 +9,8 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\FinanceiroAlunoHelper;
 use \App\Common\Helpers\MatriculaStatusHelper;
+use \App\Common\Helpers\BrandingHelper;
+use \App\Session\User\Login as SessionUser;
 
 class Relatorios extends Page{
 
@@ -52,7 +54,92 @@ class Relatorios extends Page{
 
     // Retorna o nome tratado
     return $primeiroNome . ' ' . $sobrenome;
-}
+  }
+
+  /** Cidade/UF legível a partir dos dados da escola na sessão. */
+  private static function cidadeEscolaLinha(array $escola): string {
+    $cidadeRaw = trim((string)($escola['cidade'] ?? ''));
+    $estadoRaw = trim((string)($escola['estado'] ?? ''));
+    if ($cidadeRaw === '' && $estadoRaw === '') {
+      return '';
+    }
+    if (ctype_digit($cidadeRaw) || ctype_digit($estadoRaw)) {
+      try {
+        $cid = ctype_digit($cidadeRaw)
+          ? \App\Model\Entity\EstadoCidades::getCidades('id = '.(int)$cidadeRaw)->fetchObject()
+          : null;
+        $est = ctype_digit($estadoRaw)
+          ? \App\Model\Entity\EstadoCidades::getEstados('id = '.(int)$estadoRaw)->fetchObject()
+          : null;
+        $parts = [];
+        if ($cid && !empty($cid->nome)) {
+          $parts[] = $cid->nome;
+        } elseif ($cidadeRaw !== '' && !ctype_digit($cidadeRaw)) {
+          $parts[] = $cidadeRaw;
+        }
+        if ($est && !empty($est->sigla)) {
+          $parts[] = $est->sigla;
+        } elseif ($estadoRaw !== '' && !ctype_digit($estadoRaw)) {
+          $parts[] = $estadoRaw;
+        }
+        return implode(' - ', $parts);
+      } catch (\Throwable $e) {
+        return '';
+      }
+    }
+    return trim($cidadeRaw.($estadoRaw !== '' ? ' - '.$estadoRaw : ''));
+  }
+
+  /**
+   * Envelope do relatório: cabeçalho (escola) + conteúdo + rodapé.
+   */
+  private static function montarEnvelopeRelatorio(string $conteudo, array $meta): string {
+    $escola = $meta['escola'] ?? [];
+    $logoUrl = htmlspecialchars(BrandingHelper::urlLogoEscola($escola['logo'] ?? null), ENT_QUOTES, 'UTF-8');
+    $nomeEscola = htmlspecialchars((string)($escola['nome'] ?? 'Escola'), ENT_QUOTES, 'UTF-8');
+    $cnpjEscola = htmlspecialchars((string)($escola['cpf_cnpj'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $siteEscola = trim((string)($escola['site'] ?? ''));
+    if ($siteEscola === '') {
+      $siteEscola = 'www.ctieducacional.com.br';
+    }
+    $siteEscola = htmlspecialchars($siteEscola, ENT_QUOTES, 'UTF-8');
+    $cidadeLinha = htmlspecialchars(self::cidadeEscolaLinha($escola), ENT_QUOTES, 'UTF-8');
+
+    $periodo = htmlspecialchars((string)($meta['periodo'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $emitidoEm = htmlspecialchars((string)($meta['emitido_em'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $emitidoPor = htmlspecialchars((string)($meta['emitido_por'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $totalReg = (int)($meta['total_registros'] ?? 0);
+    $totalRecebido = htmlspecialchars((string)($meta['total_recebido'] ?? '0,00'), ENT_QUOTES, 'UTF-8');
+
+    $cnpjHtml = $cnpjEscola !== '' ? '<div class="relatorio-meta-linha">CNPJ: '.$cnpjEscola.'</div>' : '';
+    $cidadeHtml = $cidadeLinha !== '' ? '<div class="relatorio-meta-linha">'.$cidadeLinha.'</div>' : '';
+    $porHtml = $emitidoPor !== '' ? ' · Emitido por: '.$emitidoPor : '';
+
+    return '
+<div class="relatorio-financeiro-impressao">
+  <header class="relatorio-cabecalho mb-3 pb-3 border-bottom">
+    <div class="d-flex align-items-center flex-wrap gap-3">
+      <img src="'.$logoUrl.'" alt="" class="relatorio-logo">
+      <div class="relatorio-escola-info">
+        <div class="relatorio-escola-nome">'.$nomeEscola.'</div>
+        '.$cnpjHtml.'
+        '.$cidadeHtml.'
+      </div>
+    </div>
+    <div class="relatorio-titulo-bloco mt-3">
+      <h4 class="relatorio-titulo mb-2">Relatório Financeiro</h4>
+      <div class="relatorio-meta-linha">Período: '.$periodo.'</div>
+      <div class="relatorio-meta-linha">Data de emissão: '.$emitidoEm.$porHtml.'</div>
+      <div class="relatorio-meta-linha">Registros: '.$totalReg.' · Total recebido: R$ '.$totalRecebido.'</div>
+    </div>
+  </header>
+  '.$conteudo.'
+  <footer class="relatorio-rodape mt-3 pt-3 border-top text-center">
+    <div class="relatorio-meta-linha">'.$siteEscola.'</div>
+    <div class="relatorio-meta-linha relatorio-rodape-nota">Documento informativo — sem valor fiscal.</div>
+  </footer>
+</div>';
+  }
 
   private static function getDadosItens($request,&$obPagination){
 
@@ -106,6 +193,7 @@ $data_registroChbx = $campos['data_registroChbx'];
 $valorChbx = $campos['valorChbx'];
 $valor_pagoChbx = $campos['valor_pagoChbx'];
 $forma_pgtoChbx = $campos['forma_pgtoChbx'];
+$acoesChbx = 'checked';
 
 
 // CONDIÇÕES DEMAIS FILTROS
@@ -132,12 +220,14 @@ $forma_pgtoChbx = $campos['forma_pgtoChbx'];
   }
 
 // filtro periodo
+$periodoLabel = 'Mês atual ('.date('m/Y').')';
 if (!empty($postVars['de']) && !empty($postVars['ate'])) {
 
     $de  = $postVars['de'] . ' 00:00:00';
     $ate = $postVars['ate'] . ' 23:59:59';
 
     $conditions[] = "data_pagamento BETWEEN '{$de}' AND '{$ate}'";
+    $periodoLabel = DateTimeHelper::databr($postVars['de']).' a '.DateTimeHelper::databr($postVars['ate']);
 
 } else {
 
@@ -147,11 +237,16 @@ if (!empty($postVars['de']) && !empty($postVars['ate'])) {
     ";
 }
 
+$userLoged = SessionUser::getUserLogedData();
+$escola = is_array($userLoged['escola'] ?? null) ? $userLoged['escola'] : [];
+$emitidoPor = trim((string)($userLoged['usuario']['nome'] ?? ''));
+$emitidoEm = date('d/m/Y').' às '.date('H:i');
+
   // Combina as condições dinâmicas
  $whereClause = implode(' AND ', $conditions);
 
 $filtragem = 
-'<div class="container my-4">
+'<div class="container my-4 no-print d-print-none" id="relatorio-filtragem">
   <h3 class="mb-4">Opções de Filtragem</h3>
 
   <form id="formBusca" method="post">
@@ -230,8 +325,9 @@ $filtragem =
     </div>
     </div>
 
-    <div class="d-flex justify-content-end mt-3">
-    <button class="btn btn-secondary" onclick="gerarPdf()">Gerar PDF</button>
+    <div class="d-flex justify-content-end mt-3 no-print d-print-none">
+    <button type="button" class="btn btn-outline-secondary" onclick="window.print()">Imprimir</button>
+    <button type="button" class="btn btn-secondary ms-2" onclick="gerarPdf()">Gerar PDF</button>
     <button type="submit" class="btn btn-primary ms-3">Filtrar</button> 
     </div>
 
@@ -250,9 +346,12 @@ $filtragem =
   $results = Caixa::getCaixa($whereClause, 'ultima_alteracao DESC');
 
 $itens = '';
+$totalValorPago = 0.0;
 
     //REDERIZA O ITEM
 while ($obDados = $results->fetchObject(Caixa::class)) {
+
+  $totalValorPago += (float)($obDados->valor_pago ?? 0);
 
   $ultima_alteracao = $obDados->ultima_alteracao ? DateTimeHelper::databr($obDados->ultima_alteracao).' as '.DateTimeHelper::horario($obDados->ultima_alteracao) : '__/__/__';
 
@@ -273,15 +372,16 @@ while ($obDados = $results->fetchObject(Caixa::class)) {
   '. (($valorChbx) ? '<td>R$ <span class="mascara-dinheiro">'.$obDados->valor.'</span></td>' : '') .'
   '. (($valor_pagoChbx) ? '<td>R$ <span class="mascara-dinheiro">'.$obDados->valor_pago.'</span></td>' : '') .'
   '. (($forma_pgtoChbx) ? '<td>'.$obDados->tipo_pagamento.'</td>' : '') .'
+  '. (($acoesChbx) ? '<td class="relatorio-acoes no-print d-print-none"><div class="btn-group btn-group-sm no-print d-print-none"><button type="button" class="btn btn-outline-secondary" title="58mm" onclick="reciboAbrir('.(int)$obDados->id.',\'58mm\')"><i class="fas fa-print"></i></button><button type="button" class="btn btn-outline-secondary" title="A4" onclick="reciboAbrir('.(int)$obDados->id.',\'a4\')">A4</button><button type="button" class="btn btn-outline-primary" title="E-mail" onclick="reciboEnviar(['.(int)$obDados->id.'],\'email\')"><i class="fas fa-envelope"></i></button><button type="button" class="btn btn-outline-success" title="WhatsApp" onclick="reciboEnviar(['.(int)$obDados->id.'],\'whatsapp\')"><i class="fab fa-whatsapp"></i></button></div></td>' : '') .'
   </tr>
   <script src="'.URL.'/resources/js/js_mascara.js"></script>';
 
 }
 
 
-$table = '<div class="card-body">
+$table = '<div class="card-body relatorio-financeiro-conteudo">
 <div class="table-responsive">
-<table class="table table-striped" id="dataTable" width="100%" cellspacing="0">
+<table class="table table-striped relatorio-financeiro-tabela" id="dataTable" width="100%" cellspacing="0">
 <thead>
 <tr> 
 '. (($tituloChbx) ? '<th>Titulo</th>' : '') .'
@@ -293,6 +393,7 @@ $table = '<div class="card-body">
 '. (($valorChbx) ? '<th>Valor</th>' : '') .'
 '. (($valor_pagoChbx) ? '<th>Valor Pago</th>' : '') .'
 '. (($forma_pgtoChbx) ? '<th>Forma Pgto</th>' : '') .'
+'. (($acoesChbx) ? '<th class="relatorio-acoes no-print d-print-none" style="width:140px">Comprovante</th>' : '') .'
 </tr>
 </thead>
 <tbody>' . $itens . '</tbody>
@@ -303,11 +404,22 @@ $table = '<div class="card-body">
 
 
   if($quantidadeTotal <= 0){
-    $table = 
+    $conteudoRelatorio =
     '<div class="alert alert-warning mt-2" role="alert">
   Nenhum registro encontrado.
     </div>';
+  } else {
+    $conteudoRelatorio = $table;
   }
+
+  $table = self::montarEnvelopeRelatorio($conteudoRelatorio, [
+    'escola' => $escola,
+    'periodo' => $periodoLabel,
+    'emitido_em' => $emitidoEm,
+    'emitido_por' => $emitidoPor,
+    'total_registros' => (int)$quantidadeTotal,
+    'total_recebido' => NumeroHelper::moedaBr($totalValorPago),
+  ]);
 
 $dados['filtragem'] = $filtragem;
 $dados['itens'] = $table;

@@ -16,6 +16,9 @@ class LmsAulaCena extends LmsBase {
 	public $auto_advance = 0;
 	public $instrucao;
 	public $ocultar_instrucao = 0;
+	public $auto_narracao;
+	public $delay_revelar_ms;
+	public $duracao_ms;
 	public $tone = 'light';
 	public $interacao;
 	public $narracao_url;
@@ -64,6 +67,51 @@ class LmsAulaCena extends LmsBase {
 		try {
 			$db = new Database();
 			$stmt = $db->execute("SHOW COLUMNS FROM lms_aula_cenas LIKE 'ocultar_instrucao'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaAutoNarracao(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM lms_aula_cenas LIKE 'auto_narracao'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaDelayRevelar(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM lms_aula_cenas LIKE 'delay_revelar_ms'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaDuracaoMs(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM lms_aula_cenas LIKE 'duracao_ms'");
 			$ok = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$ok = false;
@@ -155,6 +203,35 @@ class LmsAulaCena extends LmsBase {
 				];
 				if (self::temColunaOcultarInstrucao()) {
 					$row['ocultar_instrucao'] = !empty($scene['ocultar_instrucao']) ? 1 : 0;
+				}
+				if (self::temColunaAutoNarracao()) {
+					if (array_key_exists('auto_narracao', $scene)) {
+						if ($scene['auto_narracao'] === null || $scene['auto_narracao'] === '') {
+							$row['auto_narracao'] = null;
+						} else {
+							$row['auto_narracao'] = !empty($scene['auto_narracao']) ? 1 : 0;
+						}
+					}
+				}
+				if (self::temColunaDelayRevelar()) {
+					if (array_key_exists('delay_revelar_ms', $scene)) {
+						if ($scene['delay_revelar_ms'] === null || $scene['delay_revelar_ms'] === '') {
+							$row['delay_revelar_ms'] = null;
+						} else {
+							$ms = (int)$scene['delay_revelar_ms'];
+							$row['delay_revelar_ms'] = max(0, min(60000, $ms));
+						}
+					}
+				}
+				if (self::temColunaDuracaoMs()) {
+					if (array_key_exists('duracao_ms', $scene)) {
+						if ($scene['duracao_ms'] === null || $scene['duracao_ms'] === '') {
+							$row['duracao_ms'] = null;
+						} else {
+							$ms = (int)$scene['duracao_ms'];
+							$row['duracao_ms'] = max(0, min(120000, $ms));
+						}
+					}
 				}
 				if (self::temColunaBunnyVideoId()) {
 					$vid = trim((string)($scene['media_bunny_video_id'] ?? ''));

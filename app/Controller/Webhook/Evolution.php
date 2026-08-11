@@ -68,7 +68,7 @@ class Evolution {
 			$instanceName = EvolutionApiService::nomeInstancia($idAdmin);
 		}
 
-		$itens = isset($data[0]) ? $data : [$data];
+		$itens = self::normalizarItensMensagem($data);
 		foreach ($itens as $msg) {
 			if (!is_array($msg)) {
 				continue;
@@ -81,6 +81,14 @@ class Evolution {
 				continue;
 			}
 
+			// LID (privacidade WhatsApp): tenta JID alternativo com telefone real
+			if (strpos($remoteJid, '@lid') !== false) {
+				$alt = (string)($key['remoteJidAlt'] ?? $msg['remoteJidAlt'] ?? $key['participant'] ?? '');
+				if ($alt !== '' && strpos($alt, '@g.us') === false) {
+					$remoteJid = $alt;
+				}
+			}
+
 			$telefone = EvolutionApiService::normalizarTelefone(explode('@', $remoteJid)[0]);
 			if ($telefone === '') {
 				continue;
@@ -90,7 +98,12 @@ class Evolution {
 				continue;
 			}
 
-			$nome = $msg['pushName'] ?? null;
+			$nome = null;
+			if (!$fromMe) {
+				$push = trim((string)($msg['pushName'] ?? ''));
+				$nome = $push !== '' ? $push : WhatsappConversa::resolverNomePorTelefone($idAdmin, $telefone);
+			}
+
 			$tipo = self::extrairTipo($msg);
 			$corpo = self::extrairTexto($msg);
 			$waId = $key['id'] ?? ($msg['id'] ?? null);
@@ -106,7 +119,7 @@ class Evolution {
 				continue;
 			}
 
-			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId);
+			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId, !$fromMe);
 			if (!$conversa) {
 				continue;
 			}
@@ -129,6 +142,17 @@ class Evolution {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
 			}
 		}
+	}
+
+	/** Normaliza payload Evolution (array, objeto único ou data.messages). */
+	private static function normalizarItensMensagem(array $data): array {
+		if (isset($data['messages']) && is_array($data['messages'])) {
+			return $data['messages'];
+		}
+		if (isset($data[0]) && is_array($data[0])) {
+			return $data;
+		}
+		return [$data];
 	}
 
 	/** Eventos internos do WhatsApp que não devem virar mensagem no inbox. */

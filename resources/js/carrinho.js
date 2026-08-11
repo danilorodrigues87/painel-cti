@@ -160,19 +160,73 @@ $(document).on("submit", "#form-carrinho", function(event){
 			} else {
 				fecharModalCarrinho();
 				var ids = Array.isArray(response.recibo_ids) ? response.recibo_ids.filter(function(id){ return id > 0; }) : [];
-				var reciboUrl = ids.length
+				var reciboBase = ids.length
 					? (url_base + 'painel/carnes/recibo-lote?ids=' + ids.join(','))
 					: '';
+				var inputOptions = {};
+				if (reciboBase) {
+					inputOptions['58mm'] = 'Imprimir comprovante (58mm)';
+					inputOptions['a4'] = 'Imprimir comprovante (A4)';
+					inputOptions['email'] = 'Enviar por e-mail';
+					inputOptions['whatsapp'] = 'Enviar por WhatsApp';
+				}
 				Swal.fire({
 					title: "Pagamento registrado!",
 					text: "Total recebido: R$ "+response.total,
 					icon: "success",
-					showCancelButton: !!reciboUrl,
-					confirmButtonText: reciboUrl ? "Imprimir comprovante" : "OK",
+					input: reciboBase ? 'select' : undefined,
+					inputOptions: reciboBase ? inputOptions : undefined,
+					inputPlaceholder: reciboBase ? 'Escolha uma ação (opcional)' : undefined,
+					showCancelButton: true,
+					confirmButtonText: reciboBase ? "Executar" : "OK",
 					cancelButtonText: "Fechar"
 				}).then(function(result){
-					if(reciboUrl && (result.isConfirmed || result.value)){
-						window.open(reciboUrl, '_blank');
+					if (!reciboBase) return;
+					if (!result.isConfirmed) {
+						Swal.fire({
+							toast: true,
+							position: 'top-end',
+							icon: 'info',
+							title: 'Comprovante disponível',
+							text: 'Relatório financeiro ou Carnês → Ver títulos.',
+							showConfirmButton: false,
+							timer: 5000,
+							timerProgressBar: true,
+						});
+						return;
+					}
+					var acao = result.value;
+					if (!acao) return;
+					if (acao === '58mm' || acao === 'a4') {
+						var url = reciboBase + (acao === 'a4' ? '&formato=a4' : '&formato=58mm');
+						window.open(url, '_blank');
+						return;
+					}
+					if (acao === 'email' || acao === 'whatsapp') {
+						$.ajax({
+							url: url_base + 'painel/carnes/enviar-recibo-lote',
+							method: 'post',
+							data: { ids: ids.join(','), canal: acao },
+							dataType: 'json',
+							success: function(envio){
+								if (envio.erro) {
+									Swal.fire({ title: 'Ops...', text: envio.erro, icon: 'error' });
+								} else {
+									Swal.fire({
+										title: 'Enviado!',
+										text: envio.mensagem || 'Comprovante enviado.',
+										icon: 'success'
+									});
+								}
+							},
+							error: function(){
+								Swal.fire({
+									title: 'Ops...',
+									text: 'Não foi possível enviar o comprovante.',
+									icon: 'error'
+								});
+							}
+						});
 					}
 				});
 				atualizarWidgetCarrinho();

@@ -196,7 +196,10 @@ class StudentApiMapper {
 				$ciclo = $prog ? max(1, (int)($prog->ciclo ?? 1)) : 1;
 
 				$adminLocked = ((int)($aula->bloqueado ?? 0) === 1);
-				$lessonLocked = $adminLocked || !$prevUnidadeOk;
+				$draftInteractive = LmsAula::temColunaInterativa()
+					&& (string)($aula->tipo_conteudo ?? 'video') === 'interativa'
+					&& (string)($aula->interativa_status ?? 'rascunho') !== 'publicada';
+				$lessonLocked = $adminLocked || !$prevUnidadeOk || $draftInteractive;
 				$completed = $unidadeOk || ($assistida && count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0);
 				$revisaoLivre = $completed || $precisaRevisar;
 				$lockReason = null;
@@ -213,8 +216,13 @@ class StudentApiMapper {
 						}
 					}
 				} elseif (!$revisaoLivre && $lessonLocked && !$adminLocked) {
-					$lockReason = 'sequencia';
-					$lockMessage = 'Conclua a unidade anterior para liberar.';
+					if ($draftInteractive) {
+						$lockReason = 'rascunho';
+						$lockMessage = 'Esta aula ainda está em preparação.';
+					} else {
+						$lockReason = 'sequencia';
+						$lockMessage = 'Conclua a unidade anterior para liberar.';
+					}
 				}
 				if ($completed) {
 					$completedCount++;
@@ -497,11 +505,27 @@ class StudentApiMapper {
 			$out['contentType'] = 'interactive';
 			$out['voice'] = (string)($aula->voz_narracao ?: 'alloy');
 			$out['interactiveStatus'] = (string)($aula->interativa_status ?? 'rascunho');
+			if (LmsAula::temColunaInterativaAutoNarracao()) {
+				$out['autoNarration'] = !empty($aula->interativa_auto_narracao);
+			}
+			if (LmsAula::temColunaInterativaDelayMs()) {
+				$out['defaultRevealDelayMs'] = max(0, (int)($aula->interativa_delay_ms ?? 2000));
+			}
+			if (LmsAula::temColunaInterativaDuracaoMs()) {
+				$out['defaultSceneDurationMs'] = max(0, (int)($aula->interativa_duracao_ms ?? 4000));
+			}
 			$out['videos'] = [];
 			$out['videoUrl'] = null;
 			$out['videoProvider'] = null;
+			$published = (string)($aula->interativa_status ?? 'rascunho') === 'publicada';
+			if (!$published) {
+				$out['locked'] = true;
+				$out['lockReason'] = 'rascunho';
+				$out['lockMessage'] = 'Esta aula ainda está em preparação.';
+				$out['scenes'] = [];
+				return $out;
+			}
 			$scenes = [];
-			// Sempre inclui cenas por enquanto (também rascunho); filtrar por publicada se precisar depois.
 			foreach (LmsAulaCena::listByAula((int)$aula->id, $idAdmin) as $cena) {
 				$interacao = $cena->interacao;
 				if (is_string($interacao)) {
@@ -531,6 +555,15 @@ class StudentApiMapper {
 					'tone' => (string)($cena->tone ?: 'light'),
 					'interaction' => $interacao,
 				];
+				if (LmsAulaCena::temColunaAutoNarracao() && $cena->auto_narracao !== null && $cena->auto_narracao !== '') {
+					$item['autoNarration'] = !empty($cena->auto_narracao);
+				}
+				if (LmsAulaCena::temColunaDelayRevelar() && $cena->delay_revelar_ms !== null && $cena->delay_revelar_ms !== '') {
+					$item['revealDelayMs'] = max(0, (int)$cena->delay_revelar_ms);
+				}
+				if (LmsAulaCena::temColunaDuracaoMs() && $cena->duracao_ms !== null && $cena->duracao_ms !== '') {
+					$item['sceneDurationMs'] = max(0, (int)$cena->duracao_ms);
+				}
 				if (!empty($cena->narracao_url)) {
 					$narr = (string)$cena->narracao_url;
 					$item['narrationUrl'] = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($narr);

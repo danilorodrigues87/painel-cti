@@ -78,15 +78,20 @@ class WhatsappConversa {
 			->fetchObject(self::class) ?: null;
 	}
 
-	public static function findOrCreate(int $idAdmin, string $telefone, ?string $nome = null, ?int $numeroId = null): ?self {
+	public static function findOrCreate(int $idAdmin, string $telefone, ?string $nome = null, ?int $numeroId = null, bool $nomeDoCliente = false): ?self {
 		if (!self::tabelaExiste()) {
 			return null;
+		}
+
+		$nome = $nome !== null ? trim($nome) : null;
+		if ($nome === '') {
+			$nome = null;
 		}
 
 		$existente = self::getByIdAdminTelefone($idAdmin, $telefone);
 		if ($existente instanceof self) {
 			$upd = [];
-			if ($nome && empty($existente->nome_contato)) {
+			if ($nome && ($nomeDoCliente || empty($existente->nome_contato))) {
 				$upd['nome_contato'] = $nome;
 				$existente->nome_contato = $nome;
 			}
@@ -98,6 +103,10 @@ class WhatsappConversa {
 				(new Database('whatsapp_conversas'))->update('id = '.(int)$existente->id, $upd);
 			}
 			return $existente;
+		}
+
+		if ($nome === null) {
+			$nome = self::resolverNomePorTelefone($idAdmin, $telefone);
 		}
 
 		$dados = [
@@ -123,6 +132,32 @@ class WhatsappConversa {
 		$ob->chatbot_estado = 'novo';
 		$ob->numero_id = $numeroId;
 		return $ob;
+	}
+
+	/** Busca nome do aluno/responsável pelo WhatsApp cadastrado. */
+	public static function resolverNomePorTelefone(int $idAdmin, string $telefone): ?string {
+		$digitos = preg_replace('/\D+/', '', $telefone) ?? '';
+		if ($digitos === '') {
+			return null;
+		}
+		$suf = strlen($digitos) >= 8 ? substr($digitos, -8) : $digitos;
+		try {
+			$like = '%'.addslashes($suf).'%';
+			$stmt = (new Database('usuarios'))->select(
+				'id_admin = '.(int)$idAdmin.' AND whatsapp IS NOT NULL AND whatsapp != ""'
+				.' AND REPLACE(REPLACE(REPLACE(REPLACE(whatsapp," ",""),"-",""),"(",""),")","") LIKE "'.$like.'"',
+				'id DESC',
+				1,
+				'nome'
+			);
+			$row = $stmt->fetch(\PDO::FETCH_ASSOC);
+			if ($row && !empty($row['nome'])) {
+				return trim((string)$row['nome']);
+			}
+		} catch (\Throwable $e) {
+			return null;
+		}
+		return null;
 	}
 
 	public function tocarUltimaMensagem(bool $marcarNaoLida = false): void {

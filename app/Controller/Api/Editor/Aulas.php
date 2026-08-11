@@ -165,6 +165,15 @@ class Aulas {
 				'tone' => (string)($cena->tone ?: 'light'),
 				'interaction' => $interacao,
 			];
+			if (LmsAulaCena::temColunaAutoNarracao() && $cena->auto_narracao !== null && $cena->auto_narracao !== '') {
+				$item['autoNarration'] = !empty($cena->auto_narracao);
+			}
+			if (LmsAulaCena::temColunaDelayRevelar() && $cena->delay_revelar_ms !== null && $cena->delay_revelar_ms !== '') {
+				$item['revealDelayMs'] = max(0, (int)$cena->delay_revelar_ms);
+			}
+			if (LmsAulaCena::temColunaDuracaoMs() && $cena->duracao_ms !== null && $cena->duracao_ms !== '') {
+				$item['sceneDurationMs'] = max(0, (int)$cena->duracao_ms);
+			}
 			if (!empty($cena->narracao_url)) {
 				$narr = (string)$cena->narracao_url;
 				$item['narrationUrl'] = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($narr);
@@ -194,6 +203,15 @@ class Aulas {
 			'interactiveStatus' => LmsAula::temColunaInterativa()
 				? (string)($aula->interativa_status ?? 'rascunho')
 				: null,
+			'autoNarration' => LmsAula::temColunaInterativaAutoNarracao()
+				? !empty($aula->interativa_auto_narracao)
+				: true,
+			'defaultRevealDelayMs' => LmsAula::temColunaInterativaDelayMs()
+				? max(0, (int)($aula->interativa_delay_ms ?? 2000))
+				: 2000,
+			'defaultSceneDurationMs' => LmsAula::temColunaInterativaDuracaoMs()
+				? max(0, (int)($aula->interativa_duracao_ms ?? 4000))
+				: 4000,
 		]);
 	}
 
@@ -228,6 +246,17 @@ class Aulas {
 			$aula->interativa_status = 'publicada';
 		} else {
 			$aula->interativa_status = 'rascunho';
+		}
+		if (LmsAula::temColunaInterativaAutoNarracao() && array_key_exists('autoNarration', $body)) {
+			$aula->interativa_auto_narracao = !empty($body['autoNarration']) ? 1 : 0;
+		}
+		if (LmsAula::temColunaInterativaDelayMs() && array_key_exists('defaultRevealDelayMs', $body)) {
+			$ms = (int)($body['defaultRevealDelayMs'] ?? 2000);
+			$aula->interativa_delay_ms = max(0, min(60000, $ms));
+		}
+		if (LmsAula::temColunaInterativaDuracaoMs() && array_key_exists('defaultSceneDurationMs', $body)) {
+			$dur = (int)($body['defaultSceneDurationMs'] ?? 4000);
+			$aula->interativa_duracao_ms = max(0, min(120000, $dur));
 		}
 		$aula->tipo_conteudo = 'interativa';
 		$aula->salvar();
@@ -267,7 +296,7 @@ class Aulas {
 			if (is_string($bunnyVid)) {
 				$bunnyVid = trim($bunnyVid) !== '' ? trim($bunnyVid) : null;
 			}
-			$normalized[] = [
+			$row = [
 				'id' => (string)($sc['id'] ?? ''),
 				'media_kind' => $kind,
 				'media_url' => $src,
@@ -279,6 +308,28 @@ class Aulas {
 				'narracao_url' => $narracao,
 				'media_bunny_video_id' => $bunnyVid,
 			];
+			if (LmsAulaCena::temColunaAutoNarracao() && array_key_exists('autoNarration', $sc)) {
+				if ($sc['autoNarration'] === null || $sc['autoNarration'] === '') {
+					$row['auto_narracao'] = null;
+				} else {
+					$row['auto_narracao'] = !empty($sc['autoNarration']) ? 1 : 0;
+				}
+			}
+			if (LmsAulaCena::temColunaDelayRevelar() && array_key_exists('revealDelayMs', $sc)) {
+				if ($sc['revealDelayMs'] === null || $sc['revealDelayMs'] === '') {
+					$row['delay_revelar_ms'] = null;
+				} else {
+					$row['delay_revelar_ms'] = max(0, min(60000, (int)$sc['revealDelayMs']));
+				}
+			}
+			if (LmsAulaCena::temColunaDuracaoMs() && array_key_exists('sceneDurationMs', $sc)) {
+				if ($sc['sceneDurationMs'] === null || $sc['sceneDurationMs'] === '') {
+					$row['duracao_ms'] = null;
+				} else {
+					$row['duracao_ms'] = max(0, min(120000, (int)$sc['sceneDurationMs']));
+				}
+			}
+			$normalized[] = $row;
 		}
 
 		try {

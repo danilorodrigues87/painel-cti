@@ -14,6 +14,9 @@ class LmsAula extends LmsBase {
 	public $tipo_conteudo = 'video';
 	public $voz_narracao = 'alloy';
 	public $interativa_status = 'rascunho';
+	public $interativa_auto_narracao = 1;
+	public $interativa_delay_ms = 2000;
+	public $interativa_duracao_ms = 4000;
 
 	protected static function table(): string {
 		return 'lms_aulas';
@@ -27,6 +30,51 @@ class LmsAula extends LmsBase {
 		try {
 			$db = new \App\Model\Db\Database();
 			$stmt = $db->execute("SHOW COLUMNS FROM `lms_aulas` LIKE 'tipo_conteudo'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaInterativaAutoNarracao(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new \App\Model\Db\Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM `lms_aulas` LIKE 'interativa_auto_narracao'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaInterativaDelayMs(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new \App\Model\Db\Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM `lms_aulas` LIKE 'interativa_delay_ms'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function temColunaInterativaDuracaoMs(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new \App\Model\Db\Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM `lms_aulas` LIKE 'interativa_duracao_ms'");
 			$ok = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$ok = false;
@@ -69,6 +117,17 @@ class LmsAula extends LmsBase {
 				? (string)$this->voz_narracao
 				: 'alloy';
 			$dados['interativa_status'] = $status;
+			if (self::temColunaInterativaAutoNarracao()) {
+				$dados['interativa_auto_narracao'] = !empty($this->interativa_auto_narracao) ? 1 : 0;
+			}
+			if (self::temColunaInterativaDelayMs()) {
+				$ms = (int)($this->interativa_delay_ms ?? 2000);
+				$dados['interativa_delay_ms'] = max(0, min(60000, $ms));
+			}
+			if (self::temColunaInterativaDuracaoMs()) {
+				$dur = (int)($this->interativa_duracao_ms ?? 4000);
+				$dados['interativa_duracao_ms'] = max(0, min(120000, $dur));
+			}
 		}
 		if (!empty($this->id)) {
 			$this->updateRow((int)$this->id, (int)$this->id_admin, $dados);

@@ -121,7 +121,9 @@
 							'" data-desc="' +
 							esc(t.descricao) +
 							'">Só esta</button>'
-						: '—';
+						: t.status === 'pago'
+							? reciboAcoesHtml(t.id, true)
+							: '—';
 					rowsA +=
 						'<tr>' +
 						'<td class="text-center">' +
@@ -227,7 +229,9 @@
 					'" data-desc="' +
 					esc(t.descricao) +
 					'">Só esta</button>'
-				: '<span class="small text-muted">—</span>';
+				: t.status === 'pago'
+					? reciboAcoesHtml(t.id, true)
+					: '<span class="small text-muted">—</span>';
 			rows +=
 				'<tr>' +
 				'<td class="text-center">' +

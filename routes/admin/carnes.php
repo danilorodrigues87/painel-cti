@@ -80,6 +80,16 @@ $obRouter->get('/painel/carnes/recibo-lote',[
 	}
 ]);
 
+//ROTA ENVIAR COMPROVANTE EM LOTE (e-mail / WhatsApp)
+$obRouter->post('/painel/carnes/enviar-recibo-lote',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\Carnes::enviarReciboLote($request));
+	}
+]);
+
 //ROTA VER DETALHES DO TITULO
 $obRouter->get('/painel/carnes/recibo/{id}',[
 	'middlewares' => [
