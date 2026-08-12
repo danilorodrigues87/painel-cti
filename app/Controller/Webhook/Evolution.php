@@ -127,7 +127,7 @@ class Evolution {
 				'message' => $message,
 				'data' => $data,
 				'hypothesisId' => $hypothesisId,
-				'runId' => 'pre-fix',
+				'runId' => 'post-fix',
 			], JSON_UNESCAPED_UNICODE);
 			@file_put_contents($logDir.'/debug-6b4d05.log', $line."\n", FILE_APPEND | LOCK_EX);
 		} catch (\Throwable $e) {
@@ -182,12 +182,17 @@ class Evolution {
 			$fromMe = !empty($key['fromMe']);
 			$remoteJid = self::resolverRemoteJid($msg);
 			if ($remoteJid === '') {
+				$keyDbg = $msg['key'] ?? [];
 				// #region agent log
 				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
 					'idx' => $idx,
 					'reason' => 'remote_jid_vazio',
 					'from_me' => $fromMe,
 					'msg_keys' => array_keys($msg),
+					'key_has_remoteJid' => !empty($keyDbg['remoteJid']),
+					'key_has_remoteJidAlt' => !empty($keyDbg['remoteJidAlt']),
+					'key_has_senderPn' => !empty($keyDbg['senderPn']),
+					'key_has_participant' => !empty($keyDbg['participant']),
 				], 'C');
 				// #endregion
 				continue;
@@ -304,22 +309,27 @@ class Evolution {
 	private static function resolverRemoteJid(array $msg): string {
 		$key = $msg['key'] ?? [];
 		$remoteJid = (string)($key['remoteJid'] ?? $msg['remoteJid'] ?? '');
-		if ($remoteJid === '' || strpos($remoteJid, '@g.us') !== false) {
+
+		if ($remoteJid !== '' && strpos($remoteJid, '@g.us') !== false) {
 			return '';
 		}
 
-		if (strpos($remoteJid, '@s.whatsapp.net') !== false) {
+		if ($remoteJid !== '' && strpos($remoteJid, '@s.whatsapp.net') !== false) {
 			return $remoteJid;
 		}
 
+		$ctx = $msg['contextInfo'] ?? $key['contextInfo'] ?? null;
 		$candidatos = [
 			$key['remoteJidAlt'] ?? null,
 			$msg['remoteJidAlt'] ?? null,
-			$key['participant'] ?? null,
-			$msg['participant'] ?? null,
 			$key['senderPn'] ?? null,
 			$msg['senderPn'] ?? null,
+			$key['participant'] ?? null,
+			$msg['participant'] ?? null,
 			$msg['sender'] ?? null,
+			is_array($ctx) ? ($ctx['participant'] ?? null) : null,
+			is_array($ctx) ? ($ctx['remoteJid'] ?? null) : null,
+			$remoteJid !== '' ? $remoteJid : null,
 		];
 
 		foreach ($candidatos as $alt) {
@@ -339,12 +349,7 @@ class Evolution {
 			}
 		}
 
-		// Último recurso: mantém @lid para registrar conversa (Evolution pode sincronizar depois)
-		if (strpos($remoteJid, '@lid') !== false) {
-			return $remoteJid;
-		}
-
-		return $remoteJid;
+		return '';
 	}
 
 	private static function jidParaTelefone(string $remoteJid): string {
@@ -369,14 +374,35 @@ class Evolution {
 
 	/** Eventos internos do WhatsApp que não devem virar mensagem no inbox. */
 	private static function ignorarMensagemSistema(array $msg): bool {
-		$message = $msg['message'] ?? [];
-		if (!is_array($message)) {
+		$message = self::desembrulharMensagem($msg['message'] ?? []);
+		if (!is_array($message) || $message === []) {
 			return false;
 		}
+
+		$chavesConteudo = [
+			'conversation',
+			'extendedTextMessage',
+			'imageMessage',
+			'audioMessage',
+			'videoMessage',
+			'documentMessage',
+			'stickerMessage',
+			'reactionMessage',
+			'buttonsResponseMessage',
+			'listResponseMessage',
+			'templateButtonReplyMessage',
+			'contactMessage',
+			'locationMessage',
+		];
+		foreach ($chavesConteudo as $k) {
+			if (isset($message[$k])) {
+				return false;
+			}
+		}
+
 		$chavesIgnorar = [
 			'protocolMessage',
 			'senderKeyDistributionMessage',
-			'messageContextInfo',
 			'assocChildMessage',
 			'deviceSentMessage',
 		];
@@ -385,12 +411,25 @@ class Evolution {
 				return true;
 			}
 		}
-		// Só contexto sem conteúdo
+
 		$keys = array_keys($message);
 		$keys = array_filter($keys, static function ($k) {
 			return $k !== 'messageContextInfo';
 		});
 		return count($keys) === 0;
+	}
+
+	/** Desembrulha ephemeral / viewOnce para checar conteúdo real. */
+	private static function desembrulharMensagem($message): array {
+		if (!is_array($message)) {
+			return [];
+		}
+		foreach (['ephemeralMessage', 'viewOnceMessage'] as $wrap) {
+			if (isset($message[$wrap]['message']) && is_array($message[$wrap]['message'])) {
+				return $message[$wrap]['message'];
+			}
+		}
+		return $message;
 	}
 
 	private static function salvarMidiaRecebida(int $idAdmin, string $instance, array $msg, string $tipo): ?string {
@@ -455,7 +494,7 @@ class Evolution {
 	}
 
 	private static function extrairTexto(array $msg): ?string {
-		$message = $msg['message'] ?? [];
+		$message = self::desembrulharMensagem($msg['message'] ?? []);
 		if (!is_array($message)) {
 			return null;
 		}
@@ -492,7 +531,7 @@ class Evolution {
 	}
 
 	private static function extrairTipo(array $msg): string {
-		$message = $msg['message'] ?? [];
+		$message = self::desembrulharMensagem($msg['message'] ?? []);
 		if (!is_array($message)) {
 			return 'text';
 		}
