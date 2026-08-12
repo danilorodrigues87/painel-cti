@@ -108,6 +108,10 @@ class ConfigComunicacao extends Page {
 			return self::whatsappRecriar();
 		}
 
+		if ($acao === 'whatsapp_sincronizar') {
+			return self::whatsappSincronizar();
+		}
+
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 	}
 
@@ -520,6 +524,16 @@ class ConfigComunicacao extends Page {
 	private static function whatsappRecriar(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$res = WhatsappEscolaService::recriarInstancia($idAdmin);
+		return json_encode([
+			'success' => !empty($res['ok']),
+			'message' => $res['message'] ?? '',
+			'whatsapp'=> $res,
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function whatsappSincronizar(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$res = WhatsappEscolaService::sincronizarInstancia($idAdmin);
 		return json_encode([
 			'success' => !empty($res['ok']),
 			'message' => $res['message'] ?? '',

@@ -51,6 +51,7 @@ class Evolution {
 
 		if (self::eventoEhMensagem($event, $data, $payload)) {
 			self::processarMensagens($idAdmin, $data, $instanceName);
+			self::logWebhook($idAdmin, 'msg_processada', ['instance' => $instanceName], true);
 		}
 
 		return json_encode(['success' => true]);
@@ -77,8 +78,8 @@ class Evolution {
 		return isset($payload['key']) || isset($payload['message']);
 	}
 
-	private static function logWebhook(int $idAdmin, string $evento, array $extra = []): void {
-		if (!(bool)Environment::get('EVOLUTION_WEBHOOK_DEBUG', false) && $evento !== 'token_invalido') {
+	private static function logWebhook(int $idAdmin, string $evento, array $extra = [], bool $force = false): void {
+		if (!$force && !(bool)Environment::get('EVOLUTION_WEBHOOK_DEBUG', false) && $evento !== 'token_invalido') {
 			return;
 		}
 		$linha = '[EvolutionWebhook] id_admin='.$idAdmin.' event='.$evento;
@@ -106,6 +107,7 @@ class Evolution {
 		}
 
 		$itens = self::normalizarItensMensagem($data);
+		$processadas = 0;
 		foreach ($itens as $msg) {
 			if (!is_array($msg)) {
 				continue;
@@ -171,6 +173,10 @@ class Evolution {
 			if (!$fromMe && $tipo !== 'reaction') {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
 			}
+			$processadas++;
+		}
+		if ($processadas > 0) {
+			self::logWebhook($idAdmin, 'msgs_salvas', ['qtd' => $processadas, 'instance' => $instanceName], true);
 		}
 	}
 

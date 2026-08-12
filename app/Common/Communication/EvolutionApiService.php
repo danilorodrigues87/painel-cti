@@ -180,26 +180,27 @@ class EvolutionApiService {
 	}
 
 	public function setWebhook(string $instance, string $webhookUrl): ?array {
-		$res = $this->request('POST', '/webhook/set/'.rawurlencode($instance), [
-			'webhook' => self::payloadWebhook($webhookUrl),
-		]);
-		if ($res !== null && $this->lastHttpCode < 400) {
-			return $res;
+		$payloads = [
+			['webhook' => self::payloadWebhook($webhookUrl)],
+			[
+				'enabled'  => true,
+				'url'      => $webhookUrl,
+				'webhookByEvents' => false,
+				'webhookBase64'   => true,
+				'events'   => self::eventosWebhook(),
+			],
+			self::payloadWebhook($webhookUrl),
+		];
+
+		$ultimo = null;
+		foreach ($payloads as $body) {
+			$ultimo = $this->request('POST', '/webhook/set/'.rawurlencode($instance), $body);
+			if ($ultimo !== null && $this->lastHttpCode < 400) {
+				return $ultimo;
+			}
 		}
 
-		// Evolution v2 — payload alternativo
-		return $this->request('POST', '/webhook/set/'.rawurlencode($instance), [
-			'enabled'  => true,
-			'url'      => $webhookUrl,
-			'webhookByEvents' => false,
-			'webhookBase64'   => true,
-			'events'   => [
-				'MESSAGES_UPSERT',
-				'CONNECTION_UPDATE',
-				'QRCODE_UPDATED',
-				'SEND_MESSAGE',
-			],
-		]);
+		return $ultimo;
 	}
 
 	public function getWebhook(string $instance): ?array {
@@ -210,18 +211,144 @@ class EvolutionApiService {
 		return $this->request('GET', '/webhook/'.rawurlencode($instance));
 	}
 
+	/** Verifica se a URL do webhook na Evolution bate com a esperada. */
+	public function webhookEstaConfigurado(string $instance, string $urlEsperada): bool {
+		$wh = $this->getWebhook($instance);
+		if ($wh === null || $this->getLastHttpCode() >= 400) {
+			return false;
+		}
+		$urlCfg = (string)(
+			$wh['url']
+			?? ($wh['webhook']['url'] ?? null)
+			?? ($wh['webhookUrl'] ?? null)
+			?? ''
+		);
+		return rtrim($urlCfg, '/') === rtrim($urlEsperada, '/');
+	}
+
+	/**
+	 * Resolve o nome real da instância na Evolution (pode diferir de escola_ID).
+	 */
+	public function resolverNomeInstancia(string $preferido): string {
+		if ($this->instanciaExiste($preferido)) {
+			return $preferido;
+		}
+
+		$list = $this->fetchInstances();
+		if (!is_array($list)) {
+			return $preferido;
+		}
+
+		$itens = isset($list[0]) || $list === [] ? $list : ($list['instance'] ?? $list);
+		if (!is_array($itens)) {
+			return $preferido;
+		}
+
+		$alvo = strtolower($preferido);
+		foreach ($itens as $item) {
+			if (!is_array($item)) {
+				continue;
+			}
+			$sub = is_array($item['instance'] ?? null) ? $item['instance'] : [];
+			$nome = (string)(
+				$item['name']
+				?? $item['instanceName']
+				?? $sub['instanceName']
+				?? $sub['name']
+				?? ''
+			);
+			if ($nome !== '' && strtolower($nome) === $alvo) {
+				return $nome;
+			}
+		}
+
+		return $preferido;
+	}
+
+	/** Dados da instância na listagem (owner, status). */
+	public function obterDadosInstanciaLista(string $instance): ?array {
+		$list = $this->fetchInstances();
+		if (!is_array($list)) {
+			return null;
+		}
+		$itens = isset($list[0]) || $list === [] ? $list : ($list['instance'] ?? $list);
+		if (!is_array($itens)) {
+			return null;
+		}
+		$alvo = strtolower($instance);
+		foreach ($itens as $item) {
+			if (!is_array($item)) {
+				continue;
+			}
+			$sub = is_array($item['instance'] ?? null) ? $item['instance'] : [];
+			$nome = (string)(
+				$item['name']
+				?? $item['instanceName']
+				?? $sub['instanceName']
+				?? $sub['name']
+				?? ''
+			);
+			if ($nome !== '' && strtolower($nome) === $alvo) {
+				return $item;
+			}
+		}
+		return null;
+	}
+
+	public function restartInstance(string $instance): ?array {
+		$res = $this->request('POST', '/instance/restart/'.rawurlencode($instance));
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+		return $this->request('PUT', '/instance/restart/'.rawurlencode($instance));
+	}
+
+	/**
+	 * Logout + delete com confirmação (404 sozinho NÃO significa sucesso).
+	 */
+	public function removerInstancia(string $instance): bool {
+		if (!$this->instanciaExiste($instance)) {
+			return true;
+		}
+
+		$this->deleteInstanceForce($instance);
+		if (!$this->instanciaExiste($instance)) {
+			return true;
+		}
+
+		for ($i = 0; $i < 2; $i++) {
+			$this->logout($instance);
+			usleep(800000);
+			$this->deleteInstanceForce($instance);
+			if (!$this->instanciaExiste($instance)) {
+				return true;
+			}
+		}
+
+		$this->restartInstance($instance);
+		usleep(500000);
+		$this->deleteInstanceForce($instance);
+
+		return !$this->instanciaExiste($instance);
+	}
+
+	private static function eventosWebhook(): array {
+		return [
+			'MESSAGES_UPSERT',
+			'MESSAGES_UPDATE',
+			'CONNECTION_UPDATE',
+			'QRCODE_UPDATED',
+			'SEND_MESSAGE',
+		];
+	}
+
 	private static function payloadWebhook(string $webhookUrl): array {
 		return [
 			'enabled'  => true,
 			'url'      => $webhookUrl,
 			'byEvents' => false,
 			'base64'   => true,
-			'events'   => [
-				'MESSAGES_UPSERT',
-				'CONNECTION_UPDATE',
-				'QRCODE_UPDATED',
-				'SEND_MESSAGE',
-			],
+			'events'   => self::eventosWebhook(),
 		];
 	}
 
@@ -446,12 +573,21 @@ class EvolutionApiService {
 	}
 
 	public function logout(string $instance): ?array {
-		return $this->request('DELETE', '/instance/logout/'.rawurlencode($instance));
+		$res = $this->request('DELETE', '/instance/logout/'.rawurlencode($instance));
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+		return $this->request('POST', '/instance/logout/'.rawurlencode($instance), []);
 	}
 
 	public function deleteInstance(string $instance): ?array {
+		return $this->deleteInstanceForce($instance);
+	}
+
+	private function deleteInstanceForce(string $instance): ?array {
 		$tentativas = [
 			['DELETE', '/instance/delete/'.rawurlencode($instance), null],
+			['DELETE', '/instance/delete/'.$instance, null],
 			['DELETE', '/instance/'.rawurlencode($instance), null],
 			['POST', '/instance/delete', ['instanceName' => $instance]],
 		];
@@ -461,7 +597,7 @@ class EvolutionApiService {
 			$ultimo = $body !== null
 				? $this->request($method, $path, $body)
 				: $this->request($method, $path);
-			if ($this->lastHttpCode < 400 || $this->lastHttpCode === 404) {
+			if ($this->lastHttpCode >= 200 && $this->lastHttpCode < 300) {
 				return $ultimo;
 			}
 		}

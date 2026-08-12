@@ -273,6 +273,9 @@
 					<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-wa-status">
 						<i class="fas fa-sync"></i> Atualizar status
 					</button>
+					<button type="button" class="btn btn-outline-primary btn-sm" id="btn-wa-sincronizar">
+						<i class="fas fa-link"></i> Sincronizar
+					</button>
 					<button type="button" class="btn btn-success btn-sm" id="btn-wa-conectar">
 						<i class="fas fa-qrcode"></i> Conectar / QR
 					</button>
@@ -288,8 +291,8 @@
 				<div class="alert alert-warning small d-none" id="alert-whatsapp-sql"></div>
 				<p class="small text-muted mb-3">
 					Cada escola usa uma instância própria na Evolution (<code>escola_{id_admin}</code>).
-					Para <strong>trocar de número</strong> ou se a instância foi apagada no painel da Evolution, use
-					<strong>Trocar número</strong> (recria a instância e gera um QR novo).
+					Se o painel mostra desconectado mas a Evolution está aberta, use <strong>Sincronizar</strong> ou <strong>Conectar / QR</strong> (não “Trocar número”).
+					Para <strong>trocar de número</strong>, desvincule antes em WhatsApp → Aparelhos conectados, depois use <strong>Remover instância</strong> ou <strong>Trocar número</strong>.
 				</p>
 
 				<div class="row g-4">

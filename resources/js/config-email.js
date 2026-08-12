@@ -369,6 +369,24 @@ function whatsappTestar(){
 	});
 }
 
+function whatsappSincronizar(){
+	$('#btn-wa-sincronizar').prop('disabled', true);
+	$.post(url_base + CONFIG_EMAIL_URL, { acao: 'whatsapp_sincronizar' }, function(res){
+		$('#btn-wa-sincronizar').prop('disabled', false);
+		if(!res || !res.success){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao sincronizar.', 'error');
+			return;
+		}
+		if(res.whatsapp){
+			preencherWhatsapp(res.whatsapp, { limparQr: !res.whatsapp.conectado });
+		}
+		Swal.fire('Sincronizado', res.message || 'OK', res.whatsapp && res.whatsapp.webhook_ok === false ? 'warning' : 'success');
+	}, 'json').fail(function(){
+		$('#btn-wa-sincronizar').prop('disabled', false);
+		Swal.fire('Erro', 'Falha na requisição.', 'error');
+	});
+}
+
 function whatsappDesconectar(){
 	Swal.fire({
 		title: 'Desconectar WhatsApp?',
@@ -802,6 +820,7 @@ $(function(){
 	$('#btn-executar-aniversario').on('click', executarAniversario);
 	$('#btn-wa-status').on('click', whatsappStatus);
 	$('#btn-wa-checklist').on('click', whatsappStatus);
+	$('#btn-wa-sincronizar').on('click', whatsappSincronizar);
 	$('#btn-wa-conectar').on('click', whatsappConectar);
 	$('#btn-wa-recriar').on('click', whatsappRecriar);
 	$('#btn-wa-qr').on('click', whatsappQr);

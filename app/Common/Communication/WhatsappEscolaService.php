@@ -13,9 +13,8 @@ class WhatsappEscolaService {
 	public static function status(int $idAdmin): array {
 		$api = EvolutionApiService::fromEnv();
 		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		$instance = ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance))
-			? (string)$integracao->evolution_instance
-			: EvolutionApiService::nomeInstancia($idAdmin);
+		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
+		$instance = $api->resolverNomeInstancia($instance);
 
 		$out = [
 			'configurado_env' => $api->isConfigured(),
@@ -119,6 +118,94 @@ class WhatsappEscolaService {
 		return self::conectarInterno($idAdmin, true);
 	}
 
+	/**
+	 * Sincroniza status com a Evolution (útil quando painel desconectado mas sessão aberta lá).
+	 */
+	public static function sincronizarInstancia(int $idAdmin): array {
+		$api = EvolutionApiService::fromEnv();
+		if (!$api->isConfigured()) {
+			return ['ok' => false, 'message' => 'Evolution não configurada no .env.'];
+		}
+
+		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
+		$instance = $api->resolverNomeInstancia($instance);
+		$webhook = EvolutionApiService::webhookUrl($idAdmin);
+
+		$state = $api->connectionState($instance);
+		$http = $api->getLastHttpCode();
+		if ($state === null || $http >= 400) {
+			if ($http === 404 && !$api->instanciaExiste($instance)) {
+				self::persistirStatus($idAdmin, $instance, 'not_created', $integracao, 0, '');
+				return [
+					'ok' => true,
+					'message' => 'Nenhuma instância ativa na Evolution para esta escola.',
+					'instance' => $instance,
+					'status' => 'not_created',
+					'conectado' => false,
+					'webhook_url' => $webhook,
+				];
+			}
+			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao consultar Evolution.'];
+		}
+
+		$estado = EvolutionApiService::extrairEstado($state);
+		$conectado = in_array($estado, ['open', 'connected'], true);
+		$numero = self::extrairNumeroInstancia($api, $instance, $state);
+
+		$ativo = $conectado ? 1 : 0;
+		self::persistirStatus($idAdmin, $instance, $estado, $integracao, $ativo, $numero);
+
+		$webhookOk = null;
+		if ($conectado) {
+			$webhookOk = self::garantirWebhook($api, $instance, $idAdmin);
+		}
+
+		return [
+			'ok' => true,
+			'message' => $conectado
+				? ($webhookOk
+					? 'Sincronizado: WhatsApp conectado e webhook aplicado.'
+					: 'Conectado na Evolution, mas falhou aplicar webhook — confira se a URL abaixo é acessível pelo servidor Evolution.')
+				: 'Sincronizado: status '.$estado.'.',
+			'instance' => $instance,
+			'status' => $estado,
+			'conectado' => $conectado,
+			'webhook_url' => $webhook,
+			'webhook_ok' => $webhookOk,
+			'numero' => $numero,
+		];
+	}
+
+	private static function nomeInstanciaEscola(int $idAdmin, $integracao = null): string {
+		if ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance)) {
+			return (string)$integracao->evolution_instance;
+		}
+		return EvolutionApiService::nomeInstancia($idAdmin);
+	}
+
+	private static function extrairNumeroInstancia(EvolutionApiService $api, string $instance, ?array $state): string {
+		$meta = $api->obterDadosInstanciaLista($instance);
+		if (is_array($meta)) {
+			foreach (['owner', 'number', 'phone', 'wuid'] as $k) {
+				if (!empty($meta[$k])) {
+					return EvolutionApiService::normalizarTelefone((string)$meta[$k]);
+				}
+			}
+		}
+		if (is_array($state)) {
+			foreach (['owner', 'wuid'] as $k) {
+				if (!empty($state[$k])) {
+					return EvolutionApiService::normalizarTelefone((string)$state[$k]);
+				}
+				if (!empty($state['instance'][$k])) {
+					return EvolutionApiService::normalizarTelefone((string)$state['instance'][$k]);
+				}
+			}
+		}
+		return '';
+	}
+
 	private static function conectarInterno(int $idAdmin, bool $forcarRecriar): array {
 		$api = EvolutionApiService::fromEnv();
 		if (!$api->isConfigured()) {
@@ -128,9 +215,10 @@ class WhatsappEscolaService {
 			return ['ok' => false, 'message' => 'Execute o SQL das colunas Evolution antes.'];
 		}
 
-		$instance = EvolutionApiService::nomeInstancia($idAdmin);
-		$webhook = EvolutionApiService::webhookUrl($idAdmin);
 		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
+		$instance = $api->resolverNomeInstancia($instance);
+		$webhook = EvolutionApiService::webhookUrl($idAdmin);
 		$logs = [];
 
 		$state = $api->connectionState($instance);
@@ -139,19 +227,47 @@ class WhatsappEscolaService {
 		$estadoAtual = $existe ? EvolutionApiService::extrairEstado($state) : '';
 		$logs[] = 'state:HTTP '.$httpState.($estadoAtual !== '' ? ' '.$estadoAtual : '');
 
-		// Já conectado: só configura webhook (nunca durante o QR)
-		if ($existe && !$forcarRecriar && in_array($estadoAtual, ['open', 'connected'], true)) {
-			self::persistirStatus($idAdmin, $instance, $estadoAtual, $integracao, 1);
-			self::garantirWebhook($api, $instance, $idAdmin);
-			return [
-				'ok' => true,
-				'message' => 'WhatsApp já está conectado. Para trocar de número, use “Trocar número”.',
-				'instance' => $instance,
-				'status' => $estadoAtual,
-				'qrcode' => null,
-				'conectado' => true,
-				'webhook_url' => $webhook,
-			];
+		// Já conectado: sincroniza painel + webhook (não tenta recriar)
+		if ($existe && in_array($estadoAtual, ['open', 'connected'], true)) {
+			$numero = self::extrairNumeroInstancia($api, $instance, $state);
+			self::persistirStatus($idAdmin, $instance, $estadoAtual, $integracao, 1, $numero);
+			$webhookOk = self::garantirWebhook($api, $instance, $idAdmin);
+
+			if ($forcarRecriar) {
+				$removido = $api->removerInstancia($instance);
+				$logs[] = 'remove:'.($removido ? 'ok' : 'fail');
+				if (!$removido) {
+					return [
+						'ok' => true,
+						'message' => 'WhatsApp já está conectado na Evolution (instância: '.$instance.'). '
+							.'Não foi possível remover automaticamente — desvincule em '
+							.'WhatsApp → Aparelhos conectados no celular, depois use “Remover instância”. '
+							.'Webhook '.($webhookOk ? 'aplicado' : 'pendente').'. ['.implode(' | ', $logs).']',
+						'instance' => $instance,
+						'status' => $estadoAtual,
+						'qrcode' => null,
+						'conectado' => true,
+						'webhook_url' => $webhook,
+						'webhook_ok' => $webhookOk,
+					];
+				}
+				$existe = false;
+				$estadoAtual = '';
+				$forcarRecriar = true;
+			} else {
+				return [
+					'ok' => true,
+					'message' => $webhookOk
+						? 'WhatsApp conectado e webhook aplicado.'
+						: 'WhatsApp conectado, mas o webhook não foi confirmado — clique em “Sincronizar”.',
+					'instance' => $instance,
+					'status' => $estadoAtual,
+					'qrcode' => null,
+					'conectado' => true,
+					'webhook_url' => $webhook,
+					'webhook_ok' => $webhookOk,
+				];
+			}
 		}
 
 		// Só apaga/recria se pedido (Trocar número) ou se realmente não existe.
@@ -173,21 +289,27 @@ class WhatsappEscolaService {
 		$created = null;
 		if ($precisaRecriar) {
 			if ($existe || $forcarRecriar) {
-				$api->logout($instance);
-				$logs[] = 'logout:HTTP '.$api->getLastHttpCode();
-				$api->deleteInstance($instance);
-				$logs[] = 'delete:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
-				usleep(1500000);
+				$removido = $api->removerInstancia($instance);
+				$logs[] = 'remove:'.($removido ? 'ok' : 'fail HTTP '.$api->getLastHttpCode());
+				if (!$removido && $api->instanciaExiste($instance)) {
+					$logs[] = 'fallback:connect-existente';
+					$precisaRecriar = false;
+				}
 			}
 
-			$created = self::criarInstanciaComRetry($api, $instance, $logs);
-			if ($created === null) {
-				self::persistirStatus($idAdmin, $instance, 'error', $integracao, 0, '');
-				return [
-					'ok' => false,
-					'message' => 'Não foi possível criar a instância na Evolution. '
-						.($api->getLastError() ?: '').' ['.implode(' | ', $logs).']',
-				];
+			if ($precisaRecriar) {
+				$created = self::criarInstanciaComRetry($api, $instance, $logs);
+				if ($created === null && $api->instanciaExiste($instance)) {
+					$logs[] = 'create:ja-existe-connect';
+					$precisaRecriar = false;
+				} elseif ($created === null) {
+					self::persistirStatus($idAdmin, $instance, 'error', $integracao, 0, '');
+					return [
+						'ok' => false,
+						'message' => 'Não foi possível criar a instância na Evolution. '
+							.($api->getLastError() ?: '').' ['.implode(' | ', $logs).']',
+					];
+				}
 			}
 		}
 
@@ -259,12 +381,16 @@ class WhatsappEscolaService {
 	private static function garantirWebhook(EvolutionApiService $api, string $instance, int $idAdmin): bool {
 		$url = EvolutionApiService::webhookUrl($idAdmin);
 
+		if ($api->webhookEstaConfigurado($instance, $url)) {
+			return true;
+		}
+
 		for ($t = 0; $t < 3; $t++) {
 			if ($t > 0) {
 				usleep(600000);
 			}
 			$api->setWebhook($instance, $url);
-			if ($api->getLastHttpCode() < 400) {
+			if ($api->getLastHttpCode() < 400 && $api->webhookEstaConfigurado($instance, $url)) {
 				return true;
 			}
 		}
@@ -289,15 +415,22 @@ class WhatsappEscolaService {
 			|| stripos($msg, 'já') !== false
 			|| $api->getLastHttpCode() === 403;
 
-		if ($jaExiste) {
-			$api->logout($instance);
-			$api->deleteInstance($instance);
-			$logs[] = 'delete-retry:HTTP '.$api->getLastHttpCode();
+		if ($jaExiste || $api->getLastHttpCode() === 403) {
+			if ($api->instanciaExiste($instance)) {
+				$logs[] = 'create:403-instancia-existente';
+				return null;
+			}
+			$api->removerInstancia($instance);
+			$logs[] = 'delete-retry:'.($api->instanciaExiste($instance) ? 'fail' : 'ok');
 			usleep(1500000);
 			$created = $api->createInstance($instance, null);
 			$logs[] = 'create2:HTTP '.$api->getLastHttpCode().' '.($api->getLastError() ?: 'ok');
 			if ($created !== null && $api->getLastHttpCode() < 400) {
 				return $created;
+			}
+			if ($api->instanciaExiste($instance)) {
+				$logs[] = 'create2:usa-existente';
+				return null;
 			}
 		}
 
@@ -311,9 +444,8 @@ class WhatsappEscolaService {
 		}
 
 		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		$instance = ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance))
-			? (string)$integracao->evolution_instance
-			: EvolutionApiService::nomeInstancia($idAdmin);
+		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
+		$instance = $api->resolverNomeInstancia($instance);
 
 		$state = $api->connectionState($instance);
 		if ($api->getLastHttpCode() === 404 && !$api->instanciaExiste($instance)) {
@@ -699,33 +831,30 @@ class WhatsappEscolaService {
 		}
 
 		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		$instance = ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance))
-			? (string)$integracao->evolution_instance
-			: EvolutionApiService::nomeInstancia($idAdmin);
+		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
+		$instance = $api->resolverNomeInstancia($instance);
 
 		$avisos = [];
 		$instanceExiste = $api->instanciaExiste($instance);
 
 		if ($instanceExiste) {
-			$api->logout($instance);
-			$httpLogout = $api->getLastHttpCode();
-			if ($httpLogout >= 400 && $httpLogout !== 404) {
-				$avisos[] = 'logout: '.($api->getLastError() ?: 'HTTP '.$httpLogout);
-			}
-		}
-
-		if ($apagarInstancia && $instanceExiste) {
-			usleep(800000);
-			$api->deleteInstance($instance);
-			$httpDel = $api->getLastHttpCode();
-			if ($httpDel >= 400 && $httpDel !== 404) {
-				self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
-				return [
-					'ok' => false,
-					'message' => 'Não foi possível remover a instância na Evolution. '
-						.($api->getLastError() ?: 'HTTP '.$httpDel)
-						.' Use “Trocar número” ou apague manualmente no painel da Evolution (instância: '.$instance.').',
-				];
+			if (!$apagarInstancia) {
+				$api->logout($instance);
+				$httpLogout = $api->getLastHttpCode();
+				if ($httpLogout >= 400 && $httpLogout !== 404) {
+					$avisos[] = 'logout: '.($api->getLastError() ?: 'HTTP '.$httpLogout);
+				}
+			} else {
+				$removido = $api->removerInstancia($instance);
+				if (!$removido) {
+					self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
+					return [
+						'ok' => false,
+						'message' => 'Não foi possível remover a instância na Evolution (instância: '.$instance.'). '
+							.'Desvincule em WhatsApp → Aparelhos conectados no celular e tente novamente, '
+							.'ou apague manualmente no painel da Evolution.',
+					];
+				}
 			}
 		}
 
@@ -755,14 +884,15 @@ class WhatsappEscolaService {
 
 	public static function atualizarStatusConexao(int $idAdmin, string $estado, ?string $numero = null): void {
 		$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
-		$instance = ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance))
-			? (string)$integracao->evolution_instance
-			: EvolutionApiService::nomeInstancia($idAdmin);
+		$api = EvolutionApiService::fromEnv();
+		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
+		if ($api->isConfigured()) {
+			$instance = $api->resolverNomeInstancia($instance);
+		}
 		$ativo = in_array($estado, ['open', 'connected'], true) ? 1 : null;
 		self::persistirStatus($idAdmin, $instance, $estado, $integracao, $ativo, $numero);
 
 		if (in_array($estado, ['open', 'connected'], true)) {
-			$api = EvolutionApiService::fromEnv();
 			if ($api->isConfigured()) {
 				self::garantirWebhook($api, $instance, $idAdmin);
 			}
