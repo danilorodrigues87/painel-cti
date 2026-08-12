@@ -5,9 +5,11 @@ namespace App\Controller\Master;
 use App\Utils\View;
 use App\Common\SystemModules;
 use App\Common\Helpers\ModuleGateHelper;
+use App\Common\Helpers\CtiCatalogProvisioner;
 use App\Model\Entity\EscolasAssinantes;
 use App\Model\Entity\EstadoCidades;
 use App\Model\Entity\PlanosAssinatura;
+use App\Model\Entity\LmsEscolaCursoCti;
 use App\Model\Entity\User as EntityUser;
 use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\BrandingHelper;
@@ -64,6 +66,9 @@ class Escolas extends Page {
 		$results = EscolasAssinantes::getEscolas(null, 'nome ASC');
 		$lista = [];
 		while ($e = $results->fetchObject(EscolasAssinantes::class)) {
+			if (EscolasAssinantes::temColunaCatalogoCti() && !empty($e->catalogo_cti)) {
+				continue;
+			}
 			$lista[] = self::formatar($e);
 		}
 		return json_encode(['success' => true, 'escolas' => $lista]);
@@ -118,6 +123,7 @@ class Escolas extends Page {
 				$ob->atualizar();
 				ModuleGateHelper::limparCache((int)$ob->id);
 				ModuleGateHelper::sincronizarAcessoDiretores((int)$ob->id);
+				CtiCatalogProvisioner::syncEscola((int)$ob->id);
 
 				return json_encode([
 					'success' => true,
@@ -189,6 +195,8 @@ class Escolas extends Page {
 			$diretor->acesso = json_encode(array_values($labelsAcesso), JSON_UNESCAPED_UNICODE);
 			$diretor->id_admin = (int)$ob->id;
 			$diretor->cadastrar();
+
+			CtiCatalogProvisioner::syncEscola((int)$ob->id);
 
 			return json_encode([
 				'success' => true,
@@ -482,6 +490,9 @@ class Escolas extends Page {
 				: null,
 			'em_trial' => SaasAssinaturaService::emTrialAtivo($e) ? 1 : 0,
 			'valor_efetivo' => SaasAssinaturaService::resolverValorMensal($e),
+			'cti_cursos_qtd' => LmsEscolaCursoCti::tabelaExiste()
+				? LmsEscolaCursoCti::contarAtivosEscola((int)$e->id)
+				: 0,
 		];
 
 		if ($completo) {

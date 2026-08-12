@@ -38,6 +38,20 @@ $obRouter->post('/master/planos', [
 	}
 ]);
 
+$obRouter->get('/master/ead-cursos', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\EadCursos::index($request));
+	}
+]);
+
+$obRouter->post('/master/ead-cursos', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\EadCursos::getInfo($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/assinaturas', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

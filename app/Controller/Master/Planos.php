@@ -5,7 +5,9 @@ namespace App\Controller\Master;
 use App\Utils\View;
 use App\Common\SystemModules;
 use App\Common\Helpers\ModuleGateHelper;
+use App\Common\Helpers\CtiCatalogProvisioner;
 use App\Model\Entity\PlanosAssinatura;
+use App\Model\Entity\PlanosCurso;
 use App\Model\Entity\EscolasAssinantes;
 
 class Planos extends Page {
@@ -133,11 +135,13 @@ class Planos extends Page {
 
 		if ($id > 0) {
 			$ob->atualizar();
+			self::salvarCursosPlano((int)$ob->id, $post);
 			self::reescreverEscolasDoPlano($ob);
 			return json_encode(['success' => true, 'message' => 'Plano atualizado. Escolas vinculadas foram sincronizadas.', 'plano' => self::formatar($ob)]);
 		}
 
 		$ob->cadastrar();
+		self::salvarCursosPlano((int)$ob->id, $post);
 		return json_encode(['success' => true, 'message' => 'Plano criado.', 'plano' => self::formatar($ob)]);
 	}
 
@@ -174,7 +178,26 @@ class Planos extends Page {
 			$e->atualizar();
 			ModuleGateHelper::limparCache((int)$e->id);
 			ModuleGateHelper::sincronizarAcessoDiretores((int)$e->id);
+			CtiCatalogProvisioner::syncEscola((int)$e->id);
 		}
+	}
+
+	/** @param int[] $cursoIds */
+	private static function salvarCursosPlano(int $planId, array $post): void {
+		if ($planId <= 0 || !PlanosCurso::tabelaExiste()) {
+			return;
+		}
+		$raw = $post['cursos_json'] ?? '[]';
+		$arr = is_array($raw) ? $raw : (json_decode((string)$raw, true) ?: []);
+		$ids = [];
+		foreach ($arr as $v) {
+			$id = (int)$v;
+			if ($id > 0) {
+				$ids[] = $id;
+			}
+		}
+		PlanosCurso::syncPlano($planId, $ids);
+		CtiCatalogProvisioner::syncTodasEscolasDoPlano($planId);
 	}
 
 	private static function formatar(PlanosAssinatura $p): array {
@@ -194,6 +217,8 @@ class Planos extends Page {
 			'modulos_qtd'   => $p->temTodosModulos()
 				? count(SystemModules::getSlugs())
 				: count($p->getSlugs()),
+			'cursos_ids'    => PlanosCurso::tabelaExiste() ? PlanosCurso::idsPorPlano((int)$p->id) : [],
+			'cursos_qtd'    => PlanosCurso::tabelaExiste() ? count(PlanosCurso::idsPorPlano((int)$p->id)) : 0,
 		];
 	}
 

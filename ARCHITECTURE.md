@@ -255,15 +255,17 @@ lms_cursos (independente; titulo próprio; id_trilha opcional/legado)
   → lms_modulos → lms_aulas → videos/materiais/atividades/roleplay
 lms_matricula_ead → libera aluno no Ascend (sem carnê)
 vitrine: lms_vitrine_assinaturas + itens na saas_faturas + lms_vitrine_repasses
+catalogo_cti: planos_cursos + lms_escola_cursos_cti (cursos origem=cti, incluídos no plano SaaS)
 ```
 
+- **Catálogo CTI (Master):** `/master/ead-cursos` + vínculo em **Planos** (`planos_cursos`). Provisionamento: `CtiCatalogProvisioner` → `lms_escola_cursos_cti`. Escola: card **Cursos CTI** em `/painel/ead` (somente leitura, matrícula manual). SQL: `database/lms_catalogo_cti.sql`.
 - **Aulas interativas (L-Editor):** SQL `database/lms_aulas_interativas.sql` + `database/plataforma_bunny.sql` (`tipo_conteudo`, `lms_aula_cenas`, progresso, `lms_editor_tokens`; mídias em Bunny). Editor isolado no Ascend (`/editor/*`, sem layout do aluno). API `/api/v1/editor/*` (JWT professor) + cenas no `GET` lesson do aluno (`contentType: interactive`, `interactiveProgress: { passo, maxPasso, concluida }`). Upload: imagem/áudio → **Bunny Storage**; vídeo de cena → **Bunny Stream** (HLS assinado na leitura). Progresso de cena: `POST .../interactive-progress`. Portal: Continuar de onde parou / Começar do início. Painel: botão **Abrir editor** (token one-time → `ASCEND_URL/editor/auth?token=`).
-- **Entitlement:** `lms_matricula_ead` ativa + curso `publicado=1` + escola dona do curso **ou** licença vitrine ativa. Matrícula comercial **não** libera EAD.
+- **Entitlement:** `lms_matricula_ead` ativa + curso `publicado=1` + escola dona **ou** licença vitrine **ou** provisionamento CTI ativo. Matrícula comercial **não** libera EAD.
 - **Painel:** `/painel/ead` (cursos), `/painel/ead/curso/{id}` (editor + aba Alunos), `/painel/ead/vitrine`; Config IA `/painel/config/ia`
 - **Vitrine (menu):** slug `vitrine` / label `Vitrine de cursos` no catálogo de permissões (plano com `ead` expande `vitrine`). Menu e banner só aparecem se houver curso compartilhado de outra escola **ou** licença ativa da escola; sem isso redireciona para `/painel/ead`.
 - **Editor:** curso independente; matricular/desmatricular EAD; opcional vitrine (preço mensal). JS: `ead-cursos.js`, `ead-editor.js`, `ead-vitrine.js`
 - **Trilhas:** `ativo` + filtros busca/categoria/status; nova matrícula só ativas
-- **SQL extra:** `lms_ead_independente.sql`, `lms_vitrine.sql` (opcional limpar: `lms_ead_limpar_exemplos.sql`)
+- **SQL extra:** `lms_ead_independente.sql`, `lms_vitrine.sql`, **`lms_catalogo_cti.sql`** (opcional limpar: `lms_ead_limpar_exemplos.sql`)
 - **SQL (ordem base):** `lms_ead.sql` → `lms_xp.sql` → … → `lms_videos_bunny.sql` → **`lms_aulas_interativas.sql`** → **`plataforma_bunny.sql`** → **`lms_ead_independente.sql`** → **`lms_vitrine.sql`** — ver `database/LMS_CHECKLIST_PRODUCAO.md`
 - **API aluno:** `/api/v1/student/*` (JWT Cliente; CORS; mapper Ascend). **Não** usar API legada `/api/v1/trilhas`
 - **Portal:** `ascend-academy` — marca **CTI Educacional** (`public/brand/cti-logo.png`); build com `VITE_API_BASE_URL` apontando para a API

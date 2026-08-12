@@ -164,11 +164,14 @@ function renderLista(escolas){
 			? '<span class="badge bg-success">Ativa</span>'
 			: '<span class="badge bg-secondary">Inativa</span>';
 		const plano = e.plano_nome ? esc(e.plano_nome) : '<span class="text-muted">Personalizado</span>';
+		const ctiBadge = (e.cti_cursos_qtd || 0) > 0
+			? '<br><span class="badge bg-info text-dark mt-1">' + e.cti_cursos_qtd + ' curso(s) CTI</span>'
+			: '';
 		$tb.append(
 			'<tr>'
 			+'<td>'+esc(e.id)+'</td>'
 			+'<td><strong>'+esc(e.nome)+'</strong></td>'
-			+'<td class="small">'+plano+'</td>'
+			+'<td class="small">'+plano+ctiBadge+'</td>'
 			+'<td class="small">'+esc(e.email || '—')+'<br>'+esc(e.telefone || '')+'</td>'
 			+'<td>'+badge+'</td>'
 			+'<td class="text-end text-nowrap">'

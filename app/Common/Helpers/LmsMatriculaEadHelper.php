@@ -5,6 +5,8 @@ namespace App\Common\Helpers;
 use App\Model\Entity\LmsCurso;
 use App\Model\Entity\LmsMatriculaEad;
 use App\Model\Entity\LmsVitrineAssinatura;
+use App\Model\Entity\LmsEscolaCursoCti;
+use App\Common\CtiCatalog;
 use App\Model\Entity\User as EntityUser;
 use App\Session\User\Login as SessionUser;
 
@@ -21,6 +23,9 @@ class LmsMatriculaEadHelper {
 	 */
 	public static function escolaPodeUsarCurso(LmsCurso $curso, int $idAdminEscola): bool {
 		if ((int)$curso->id_admin === $idAdminEscola) {
+			return true;
+		}
+		if (CtiCatalog::isCursoCti($curso) && LmsEscolaCursoCti::ativaParaEscolaCurso($idAdminEscola, (int)$curso->id)) {
 			return true;
 		}
 		if (!class_exists(LmsVitrineAssinatura::class) || !LmsVitrineAssinatura::tabelaExiste()) {

@@ -23,6 +23,53 @@
 	<a href="{{URL}}/painel/ead/vitrine" class="btn btn-sm btn-primary">Abrir vitrine</a>
 </div>
 
+<div class="card shadow mb-4 d-none" id="card-cursos-cti">
+	<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+		<span><i class="fa-solid fa-building-columns me-1"></i> Cursos CTI (padrão do plano)</span>
+		<span class="badge bg-info text-dark">Somente leitura</span>
+	</div>
+	<div class="card-body">
+		<p class="text-muted small">Incluídos automaticamente pelo seu plano. Matricule alunos manualmente — conteúdo editado pela CTI.</p>
+		<div class="table-responsive">
+			<table class="table table-striped align-middle mb-0">
+				<thead>
+					<tr>
+						<th>Curso</th>
+						<th>Carga h</th>
+						<th>Aulas</th>
+						<th>Status</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody id="ead-cti-tbody">
+					<tr><td colspan="5" class="text-muted">Carregando…</td></tr>
+				</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="modal fade" id="modalMatriculaCti" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="modalMatriculaCtiTitulo">Matrículas</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<input type="hidden" id="cti_matricula_curso_id" value="">
+				<div class="input-group mb-3">
+					<input type="text" class="form-control" id="cti_busca_aluno" placeholder="Buscar aluno por nome ou e-mail">
+					<button type="button" class="btn btn-outline-primary" id="btn-cti-buscar-aluno">Buscar</button>
+				</div>
+				<div id="cti_busca_resultados" class="mb-3"></div>
+				<h6>Matriculados</h6>
+				<div id="cti_lista_matriculas" class="small text-muted">—</div>
+			</div>
+		</div>
+	</div>
+</div>
+
 <div class="card shadow mb-4">
 	<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
 		<span><i class="fa-solid fa-laptop-code me-1"></i> Cursos EAD</span>
@@ -51,4 +98,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/ead-cursos.js?v=20260801b"></script>
+<script src="{{URL}}/resources/js/ead-cursos.js?v=20260812a"></script>

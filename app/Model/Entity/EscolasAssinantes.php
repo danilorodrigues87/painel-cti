@@ -33,6 +33,7 @@ class EscolasAssinantes {
 	public $modelo_certificado;
 	public $modelo_contrato_html;
 	public $certificado_frase_conclusao;
+	public $catalogo_cti = 0;
 
 	public static function temColunaPlanId(): bool {
 		return self::temColuna('plan_id');
@@ -60,6 +61,10 @@ class EscolasAssinantes {
 
 	public static function temColunaCertificadoFrase(): bool {
 		return self::temColuna('certificado_frase_conclusao');
+	}
+
+	public static function temColunaCatalogoCti(): bool {
+		return self::temColuna('catalogo_cti');
 	}
 
 	private static function temColuna(string $coluna): bool {
@@ -175,6 +180,9 @@ class EscolasAssinantes {
 				? mb_substr(trim((string)$this->certificado_frase_conclusao), 0, 255)
 				: null;
 		}
+		if (self::temColunaCatalogoCti()) {
+			$dados['catalogo_cti'] = !empty($this->catalogo_cti) ? 1 : 0;
+		}
 		$this->id = (int)$obDatabase->insert($dados);
 
 		// Tenant = PK da escola
@@ -224,6 +232,9 @@ class EscolasAssinantes {
 			$dados['certificado_frase_conclusao'] = $this->certificado_frase_conclusao !== null && trim((string)$this->certificado_frase_conclusao) !== ''
 				? mb_substr(trim((string)$this->certificado_frase_conclusao), 0, 255)
 				: null;
+		}
+		if (self::temColunaCatalogoCti()) {
+			$dados['catalogo_cti'] = !empty($this->catalogo_cti) ? 1 : 0;
 		}
 		return (new Database('escolas_assinantes'))->update('id = '.(int)$this->id, $dados);
 	}

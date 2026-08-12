@@ -23,6 +23,7 @@ class LmsCurso extends LmsBase {
 	public $vitrine_ativo = 0;
 	public $vitrine_preco_mensal = 0;
 	public $vitrine_descricao;
+	public $origem = 'escola';
 	public $created_at;
 	public $updated_at;
 
@@ -91,6 +92,12 @@ class LmsCurso extends LmsBase {
 			$dados['vitrine_descricao'] = $this->vitrine_descricao;
 		}
 
+		if (self::temColunaOrigem()) {
+			$dados['origem'] = in_array((string)$this->origem, ['escola', 'cti'], true)
+				? (string)$this->origem
+				: 'escola';
+		}
+
 		if (!empty($this->id)) {
 			$this->updateRow((int)$this->id, (int)$this->id_admin, $dados);
 			return (int)$this->id;
@@ -132,5 +139,38 @@ class LmsCurso extends LmsBase {
 			$ok = false;
 		}
 		return $ok;
+	}
+
+	public static function temColunaOrigem(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$db = new \App\Model\Db\Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM `lms_cursos` LIKE 'origem'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	/** @return LmsCurso[] */
+	public static function listarPorOrigem(string $origem, int $idAdmin): array {
+		if (!self::temColunaOrigem()) {
+			return [];
+		}
+		$origem = addslashes($origem);
+		$order = self::temColunaTitulo() ? 'titulo ASC, id DESC' : 'id DESC';
+		$results = self::get(
+			"origem = '{$origem}' AND id_admin = ".(int)$idAdmin,
+			$order
+		);
+		$out = [];
+		while ($c = $results->fetchObject(self::class)) {
+			$out[] = $c;
+		}
+		return $out;
 	}
 }

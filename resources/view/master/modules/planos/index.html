@@ -67,6 +67,14 @@
 					</div>
 					<div class="col-12">
 						<div class="d-flex justify-content-between align-items-center mb-2">
+							<h6 class="mb-0">Cursos CTI incluídos</h6>
+							<a href="{{URL}}/master/ead-cursos" class="small" target="_blank">Gerenciar catálogo</a>
+						</div>
+						<div id="lista-cursos-plano" class="border rounded p-2" style="max-height:240px;overflow:auto;"></div>
+						<div class="form-text">Marque os cursos e use ▲▼ para definir a ordem no portal. Escolas com este plano recebem licença automática (somente leitura).</div>
+					</div>
+					<div class="col-12">
+						<div class="d-flex justify-content-between align-items-center mb-2">
 							<h6 class="mb-0">Módulos do plano</h6>
 							<div class="form-check form-switch">
 								<input class="form-check-input" type="checkbox" id="plano_todos_modulos">
@@ -89,4 +97,4 @@
 <script>
 window.MASTER_MODULOS = {{modulos_json}};
 </script>
-<script src="{{URL}}/resources/js/master-planos.js?v=20260718a"></script>
+<script src="{{URL}}/resources/js/master-planos.js?v=20260812b"></script>

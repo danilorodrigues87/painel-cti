@@ -79,6 +79,22 @@ class LmsHelper {
 		return LmsCurso::getByIdAdmin((int)$curso->id, $idAdmin);
 	}
 
+	/** Cria curso no catálogo CTI (Master). */
+	public static function criarCursoCti(string $titulo = 'Novo curso CTI'): ?LmsCurso {
+		$idAdmin = \App\Common\CtiCatalog::idAdmin();
+		if ($idAdmin <= 0 || !self::tabelasExistem()) {
+			return null;
+		}
+		$curso = self::criarCursoIndependente($idAdmin, $titulo);
+		if (!$curso instanceof LmsCurso || !LmsCurso::temColunaOrigem()) {
+			return $curso;
+		}
+		$curso->origem = \App\Common\CtiCatalog::ORIGEM_CTI;
+		$curso->vitrine_ativo = 0;
+		$curso->salvar();
+		return LmsCurso::getByIdAdmin((int)$curso->id, $idAdmin);
+	}
+
 	public static function garantirModuloPadrao(int $idCurso, int $idAdmin): LmsModulo {
 		$mods = LmsModulo::listByCurso($idCurso, $idAdmin);
 		if (!empty($mods)) {

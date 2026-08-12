@@ -6,6 +6,8 @@ use App\Utils\View;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\LmsHelper;
 use App\Common\Helpers\BunnyStreamHelper;
+use App\Common\CtiCatalog;
+use App\Model\Entity\LmsEscolaCursoCti;
 use App\Model\Entity\LmsCurso;
 use App\Model\Entity\LmsModulo;
 use App\Model\Entity\LmsAula;
@@ -140,7 +142,34 @@ class EadCursos extends Page {
 			'bunny_ok' => $bunnyStream && $bunnySql,
 			'bunny_motivo' => $bunnyMotivo,
 			'itens' => $itens,
+			'cti_itens' => self::listarCursosCtiEscola($idAdmin),
+			'catalogo_cti_ok' => CtiCatalog::tabelasExistem(),
 		]);
+	}
+
+	/** @return array<int, array<string, mixed>> */
+	private static function listarCursosCtiEscola(int $idAdmin): array {
+		if (!LmsEscolaCursoCti::tabelaExiste()) {
+			return [];
+		}
+		$itens = [];
+		foreach (LmsEscolaCursoCti::listarAtivosEscola($idAdmin) as $row) {
+			$curso = LmsCurso::getById((int)($row['curso_id'] ?? 0));
+			if (!$curso instanceof LmsCurso) {
+				continue;
+			}
+			$idOwner = (int)$curso->id_admin;
+			$itens[] = [
+				'id_curso' => (int)$curso->id,
+				'nome' => $curso->nomeExibicao(),
+				'carga_h' => $curso->carga_h,
+				'status' => LmsHelper::statusEad($curso, $idOwner),
+				'publicado' => (int)$curso->publicado,
+				'aulas' => LmsHelper::contagemAulasCurso((int)$curso->id, $idOwner),
+				'somente_leitura' => true,
+			];
+		}
+		return $itens;
 	}
 
 	private static function criarCurso(array $post): string {
