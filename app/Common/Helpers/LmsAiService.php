@@ -204,25 +204,42 @@ class LmsAiService {
 
 	/**
 	 * Corrige questão aberta. Retorna ['score'=>0-100, 'feedback'=>string, 'correct'=>bool].
+	 * $expectedAnswer = gabarito opcional (campo resposta_correta). $idAdmin = tenant da escola dona do conteúdo/IA.
 	 */
-	public static function gradeEssay(int $idAdmin, string $prompt, string $answer, string $lessonContext = ''): array {
+	public static function gradeEssay(
+		int $idAdmin,
+		string $prompt,
+		string $answer,
+		string $lessonContext = '',
+		string $expectedAnswer = ''
+	): array {
 		$answer = trim($answer);
 		if ($answer === '') {
 			return ['score' => 0, 'feedback' => 'Resposta em branco.', 'correct' => false];
 		}
+
+		$local = self::tryGradeEssayLocally($prompt, $answer, trim($expectedAnswer));
+		if ($local !== null) {
+			return $local;
+		}
+
 		$sys = 'Você é um corretor pedagógico. Avalie a resposta do aluno de 0 a 100. '
-			.'Responda APENAS JSON válido: {"score":0-100,"feedback":"texto curto em português","correct":true|false}. '
-			.'correct=true se score>=70. Seja justo: valorize raciocínio correto mesmo com redação simples.';
+			.'Responda APENAS JSON válido, sem markdown: {"score":0-100,"feedback":"texto curto em português","correct":true|false}. '
+			.'correct=true se score>=70. Seja justo: respostas objetivamente corretas (incluindo contas simples) devem receber score alto.';
 		$user = "Enunciado:\n{$prompt}\n\nResposta do aluno:\n{$answer}";
+		if (trim($expectedAnswer) !== '') {
+			$user .= "\n\nGabarito esperado (referência):\n".$expectedAnswer;
+		}
 		if ($lessonContext !== '') {
 			$user = "Contexto da aula (use só como referência, sem inventar fatos):\n{$lessonContext}\n\n".$user;
 		}
 		$raw = self::chat($idAdmin, [['role' => 'user', 'content' => $user]], $sys);
-		$json = null;
-		if (preg_match('/\{.*\}/s', $raw, $m)) {
-			$json = json_decode($m[0], true);
-		}
+		$json = self::parseJsonFromLlm($raw);
 		if (!is_array($json)) {
+			$retry = self::avaliarExpressaoNoEnunciado($prompt, $answer);
+			if ($retry !== null) {
+				return $retry;
+			}
 			$len = mb_strlen($answer);
 			$score = $len < 20 ? 40 : ($len < 80 ? 65 : 75);
 			return [
@@ -232,11 +249,127 @@ class LmsAiService {
 			];
 		}
 		$score = max(0, min(100, (int)($json['score'] ?? 0)));
-		return [
+		$result = [
 			'score' => $score,
 			'feedback' => (string)($json['feedback'] ?? ''),
 			'correct' => !empty($json['correct']) || $score >= 70,
 		];
+		if ($score < 70) {
+			$override = self::tryGradeEssayLocally($prompt, $answer, trim($expectedAnswer));
+			if ($override !== null && !empty($override['correct'])) {
+				return $override;
+			}
+		}
+		return $result;
+	}
+
+	/** @return array{score:int,feedback:string,correct:bool}|null */
+	private static function tryGradeEssayLocally(string $prompt, string $answer, string $expected): ?array {
+		if ($expected !== '') {
+			if (self::respostasEquivalentes($expected, $answer)) {
+				return ['score' => 100, 'feedback' => 'Resposta correta.', 'correct' => true];
+			}
+		}
+		return self::avaliarExpressaoNoEnunciado($prompt, $answer);
+	}
+
+	/** Detecta contas simples no enunciado (ex.: "quanto é 40 - 10"). */
+	private static function avaliarExpressaoNoEnunciado(string $prompt, string $answer): ?array {
+		$texto = self::normalizarTextoEnunciado($prompt);
+		if (!preg_match('/(\d+(?:[.,]\d+)?)\s*([+\-*\/×÷x−–—])\s*(\d+(?:[.,]\d+)?)/u', $texto, $m)) {
+			return null;
+		}
+		$a = (float)str_replace(',', '.', $m[1]);
+		$op = $m[2];
+		$b = (float)str_replace(',', '.', $m[3]);
+		$resultado = null;
+		if ($op === '+' || $op === 'x') {
+			$resultado = $a + $b;
+		} elseif ($op === '-' || $op === '−' || $op === '–' || $op === '—') {
+			$resultado = $a - $b;
+		} elseif ($op === '*' || $op === '×') {
+			$resultado = $a * $b;
+		} elseif (($op === '/' || $op === '÷') && abs($b) > 0.00001) {
+			$resultado = $a / $b;
+		}
+		if ($resultado === null) {
+			return null;
+		}
+		$ok = self::respostasEquivalentes((string)$resultado, $answer);
+		return [
+			'score' => $ok ? 100 : 0,
+			'feedback' => $ok ? 'Resposta correta.' : 'Resposta incorreta.',
+			'correct' => $ok,
+		];
+	}
+
+	private static function respostasEquivalentes(string $expected, string $given): bool {
+		$e = self::normalizarRespostaTexto($expected);
+		$g = self::normalizarRespostaTexto($given);
+		if ($e === $g) {
+			return true;
+		}
+		if (self::numerosEquivalentes($expected, $given)) {
+			return true;
+		}
+		return false;
+	}
+
+	private static function normalizarRespostaTexto(string $s): string {
+		$s = html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		$s = str_replace(["\xc2\xa0", '−', '–', '—'], [' ', '-', '-', '-'], $s);
+		$s = mb_strtolower(trim($s), 'UTF-8');
+		$s = preg_replace('/\s+/u', ' ', $s) ?? $s;
+		return $s;
+	}
+
+	private static function normalizarTextoEnunciado(string $s): string {
+		$s = html_entity_decode(strip_tags($s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		$s = str_replace(["\xc2\xa0", '−', '–', '—'], [' ', '-', '-', '-'], $s);
+		return mb_strtolower($s, 'UTF-8');
+	}
+
+	private static function numerosEquivalentes(string $expected, string $given): bool {
+		$ne = self::extrairNumero($expected);
+		$ng = self::extrairNumero($given);
+		if ($ne === null || $ng === null) {
+			return false;
+		}
+		return abs($ne - $ng) < 0.01;
+	}
+
+	private static function extrairNumero(string $s): ?float {
+		$s = trim(str_replace(',', '.', $s));
+		if ($s === '' || !preg_match('/^-?\d+(?:\.\d+)?$/', $s)) {
+			if (preg_match('/-?\d+(?:[.,]\d+)?/', $s, $m)) {
+				$s = str_replace(',', '.', $m[0]);
+			} else {
+				return null;
+			}
+		}
+		return is_numeric($s) ? (float)$s : null;
+	}
+
+	private static function parseJsonFromLlm(string $raw): ?array {
+		$raw = trim($raw);
+		if ($raw === '') {
+			return null;
+		}
+		if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/s', $raw, $m)) {
+			$decoded = json_decode($m[1], true);
+			if (is_array($decoded)) {
+				return $decoded;
+			}
+		}
+		$start = strpos($raw, '{');
+		$end = strrpos($raw, '}');
+		if ($start !== false && $end !== false && $end > $start) {
+			$decoded = json_decode(substr($raw, $start, $end - $start + 1), true);
+			if (is_array($decoded)) {
+				return $decoded;
+			}
+		}
+		return null;
 	}
 
 	public static function evaluateRoleplay(int $idAdmin, array $scenario, array $messages): array {

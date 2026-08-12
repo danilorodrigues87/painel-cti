@@ -85,10 +85,11 @@ class LmsUnidadeAvaliacaoHelper {
 	/**
 	 * @return array{scores: float[], average: ?float, allDone: bool, passed: bool, details: array}
 	 */
-	public static function avaliarUnidade(int $idAluno, int $idAula, int $idAdmin): array {
-		$prog = self::getOrCreateProgresso($idAluno, $idAula, $idAdmin);
+	public static function avaliarUnidade(int $idAluno, int $idAula, int $idAdminEscola, ?int $idAdminConteudo = null): array {
+		$idContent = $idAdminConteudo ?? $idAdminEscola;
+		$prog = self::getOrCreateProgresso($idAluno, $idAula, $idAdminEscola);
 		$ciclo = self::cicloAtual($prog);
-		$itens = self::itensAvaliados($idAula, $idAdmin);
+		$itens = self::itensAvaliados($idAula, $idContent);
 		$scores = [];
 		$details = [];
 		$allDone = true;
@@ -100,7 +101,7 @@ class LmsUnidadeAvaliacaoHelper {
 			if ($it['kind'] === 'assessment') {
 				$nota = self::melhorNotaAtividade($idAluno, $it['id'], $ciclo);
 			} else {
-				$nota = self::melhorNotaRoleplay($idAluno, $it['id'], $idAdmin, $ciclo);
+				$nota = self::melhorNotaRoleplay($idAluno, $it['id'], $idAdminEscola, $ciclo);
 			}
 			$details[] = [
 				'kind' => $it['kind'],
@@ -127,9 +128,9 @@ class LmsUnidadeAvaliacaoHelper {
 	}
 
 	/** Persiste resultado da unidade; se reprovado com tudo feito, exige revisar aula. */
-	public static function sincronizarUnidade(int $idAluno, int $idAula, int $idAdmin): array {
-		$eval = self::avaliarUnidade($idAluno, $idAula, $idAdmin);
-		$prog = self::getOrCreateProgresso($idAluno, $idAula, $idAdmin);
+	public static function sincronizarUnidade(int $idAluno, int $idAula, int $idAdminEscola, ?int $idAdminConteudo = null): array {
+		$eval = self::avaliarUnidade($idAluno, $idAula, $idAdminEscola, $idAdminConteudo);
+		$prog = self::getOrCreateProgresso($idAluno, $idAula, $idAdminEscola);
 		if ($eval['allDone'] && $eval['average'] !== null) {
 			$prog->nota_unidade = $eval['average'];
 			if ($eval['passed']) {

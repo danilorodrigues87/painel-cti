@@ -184,14 +184,16 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 		$userLogedData = SessionUser::getUserLogedData();
 
-		$termosAceito = TermosDeUso::usuarioAceitouVersaoAtual(
-			User::getUser(
-				'id = '.(int)$userLogedData['usuario']['id'],
-				null,
-				null,
-				'termos_uso'.(\App\Model\Entity\User::temColunasTermosVersao() ? ', termos_versao' : '')
-			)->fetchObject()
-		);
+		// Master em impersonate: não bloquear por termos do diretor da escola
+		$termosAceito = SessionUser::isImpersonating()
+			|| TermosDeUso::usuarioAceitouVersaoAtual(
+				User::getUser(
+					'id = '.(int)$userLogedData['usuario']['id'],
+					null,
+					null,
+					'termos_uso'.(\App\Model\Entity\User::temColunasTermosVersao() ? ', termos_versao' : '')
+				)->fetchObject()
+			);
 
 		$permittedModules = array();
 

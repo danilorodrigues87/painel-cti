@@ -3,6 +3,7 @@
 namespace App\Controller\Api\Editor;
 
 use App\Common\Environment;
+use App\Common\Helpers\EditorAuthHelper;
 use App\Model\Entity\User;
 use App\Model\Entity\LmsEditorToken;
 use App\Model\Entity\EscolasAssinantes;
@@ -70,11 +71,14 @@ class Auth {
 			if ((string)($user->nivel ?? '') === 'Cliente') {
 				return self::err('Acesso apenas para editores.', 403);
 			}
-			if ((int)$user->id_admin !== (int)$row->id_admin) {
+
+			$idAdminToken = (int)$row->id_admin;
+			if (!EditorAuthHelper::usuarioCompativelComToken($user, $idAdminToken)) {
 				return self::err('Token inválido (tenant).', 401);
 			}
 
-			$escola = EscolasAssinantes::getEscolaById((int)$row->id_admin);
+			$idAdminEditor = $idAdminToken;
+			$escola = EscolasAssinantes::getEscolaById($idAdminEditor);
 			if (!$escola || !$escola->isAtiva()) {
 				return self::err('Escola inativa ou não encontrada.', 403);
 			}
@@ -83,12 +87,15 @@ class Auth {
 			$payload = [
 				'sub' => (int)$user->id,
 				'email' => (string)$user->email,
-				'id_admin' => (int)$row->id_admin,
+				'id_admin' => $idAdminEditor,
 				'role' => 'editor',
 				'nivel' => (string)$user->nivel,
 				'iat' => time(),
 				'exp' => time() + $expiresIn,
 			];
+			if (EditorAuthHelper::isMasterCatalogEditor($user, $idAdminEditor)) {
+				$payload['master_catalog'] = true;
+			}
 			if (!empty($row->id_curso)) {
 				$payload['id_curso'] = (int)$row->id_curso;
 			}
@@ -101,7 +108,7 @@ class Auth {
 					'name' => (string)($user->nome ?? ''),
 					'email' => (string)($user->email ?? ''),
 					'role' => 'editor',
-					'idAdmin' => (int)$row->id_admin,
+					'idAdmin' => $idAdminEditor,
 					'idCurso' => !empty($row->id_curso) ? (int)$row->id_curso : null,
 				],
 				'tokens' => [

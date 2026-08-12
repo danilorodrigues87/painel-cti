@@ -28,28 +28,43 @@ class Assessments {
 		$idAdmin = (int)$u->id_admin;
 		$idAluno = (int)$u->id;
 		$out = [];
+		$seen = [];
+
 		foreach (StudentEntitlement::idsTrilhasMatriculadas($idAluno, $idAdmin) as $idTrilha) {
 			$curso = LmsCurso::getByTrilha($idTrilha, $idAdmin);
 			if (!$curso || (int)$curso->publicado !== 1) {
 				continue;
 			}
 			foreach (LmsAtividade::listByCurso((int)$curso->id, $idAdmin) as $at) {
+				$seen[(int)$at->id] = true;
+				$out[] = $at;
+			}
+		}
+
+		foreach (StudentEntitlement::idsCursosEad($idAluno, $idAdmin) as $idCurso) {
+			$curso = LmsCurso::getById((int)$idCurso);
+			if (!$curso || !StudentEntitlement::podeAcessarCurso($curso, $idAluno, $idAdmin)) {
+				continue;
+			}
+			$idOwner = StudentEntitlement::idAdminConteudo($curso);
+			foreach (LmsAtividade::listByCurso((int)$curso->id, $idOwner) as $at) {
+				if (!empty($seen[(int)$at->id])) {
+					continue;
+				}
+				$seen[(int)$at->id] = true;
 				$out[] = $at;
 			}
 		}
 		return $out;
 	}
 
+	/** @return array{0: ?LmsAtividade, 1: int, 2: ?array} */
 	private static function loadAtividade(User $u, int $id): array {
-		$at = LmsAtividade::getByIdAdmin($id, (int)$u->id_admin);
-		if (!$at) {
-			return [null, self::err('Avaliação não encontrada.', 404)];
+		$resolved = StudentEntitlement::resolveAtividadeAluno($id, (int)$u->id, (int)$u->id_admin);
+		if (!$resolved) {
+			return [null, 0, self::err('Avaliação não encontrada.', 404)];
 		}
-		$curso = LmsCurso::getByIdAdmin((int)$at->id_curso, (int)$u->id_admin);
-		if (!$curso || !StudentEntitlement::podeAcessarCurso($curso, (int)$u->id, (int)$u->id_admin)) {
-			return [null, self::err('Sem acesso.', 403)];
-		}
-		return [$at, null];
+		return [$resolved['atividade'], (int)$resolved['idOwner'], null];
 	}
 
 	private static function isTrueish(string $v): bool {
@@ -148,9 +163,11 @@ class Assessments {
 		];
 	}
 
-	private static function payload(LmsAtividade $at, int $idAdmin, int $idAluno): array {
-		$data = StudentApiMapper::assessment($at, $idAdmin, false);
-		$ciclo = self::cicloDaAtividade($at, $idAluno, $idAdmin);
+	private static function payload(LmsAtividade $at, User $u, int $idOwner): array {
+		$idEscola = (int)$u->id_admin;
+		$idAluno = (int)$u->id;
+		$data = StudentApiMapper::assessment($at, $idOwner, false);
+		$ciclo = self::cicloDaAtividade($at, $idAluno, $idEscola);
 		$inProg = LmsAtividadeTentativa::getInProgress($idAluno, (int)$at->id, $ciclo);
 		$last = null;
 		if (!$inProg) {
@@ -162,7 +179,7 @@ class Assessments {
 		$data['bestScore'] = LmsUnidadeAvaliacaoHelper::melhorNotaAtividade($idAluno, (int)$at->id, $ciclo);
 		$idAula = (int)($at->id_aula ?? 0);
 		if ($idAula > 0) {
-			$unit = LmsUnidadeAvaliacaoHelper::avaliarUnidade($idAluno, $idAula, $idAdmin);
+			$unit = LmsUnidadeAvaliacaoHelper::avaliarUnidade($idAluno, $idAula, $idEscola, $idOwner);
 			$data['unitScore'] = $unit['average'];
 			$data['unitPassed'] = $unit['passed'];
 			$data['unitDetails'] = $unit['details'];
@@ -175,24 +192,26 @@ class Assessments {
 		$u = $request->user;
 		$list = [];
 		foreach (self::atividadesDoAluno($u) as $at) {
-			$list[] = self::payload($at, (int)$u->id_admin, (int)$u->id);
+			$resolved = StudentEntitlement::resolveAtividadeAluno((int)$at->id, (int)$u->id, (int)$u->id_admin);
+			$idOwner = $resolved ? (int)$resolved['idOwner'] : (int)$u->id_admin;
+			$list[] = self::payload($at, $u, $idOwner);
 		}
 		return self::ok($list);
 	}
 
 	public static function get($request, $id) {
 		$u = $request->user;
-		[$at, $err] = self::loadAtividade($u, (int)$id);
+		[$at, $idOwner, $err] = self::loadAtividade($u, (int)$id);
 		if ($err) {
 			return $err;
 		}
-		return self::ok(self::payload($at, (int)$u->id_admin, (int)$u->id));
+		return self::ok(self::payload($at, $u, $idOwner));
 	}
 
 	/** Inicia tentativa in_progress (se ainda houver cota no ciclo). */
 	public static function start($request, $id) {
 		$u = $request->user;
-		[$at, $err] = self::loadAtividade($u, (int)$id);
+		[$at, $idOwner, $err] = self::loadAtividade($u, (int)$id);
 		if ($err) {
 			return $err;
 		}
@@ -206,13 +225,13 @@ class Assessments {
 		}
 		$existing = LmsAtividadeTentativa::getInProgress((int)$u->id, (int)$at->id, $ciclo);
 		if ($existing) {
-			return self::ok(self::payload($at, (int)$u->id_admin, (int)$u->id));
+			return self::ok(self::payload($at, $u, $idOwner));
 		}
 		$max = max(1, min(10, (int)($at->tentativas_max ?: LmsUnidadeAvaliacaoHelper::TENTATIVAS_POR_CICLO)));
 		$used = LmsAtividadeTentativa::countCompletedCiclo((int)$u->id, (int)$at->id, $ciclo);
 		if ($used >= $max) {
 			if ($idAula > 0) {
-				LmsUnidadeAvaliacaoHelper::sincronizarUnidade((int)$u->id, $idAula, (int)$u->id_admin);
+				LmsUnidadeAvaliacaoHelper::sincronizarUnidade((int)$u->id, $idAula, (int)$u->id_admin, $idOwner);
 			}
 			return self::err('Limite de 3 tentativas esgotado neste ciclo. Assista a aula novamente para liberar +3 tentativas.', 403);
 		}
@@ -229,13 +248,13 @@ class Assessments {
 		$tent->status = 'in_progress';
 		$tent->ciclo = $ciclo;
 		$tent->salvar();
-		return self::ok(self::payload($at, (int)$u->id_admin, (int)$u->id));
+		return self::ok(self::payload($at, $u, $idOwner));
 	}
 
 	/** Responde 1 questão (trava imediata). Essay é corrigida por IA na hora. */
 	public static function answer($request, $id) {
 		$u = $request->user;
-		[$at, $err] = self::loadAtividade($u, (int)$id);
+		[$at, $idOwner, $err] = self::loadAtividade($u, (int)$id);
 		if ($err) {
 			return $err;
 		}
@@ -265,7 +284,7 @@ class Assessments {
 			$tent = LmsAtividadeTentativa::getInProgress((int)$u->id, (int)$at->id, $ciclo);
 		}
 
-		$questoes = LmsQuestao::listByAtividade((int)$at->id, (int)$u->id_admin);
+		$questoes = LmsQuestao::listByAtividade((int)$at->id, $idOwner);
 		$q = null;
 		foreach ($questoes as $row) {
 			if ((string)$row->id === $qid) {
@@ -283,8 +302,14 @@ class Assessments {
 		}
 
 		if ($q->tipo === 'essay') {
-			$ctx = self::lessonContext($at, (int)$u->id_admin);
-			$grade = LmsAiService::gradeEssay((int)$u->id_admin, (string)$q->enunciado, $answer, $ctx);
+			$ctx = self::lessonContext($at, $idOwner);
+			$grade = LmsAiService::gradeEssay(
+				$idOwner,
+				(string)$q->enunciado,
+				$answer,
+				$ctx,
+				(string)($q->resposta_correta ?? '')
+			);
 			$entry = [
 				'answer' => $answer,
 				'correct' => !empty($grade['correct']),
@@ -320,7 +345,7 @@ class Assessments {
 	/** Fecha a tentativa: calcula nota média e credita XP. */
 	public static function finalize($request, $id) {
 		$u = $request->user;
-		[$at, $err] = self::loadAtividade($u, (int)$id);
+		[$at, $idOwner, $err] = self::loadAtividade($u, (int)$id);
 		if ($err) {
 			return $err;
 		}
@@ -329,7 +354,7 @@ class Assessments {
 		if (!$tent) {
 			return self::err('Nenhuma tentativa em andamento.');
 		}
-		$questoes = LmsQuestao::listByAtividade((int)$at->id, (int)$u->id_admin);
+		$questoes = LmsQuestao::listByAtividade((int)$at->id, $idOwner);
 		$respostas = $tent->decodeRespostas();
 		if (count($questoes) > 0 && count($respostas) < count($questoes)) {
 			return self::err('Responda todas as questões antes de finalizar.');
@@ -379,11 +404,11 @@ class Assessments {
 		$unit = null;
 		$idAula = (int)($at->id_aula ?? 0);
 		if ($idAula > 0) {
-			$unit = LmsUnidadeAvaliacaoHelper::sincronizarUnidade((int)$u->id, $idAula, (int)$u->id_admin);
+			$unit = LmsUnidadeAvaliacaoHelper::sincronizarUnidade((int)$u->id, $idAula, (int)$u->id_admin, $idOwner);
 		}
 
 		$certId = null;
-		$curso = LmsCurso::getByIdAdmin((int)$at->id_curso, (int)$u->id_admin);
+		$curso = LmsCurso::getById((int)$at->id_curso);
 		if ($curso) {
 			$cert = \App\Common\Helpers\LmsCertificadoHelper::emitirSeCursoCompleto(
 				(int)$u->id,
@@ -430,7 +455,7 @@ class Assessments {
 	 */
 	public static function submit($request, $id) {
 		$u = $request->user;
-		[$at, $err] = self::loadAtividade($u, (int)$id);
+		[$at, $idOwner, $err] = self::loadAtividade($u, (int)$id);
 		if ($err) {
 			return $err;
 		}
@@ -449,15 +474,21 @@ class Assessments {
 			$answers = [];
 		}
 
-		$questoes = LmsQuestao::listByAtividade((int)$at->id, (int)$u->id_admin);
-		$ctx = self::lessonContext($at, (int)$u->id_admin);
+		$questoes = LmsQuestao::listByAtividade((int)$at->id, $idOwner);
+		$ctx = self::lessonContext($at, $idOwner);
 		$respostas = [];
 		$sum = 0;
 		$n = 0;
 		foreach ($questoes as $q) {
 			$ans = (string)($answers[(string)$q->id] ?? $answers[$q->id] ?? '');
 			if ($q->tipo === 'essay') {
-				$grade = LmsAiService::gradeEssay((int)$u->id_admin, (string)$q->enunciado, $ans, $ctx);
+				$grade = LmsAiService::gradeEssay(
+					$idOwner,
+					(string)$q->enunciado,
+					$ans,
+					$ctx,
+					(string)($q->resposta_correta ?? '')
+				);
 				$entry = [
 					'answer' => $ans,
 					'correct' => !empty($grade['correct']),

@@ -68,6 +68,8 @@ class Roleplay {
 		$u = $request->user;
 		$idAdmin = (int)$u->id_admin;
 		$out = [];
+		$seen = [];
+
 		foreach (StudentEntitlement::idsTrilhasMatriculadas((int)$u->id, $idAdmin) as $idTrilha) {
 			$curso = LmsCurso::getByTrilha($idTrilha, $idAdmin);
 			if (!$curso || (int)$curso->publicado !== 1) {
@@ -75,24 +77,49 @@ class Roleplay {
 			}
 			$title = StudentEntitlement::nomeTrilha($idTrilha);
 			foreach (LmsRoleplayCenario::listByCurso((int)$curso->id, $idAdmin) as $rp) {
+				$seen[(int)$rp->id] = true;
+				$out[] = StudentApiMapper::roleplayScenario($rp, $title);
+			}
+		}
+
+		foreach (StudentEntitlement::idsCursosEad((int)$u->id, $idAdmin) as $idCurso) {
+			$curso = LmsCurso::getById((int)$idCurso);
+			if (!$curso || !StudentEntitlement::podeAcessarCurso($curso, (int)$u->id, $idAdmin)) {
+				continue;
+			}
+			$idOwner = StudentEntitlement::idAdminConteudo($curso);
+			$title = StudentEntitlement::tituloCursoAluno($curso, $idAdmin);
+			foreach (LmsRoleplayCenario::listByCurso((int)$curso->id, $idOwner) as $rp) {
+				if (!empty($seen[(int)$rp->id])) {
+					continue;
+				}
+				$seen[(int)$rp->id] = true;
 				$out[] = StudentApiMapper::roleplayScenario($rp, $title);
 			}
 		}
 		return self::ok($out);
 	}
 
+	/** @return array{0: ?LmsRoleplayCenario, 1: ?LmsCurso, 2: int, 3: ?array} */
+	private static function loadCenario(User $u, int $id): array {
+		$resolved = StudentEntitlement::resolveRoleplayAluno($id, (int)$u->id, (int)$u->id_admin);
+		if (!$resolved) {
+			return [null, null, 0, self::err('Cenário não encontrado.', 404)];
+		}
+		return [$resolved['cenario'], $resolved['curso'], (int)$resolved['idOwner'], null];
+	}
+
+	private static function tituloCurso(LmsCurso $curso, int $idAdminEscola): string {
+		return StudentEntitlement::tituloCursoAluno($curso, $idAdminEscola);
+	}
+
 	public static function getScenario($request, $id) {
 		$u = $request->user;
-		$rp = LmsRoleplayCenario::getByIdAdmin((int)$id, (int)$u->id_admin);
-		if (!$rp) {
-			return self::err('Cenário não encontrado.', 404);
+		[$rp, $curso, , $err] = self::loadCenario($u, (int)$id);
+		if ($err) {
+			return $err;
 		}
-		$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-		if (!$curso || !StudentEntitlement::podeAcessarCurso($curso, (int)$u->id, (int)$u->id_admin)) {
-			return self::err('Sem acesso.', 403);
-		}
-		$title = StudentEntitlement::nomeTrilha((int)$curso->id_trilha);
-		return self::ok(StudentApiMapper::roleplayScenario($rp, $title));
+		return self::ok(StudentApiMapper::roleplayScenario($rp, self::tituloCurso($curso, (int)$u->id_admin)));
 	}
 
 	public static function start($request) {
@@ -100,13 +127,9 @@ class Roleplay {
 		$post = $request->getPostVars() ?: [];
 		$idCenario = (int)($post['scenarioId'] ?? 0);
 		$difficulty = (string)($post['difficulty'] ?? 'medium');
-		$rp = LmsRoleplayCenario::getByIdAdmin($idCenario, (int)$u->id_admin);
-		if (!$rp) {
-			return self::err('Cenário não encontrado.', 404);
-		}
-		$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-		if (!$curso || !StudentEntitlement::podeAcessarCurso($curso, (int)$u->id, (int)$u->id_admin)) {
-			return self::err('Sem acesso.', 403);
+		[$rp, $curso, $idOwner, $err] = self::loadCenario($u, $idCenario);
+		if ($err) {
+			return $err;
 		}
 		$initial = [
 			[
@@ -138,7 +161,7 @@ class Roleplay {
 		$s->ciclo = $ciclo;
 		$id = $s->salvar();
 		$s = LmsRoleplaySessao::getByIdAdmin($id, (int)$u->id_admin);
-		$title = StudentEntitlement::nomeTrilha((int)$curso->id_trilha);
+		$title = self::tituloCurso($curso, (int)$u->id_admin);
 		return self::ok(self::mapSessao($s, $rp, $title));
 	}
 
@@ -148,9 +171,11 @@ class Roleplay {
 		if (!$s || (int)$s->id_aluno !== (int)$u->id) {
 			return self::err('Simulação não encontrada.', 404);
 		}
-		$rp = LmsRoleplayCenario::getByIdAdmin((int)$s->id_cenario, (int)$u->id_admin);
-		$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-		$title = $curso ? StudentEntitlement::nomeTrilha((int)$curso->id_trilha) : '';
+		[$rp, $curso, , $err] = self::loadCenario($u, (int)$s->id_cenario);
+		if ($err) {
+			return $err;
+		}
+		$title = self::tituloCurso($curso, (int)$u->id_admin);
 		return self::ok(self::mapSessao($s, $rp, $title));
 	}
 
@@ -163,7 +188,10 @@ class Roleplay {
 		if (in_array((string)$s->status, ['approved', 'retry'], true) || !empty($s->ended_at)) {
 			return self::err('Esta simulação já foi encerrada.', 403);
 		}
-		$rp = LmsRoleplayCenario::getByIdAdmin((int)$s->id_cenario, (int)$u->id_admin);
+		[$rp, $curso, , $err] = self::loadCenario($u, (int)$s->id_cenario);
+		if ($err) {
+			return $err;
+		}
 		$limitSec = max(60, (int)$rp->estimated_minutes * 60);
 		$started = $s->started_at ? strtotime($s->started_at) : time();
 		if (time() - $started >= $limitSec) {
@@ -198,8 +226,7 @@ class Roleplay {
 		$msgs[] = $aiMsg;
 		$s->messages = $msgs;
 		$s->salvar();
-		$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-		$title = $curso ? StudentEntitlement::nomeTrilha((int)$curso->id_trilha) : '';
+		$title = self::tituloCurso($curso, (int)$u->id_admin);
 		return self::ok([
 			'message' => $aiMsg,
 			'timeRemainingSeconds' => max(0, $limitSec - (time() - $started)),
@@ -214,12 +241,17 @@ class Roleplay {
 			return self::err('Simulação não encontrada.', 404);
 		}
 		if (in_array((string)$s->status, ['approved', 'retry'], true) && !empty($s->ended_at)) {
-			$rp = LmsRoleplayCenario::getByIdAdmin((int)$s->id_cenario, (int)$u->id_admin);
-			$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-			$title = $curso ? StudentEntitlement::nomeTrilha((int)$curso->id_trilha) : '';
+			[$rp, $curso, $idOwner, $err] = self::loadCenario($u, (int)$s->id_cenario);
+			if ($err) {
+				return $err;
+			}
+			$title = self::tituloCurso($curso, (int)$u->id_admin);
 			return self::ok(self::mapSessao($s, $rp, $title));
 		}
-		$rp = LmsRoleplayCenario::getByIdAdmin((int)$s->id_cenario, (int)$u->id_admin);
+		[$rp, $curso, $idOwner, $err] = self::loadCenario($u, (int)$s->id_cenario);
+		if ($err) {
+			return $err;
+		}
 		$msgs = json_decode((string)($s->messages ?? '[]'), true) ?: [];
 		$scenario = StudentApiMapper::roleplayScenario($rp, '', '', false);
 		$evaluation = LmsAiService::evaluateRoleplay((int)$u->id_admin, $scenario, $msgs);
@@ -242,11 +274,11 @@ class Roleplay {
 			$unit = \App\Common\Helpers\LmsUnidadeAvaliacaoHelper::sincronizarUnidade(
 				(int)$u->id,
 				(int)$rp->id_aula,
-				(int)$u->id_admin
+				(int)$u->id_admin,
+				$idOwner
 			);
 		}
-		$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-		$title = $curso ? StudentEntitlement::nomeTrilha((int)$curso->id_trilha) : '';
+		$title = self::tituloCurso($curso, (int)$u->id_admin);
 		$payload = self::mapSessao($s, $rp, $title);
 		$payload['xpEarned'] = $xp;
 		$payload['unitScore'] = $unit['average'] ?? null;
@@ -278,12 +310,11 @@ class Roleplay {
 		$u = $request->user;
 		$out = [];
 		foreach (LmsRoleplaySessao::listByAluno((int)$u->id, (int)$u->id_admin) as $s) {
-			$rp = LmsRoleplayCenario::getByIdAdmin((int)$s->id_cenario, (int)$u->id_admin);
-			if (!$rp) {
+			[$rp, $curso, , $err] = self::loadCenario($u, (int)$s->id_cenario);
+			if ($err || !$rp) {
 				continue;
 			}
-			$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, (int)$u->id_admin);
-			$title = $curso ? StudentEntitlement::nomeTrilha((int)$curso->id_trilha) : '';
+			$title = self::tituloCurso($curso, (int)$u->id_admin);
 			$out[] = self::mapSessao($s, $rp, $title);
 		}
 		return self::ok($out);

@@ -65,4 +65,18 @@ class WhatsappMensagem {
 			'id_usuario'    => $dados['id_usuario'] ?? null,
 		]);
 	}
+
+	public static function existeWaMessageId(?string $waMessageId): bool {
+		if ($waMessageId === null || trim($waMessageId) === '') {
+			return false;
+		}
+		if (!self::tabelaExiste()) {
+			return false;
+		}
+		$wa = addslashes(trim($waMessageId));
+		$existe = (new Database('whatsapp_mensagens'))
+			->select('wa_message_id = "'.$wa.'"', null, 1, 'id')
+			->fetch(\PDO::FETCH_ASSOC);
+		return !empty($existe['id']);
+	}
 }

@@ -27,6 +27,11 @@ class WhatsappChatbotService {
 			return;
 		}
 
+		// Conversa já iniciada pelo negócio (celular ou inbox): não mandar menu automático
+		if (self::conversaEmAtendimentoHumano($conversa)) {
+			return;
+		}
+
 		// Fluxos configuráveis (Fase A) — se tratar, não roda o menu de setores
 		if (WhatsappFlowRunner::aoReceberMensagem($conversa, $texto, $fromMe)) {
 			return;
@@ -477,5 +482,38 @@ class WhatsappChatbotService {
 		}
 
 		return EvolutionApiService::nomeInstancia((int)$conversa->id_admin);
+	}
+
+	/**
+	 * Mensagem enviada pelo celular/WhatsApp Web (fromMe) — tratar como atendimento humano
+	 * para não disparar menu quando o cliente responder.
+	 */
+	public static function marcarHandoffHumanoExterno(WhatsappConversa $conversa): void {
+		if (!WhatsappConversa::temColunasChatbot()) {
+			return;
+		}
+		if (self::conversaEmAtendimentoHumano($conversa)) {
+			return;
+		}
+
+		if (\App\Model\Entity\WhatsappFluxoSessao::tabelaExiste()) {
+			\App\Model\Entity\WhatsappFluxoSessao::apagarPorConversa((int)$conversa->id);
+		}
+
+		$conversa->atualizar([
+			'chatbot_estado' => 'humano',
+			'status'         => 'em_atendimento',
+		]);
+	}
+
+	private static function conversaEmAtendimentoHumano(WhatsappConversa $conversa): bool {
+		$estado = (string)($conversa->chatbot_estado ?: '');
+		$status = (string)($conversa->status ?: '');
+		if ($estado === 'humano' && $status !== 'fechada') {
+			return true;
+		}
+		return (int)($conversa->id_atendente ?? 0) > 0
+			&& $estado !== 'encerrado'
+			&& $status !== 'fechada';
 	}
 }

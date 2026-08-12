@@ -52,6 +52,20 @@ $obRouter->post('/master/ead-cursos', [
 	}
 ]);
 
+$obRouter->get('/master/ead-cursos/editor/{idCurso}', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $idCurso) {
+		return new Response(200, Master\EadCursos::editor($request, $idCurso));
+	}
+]);
+
+$obRouter->post('/master/ead-cursos/editor/{idCurso}', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $idCurso) {
+		return new Response(200, Master\EadCursos::editorApi($request, $idCurso), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/assinaturas', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

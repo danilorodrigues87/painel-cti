@@ -4,6 +4,29 @@ function esc(s) {
 	return $('<div>').text(s == null ? '' : String(s)).html();
 }
 
+function postMaster(dados, ok) {
+	$.post(url_base + MASTER_EAD_CTI_URL, dados, function (res) {
+		if (!res || !res.success) {
+			Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
+			return;
+		}
+		if (typeof ok === 'function') {
+			ok(res);
+		}
+	}, 'json').fail(function (xhr) {
+		var msg = 'Falha na comunicação com o servidor.';
+		if (xhr && xhr.responseText) {
+			try {
+				var j = JSON.parse(xhr.responseText);
+				if (j && j.message) {
+					msg = j.message;
+				}
+			} catch (e) { /* resposta não-JSON */ }
+		}
+		Swal.fire('Erro', msg, 'error');
+	});
+}
+
 function badgeStatus(status) {
 	if (status === 'publicado') return '<span class="badge bg-success">Publicado</span>';
 	if (status === 'rascunho') return '<span class="badge bg-warning text-dark">Rascunho</span>';
@@ -17,6 +40,7 @@ function renderLista(itens) {
 		return;
 	}
 	itens.forEach(function (c) {
+		var editorUrl = url_base + 'master/ead-cursos/editor/' + encodeURIComponent(c.id);
 		$tb.append(
 			'<tr>'
 			+ '<td><strong>' + esc(c.nome) + '</strong></td>'
@@ -24,7 +48,7 @@ function renderLista(itens) {
 			+ '<td>' + esc(c.aulas || 0) + '</td>'
 			+ '<td>' + badgeStatus(c.status) + '</td>'
 			+ '<td class="text-end text-nowrap">'
-			+ '<button type="button" class="btn btn-sm btn-outline-primary me-1 btn-editar-cti" data-id="' + c.id + '"><i class="fas fa-pen"></i> Editor</button>'
+			+ '<a href="' + esc(editorUrl) + '" class="btn btn-sm btn-outline-primary me-1"><i class="fas fa-pen"></i> Editor</a>'
 			+ '<button type="button" class="btn btn-sm btn-outline-secondary me-1 btn-toggle-pub-cti" data-id="' + c.id + '">' + (c.publicado ? 'Despublicar' : 'Publicar') + '</button>'
 			+ '<button type="button" class="btn btn-sm btn-outline-danger btn-excluir-cti" data-id="' + c.id + '"><i class="fas fa-trash"></i></button>'
 			+ '</td></tr>'
@@ -33,16 +57,25 @@ function renderLista(itens) {
 }
 
 function carregar() {
-	$.post(url_base + MASTER_EAD_CTI_URL, { acao: 'listar' }, function (res) {
-		if (!res || !res.success) {
-			Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
-			return;
-		}
+	postMaster({ acao: 'listar' }, function (res) {
 		renderLista(res.itens || []);
-	}, 'json');
+	});
+}
+
+function mostrarErroUrl() {
+	try {
+		var params = new URLSearchParams(window.location.search || '');
+		var erro = params.get('erro');
+		if (!erro) return;
+		Swal.fire('Erro', decodeURIComponent(erro.replace(/\+/g, ' ')), 'error');
+		if (window.history && window.history.replaceState) {
+			window.history.replaceState({}, document.title, url_base + MASTER_EAD_CTI_URL);
+		}
+	} catch (e) { /* ignore */ }
 }
 
 $(function () {
+	mostrarErroUrl();
 	carregar();
 
 	$('#btn-novo-curso-cti').on('click', function () {
@@ -55,41 +88,22 @@ $(function () {
 			confirmButtonText: 'Criar'
 		}).then(function (r) {
 			if (!r.isConfirmed) return;
-			$.post(url_base + MASTER_EAD_CTI_URL, { acao: 'criar', titulo: r.value || '' }, function (res) {
-				if (!res || !res.success) {
-					Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
-					return;
-				}
+			postMaster({ acao: 'criar', titulo: r.value || '' }, function (res) {
 				Swal.fire('OK', res.message || 'Criado.', 'success');
 				carregar();
-			}, 'json');
+			});
 		});
 	});
 
-	$(document).on('click', '.btn-editar-cti', function () {
-		const id = $(this).data('id');
-		$.post(url_base + MASTER_EAD_CTI_URL, { acao: 'abrir_editor', id: id }, function (res) {
-			if (!res || !res.success || !res.redirect) {
-				Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
-				return;
-			}
-			window.location.href = res.redirect;
-		}, 'json');
-	});
-
 	$(document).on('click', '.btn-toggle-pub-cti', function () {
-		const id = $(this).data('id');
-		$.post(url_base + MASTER_EAD_CTI_URL, { acao: 'toggle_publicado', id: id }, function (res) {
-			if (!res || !res.success) {
-				Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
-				return;
-			}
+		var id = $(this).data('id');
+		postMaster({ acao: 'toggle_publicado', id: id }, function () {
 			carregar();
-		}, 'json');
+		});
 	});
 
 	$(document).on('click', '.btn-excluir-cti', function () {
-		const id = $(this).data('id');
+		var id = $(this).data('id');
 		Swal.fire({
 			title: 'Excluir curso CTI?',
 			text: 'Escolas perderão o provisionamento deste curso.',
@@ -99,13 +113,9 @@ $(function () {
 			confirmButtonColor: '#dc3545'
 		}).then(function (r) {
 			if (!r.isConfirmed) return;
-			$.post(url_base + MASTER_EAD_CTI_URL, { acao: 'excluir', id: id }, function (res) {
-				if (!res || !res.success) {
-					Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
-					return;
-				}
+			postMaster({ acao: 'excluir', id: id }, function () {
 				carregar();
-			}, 'json');
+			});
 		});
 	});
 });

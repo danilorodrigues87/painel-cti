@@ -59,7 +59,10 @@ class EadCursos extends Page {
 	}
 
 	public static function getInfo($request) {
-		$post = $request->getPostVars();
+		return self::dispatch($request->getPostVars());
+	}
+
+	public static function dispatch(array $post): string {
 		$acao = $post['acao'] ?? '';
 
 		if (!LmsHelper::tabelasExistem()) {
@@ -793,7 +796,7 @@ class EadCursos extends Page {
 			$resposta = in_array($t, ['0', 'false', 'f', 'falso', 'nao', 'não', 'n'], true) ? 'false' : 'true';
 		} elseif ($tipo === 'essay') {
 			$opcoes = [];
-			$resposta = '';
+			// Gabarito opcional em resposta_correta (contas objetivas ou referência para IA)
 		}
 		$q->id_atividade = $idAtividade;
 		$q->id_admin = $idAdmin;

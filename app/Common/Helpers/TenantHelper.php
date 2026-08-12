@@ -8,7 +8,22 @@ use PDO;
 
 class TenantHelper {
 
+	private static ?int $overrideIdAdmin = null;
+
+	/** Executa callback usando tenant fixo (ex.: catálogo CTI no Master, sem impersonate). */
+	public static function withTenant(int $idAdmin, callable $fn) {
+		self::$overrideIdAdmin = $idAdmin > 0 ? $idAdmin : null;
+		try {
+			return $fn();
+		} finally {
+			self::$overrideIdAdmin = null;
+		}
+	}
+
 	public static function getIdAdmin(): int {
+		if (self::$overrideIdAdmin !== null && self::$overrideIdAdmin > 0) {
+			return self::$overrideIdAdmin;
+		}
 		$data = SessionUser::getUserLogedData();
 		return (int)($data['usuario']['id_admin'] ?? 0);
 	}

@@ -305,7 +305,7 @@ class Portal {
 		$prog->salvar();
 		LmsAgendaAcessoHelper::registrarAulaNaCota((int)$u->id, (int)$u->id_admin, (int)$aula->id);
 
-		$lesson = StudentApiMapper::lesson($aula, (int)$aula->id_modulo, (int)$u->id_admin, true, false);
+		$lesson = StudentApiMapper::lesson($aula, (int)$aula->id_modulo, $idOwner, true, false);
 		$xp = LmsXpHelper::creditLessonComplete(
 			(int)$u->id_admin,
 			(int)$u->id,

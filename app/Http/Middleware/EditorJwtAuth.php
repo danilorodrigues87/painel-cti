@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Common\Helpers\EditorAuthHelper;
 use App\Model\Entity\User;
 use App\Model\Entity\EscolasAssinantes;
 use Firebase\JWT\JWT;
@@ -40,9 +41,9 @@ class EditorJwtAuth {
 			throw new \Exception('Acesso apenas para editores', 403);
 		}
 
-		$idAdmin = (int)($decode['id_admin'] ?? $obUser->id_admin);
-		if ($idAdmin <= 0 || (int)$obUser->id_admin !== $idAdmin) {
-			$idAdmin = (int)$obUser->id_admin;
+		$idAdmin = EditorAuthHelper::resolveIdAdmin($obUser, $decode);
+		if ($idAdmin <= 0) {
+			throw new \Exception('Tenant inválido', 403);
 		}
 
 		$escola = EscolasAssinantes::getEscolaById($idAdmin);

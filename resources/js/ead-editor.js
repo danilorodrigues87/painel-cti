@@ -1,10 +1,17 @@
 function postEad(data) {
+	var url = (typeof window.EAD_EDITOR_API === 'string' && window.EAD_EDITOR_API)
+		? window.EAD_EDITOR_API
+		: (url_base + 'painel/ead');
 	return $.ajax({
-		url: url_base + 'painel/ead',
+		url: url,
 		method: 'POST',
 		dataType: 'json',
 		data: data
 	});
+}
+
+function eadEditorOpts() {
+	return window.EAD_EDITOR_OPTS || {};
 }
 
 function toastOk(msg) {
@@ -48,7 +55,7 @@ function carregarGeral() {
 		$('#instructor_bio').val(c.instructor_bio || '');
 		$('#instructor_avatar_url').val(c.instructor_avatar_url || '');
 		$('#publicado').prop('checked', !!c.publicado);
-		if (c.vitrine_ok) {
+		if (c.vitrine_ok && !eadEditorOpts().hideVitrine) {
 			$('#bloco-vitrine').removeClass('d-none');
 			$('#vitrine_ativo').prop('checked', !!c.vitrine_ativo);
 			var preco = Number(c.vitrine_preco_mensal || 0);
@@ -58,7 +65,9 @@ function carregarGeral() {
 			$('#vitrine_preco_mensal').prop('disabled', $('#vitrine_gratuito').is(':checked'));
 		}
 		listarAulas();
-		listarMatriculasEad();
+		if (!eadEditorOpts().hideAlunos) {
+			listarMatriculasEad();
+		}
 	});
 }
 
@@ -452,40 +461,48 @@ function abrirDialogoAtividade(at) {
 	var edit = !!at;
 	Swal.fire({
 		title: edit ? 'Editar atividade' : 'Nova atividade',
-		width: 640,
-		customClass: { popup: 'swal-ead-wide' },
+		width: 780,
+		customClass: { popup: 'swal-ead-form', htmlContainer: 'swal-ead-html' },
 		html:
-			'<div class="text-start px-1">' +
-			'<label class="form-label small mb-0 fw-semibold" for="sw-at-titulo">Título</label>' +
-			'<input id="sw-at-titulo" class="swal2-input mt-1 mb-2" style="width:100%;margin-left:0" placeholder="Ex.: Quiz da aula 3">' +
-			'<label class="form-label small mb-0 fw-semibold" for="sw-at-desc">Descrição (opcional)</label>' +
-			'<textarea id="sw-at-desc" class="swal2-textarea mt-1 mb-2" style="width:100%;margin-left:0" placeholder="Instruções para o aluno"></textarea>' +
-			'<div class="row g-2">' +
-			'<div class="col-6">' +
-			'<label class="form-label small mb-0 fw-semibold" for="sw-at-tent">Tentativas por ciclo</label>' +
-			'<input id="sw-at-tent" type="number" min="1" max="10" class="swal2-input mt-1" style="width:100%;margin-left:0" placeholder="3">' +
+			'<div class="ead-at-form">' +
+			'<label class="form-label" for="sw-at-titulo">Título da atividade</label>' +
+			'<input id="sw-at-titulo" class="form-control" type="text" placeholder="Ex.: Questionário da aula 1">' +
+			'<label class="form-label mt-2" for="sw-at-desc">Instruções para o aluno <span class="fw-normal text-body-secondary">(opcional)</span></label>' +
+			'<textarea id="sw-at-desc" class="form-control" rows="3" placeholder="Ex.: Leia o material e responda todas as questões. Média mínima: 70%."></textarea>' +
+			'<div class="row g-3 mt-1">' +
+			'<div class="col-md-6">' +
+			'<label class="form-label" for="sw-at-tent">Tentativas por ciclo</label>' +
+			'<select id="sw-at-tent" class="form-select">' +
+			'<option value="1">1 tentativa</option>' +
+			'<option value="2">2 tentativas</option>' +
+			'<option value="3" selected>3 tentativas (padrão)</option>' +
+			'<option value="5">5 tentativas</option>' +
+			'</select>' +
+			'<div class="form-text">Se o aluno esgotar, precisa reassistir a aula para ganhar novas tentativas.</div>' +
 			'</div>' +
-			'<div class="col-6">' +
-			'<label class="form-label small mb-0 fw-semibold" for="sw-at-dur">Duração estimada (min)</label>' +
-			'<input id="sw-at-dur" type="number" min="5" max="180" class="swal2-input mt-1" style="width:100%;margin-left:0" placeholder="30">' +
+			'<div class="col-md-6">' +
+			'<label class="form-label" for="sw-at-dur">Tempo estimado (minutos)</label>' +
+			'<select id="sw-at-dur" class="form-select">' +
+			'<option value="10">10 min</option><option value="15">15 min</option>' +
+			'<option value="20">20 min</option><option value="30" selected>30 min</option>' +
+			'<option value="45">45 min</option><option value="60">60 min</option>' +
+			'</select>' +
 			'</div></div></div>',
 		didOpen: function () {
 			if (edit) {
 				$('#sw-at-titulo').val(at.titulo || '');
 				$('#sw-at-desc').val(at.descricao || '');
-				$('#sw-at-tent').val(at.tentativas_max || 3);
-				$('#sw-at-dur').val(at.duracao_min || 30);
-			} else {
-				$('#sw-at-tent').val(3);
-				$('#sw-at-dur').val(30);
+				$('#sw-at-tent').val(String(at.tentativas_max || 3));
+				$('#sw-at-dur').val(String(at.duracao_min || 30));
 			}
 		},
 		showCancelButton: true,
-		confirmButtonText: edit ? 'Salvar' : 'Criar',
+		confirmButtonText: edit ? 'Salvar atividade' : 'Criar atividade',
+		cancelButtonText: 'Cancelar',
 		preConfirm: function () {
 			var titulo = ($('#sw-at-titulo').val() || '').trim();
 			if (!titulo) {
-				Swal.showValidationMessage('Informe o título.');
+				Swal.showValidationMessage('Informe o título da atividade.');
 				return false;
 			}
 			return {
@@ -511,26 +528,70 @@ function abrirDialogoAtividade(at) {
 	});
 }
 
+function parseOpcoesQuestao(opcoes) {
+	var list = [];
+	if (Array.isArray(opcoes)) {
+		list = opcoes;
+	} else if (typeof opcoes === 'string' && opcoes.trim()) {
+		try {
+			var parsed = JSON.parse(opcoes);
+			if (Array.isArray(parsed)) list = parsed;
+		} catch (e) { /* ignore */ }
+	}
+	return list.map(function (o, i) {
+		return {
+			id: String(o.id || String.fromCharCode(65 + i)),
+			label: String(o.label || o.texto || '')
+		};
+	}).filter(function (o) { return o.label.trim() !== ''; });
+}
+
+function renderOpcoesQuestaoRows(labels, respostaCorreta) {
+	var rows = labels && labels.length ? labels : ['', ''];
+	if (rows.length < 2) {
+		while (rows.length < 2) rows.push('');
+	}
+	var html = '<div class="ead-q-opcoes" id="sw-q-opcoes-wrap">';
+	rows.forEach(function (label, i) {
+		var letra = String.fromCharCode(65 + i);
+		var checked = respostaCorreta && respostaCorreta.toUpperCase() === letra ? ' checked' : '';
+		html += '<div class="ead-q-opcao-row">' +
+			'<span class="ead-q-opcao-letra">' + letra + ')</span>' +
+			'<input type="text" class="form-control sw-q-op-label" data-letra="' + letra + '" value="' + $('<div>').text(label).html() + '" placeholder="Texto da opção ' + letra + '">' +
+			'<label class="form-check-label text-nowrap mb-0"><input type="radio" name="sw-q-correta" class="form-check-input sw-q-correta" value="' + letra + '"' + checked + '> Correta</label>' +
+			'</div>';
+	});
+	html += '<button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="sw-q-add-op">+ Adicionar opção</button>';
+	html += '<div class="form-text mt-2">Marque qual alternativa é a resposta correta. Mínimo 2 opções.</div>';
+	html += '</div>';
+	return html;
+}
+
 function abrirDialogoQuestao(idAtiv, q) {
 	var edit = !!q;
 	Swal.fire({
 		title: edit ? 'Editar questão' : 'Nova questão',
-		html: '<select id="sw-q-tipo" class="swal2-select">' +
-			'<option value="multiple">Múltipla escolha</option>' +
-			'<option value="boolean">Verdadeiro / Falso</option>' +
-			'<option value="essay">Aberta (corrigida por IA)</option></select>' +
-			'<textarea id="sw-q-enun" class="swal2-textarea" placeholder="Enunciado"></textarea>' +
-			'<div id="sw-q-multiple-fields">' +
-			'<input id="sw-q-ops" class="swal2-input" placeholder="Opções separadas por | (ex: Windows|Linux|macOS)">' +
-			'<p class="text-muted small mb-0 px-1">Resposta correta = letra da opção: A, B, C…</p>' +
-			'<input id="sw-q-resp" class="swal2-input" placeholder="Resposta correta (ex: A)">' +
-			'</div>' +
+		width: 860,
+		customClass: { popup: 'swal-ead-questao', htmlContainer: 'swal-ead-html' },
+		html:
+			'<label class="form-label" for="sw-q-tipo">Tipo de questão</label>' +
+			'<select id="sw-q-tipo" class="form-select">' +
+			'<option value="multiple">Múltipla escolha (com gabarito)</option>' +
+			'<option value="boolean">Verdadeiro ou Falso</option>' +
+			'<option value="essay">Resposta aberta (corrigida por IA)</option></select>' +
+			'<label class="form-label mt-2" for="sw-q-enun">Enunciado</label>' +
+			'<textarea id="sw-q-enun" class="form-control" rows="4" placeholder="Escreva a pergunta de forma clara para o aluno"></textarea>' +
+			'<div id="sw-q-multiple-fields">' + renderOpcoesQuestaoRows(['', ''], '') + '</div>' +
 			'<div id="sw-q-boolean-fields" style="display:none">' +
-			'<select id="sw-q-bool" class="swal2-select"><option value="true">Verdadeiro</option><option value="false">Falso</option></select>' +
-			'<p class="text-muted small mb-0 px-1">O aluno verá botões Verdadeiro e Falso.</p>' +
+			'<label class="form-label" for="sw-q-bool">Resposta correta</label>' +
+			'<select id="sw-q-bool" class="form-select"><option value="true">Verdadeiro</option><option value="false">Falso</option></select>' +
+			'<div class="form-text">O aluno verá dois botões: Verdadeiro e Falso.</div>' +
 			'</div>' +
 			'<div id="sw-q-essay-fields" style="display:none">' +
-			'<p class="text-muted small mb-0 px-1">Sem gabarito — a IA avalia a resposta em percentual (0–100%).</p>' +
+			'<label class="form-label mt-1" for="sw-q-gabarito">Gabarito esperado <span class="fw-normal text-body-secondary">(opcional)</span></label>' +
+			'<input id="sw-q-gabarito" class="form-control" type="text" placeholder="Ex.: 30 — use em contas ou respostas objetivas">' +
+			'<div class="form-text">Se preencher, a correção compara com este valor antes da IA. Contas simples no enunciado (ex.: 40 - 10) também são detectadas automaticamente.</div>' +
+			'<div class="alert alert-info py-2 mb-0 small mt-2">Sem gabarito, a IA avalia com base no enunciado e no conteúdo da aula.</div>' +
 			'</div>',
 		didOpen: function () {
 			function syncTipo() {
@@ -538,6 +599,23 @@ function abrirDialogoQuestao(idAtiv, q) {
 				$('#sw-q-multiple-fields').toggle(t === 'multiple');
 				$('#sw-q-boolean-fields').toggle(t === 'boolean');
 				$('#sw-q-essay-fields').toggle(t === 'essay');
+			}
+			function bindOpcoes() {
+				$('#sw-q-add-op').off('click').on('click', function () {
+					var count = $('#sw-q-opcoes-wrap .sw-q-op-label').length;
+					if (count >= 8) {
+						Swal.showValidationMessage('Máximo de 8 opções.');
+						return;
+					}
+					var letra = String.fromCharCode(65 + count);
+					$('#sw-q-add-op').before(
+						'<div class="ead-q-opcao-row">' +
+						'<span class="ead-q-opcao-letra">' + letra + ')</span>' +
+						'<input type="text" class="form-control sw-q-op-label" data-letra="' + letra + '" placeholder="Texto da opção ' + letra + '">' +
+						'<label class="form-check-label text-nowrap mb-0"><input type="radio" name="sw-q-correta" class="form-check-input sw-q-correta" value="' + letra + '"> Correta</label>' +
+						'</div>'
+					);
+				});
 			}
 			$('#sw-q-tipo').on('change', syncTipo);
 			if (edit) {
@@ -547,18 +625,24 @@ function abrirDialogoQuestao(idAtiv, q) {
 					var rc = String(q.resposta_correta || 'true').toLowerCase();
 					$('#sw-q-bool').val(rc === 'false' || rc === '0' || rc === 'falso' ? 'false' : 'true');
 				} else if (q.tipo === 'multiple') {
-					$('#sw-q-ops').val(opcoesToPipe(q.opcoes));
-					$('#sw-q-resp').val(q.resposta_correta || '');
+					var ops = parseOpcoesQuestao(q.opcoes);
+					var labels = ops.map(function (o) { return o.label; });
+					$('#sw-q-multiple-fields').html(renderOpcoesQuestaoRows(labels, q.resposta_correta || ''));
+				} else if (q.tipo === 'essay') {
+					$('#sw-q-gabarito').val(q.resposta_correta || '');
 				}
 			}
+			bindOpcoes();
 			syncTipo();
 		},
 		showCancelButton: true,
+		confirmButtonText: edit ? 'Salvar questão' : 'Adicionar questão',
+		cancelButtonText: 'Cancelar',
 		preConfirm: function () {
 			var tipo = $('#sw-q-tipo').val();
 			var enunciado = ($('#sw-q-enun').val() || '').trim();
 			if (!enunciado) {
-				Swal.showValidationMessage('Informe o enunciado.');
+				Swal.showValidationMessage('Informe o enunciado da questão.');
 				return false;
 			}
 			if (tipo === 'boolean') {
@@ -573,19 +657,30 @@ function abrirDialogoQuestao(idAtiv, q) {
 				};
 			}
 			if (tipo === 'essay') {
-				return { tipo: 'essay', enunciado: enunciado, opcoes: '[]', resposta_correta: '' };
+				return {
+					tipo: 'essay',
+					enunciado: enunciado,
+					opcoes: '[]',
+					resposta_correta: ($('#sw-q-gabarito').val() || '').trim()
+				};
 			}
-			var opsRaw = ($('#sw-q-ops').val() || '').split('|').map(function (s) { return s.trim(); }).filter(Boolean);
-			if (opsRaw.length < 2) {
-				Swal.showValidationMessage('Informe ao menos 2 opções separadas por |');
+			var opcoes = [];
+			var resp = '';
+			$('#sw-q-opcoes-wrap .ead-q-opcao-row').each(function (i) {
+				var label = ($(this).find('.sw-q-op-label').val() || '').trim();
+				if (!label) return;
+				var letra = String.fromCharCode(65 + opcoes.length);
+				opcoes.push({ id: letra, label: label });
+				if ($(this).find('.sw-q-correta').is(':checked')) {
+					resp = letra;
+				}
+			});
+			if (opcoes.length < 2) {
+				Swal.showValidationMessage('Preencha ao menos 2 opções de resposta.');
 				return false;
 			}
-			var opcoes = opsRaw.map(function (label, i) {
-				return { id: String.fromCharCode(65 + i), label: label };
-			});
-			var resp = ($('#sw-q-resp').val() || '').trim().toUpperCase();
-			if (!resp || !opcoes.some(function (o) { return o.id === resp; })) {
-				Swal.showValidationMessage('Resposta correta deve ser uma letra das opções (A, B, C…).');
+			if (!resp) {
+				Swal.showValidationMessage('Marque qual opção é a resposta correta.');
 				return false;
 			}
 			return {
@@ -675,7 +770,11 @@ function previewAtividade(at) {
 		if (q.tipo === 'boolean') {
 			body += '<p class="small mb-0">○ Verdadeiro &nbsp; ○ Falso</p>';
 		} else if (q.tipo === 'essay') {
-			body += '<p class="small text-muted mb-0">[caixa de texto livre — corrigida por IA]</p>';
+			var hint = '[caixa de texto livre — corrigida por IA]';
+			if (q.resposta_correta) {
+				hint += ' · gabarito: ' + $('<div>').text(q.resposta_correta).html();
+			}
+			body += '<p class="small text-muted mb-0">' + hint + '</p>';
 		} else {
 			(q.opcoes || []).forEach(function (o) {
 				body += '<p class="small mb-0">○ ' + $('<div>').text(o.label || o.id).html() + '</p>';
@@ -719,6 +818,21 @@ function salvarAula() {
 
 $(function () {
 	carregarGeral();
+
+	$('#btn-abrir-editor-ascend').on('click', function () {
+		var $b = $(this).prop('disabled', true);
+		postEad({ acao: 'abrir_editor', id_curso: idCurso() }).done(function (res) {
+			if (!res || !res.success || !res.url) {
+				toastErr((res && res.message) || 'Não foi possível abrir o editor interativo.');
+				return;
+			}
+			window.open(res.url, '_blank');
+		}).fail(function () {
+			toastErr('Falha de rede ao abrir o editor interativo.');
+		}).always(function () {
+			$b.prop('disabled', false);
+		});
+	});
 
 	$('#btn-salvar-geral').on('click', salvarGeral);
 

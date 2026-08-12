@@ -1,6 +1,6 @@
-<h1 class="mt-4">Curso Online</h1>
+<h1 class="mt-4">Editor — Curso CTI</h1>
 <ol class="breadcrumb mb-4">
-	<li class="breadcrumb-item"><a href="{{URL}}/painel/ead">Cursos Online</a></li>
+	<li class="breadcrumb-item"><a href="{{URL}}/master/ead-cursos">Cursos CTI</a></li>
 	<li class="breadcrumb-item active">{{nome_curso}}</li>
 </ol>
 
@@ -18,9 +18,6 @@
 	</li>
 	<li class="nav-item" role="presentation">
 		<button class="nav-link" id="tab-aulas" data-bs-toggle="tab" data-bs-target="#pane-aulas" type="button">Aulas</button>
-	</li>
-	<li class="nav-item" role="presentation">
-		<button class="nav-link" id="tab-alunos" data-bs-toggle="tab" data-bs-target="#pane-alunos" type="button">Alunos</button>
 	</li>
 </ul>
 
@@ -82,37 +79,9 @@
 			<div class="col-12">
 				<div class="form-check form-switch">
 					<input class="form-check-input" type="checkbox" id="publicado">
-					<label class="form-check-label" for="publicado">Publicado no portal do aluno</label>
+					<label class="form-check-label" for="publicado">Publicado (disponível via planos SaaS)</label>
 				</div>
 			</div>
-
-			<div id="bloco-vitrine" class="col-12 border rounded p-3 bg-light d-none">
-				<h6 class="mb-2">Vitrine entre escolas (opcional)</h6>
-				<p class="small text-muted mb-2">
-					Outras escolas encontram este curso em <strong>Portal EAD → Vitrine de cursos</strong>.
-					É preciso marcar <strong>Publicado no portal</strong> acima.
-				</p>
-				<div class="form-check form-switch mb-2">
-					<input class="form-check-input" type="checkbox" id="vitrine_ativo">
-					<label class="form-check-label" for="vitrine_ativo">Disponibilizar para outras escolas</label>
-				</div>
-				<div class="form-check mb-2">
-					<input class="form-check-input" type="checkbox" id="vitrine_gratuito">
-					<label class="form-check-label" for="vitrine_gratuito">Disponibilizar gratuitamente (R$ 0)</label>
-				</div>
-				<div class="row g-2">
-					<div class="col-md-4">
-						<label class="form-label">Preço mensal (R$)</label>
-						<input type="number" step="0.01" min="0" class="form-control" id="vitrine_preco_mensal">
-						<div class="form-text">Deixe 0 se for gratuito.</div>
-					</div>
-					<div class="col-md-8">
-						<label class="form-label">Descrição na vitrine</label>
-						<input type="text" class="form-control" id="vitrine_descricao" maxlength="500">
-					</div>
-				</div>
-			</div>
-
 			<div class="col-12">
 				<button type="button" class="btn btn-primary" id="btn-salvar-geral">Salvar dados gerais</button>
 			</div>
@@ -121,7 +90,7 @@
 
 	<div class="tab-pane fade" id="pane-aulas" role="tabpanel">
 		<div class="d-flex justify-content-between align-items-center mb-3">
-			<p class="text-muted mb-0 small">Cada aula pode ter só PDF, vários vídeos, atividades e role play — tudo opcional.</p>
+			<p class="text-muted mb-0 small">Vídeos, PDFs, atividades, role play ou aulas interativas (Ascend).</p>
 			<button type="button" class="btn btn-success btn-sm" id="btn-nova-aula"><i class="fa fa-plus"></i> Nova aula</button>
 		</div>
 		<div class="row">
@@ -195,27 +164,11 @@
 			</div>
 		</div>
 	</div>
-
-	<div class="tab-pane fade" id="pane-alunos" role="tabpanel">
-		<p class="text-muted small">Matrícula EAD — libera o curso no portal <strong>sem</strong> gerar carnê/contrato.</p>
-		<div class="row g-2 mb-3">
-			<div class="col-md-8">
-				<input type="text" class="form-control" id="busca-aluno" placeholder="Buscar aluno por nome ou e-mail…">
-				<div id="busca-aluno-resultados" class="list-group mt-1"></div>
-			</div>
-		</div>
-		<div class="table-responsive">
-			<table class="table table-sm align-middle">
-				<thead>
-					<tr><th>Aluno</th><th>E-mail</th><th>Início</th><th></th></tr>
-				</thead>
-				<tbody id="tbody-matriculas-ead">
-					<tr><td colspan="4" class="text-muted">Carregando…</td></tr>
-				</tbody>
-			</table>
-		</div>
-	</div>
 </div>
 
 <link rel="stylesheet" href="{{URL}}/resources/css/ead-editor.css?v=20260812b">
+<script>
+	window.EAD_EDITOR_API = (typeof url_base !== 'undefined' ? url_base : '{{URL}}/') + 'master/ead-cursos/editor/{{id_curso}}';
+	window.EAD_EDITOR_OPTS = { hideAlunos: true, hideVitrine: true };
+</script>
 <script src="{{URL}}/resources/js/ead-editor.js?v=20260812f"></script>

@@ -139,6 +139,7 @@ class Evolution {
 			$tipo = self::extrairTipo($msg);
 			$corpo = self::extrairTexto($msg);
 			$waId = $key['id'] ?? ($msg['id'] ?? null);
+			$ecoSistema = $fromMe && WhatsappMensagem::existeWaMessageId(is_string($waId) ? $waId : null);
 			$mediaUrl = self::salvarMidiaRecebida($idAdmin, $instanceName, $msg, $tipo);
 
 			// Reação sem emoji = remoção; ainda registramos com texto amigável
@@ -168,6 +169,11 @@ class Evolution {
 			]);
 
 			$conversa->tocarUltimaMensagem(!$fromMe);
+
+			// Mensagem enviada pelo celular/WhatsApp Web: handoff humano (não eco do bot/inbox)
+			if ($fromMe && !$ecoSistema && $tipo !== 'reaction') {
+				WhatsappChatbotService::marcarHandoffHumanoExterno($conversa);
+			}
 
 			// Reações não disparam o chatbot de menu
 			if (!$fromMe && $tipo !== 'reaction') {

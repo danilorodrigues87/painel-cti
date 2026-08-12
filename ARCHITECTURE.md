@@ -97,6 +97,7 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 ### Preferências do produto (não quebrar)
 - Diretor da escola **não** deve conseguir marcar permissões de módulos que a escola não contratou
 - Painel mestre futuro usará os **slugs** de `SystemModules`, não labels livres
+- **Master RBAC (futuro, não implementado):** hoje acesso binário via `MASTER_EMAILS` + `MasterGateHelper`. Evolução planejada: super-admins no `.env` + staff Master em `usuarios` (`id_admin=0`) com `acesso` JSON (slugs: `ead_cursos`, `planos`, `escolas`, …) espelhando o CRUD de [`Admin/User.php`](app/Controller/Admin/User.php). Checks de autorização devem passar por helpers (`MasterGateHelper` → `ModuleGateHelper` adaptado), não e-mail espalhado no código. Editor Ascend do catálogo CTI: [`EditorAuthHelper::canEditCatalogCti`](app/Common/Helpers/EditorAuthHelper.php) — expandir para permissão `ead_cursos` quando RBAC existir.
 
 ---
 
@@ -259,6 +260,8 @@ catalogo_cti: planos_cursos + lms_escola_cursos_cti (cursos origem=cti, incluíd
 ```
 
 - **Catálogo CTI (Master):** `/master/ead-cursos` + vínculo em **Planos** (`planos_cursos`). Provisionamento: `CtiCatalogProvisioner` → `lms_escola_cursos_cti`. Escola: card **Cursos CTI** em `/painel/ead` (somente leitura, matrícula manual). SQL: `database/lms_catalogo_cti.sql`.
+- **Editor Master (sem impersonate):** GET `/master/ead-cursos/editor/{id}` — layout Master + JS compartilhado `ead-editor.js` (`window.EAD_EDITOR_API` → POST `/master/ead-cursos/editor/{id}`). API roda em `TenantHelper::withTenant(idCatalogo)` gravando no tenant catálogo com sessão Master intacta. Botão **Editor interativo (Ascend):** `abrir_editor` cria `lms_editor_tokens` com `id_admin` catálogo + `id_usuario` Master → `ASCEND_URL/editor/auth?token=`. Exchange JWT: [`EditorAuthHelper`](app/Common/Helpers/EditorAuthHelper.php) aceita mismatch tenant (Master ≠ catálogo); claim `master_catalog` no JWT; [`EditorJwtAuth`](app/Http/Middleware/EditorJwtAuth.php) usa `resolveIdAdmin()` para APIs `/api/v1/editor/*`.
+- **Editor Master (sem impersonate):** GET `/master/ead-cursos/editor/{id}` — layout Master + JS compartilhado `ead-editor.js` (`window.EAD_EDITOR_API` → POST `/master/ead-cursos/editor/{id}`). API roda em `TenantHelper::withTenant(idCatalogo)` gravando no tenant catálogo com sessão Master intacta. Botão **Editor interativo (Ascend):** `abrir_editor` cria `lms_editor_tokens` com `id_admin` catálogo + `id_usuario` Master → `ASCEND_URL/editor/auth?token=`. Exchange JWT: [`EditorAuthHelper`](app/Common/Helpers/EditorAuthHelper.php) aceita mismatch tenant (Master ≠ catálogo); claim `master_catalog` no JWT; [`EditorJwtAuth`](app/Http/Middleware/EditorJwtAuth.php) usa `resolveIdAdmin()` para APIs `/api/v1/editor/*`.
 - **Aulas interativas (L-Editor):** SQL `database/lms_aulas_interativas.sql` + `database/plataforma_bunny.sql` (`tipo_conteudo`, `lms_aula_cenas`, progresso, `lms_editor_tokens`; mídias em Bunny). Editor isolado no Ascend (`/editor/*`, sem layout do aluno). API `/api/v1/editor/*` (JWT professor) + cenas no `GET` lesson do aluno (`contentType: interactive`, `interactiveProgress: { passo, maxPasso, concluida }`). Upload: imagem/áudio → **Bunny Storage**; vídeo de cena → **Bunny Stream** (HLS assinado na leitura). Progresso de cena: `POST .../interactive-progress`. Portal: Continuar de onde parou / Começar do início. Painel: botão **Abrir editor** (token one-time → `ASCEND_URL/editor/auth?token=`).
 - **Entitlement:** `lms_matricula_ead` ativa + curso `publicado=1` + escola dona **ou** licença vitrine **ou** provisionamento CTI ativo. Matrícula comercial **não** libera EAD.
 - **Painel:** `/painel/ead` (cursos), `/painel/ead/curso/{id}` (editor + aba Alunos), `/painel/ead/vitrine`; Config IA `/painel/config/ia`
@@ -668,6 +671,8 @@ Detalhe: `database/LMS_CHECKLIST_PRODUCAO.md`
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 5+** | Templates editáveis de automação CRM por escola | Base já envia textos fixos |
 | **Master fase 2+** | Dashboard SaaS, e-mail cobrança, trial 14d, valor por escola, login só Assinatura se inativa | Feito — `database/saas_fase2plus.sql` |
+| **Master RBAC** | CRUD `/master/usuarios` + permissões por slug (`ead_cursos`, …); instrutores editam catálogo CTI | Futuro — `EditorAuthHelper::canEditCatalogCti` já é ponto de extensão |
+| **Master RBAC** | CRUD `/master/usuarios` + permissões por slug (`ead_cursos`, …); instrutores editam catálogo CTI | Futuro — `EditorAuthHelper::canEditCatalogCti` já é ponto de extensão |
 
 ### Decisões de produto já alinhadas
 - Cada escola configura **SMTP próprio** (Gmail/corporativo); sistema tem fallback `no-reply@...` no `.env`

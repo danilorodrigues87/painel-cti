@@ -439,18 +439,15 @@ class StudentApiMapper {
 						$status = BunnyStreamHelper::sincronizarStatusVideo($v, $idAdmin);
 					}
 					if ($status !== 'ready' || empty($v->bunny_video_id)) {
-						// Expõe status para o portal mostrar "processando" em vez de "sem vídeo"
-						if (!empty($v->bunny_video_id)) {
-							$videos[] = [
-								'id' => (string)$v->id,
-								'title' => (string)($v->titulo ?: 'Vídeo'),
-								'url' => null,
-								'provider' => 'bunny',
-								'bunnyStatus' => $status ?: 'processing',
-								'durationMinutes' => (int)$v->duracao_min,
-								'order' => (int)$v->ordem,
-							];
-						}
+						$videos[] = [
+							'id' => (string)$v->id,
+							'title' => (string)($v->titulo ?: 'Vídeo'),
+							'url' => null,
+							'provider' => 'bunny',
+							'bunnyStatus' => !empty($v->bunny_video_id) ? ($status ?: 'processing') : 'pending_upload',
+							'durationMinutes' => (int)$v->duracao_min,
+							'order' => (int)$v->ordem,
+						];
 						continue;
 					}
 					// URL permanente não é exposta — Ascend chama /play

@@ -6,7 +6,9 @@ use App\Model\Entity\Matriculas;
 use App\Model\Entity\LmsCurso;
 use App\Model\Entity\LmsModulo;
 use App\Model\Entity\LmsAula;
+use App\Model\Entity\LmsAtividade;
 use App\Model\Entity\LmsMatriculaEad;
+use App\Model\Entity\LmsRoleplayCenario;
 use App\Model\Entity\Trilhas;
 
 class StudentEntitlement {
@@ -100,5 +102,74 @@ class StudentEntitlement {
 	/** id_admin dono do conteúdo (criador do curso). */
 	public static function idAdminConteudo(LmsCurso $curso): int {
 		return (int)$curso->id_admin;
+	}
+
+	/**
+	 * Resolve atividade acessível (escola própria ou curso CTI cross-tenant).
+	 * @return array{atividade: LmsAtividade, curso: LmsCurso, idOwner: int}|null
+	 */
+	public static function resolveAtividadeAluno(int $idAtividade, int $idAluno, int $idAdminEscola): ?array {
+		if ($idAtividade <= 0) {
+			return null;
+		}
+		$at = LmsAtividade::getByIdAdmin($idAtividade, $idAdminEscola);
+		if ($at instanceof LmsAtividade) {
+			$curso = LmsCurso::getByIdAdmin((int)$at->id_curso, $idAdminEscola);
+			if ($curso && self::podeAcessarCurso($curso, $idAluno, $idAdminEscola)) {
+				return ['atividade' => $at, 'curso' => $curso, 'idOwner' => self::idAdminConteudo($curso)];
+			}
+		}
+		foreach (self::idsCursosEad($idAluno, $idAdminEscola) as $idCurso) {
+			$curso = LmsCurso::getById((int)$idCurso);
+			if (!$curso || !self::podeAcessarCurso($curso, $idAluno, $idAdminEscola)) {
+				continue;
+			}
+			$idOwner = self::idAdminConteudo($curso);
+			$at = LmsAtividade::getByIdAdmin($idAtividade, $idOwner);
+			if ($at instanceof LmsAtividade && (int)$at->id_curso === (int)$curso->id) {
+				return ['atividade' => $at, 'curso' => $curso, 'idOwner' => $idOwner];
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return array{cenario: LmsRoleplayCenario, curso: LmsCurso, idOwner: int}|null
+	 */
+	public static function resolveRoleplayAluno(int $idCenario, int $idAluno, int $idAdminEscola): ?array {
+		if ($idCenario <= 0) {
+			return null;
+		}
+		$rp = LmsRoleplayCenario::getByIdAdmin($idCenario, $idAdminEscola);
+		if ($rp instanceof LmsRoleplayCenario) {
+			$curso = LmsCurso::getByIdAdmin((int)$rp->id_curso, $idAdminEscola);
+			if ($curso && self::podeAcessarCurso($curso, $idAluno, $idAdminEscola)) {
+				return ['cenario' => $rp, 'curso' => $curso, 'idOwner' => self::idAdminConteudo($curso)];
+			}
+		}
+		foreach (self::idsCursosEad($idAluno, $idAdminEscola) as $idCurso) {
+			$curso = LmsCurso::getById((int)$idCurso);
+			if (!$curso || !self::podeAcessarCurso($curso, $idAluno, $idAdminEscola)) {
+				continue;
+			}
+			$idOwner = self::idAdminConteudo($curso);
+			$rp = LmsRoleplayCenario::getByIdAdmin($idCenario, $idOwner);
+			if ($rp instanceof LmsRoleplayCenario && (int)$rp->id_curso === (int)$curso->id) {
+				return ['cenario' => $rp, 'curso' => $curso, 'idOwner' => $idOwner];
+			}
+		}
+		return null;
+	}
+
+	/** Título exibido no portal (trilha comercial ou nome do curso EAD). */
+	public static function tituloCursoAluno(LmsCurso $curso, int $idAdminEscola): string {
+		$idTrilha = (int)($curso->id_trilha ?? 0);
+		if ($idTrilha > 0) {
+			$t = Trilhas::getTrilhaById($idTrilha);
+			if ($t) {
+				return (string)$t->nome;
+			}
+		}
+		return $curso->nomeExibicao();
 	}
 }
