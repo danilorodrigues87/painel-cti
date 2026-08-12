@@ -19,6 +19,9 @@ class Evolution {
 
 		if (!hash_equals($esperado, (string)$token)) {
 			self::logWebhook($idAdmin, 'token_invalido', []);
+			// #region agent log
+			self::debugAgentLog('Evolution.php:receber', 'token_invalido', ['id_admin' => $idAdmin], 'A');
+			// #endregion
 			return json_encode(['success' => false, 'message' => 'Token inválido.']);
 		}
 
@@ -32,6 +35,19 @@ class Evolution {
 		$event = self::normalizarEvento((string)($payload['event'] ?? $payload['type'] ?? ''));
 		$data = $payload['data'] ?? $payload;
 		$instanceName = (string)($payload['instance'] ?? $payload['instanceName'] ?? '');
+		$ehMensagem = self::eventoEhMensagem($event, $data, $payload);
+
+		// #region agent log
+		self::debugAgentLog('Evolution.php:receber', 'webhook_recebido', [
+			'id_admin' => $idAdmin,
+			'event' => $event,
+			'instance' => $instanceName,
+			'raw_bytes' => strlen((string)$raw),
+			'payload_keys' => array_keys($payload),
+			'data_keys' => is_array($data) ? array_keys($data) : [],
+			'eh_mensagem' => $ehMensagem,
+		], 'A,B');
+		// #endregion
 
 		self::logWebhook($idAdmin, $event ?: 'sem_evento', [
 			'instance' => $instanceName,
@@ -49,9 +65,16 @@ class Evolution {
 			WhatsappEscolaService::atualizarStatusConexao($idAdmin, $estado ?: 'unknown', $numero);
 		}
 
-		if (self::eventoEhMensagem($event, $data, $payload)) {
+		if ($ehMensagem) {
 			self::processarMensagens($idAdmin, $data, $instanceName);
 			self::logWebhook($idAdmin, 'msg_processada', ['instance' => $instanceName], true);
+		} elseif ($event !== '' && strpos($event, 'connection') === false) {
+			// #region agent log
+			self::debugAgentLog('Evolution.php:receber', 'evento_nao_tratado_como_mensagem', [
+				'id_admin' => $idAdmin,
+				'event' => $event,
+			], 'B');
+			// #endregion
 		}
 
 		return json_encode(['success' => true]);
@@ -89,6 +112,35 @@ class Evolution {
 		error_log($linha);
 	}
 
+	/** NDJSON debug (sessão 6b4d05) — não logar PII. */
+	private static function debugAgentLog(string $location, string $message, array $data = [], string $hypothesisId = ''): void {
+		// #region agent log
+		try {
+			$logDir = dirname(__DIR__, 3).'/storage/logs';
+			if (!is_dir($logDir)) {
+				@mkdir($logDir, 0755, true);
+			}
+			$line = json_encode([
+				'sessionId' => '6b4d05',
+				'timestamp' => (int)round(microtime(true) * 1000),
+				'location' => $location,
+				'message' => $message,
+				'data' => $data,
+				'hypothesisId' => $hypothesisId,
+				'runId' => 'pre-fix',
+			], JSON_UNESCAPED_UNICODE);
+			@file_put_contents($logDir.'/debug-6b4d05.log', $line."\n", FILE_APPEND | LOCK_EX);
+		} catch (\Throwable $e) {
+			// silencioso
+		}
+		// #endregion
+	}
+
+	private static function jidSuffix(string $jid): string {
+		$pos = strpos($jid, '@');
+		return $pos !== false ? substr($jid, $pos) : 'sem_jid';
+	}
+
 	private static function processarMensagens(int $idAdmin, $data, string $instanceName = ''): void {
 		if (!is_array($data)) {
 			return;
@@ -108,8 +160,21 @@ class Evolution {
 
 		$itens = self::normalizarItensMensagem($data);
 		$processadas = 0;
-		foreach ($itens as $msg) {
+		// #region agent log
+		self::debugAgentLog('Evolution.php:processarMensagens', 'inicio', [
+			'id_admin' => $idAdmin,
+			'instance' => $instanceName,
+			'qtd_itens' => count($itens),
+		], 'B');
+		// #endregion
+		foreach ($itens as $idx => $msg) {
 			if (!is_array($msg)) {
+				// #region agent log
+				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
+					'idx' => $idx,
+					'reason' => 'item_nao_array',
+				], 'B');
+				// #endregion
 				continue;
 			}
 
@@ -117,16 +182,40 @@ class Evolution {
 			$fromMe = !empty($key['fromMe']);
 			$remoteJid = self::resolverRemoteJid($msg);
 			if ($remoteJid === '') {
+				// #region agent log
+				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
+					'idx' => $idx,
+					'reason' => 'remote_jid_vazio',
+					'from_me' => $fromMe,
+					'msg_keys' => array_keys($msg),
+				], 'C');
+				// #endregion
 				continue;
 			}
 
 			$telefone = self::jidParaTelefone($remoteJid);
 			if ($telefone === '') {
 				self::logWebhook($idAdmin, 'telefone_vazio', ['jid' => $remoteJid]);
+				// #region agent log
+				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
+					'idx' => $idx,
+					'reason' => 'telefone_vazio',
+					'jid_suffix' => self::jidSuffix($remoteJid),
+					'from_me' => $fromMe,
+				], 'C');
+				// #endregion
 				continue;
 			}
 
 			if (self::ignorarMensagemSistema($msg)) {
+				// #region agent log
+				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
+					'idx' => $idx,
+					'reason' => 'mensagem_sistema',
+					'from_me' => $fromMe,
+					'message_keys' => is_array($msg['message'] ?? null) ? array_keys($msg['message']) : [],
+				], 'D');
+				// #endregion
 				continue;
 			}
 
@@ -148,11 +237,27 @@ class Evolution {
 
 			// Evita bolha vazia de eventos sem conteúdo útil
 			if ($tipo === 'text' && ($corpo === null || trim((string)$corpo) === '') && $mediaUrl === null) {
+				// #region agent log
+				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
+					'idx' => $idx,
+					'reason' => 'texto_vazio',
+					'from_me' => $fromMe,
+					'jid_suffix' => self::jidSuffix($remoteJid),
+					'message_keys' => is_array($msg['message'] ?? null) ? array_keys($msg['message']) : [],
+				], 'E');
+				// #endregion
 				continue;
 			}
 
 			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId, !$fromMe);
 			if (!$conversa) {
+				// #region agent log
+				self::debugAgentLog('Evolution.php:processarMensagens', 'skip', [
+					'idx' => $idx,
+					'reason' => 'conversa_nao_criada',
+					'from_me' => $fromMe,
+				], 'F');
+				// #endregion
 				continue;
 			}
 
@@ -174,10 +279,25 @@ class Evolution {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
 			}
 			$processadas++;
+			// #region agent log
+			self::debugAgentLog('Evolution.php:processarMensagens', 'salva', [
+				'idx' => $idx,
+				'direction' => $fromMe ? 'out' : 'in',
+				'tipo' => $tipo,
+				'jid_suffix' => self::jidSuffix($remoteJid),
+				'conversa_id' => (int)$conversa->id,
+			], 'OK');
+			// #endregion
 		}
 		if ($processadas > 0) {
 			self::logWebhook($idAdmin, 'msgs_salvas', ['qtd' => $processadas, 'instance' => $instanceName], true);
 		}
+		// #region agent log
+		self::debugAgentLog('Evolution.php:processarMensagens', 'fim', [
+			'id_admin' => $idAdmin,
+			'processadas' => $processadas,
+		], 'OK');
+		// #endregion
 	}
 
 	/** Resolve JID do contato (inclui fallback para @lid / privacidade). */
