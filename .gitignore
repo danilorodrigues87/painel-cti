@@ -5,6 +5,7 @@
 .vscode/
 resources/assets/img/*
 uploads/*
+database/*
 
 # Sessões PHP (não versionar)
 app/sessions/*
