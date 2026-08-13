@@ -29,7 +29,7 @@ class CrmAutomacao extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/crm/automacao', []);
-		return parent::getPanel('Automação CRM', $content, 'CRM', $request);
+		return parent::getPanel('Leads', $content, 'CRM', $request);
 	}
 
 	public static function getInfo($request) {

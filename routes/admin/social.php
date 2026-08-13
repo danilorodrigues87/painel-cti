@@ -25,6 +25,20 @@ $obRouter->post('/painel/social/upload', [
 	}
 ]);
 
+$obRouter->get('/painel/social/mensagens', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\MetaInbox::index($request));
+	}
+]);
+
+$obRouter->post('/painel/social/mensagens', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\MetaInbox::getInfo($request));
+	}
+]);
+
 $obRouter->get('/painel/config/social', [
 	'middlewares' => ['required-admin-login'],
 	function ($request) {

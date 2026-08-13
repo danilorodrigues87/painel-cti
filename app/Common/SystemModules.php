@@ -241,8 +241,21 @@ class SystemModules {
 		],
 		'social' => [
 			'label' => 'Redes sociais',
-			'link' => URL.'/painel/social',
-			'icon' => 'fa-solid fa-share-nodes'
+			'icon' => 'fa-solid fa-share-nodes',
+			'subsections' => [
+				'name' => 'Layouts-social',
+				'icon' => 'fas fa-caret-down',
+				'items' => [
+					[
+						'label' => 'Agenda',
+						'link' => URL.'/painel/social',
+					],
+					[
+						'label' => 'Mensagens',
+						'link' => URL.'/painel/social/mensagens',
+					],
+				],
+			],
 		],
 		'campanhas' => [
 			'label' => 'Campanhas',

@@ -4,12 +4,13 @@ namespace App\Controller\Webhook;
 
 use App\Common\Helpers\MetaGraphHelper;
 use App\Common\Helpers\SocialAutomacaoService;
+use App\Common\Helpers\MetaMessagingService;
 use App\Model\Entity\EscolaIntegracoes;
 
 /**
  * Webhook Meta Graph.
  * GET: verificação hub.challenge
- * POST: comentários → keyword → DM (private reply)
+ * POST: comentários → keyword → DM | messaging → inbox Meta
  */
 class Meta {
 
@@ -36,9 +37,11 @@ class Meta {
 		}
 
 		$payload = json_decode((string)$raw, true);
-		$resumo = is_array($payload)
-			? SocialAutomacaoService::processarPayload(null, $payload)
-			: ['processados' => 0];
+		$resumo = ['comentarios' => ['processados' => 0], 'messaging' => ['processados' => 0]];
+		if (is_array($payload)) {
+			$resumo['comentarios'] = SocialAutomacaoService::processarPayload(null, $payload);
+			$resumo['messaging'] = MetaMessagingService::processarPayload(null, $payload);
+		}
 
 		return json_encode(['success' => true, 'resumo' => $resumo], JSON_UNESCAPED_UNICODE);
 	}
@@ -67,9 +70,11 @@ class Meta {
 		}
 
 		$payload = json_decode((string)$raw, true);
-		$resumo = is_array($payload)
-			? SocialAutomacaoService::processarPayload($idAdmin, $payload)
-			: ['processados' => 0];
+		$resumo = ['comentarios' => ['processados' => 0], 'messaging' => ['processados' => 0]];
+		if (is_array($payload)) {
+			$resumo['comentarios'] = SocialAutomacaoService::processarPayload($idAdmin, $payload);
+			$resumo['messaging'] = MetaMessagingService::processarPayload($idAdmin, $payload);
+		}
 
 		return json_encode(['success' => true, 'resumo' => $resumo], JSON_UNESCAPED_UNICODE);
 	}

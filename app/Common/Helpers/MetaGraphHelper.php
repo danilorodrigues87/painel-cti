@@ -335,7 +335,7 @@ class MetaGraphHelper {
 	 * @return array{ok:bool,message?:string}
 	 */
 	public static function subscribePageApps(string $pageId, string $pageToken): array {
-		$fields = 'feed,messages,message_deliveries,message_reads';
+		$fields = 'feed,messages,messaging_postbacks,message_echoes,message_deliveries,message_reads,standby';
 		$r = self::post($pageId.'/subscribed_apps', [
 			'subscribed_fields' => $fields,
 		], $pageToken);
@@ -364,6 +364,43 @@ class MetaGraphHelper {
 		return self::post($commentId.'/private_replies', [
 			'message' => $text,
 		], $pageToken);
+	}
+
+	/**
+	 * Envia mensagem no Messenger / Instagram Direct (recipient.id = PSID/IGSID).
+	 *
+	 * @return array{ok:bool,id?:string,message_id?:string,message?:string,auth_error?:bool}
+	 */
+	public static function sendMessage(
+		string $pageId,
+		string $pageToken,
+		string $recipientId,
+		string $text,
+		?string $messagingTag = null
+	): array {
+		$body = [
+			'recipient' => ['id' => $recipientId],
+			'message'   => ['text' => $text],
+		];
+		if ($messagingTag !== null && trim($messagingTag) !== '') {
+			$body['messaging_type'] = 'MESSAGE_TAG';
+			$body['tag'] = trim($messagingTag);
+		} else {
+			$body['messaging_type'] = 'RESPONSE';
+		}
+		return self::postJson($pageId.'/messages', $body, $pageToken);
+	}
+
+	/**
+	 * Perfil do participante (Messenger PSID ou IGSID conforme canal/contexto).
+	 *
+	 * @return array{ok:bool,data?:array,message?:string,auth_error?:bool}
+	 */
+	public static function getUserProfile(string $userId, string $pageToken, string $fields = 'first_name,last_name,profile_pic'): array {
+		if (trim($userId) === '') {
+			return ['ok' => false, 'message' => 'userId vazio.'];
+		}
+		return self::get($userId, ['fields' => $fields], $pageToken);
 	}
 
 	/**
