@@ -41,37 +41,23 @@ class Certificados extends Page{
     // Página Atual
   $postVars = $request->getPostVars();
   $paginaAtual = $postVars['page'] ?? 1;
+  $busca = trim((string)($postVars['busca'] ?? ''));
 
-    // Filtro de Cliente
-  $id_cliente = (isset($postVars['filtro']) && !empty($postVars['filtro'])) ? intval($postVars['filtro']) : '';
+  $where = 'certificados.id_admin = ' . (int)$id_admin;
+  $wherePagination = 'id_admin = ' . (int)$id_admin;
 
-    // Select para Pesquisa por Cliente
-  $selecteCliente = '
-  <div class="col-sm-6 col-md-4 col-lg-4 col-xg-2 mb-2">
-  <select onchange="listar(this.value,1)" class="form-control" id="aluno" name="aluno">
-  <option value="0">Filtrar por aluno</option>';
+  $idsBusca = TenantHelper::idsAlunosPorBusca((int)$id_admin, $busca);
+  if (is_array($idsBusca)) {
+    if (!$idsBusca) {
+      $where .= ' AND 1=0';
+      $wherePagination .= ' AND 1=0';
+    } else {
+      $where .= ' AND certificados.id_aluno IN (' . implode(',', $idsBusca) . ')';
+      $wherePagination .= ' AND id_aluno IN (' . implode(',', $idsBusca) . ')';
+    }
+  }
 
-  $results = EntityUser::getUser("nivel = 'Cliente' AND id_admin = '" . $id_admin . "'", 'nome ASC');
-  while ($obCliente = $results->fetchObject(EntityUser::class)) {
-    $selected = ($obCliente->id == $id_cliente) ? 'selected' : '';
-    $selecteCliente .= '<option ' . $selected . ' value="' . $obCliente->id . '">' . $obCliente->nome . '</option>';
- }
- $selecteCliente .= '</select></div>';
-
-    // Condição para Filtro de Cliente
- if ($id_cliente != '') {
-    $where = 'usuarios.id =' . (int)$id_cliente;
-    $wherePagination = 'id_aluno = ' . (int)$id_cliente;
- } else {
-    $where = 'certificados.id_admin = ' . (int)$id_admin;
-    $wherePagination = 'id_admin = ' . (int)$id_admin;
- }
-
- $itens = '<div class="row">' . $selecteCliente . '
- <div class="col">
- <button type="button" class="btn btn-success" onclick="list_itens(\'\',\'novo\')" data-toggle="modal">Nova Certificação</button>
- </div>
- </div>';
+  $itens = '';
 
     // Quantidade Total de Registros
  $quantidadeTotal = EntityCertificados::getCertificados($wherePagination, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
@@ -96,8 +82,8 @@ class Certificados extends Page{
  trilhas.nome as trilha
  ';
 
-    // Resultados da Página
- $results = EntityCertificados::getCertificados($where, 'certificados.id ASC', $obPagination->getLimit(), $fields, $innerJoin);
+    // Mais recentes primeiro (data de emissão ≈ cadastro no sistema)
+ $results = EntityCertificados::getCertificados($where, 'certificados.id DESC', $obPagination->getLimit(), $fields, $innerJoin);
 
     // Renderiza o Item
  while ($obDados = $results->fetchObject(EntityCertificados::class)) {
@@ -123,6 +109,10 @@ class Certificados extends Page{
     </div>
     </td>
     </tr>';
+ }
+
+ if ($itens === '') {
+   $itens = '<tr><td colspan="6" class="text-center text-muted py-4">Nenhum certificado encontrado com esses filtros.</td></tr>';
  }
 
     // Tabela HTML
@@ -205,16 +195,16 @@ private static function getForm($request) {
     // DADOS DO ADMIN
  $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
 
- $results = EntityUser::getUser('id_admin = ' . (int)$id_admin . ' AND nivel = "Cliente"', 'id ASC');
+ $results = EntityUser::getUser('id_admin = ' . (int)$id_admin . ' AND nivel = "Cliente"', 'nome ASC');
 
     // Carrega o SELECT de alunos
  $optionSelect = '';
  while ($obDados = $results->fetchObject(EntityUser::class)) {
     $selected = (isset($dados['id_aluno']) && $dados['id_aluno'] == $obDados->id) ? 'selected' : '';
-    $optionSelect .= '<option ' . $selected . ' value="' . $obDados->id . '">' . $obDados->nome . '</option>';
+    $optionSelect .= '<option ' . $selected . ' value="' . (int)$obDados->id . '">' . htmlspecialchars((string)$obDados->nome, ENT_QUOTES, 'UTF-8') . '</option>';
  }
 
- $resultsTrilhas = EntityTrilhas::getTrilha('id_admin = ' . (int)$id_admin, 'id ASC');
+ $resultsTrilhas = EntityTrilhas::getTrilha('id_admin = ' . (int)$id_admin, 'nome ASC');
 
     // Carrega o SELECT de trilhas
  $optSlqTrilhas = '';

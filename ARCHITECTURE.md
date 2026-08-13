@@ -1,4 +1,4 @@
-﻿# ARCHITECTURE.md — Contexto completo do Painel CTI
+# ARCHITECTURE.md — Contexto completo do Painel CTI
 
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.

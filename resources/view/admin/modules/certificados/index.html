@@ -4,6 +4,21 @@
   <li class="breadcrumb-item active">Certificados</li>
 </ol>
 
+<div id="barra-filtros-lista" class="card shadow-sm mb-3">
+	<div class="card-body py-3">
+		<div class="row g-2 align-items-end">
+			<div class="col-md-5">
+				<label class="form-label small mb-1" for="filtro-busca-cert">Aluno</label>
+				<input type="search" class="form-control form-control-sm" name="busca" id="filtro-busca-cert" placeholder="Nome, e-mail ou WhatsApp do aluno…">
+			</div>
+			<div class="col-md-7 d-flex flex-wrap gap-2">
+				<button type="button" class="btn btn-sm btn-outline-secondary btn-limpar-filtros">Limpar</button>
+				<button type="button" class="btn btn-sm btn-success ms-auto" onclick="list_itens('','novo')">Nova certificação</button>
+			</div>
+		</div>
+	</div>
+</div>
+
 <div class="card shadow-sm mb-4">
 	<div class="card-body p-0">
 		<div id="listar" class="p-3 text-muted small">Carregando…</div>
@@ -27,4 +42,4 @@
 	let edicao = 'painel/certificados/save';
 	let deletar = 'painel/certificados/excluir';
 </script>
-<script src="{{URL}}/resources/js/ajax.js?v=20260717n"></script>
+<script src="{{URL}}/resources/js/ajax.js?v=20260728g"></script>

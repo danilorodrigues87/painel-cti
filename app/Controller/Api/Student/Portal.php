@@ -199,7 +199,7 @@ class Portal {
 		}
 
 		$idOwner = StudentEntitlement::idAdminConteudo($curso);
-		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, $idOwner);
+		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, $idOwner, (int)$u->id_admin);
 		$progExistente = LmsProgressoAula::getAlunoAula((int)$u->id, (int)$aula->id);
 		$precisaRevisar = $progExistente && (int)($progExistente->precisa_revisar ?? 0) === 1;
 		$unidadeOk = $progExistente && (int)($progExistente->unidade_aprovada ?? 0) === 1;
@@ -271,7 +271,7 @@ class Portal {
 		}
 
 		$idOwner = StudentEntitlement::idAdminConteudo($curso);
-		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, $idOwner);
+		$idsInc = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, (int)$u->id, $idOwner, (int)$u->id_admin);
 		$prog = LmsProgressoAula::getAlunoAula((int)$u->id, (int)$aula->id);
 		$precisaRevisar = $prog && (int)($prog->precisa_revisar ?? 0) === 1;
 		$unidadeOk = $prog && (int)($prog->unidade_aprovada ?? 0) === 1;

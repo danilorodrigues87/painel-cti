@@ -183,13 +183,24 @@ class LmsUnidadeAvaliacaoHelper {
 	}
 
 	/** Unidade anterior aprovada? (para liberar próxima aula) */
-	public static function unidadeAprovada(int $idAluno, int $idAula, int $idAdmin): bool {
-		$prog = LmsProgressoAula::getAlunoAula($idAluno, $idAula);
+	public static function unidadeAprovada(int $idAluno, int $idAula, int $idAdminConteudo, ?int $idAdminEscola = null): bool {
+		$prog = null;
+		if ($idAdminEscola !== null && $idAdminEscola > 0) {
+			foreach (LmsProgressoAula::listByAluno($idAluno, $idAdminEscola) as $p) {
+				if ((int)$p->id_aula === $idAula) {
+					$prog = $p;
+					break;
+				}
+			}
+		}
+		if (!$prog instanceof LmsProgressoAula) {
+			$prog = LmsProgressoAula::getAlunoAula($idAluno, $idAula);
+		}
 		if ($prog instanceof LmsProgressoAula && (int)($prog->unidade_aprovada ?? 0) === 1) {
 			return true;
 		}
 		// Sem itens avaliados: basta ter assistido
-		$itens = self::itensAvaliados($idAula, $idAdmin);
+		$itens = self::itensAvaliados($idAula, $idAdminConteudo);
 		if (count($itens) === 0) {
 			return $prog instanceof LmsProgressoAula && !empty($prog->concluida_em);
 		}

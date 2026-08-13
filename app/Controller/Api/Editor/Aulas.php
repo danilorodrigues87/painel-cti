@@ -152,6 +152,8 @@ class Aulas {
 				if (!empty($play['playbackUrl'])) {
 					$src = (string)$play['playbackUrl'];
 				}
+			} elseif ($src !== '' && (string)($cena->media_kind ?: 'image') !== 'video') {
+				$src = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($src);
 			}
 			$item = [
 				'id' => (string)$cena->id,

@@ -365,19 +365,25 @@ class LmsAgendaAcessoHelper {
 		];
 	}
 
-	public static function idsIncompletasDoCurso(LmsCurso $curso, int $idAluno, int $idAdmin): array {
+	public static function idsIncompletasDoCurso(
+		LmsCurso $curso,
+		int $idAluno,
+		int $idAdminConteudo,
+		?int $idAdminEscola = null
+	): array {
+		$idEscola = ($idAdminEscola !== null && $idAdminEscola > 0) ? $idAdminEscola : $idAdminConteudo;
 		$ids = [];
 		$progressMap = [];
-		foreach (\App\Model\Entity\LmsProgressoAula::listByAluno($idAluno, $idAdmin) as $p) {
+		foreach (\App\Model\Entity\LmsProgressoAula::listByAluno($idAluno, $idEscola) as $p) {
 			$progressMap[(int)$p->id_aula] = $p;
 		}
-		foreach (\App\Model\Entity\LmsModulo::listByCurso((int)$curso->id, $idAdmin) as $mod) {
-			foreach (\App\Model\Entity\LmsAula::listByModulo((int)$mod->id, $idAdmin) as $aula) {
+		foreach (\App\Model\Entity\LmsModulo::listByCurso((int)$curso->id, $idAdminConteudo) as $mod) {
+			foreach (\App\Model\Entity\LmsAula::listByModulo((int)$mod->id, $idAdminConteudo) as $aula) {
 				$prog = $progressMap[(int)$aula->id] ?? null;
 				$unidadeOk = $prog && (int)($prog->unidade_aprovada ?? 0) === 1;
 				$precisaRevisar = $prog && (int)($prog->precisa_revisar ?? 0) === 1;
 				$assistida = $prog && !empty($prog->concluida_em) && !$precisaRevisar;
-				$semAval = count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idAdmin)) === 0;
+				$semAval = count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idAdminConteudo)) === 0;
 				$completed = $unidadeOk || ($semAval && $assistida);
 				if (!$completed) {
 					$ids[] = (int)$aula->id;

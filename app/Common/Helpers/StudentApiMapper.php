@@ -146,7 +146,7 @@ class StudentApiMapper {
 		// Agenda pela trilha/plano da escola do aluno (inclui curso licenciado da vitrine).
 		$idTrilha = LmsAgendaAcessoHelper::idTrilhaAgendaAluno($idAluno, (int)$idAdmin);
 		$usaAgenda = $idTrilha > 0;
-		$idsIncompletas = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, $idAluno, $idOwner);
+		$idsIncompletas = LmsAgendaAcessoHelper::idsIncompletasDoCurso($curso, $idAluno, $idOwner, $idAdmin);
 		$janela = $usaAgenda ? LmsAgendaAcessoHelper::janelaAtiva($idAluno, $idAdmin, $idTrilha) : null;
 		$consumidas = $usaAgenda ? LmsAgendaAcessoHelper::aulasConsumidasHoje($idAluno, $idAdmin) : [];
 		$cotaMax = $janela ? (int)$janela['aulas_cota'] : 0;
@@ -199,13 +199,22 @@ class StudentApiMapper {
 				$draftInteractive = LmsAula::temColunaInterativa()
 					&& (string)($aula->tipo_conteudo ?? 'video') === 'interativa'
 					&& (string)($aula->interativa_status ?? 'rascunho') !== 'publicada';
-				$lessonLocked = $adminLocked || !$prevUnidadeOk || $draftInteractive;
-				$completed = $unidadeOk || ($assistida && count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0);
+				$semAvaliacao = count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0;
+				$completed = $unidadeOk || ($semAvaliacao && $assistida);
 				$revisaoLivre = $completed || $precisaRevisar;
+				$lessonLocked = $adminLocked;
 				$lockReason = null;
 				$lockMessage = null;
 				if (!$revisaoLivre && !$adminLocked) {
-					if (empty($aulasAgendaOk[(int)$aula->id])) {
+					if (!$prevUnidadeOk) {
+						$lessonLocked = true;
+						$lockReason = 'sequencia';
+						$lockMessage = 'Conclua a unidade anterior para liberar.';
+					} elseif ($draftInteractive) {
+						$lessonLocked = true;
+						$lockReason = 'rascunho';
+						$lockMessage = 'Esta aula ainda está em preparação.';
+					} elseif (empty($aulasAgendaOk[(int)$aula->id])) {
 						$lessonLocked = true;
 						if (!$janela) {
 							$lockReason = 'fora_horario';
@@ -215,25 +224,23 @@ class StudentApiMapper {
 							$lockMessage = 'Cota de aulas desta sessão esgotada.';
 						}
 					}
-				} elseif (!$revisaoLivre && $lessonLocked && !$adminLocked) {
-					if ($draftInteractive) {
-						$lockReason = 'rascunho';
-						$lockMessage = 'Esta aula ainda está em preparação.';
-					} else {
-						$lockReason = 'sequencia';
-						$lockMessage = 'Conclua a unidade anterior para liberar.';
-					}
 				}
 				if ($completed) {
 					$completedCount++;
 				}
 				$lessonPayload = self::lesson($aula, (int)$mod->id, $idOwner, $assistida || $unidadeOk, $lessonLocked);
+				if (!empty($lessonPayload['locked']) && !empty($lessonPayload['lockReason'])) {
+					$lessonLocked = true;
+					$lockReason = (string)$lessonPayload['lockReason'];
+					$lockMessage = (string)($lessonPayload['lockMessage'] ?? $lockMessage);
+				}
 				$lessonPayload['needsRewatch'] = $precisaRevisar;
 				$lessonPayload['unitScore'] = $prog && $prog->nota_unidade !== null ? (float)$prog->nota_unidade : null;
 				$lessonPayload['unitPassed'] = $unidadeOk;
 				$lessonPayload['cycle'] = $ciclo;
 				$lessonPayload['lockReason'] = $lockReason;
 				$lessonPayload['lockMessage'] = $lockMessage;
+				$lessonPayload['locked'] = $lessonLocked;
 				if (!empty($lessonPayload['contentType']) && $lessonPayload['contentType'] === 'interactive') {
 					$lessonPayload['interactiveProgress'] = self::interactiveProgressPayload($idAluno, (int)$aula->id);
 				}
@@ -306,7 +313,6 @@ class StudentApiMapper {
 				}
 				unset($it);
 
-				$semAvaliacao = count(LmsUnidadeAvaliacaoHelper::itensAvaliados((int)$aula->id, $idOwner)) === 0;
 				$prevUnidadeOk = $unidadeOk || ($semAvaliacao && $assistida);
 			}
 
@@ -539,6 +545,8 @@ class StudentApiMapper {
 					if (!empty($play['playbackUrl'])) {
 						$src = (string)$play['playbackUrl'];
 					}
+				} elseif ($src !== '' && (string)($cena->media_kind ?: 'image') !== 'video') {
+					$src = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($src);
 				}
 				$item = [
 					'id' => (string)$cena->id,
