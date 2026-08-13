@@ -249,10 +249,12 @@ class SystemModules {
 					[
 						'label' => 'Agenda',
 						'link' => URL.'/painel/social',
+						'requires_label' => 'Redes sociais',
 					],
 					[
 						'label' => 'Mensagens',
 						'link' => URL.'/painel/social/mensagens',
+						'requires_label' => 'Redes sociais',
 					],
 				],
 			],

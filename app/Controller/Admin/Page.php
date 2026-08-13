@@ -157,7 +157,7 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
                     'expanded' => $expanded,
                     'show' => $showClass
                 ]);
-            } else {
+            } elseif (!empty($module['link'])) {
                 $links .= View::render('admin/menu/link', [
                     'label' => $module['label'],
                     'link' => $module['link'],

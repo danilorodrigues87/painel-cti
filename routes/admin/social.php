@@ -4,6 +4,20 @@ use App\Http\Response;
 use App\Controller\Admin;
 use App\Controller\Webhook;
 
+$obRouter->get('/painel/social/mensagens', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\MetaInbox::index($request));
+	}
+]);
+
+$obRouter->post('/painel/social/mensagens', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\MetaInbox::getInfo($request));
+	}
+]);
+
 $obRouter->get('/painel/social', [
 	'middlewares' => ['required-admin-login'],
 	function ($request) {
@@ -22,20 +36,6 @@ $obRouter->post('/painel/social/upload', [
 	'middlewares' => ['required-admin-login'],
 	function ($request) {
 		return new Response(200, Admin\SocialAgenda::upload($request));
-	}
-]);
-
-$obRouter->get('/painel/social/mensagens', [
-	'middlewares' => ['required-admin-login'],
-	function ($request) {
-		return new Response(200, Admin\MetaInbox::index($request));
-	}
-]);
-
-$obRouter->post('/painel/social/mensagens', [
-	'middlewares' => ['required-admin-login'],
-	function ($request) {
-		return new Response(200, Admin\MetaInbox::getInfo($request));
 	}
 ]);
 
