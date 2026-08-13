@@ -224,6 +224,12 @@ class SystemModules {
 						'link' => URL.'/painel/crm/relatorios',
 						'diretor_only' => true,
 						'requires_label' => 'Leads',
+					],
+					[
+						'label' => 'Automação WhatsApp',
+						'link' => URL.'/painel/crm/automacao',
+						'diretor_only' => true,
+						'requires_label' => 'Leads',
 					]
 				]
 			]

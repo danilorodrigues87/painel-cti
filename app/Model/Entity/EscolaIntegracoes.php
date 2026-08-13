@@ -41,6 +41,13 @@ class EscolaIntegracoes {
 	public $aniversario_whatsapp_ativo = 0;
 	public $aniversario_assunto;
 	public $aniversario_mensagem;
+	public $crm_wa_automacao_ativo = 1;
+	public $crm_wa_enviar_novo = 1;
+	public $crm_wa_enviar_em_atendimento = 1;
+	public $crm_wa_enviar_matriculado = 1;
+	public $crm_wa_msg_novo;
+	public $crm_wa_msg_em_atendimento;
+	public $crm_wa_msg_matriculado;
 	public $evolution_instance;
 	public $evolution_status = 'disconnected';
 	public $evolution_ativo = 0;
@@ -159,6 +166,61 @@ class EscolaIntegracoes {
 			$cache = false;
 		}
 		return $cache;
+	}
+
+	public static function temColunasCrmAutomacao(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'crm_wa_automacao_ativo'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	/** Grava só campos de automação CRM (upsert mínimo). */
+	public static function salvarCrmAutomacao(int $idAdmin, array $dados): bool {
+		if (!self::temColunasCrmAutomacao() || $idAdmin <= 0) {
+			return false;
+		}
+
+		$permitidos = [
+			'crm_wa_automacao_ativo',
+			'crm_wa_enviar_novo',
+			'crm_wa_enviar_em_atendimento',
+			'crm_wa_enviar_matriculado',
+			'crm_wa_msg_novo',
+			'crm_wa_msg_em_atendimento',
+			'crm_wa_msg_matriculado',
+		];
+		$gravar = [];
+		foreach ($permitidos as $col) {
+			if (array_key_exists($col, $dados)) {
+				$gravar[$col] = $dados[$col];
+			}
+		}
+		if ($gravar === []) {
+			return false;
+		}
+
+		$existente = self::getByIdAdmin($idAdmin);
+		$db = new Database('escola_integracoes');
+		if ($existente instanceof self) {
+			return (bool)$db->update('id_admin = '.(int)$idAdmin, $gravar);
+		}
+
+		$gravar['id_admin'] = (int)$idAdmin;
+		return (bool)$db->insert($gravar);
 	}
 
 	public static function temColunasEvolution(): bool {

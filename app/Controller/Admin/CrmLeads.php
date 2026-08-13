@@ -12,6 +12,7 @@ use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\PlanilhaHelper;
 use \App\Common\Helpers\EmailValidator;
 use \App\Common\Communication\WhatsappEscolaService;
+use \App\Common\Helpers\CrmAutomacaoTemplateHelper;
 use \App\Common\Helpers\ModuleGateHelper;
 use \App\Model\Db\Database;
 use \App\Model\Db\Pagination;
@@ -1160,18 +1161,18 @@ class CrmLeads extends Page{
 			return;
 		}
 
-		$mensagem = self::mensagemAutomaticaStatus($lead, $statusNovo);
+		$idAdmin = (int)($lead->id_admin ?? 0);
+		if($idAdmin <= 0){
+			return;
+		}
+
+		$mensagem = CrmAutomacaoTemplateHelper::mensagemParaLead($idAdmin, $statusNovo, $lead);
 		if($mensagem === null || $mensagem === ''){
 			return;
 		}
 
 		$telefone = preg_replace('/\D/', '', (string)($lead->whatsapp ?? ''));
 		if($telefone === ''){
-			return;
-		}
-
-		$idAdmin = (int)($lead->id_admin ?? 0);
-		if($idAdmin <= 0){
 			return;
 		}
 
@@ -1241,23 +1242,6 @@ class CrmLeads extends Page{
 			return;
 		}
 		self::registrarHistorico($leadId, $uid, 'whatsapp_automatico', $observacao);
-	}
-
-	/** Templates enxutos por status (null = não envia). */
-	private static function mensagemAutomaticaStatus($lead, string $statusNovo): ?string {
-		$nome = trim((string)($lead->nome ?? ''));
-		$primeiro = $nome !== '' ? explode(' ', $nome)[0] : 'olá';
-
-		switch ($statusNovo) {
-			case 'novo':
-				return 'Olá, '.$primeiro.'! Recebemos seu contato. Em breve um atendente da escola falará com você.';
-			case 'em_atendimento':
-				return 'Olá, '.$primeiro.'! Seu atendimento foi iniciado. Podemos te ajudar com dúvidas sobre cursos e horários.';
-			case 'matriculado':
-				return 'Parabéns, '.$primeiro.'! Sua matrícula foi registrada. Se precisar de algo, é só responder esta mensagem.';
-			default:
-				return null;
-		}
 	}
 
 }

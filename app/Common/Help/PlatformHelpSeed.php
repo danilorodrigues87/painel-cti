@@ -545,7 +545,7 @@ class PlatformHelpSeed {
 						'Importe planilha quando tiver muitos leads de uma vez.',
 						'Use o botão WhatsApp no lead para abrir o Inbox (se conectado) ou o WhatsApp Web.',
 					],
-					'<ul><li>WhatsApp do lead deve ser válido para abrir conversa.</li><li>Ao mudar status, pode haver mensagem automática configurada.</li><li>Em perda, informe o motivo quando a tela pedir.</li></ul>',
+					'<ul><li>WhatsApp do lead deve ser válido para abrir conversa.</li><li>Ao mudar status, pode haver mensagem automática — configure em <strong>CRM → Automação WhatsApp</strong> (Diretor).</li><li>Em perda, informe o motivo quando a tela pedir.</li></ul>',
 					'CRM → Leads'
 				),
 			],

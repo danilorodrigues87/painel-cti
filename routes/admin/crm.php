@@ -131,3 +131,22 @@ $obRouter->post('/painel/crm/relatorios',[
 		return new Response(200, Admin\CrmRelatorios::getInfo($request));
 	}
 ]);
+
+// Automação WhatsApp CRM (Diretor) — Fase 5+
+$obRouter->get('/painel/crm/automacao',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\CrmAutomacao::index($request));
+	}
+]);
+
+$obRouter->post('/painel/crm/automacao',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\CrmAutomacao::getInfo($request));
+	}
+]);

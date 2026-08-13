@@ -186,7 +186,7 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - `crm_leads` Kanban, funis, histórico, importação planilha
 - Tarefas estilo Trello (`crm_tarefas_*`)
 - **WhatsApp no CRM:** um botão “WhatsApp” → `iniciarAtendimentoWa` — com módulo + Evolution conectada abre o Inbox; sem plano/desconectado abre **WhatsApp Web** (`wa.me`)
-- Auto-mensagem ao mudar status (`novo` / `em_atendimento` / `matriculado`): Evolution via `WhatsappEscolaService::enviarTexto`; se escola sem módulo ou desconectada, registra no histórico e `status_wa=pulado` (não tenta enviar)
+- Auto-mensagem ao mudar status (`novo` / `em_atendimento` / `matriculado`): Evolution via `WhatsappEscolaService::enviarTexto`; templates editáveis em `/painel/crm/automacao` (Diretor); se escola sem módulo ou desconectada, registra no histórico e `status_wa=pulado` (não tenta enviar)
 - **Relatórios CRM (Diretor):** `/painel/crm/relatorios` — KPIs, por status, por funil, motivos de perda, origens (filtro por período de cadastro). Menu só para Diretor com permissão Leads.
 - **Roadmap relatório de tarefas:** cards Kanban (`crm_tarefas_cartoes`) sem status/data de conclusão padronizados — planejar: contagem por lista, cards criados no período, checklists % concluídos, tempo médio na lista (exige `updated_at`/histórico de movimento ou campos novos).
 
@@ -602,6 +602,7 @@ ALTER TABLE whatsapp_conversas ADD COLUMN assigned_at DATETIME NULL;
 | Dados da escola (Diretor) + menu reorganizado | Feito |
 | Webhook MP: validação `x-signature` quando secret configurado | Feito |
 | CRM: mensagem WA automática ao mudar status (novo / em atendimento / matriculado) | Feito (Fase 5 enxuta) |
+| CRM: templates editáveis de automação WA por escola | Feito (Fase 5+) — SQL `database/crm_automacao_wa.sql`, UI `/painel/crm/automacao` |
 | **Master fase 2 — cobrança SaaS** (PIX conta CTI, faturas, webhook, worker, grace 5 dias) | Feito (MVP) — SQL `database/saas_assinatura.sql` |
 
 ### Master fase 2 — Assinaturas SaaS (FEITO — MVP operacional)
@@ -669,7 +670,7 @@ Detalhe: `database/LMS_CHECKLIST_PRODUCAO.md`
 | **LMS L6+** | Vitrine EAD entre escolas + royalties (CTI %) + aula demo | Futuro — não abrir sem pedido |
 | **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | Adiado |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
-| **Fase 5+** | Templates editáveis de automação CRM por escola | Base já envia textos fixos |
+| **Fase 5+** | Templates editáveis de automação CRM por escola | Feito — `/painel/crm/automacao` |
 | **Master fase 2+** | Dashboard SaaS, e-mail cobrança, trial 14d, valor por escola, login só Assinatura se inativa | Feito — `database/saas_fase2plus.sql` |
 | **Master RBAC** | CRUD `/master/usuarios` + permissões por slug (`ead_cursos`, …); instrutores editam catálogo CTI | Futuro — `EditorAuthHelper::canEditCatalogCti` já é ponto de extensão |
 | **Master RBAC** | CRUD `/master/usuarios` + permissões por slug (`ead_cursos`, …); instrutores editam catálogo CTI | Futuro — `EditorAuthHelper::canEditCatalogCti` já é ponto de extensão |
