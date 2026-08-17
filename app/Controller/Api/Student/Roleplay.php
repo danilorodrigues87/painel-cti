@@ -216,7 +216,7 @@ class Roleplay {
 			."\nRegras: permaneça no personagem; não saia do tema da simulação; linguagem profissional; "
 			."se o aluno desviar do assunto, redirecione educadamente ao cenário."
 		);
-		$aiText = LmsAiService::chat((int)$u->id_admin, $msgs, $system);
+		$aiText = LmsAiService::chat((int)$u->id_admin, $msgs, $system, 'roleplay');
 		$aiMsg = [
 			'id' => 'm_'.time().'_a',
 			'role' => 'ai',

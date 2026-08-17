@@ -3,12 +3,17 @@
   <li class="breadcrumb-item active">Horários</li>
 </ol>
 
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+  <label class="form-label mb-0 me-1" for="filtro_laboratorio">Laboratório:</label>
+  <select id="filtro_laboratorio" class="form-select form-select-sm" style="max-width:280px" onchange="listarHorarios(1)">
+    {{labs_options}}
+  </select>
+</div>
+
 <div class="card shadow mb-4">
 	<div id="listar"></div>
-	<nav class="container">
-		<ul class="pagination">
-			<div id="pagination"></div>
-		</ul>
+	<nav class="container mt-3" aria-label="Paginação">
+		<div id="pagination"></div>
 	</nav>
 </div>
 
@@ -26,4 +31,4 @@
 	let edicao = 'painel/agenda/horarios/salvar';
 	let deletar = 'painel/agenda/horarios/excluir';
 </script>
-<script src="{{URL}}/resources/js/agenda-horarios.js"></script>
+<script src="{{URL}}/resources/js/agenda-horarios.js?v=20260817hr"></script>

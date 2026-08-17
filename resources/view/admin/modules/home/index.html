@@ -134,6 +134,30 @@
       </a>
     </div>
 
+    <div class="col-6 col-lg-3 {{visible}}">
+      <a href="{{URL}}/painel/caixa/entrada" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-warning">
+          <div class="card-body">
+            <div class="dash-label">Vencimentos hoje</div>
+            <div class="dash-value">R$ {{vencimentos-hoje}}</div>
+            <div class="dash-sub text-muted">{{vencimentos-hoje-qtd}} título(s) · cobrar hoje</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-lg-3 {{visible}}">
+      <a href="{{URL}}/painel/caixa/relatorio" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-fin">
+          <div class="card-body">
+            <div class="dash-label">Recebido no mês</div>
+            <div class="dash-value">R$ {{recebido-mes}}</div>
+            <div class="dash-sub text-muted">{{recebido-mes-sub}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
   </div>
 </div>
 
@@ -266,24 +290,57 @@
     </div>
 
   </div>
-</div>
 
-<div class="row g-3 mb-4">
-  <div class="col-md-6">
-    <div class="card dash-card border-0 shadow-sm h-100">
-      <div class="card-body">
-        <div class="dash-label">Matrículas este mês</div>
-        <div class="dash-value fs-5">{{comp-matriculas}}</div>
-      </div>
+  <div class="row g-3 mb-4">
+
+    <div class="col-6 col-lg-3">
+      <a href="{{URL}}/painel/clientes" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-ped">
+          <div class="card-body">
+            <div class="dash-label">Matrículas este mês</div>
+            <div class="dash-value">{{crm-matriculas-mes}}</div>
+            <div class="dash-sub text-muted">{{crm-matriculas-sub}}</div>
+          </div>
+        </div>
+      </a>
     </div>
-  </div>
-  <div class="col-md-6 {{visible}}">
-    <div class="card dash-card border-0 shadow-sm h-100">
-      <div class="card-body">
-        <div class="dash-label">Receita este mês</div>
-        <div class="dash-value fs-5">{{comp-receita}}</div>
-      </div>
+
+    <div class="col-6 col-lg-3 {{visible}}">
+      <a href="{{URL}}/painel/caixa/relatorio" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 accent-fin">
+          <div class="card-body">
+            <div class="dash-label">Receita este mês</div>
+            <div class="dash-value">{{crm-receita-mes}}</div>
+            <div class="dash-sub text-muted">{{crm-receita-sub}}</div>
+          </div>
+        </div>
+      </a>
     </div>
+
+    <div class="col-6 col-lg-3">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-primary">
+          <div class="card-body">
+            <div class="dash-label text-primary">Leads no mês</div>
+            <div class="dash-value">{{crm-leads-mes}}</div>
+            <div class="dash-sub text-muted">{{crm-leads-sub}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <div class="col-6 col-lg-3">
+      <a href="{{URL}}/painel/crm" class="text-decoration-none text-reset d-block h-100 card-dashboard-link">
+        <div class="card dash-card border-0 shadow-sm h-100 border-left-info">
+          <div class="card-body">
+            <div class="dash-label text-info">Pipeline CRM</div>
+            <div class="dash-value">{{crm-pipeline}}</div>
+            <div class="dash-sub text-muted">{{crm-pipeline-sub}}</div>
+          </div>
+        </div>
+      </a>
+    </div>
+
   </div>
 </div>
 
@@ -414,6 +471,7 @@
   .accent-pdv { border-left-color: #198754 !important; }
   .accent-estoque { border-left-color: #fd7e14 !important; }
   .accent-fin { border-left-color: #6f42c1 !important; }
+  .accent-warning { border-left-color: #ffc107 !important; }
   .accent-danger { border-left-color: #dc3545 !important; }
   .accent-saas { border-left-color: #0dcaf0 !important; }
   .accent-ped { border-left-color: #20c997 !important; }

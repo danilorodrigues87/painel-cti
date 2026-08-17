@@ -138,6 +138,20 @@ $obRouter->post('/painel/config/ia', [
 	}
 ]);
 
+$obRouter->get('/painel/config/ia/uso', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\RelatorioIa::index($request));
+	}
+]);
+
+$obRouter->post('/painel/config/ia/uso', [
+	'middlewares' => ['required-admin-login'],
+	function ($request) {
+		return new Response(200, Admin\RelatorioIa::getInfo($request));
+	}
+]);
+
 $obRouter->get('/painel/config/bunny', [
 	'middlewares' => ['required-admin-login'],
 	function ($request) {

@@ -11,6 +11,7 @@ use \App\Model\Entity\CrmHistorico as EntityCrmHistorico;
 use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\DashboardEscolaHelper;
+use \App\Common\Helpers\AgentAnalyticsHelper;
 use PDO;
 
 class Home extends Page{
@@ -41,6 +42,10 @@ class Home extends Page{
 			'receber-semana'         => $dados['receber_semana'],
 			'balanco'                => $dados['balanco'],
 			'inadimplentesDoMes'     => $dados['inadimplentes_mes'],
+			'vencimentos-hoje'       => $dados['vencimentos_hoje'],
+			'vencimentos-hoje-qtd'   => $dados['vencimentos_hoje_qtd'],
+			'recebido-mes'           => $dados['recebido_mes'],
+			'recebido-mes-sub'       => $dados['recebido_mes_sub'],
 			'visible'                => $dados['visible'],
 			'visible-crm'            => $dados['visible_crm'],
 			'crm-novo'               => $dados['crm_novo'],
@@ -49,8 +54,14 @@ class Home extends Page{
 			'crm-perdido'            => $dados['crm_perdido'],
 			'crm-esquecidos'         => $dados['crm_esquecidos'],
 			'crm-conversao'          => $dados['crm_conversao'],
-			'comp-matriculas'        => $dados['comp_matriculas'],
-			'comp-receita'           => $dados['comp_receita'],
+			'crm-matriculas-mes'     => $dados['crm_matriculas_mes'],
+			'crm-matriculas-sub'     => $dados['crm_matriculas_sub'],
+			'crm-receita-mes'        => $dados['crm_receita_mes'],
+			'crm-receita-sub'        => $dados['crm_receita_sub'],
+			'crm-leads-mes'          => $dados['crm_leads_mes'],
+			'crm-leads-sub'          => $dados['crm_leads_sub'],
+			'crm-pipeline'           => $dados['crm_pipeline'],
+			'crm-pipeline-sub'       => $dados['crm_pipeline_sub'],
 		], [
 			'visible-hoje'           => $dados['visible_hoje'],
 			'visible-agenda'         => $dados['visible_agenda'],
@@ -116,7 +127,9 @@ class Home extends Page{
 		)->fetchObject()->recebe;
 
 		$crmStats = self::getCrmStatsCards($id_admin);
-		$comparativo = self::getComparativoMes($id_admin);
+		$crmMes = self::getCrmMesCards($id_admin);
+		$vencHoje = AgentAnalyticsHelper::aReceber($id_admin, 'hoje');
+		$recebidoMes = self::getRecebidoMesCard($id_admin);
 		$extra = DashboardEscolaHelper::kpis(
 			$id_admin,
 			(string)$nivel,
@@ -131,6 +144,10 @@ class Home extends Page{
 			'receber_semana'           => NumeroHelper::moedaBr($receber_semana ?: 0),
 			'balanco'                  => self::dinheiroEmCaixa(),
 			'inadimplentes_mes'        => self::inadimplentesDoMes(),
+			'vencimentos_hoje'         => $vencHoje['total_br'],
+			'vencimentos_hoje_qtd'     => (string)$vencHoje['qtd_titulos'],
+			'recebido_mes'             => $recebidoMes['valor'],
+			'recebido_mes_sub'         => $recebidoMes['sub'],
 			'visible'                  => $visibleFinanceiro,
 			'visible_crm'              => $visibleCrm,
 			'crm_novo'                 => $crmStats['novo'],
@@ -139,8 +156,14 @@ class Home extends Page{
 			'crm_perdido'              => $crmStats['perdido'],
 			'crm_esquecidos'           => $crmStats['esquecidos'],
 			'crm_conversao'            => $crmStats['conversao'],
-			'comp_matriculas'          => $comparativo['matriculas'],
-			'comp_receita'             => $comparativo['receita'],
+			'crm_matriculas_mes'       => $crmMes['matriculas_valor'],
+			'crm_matriculas_sub'       => $crmMes['matriculas_sub'],
+			'crm_receita_mes'          => $crmMes['receita_valor'],
+			'crm_receita_sub'          => $crmMes['receita_sub'],
+			'crm_leads_mes'            => $crmMes['leads_mes_valor'],
+			'crm_leads_sub'            => $crmMes['leads_mes_sub'],
+			'crm_pipeline'             => $crmMes['pipeline_valor'],
+			'crm_pipeline_sub'         => $crmMes['pipeline_sub'],
 		], $extra);
 	}
 
@@ -285,7 +308,39 @@ class Home extends Page{
 		return $esquecidos;
 	}
 
-	private static function getComparativoMes($id_admin){
+	private static function getRecebidoMesCard(int $id_admin): array {
+
+		$recAtual = (float)Caixa::getCaixa(
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND MONTH(data_pagamento) = MONTH(CURDATE()) AND YEAR(data_pagamento) = YEAR(CURDATE())'
+			.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento'),
+			null, null, 'SUM(valor_pago) as total'
+		)->fetchObject()->total;
+
+		$recAnterior = (float)Caixa::getCaixa(
+			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
+			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
+			.' AND MONTH(data_pagamento) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(data_pagamento) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))'
+			.' AND '.\App\Common\Helpers\MatriculaStatusHelper::sqlExcluirNaoReceita('tipo_pagamento'),
+			null, null, 'SUM(valor_pago) as total'
+		)->fetchObject()->total;
+
+		if ($recAnterior > 0) {
+			$diff = round((($recAtual - $recAnterior) / $recAnterior) * 100, 1);
+			$sinal = $diff >= 0 ? '+' : '';
+			$sub = $sinal.$diff.'% vs mês anterior';
+		} else {
+			$sub = $recAtual > 0 ? 'Novo período' : 'Sem variação';
+		}
+
+		return [
+			'valor' => NumeroHelper::moedaBr($recAtual),
+			'sub'   => $sub,
+		];
+	}
+
+	private static function getCrmMesCards(int $id_admin): array {
 
 		$dataMatricula = Matriculas::campoDataMatricula('matriculas');
 
@@ -315,25 +370,50 @@ class Home extends Page{
 			null, null, 'SUM(valor_pago) as total'
 		)->fetchObject()->total;
 
+		$leadsAtual = (int)EntityCrmLeads::getLeads(
+			'id_admin = '.$id_admin.' AND MONTH(data_cadastro) = MONTH(CURDATE()) AND YEAR(data_cadastro) = YEAR(CURDATE())',
+			null, null, 'COUNT(*) as qtd'
+		)->fetch(PDO::FETCH_ASSOC)['qtd'];
+
+		$leadsAnterior = (int)EntityCrmLeads::getLeads(
+			'id_admin = '.$id_admin.' AND MONTH(data_cadastro) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AND YEAR(data_cadastro) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))',
+			null, null, 'COUNT(*) as qtd'
+		)->fetch(PDO::FETCH_ASSOC)['qtd'];
+
+		$pipeline = EntityCrmLeads::getLeads(
+			'id_admin = '.$id_admin.' AND status IN ("novo","em_atendimento")',
+			null, null, 'COUNT(*) as qtd, COALESCE(SUM(valor_estimado),0) as total'
+		)->fetch(PDO::FETCH_ASSOC);
+
+		$mat = self::formatarComparativoCard($matAtual, $matAnterior, false);
+		$rec = self::formatarComparativoCard($recAtual, $recAnterior, true);
+		$leads = self::formatarComparativoCard($leadsAtual, $leadsAnterior, false);
+
 		return [
-			'matriculas' => self::formatarComparativo($matAtual, $matAnterior, false),
-			'receita'    => self::formatarComparativo($recAtual, $recAnterior, true)
+			'matriculas_valor' => $mat['valor'],
+			'matriculas_sub'   => $mat['sub'],
+			'receita_valor'    => $rec['valor'],
+			'receita_sub'      => $rec['sub'],
+			'leads_mes_valor'  => $leads['valor'],
+			'leads_mes_sub'    => $leads['sub'],
+			'pipeline_valor'   => 'R$ '.NumeroHelper::moedaBr((float)($pipeline['total'] ?? 0)),
+			'pipeline_sub'     => (int)($pipeline['qtd'] ?? 0).' lead(s) em aberto',
 		];
 	}
 
-	private static function formatarComparativo($atual, $anterior, $moeda){
+	private static function formatarComparativoCard($atual, $anterior, $moeda): array {
 
-		if($anterior > 0){
+		if ($anterior > 0) {
 			$diff = round((($atual - $anterior) / $anterior) * 100, 1);
 			$sinal = $diff >= 0 ? '+' : '';
-			$texto = $sinal.$diff.'% vs mês anterior';
+			$sub = $sinal.$diff.'% vs mês anterior';
 		} else {
-			$texto = $atual > 0 ? 'Novo período' : 'Sem variação';
+			$sub = $atual > 0 ? 'Novo período' : 'Sem variação';
 		}
 
-		$valor = $moeda ? 'R$ '.NumeroHelper::moedaBr($atual) : (int)$atual;
+		$valor = $moeda ? 'R$ '.NumeroHelper::moedaBr($atual) : (string)(int)$atual;
 
-		return $valor.' <small class="text-muted d-block">'.$texto.'</small>';
+		return ['valor' => $valor, 'sub' => $sub];
 	}
 
 	private static function resolverQuantidadeMeses($periodo){

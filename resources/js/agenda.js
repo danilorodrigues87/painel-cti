@@ -4,50 +4,98 @@ function diaAtualAgenda() {
  return d === 0 ? 1 : d;
 }
 
+var _filtroDiaAtual = null;
+var _filtroLabAtual = 0;
+var _paginaAtual = 1;
+
+function getFiltroDiaAtivo() {
+ if (_filtroDiaAtual !== null && _filtroDiaAtual !== undefined) {
+  return _filtroDiaAtual;
+ }
+ for (var i = 1; i <= 6; i++) {
+  if ($('#fil-' + i).hasClass('active')) {
+   return i;
+  }
+ }
+ return diaAtualAgenda();
+}
+
+function getFiltroLabAtivo() {
+ var el = document.getElementById('filtro_laboratorio');
+ if (el) {
+  return parseInt(el.value, 10) || 0;
+ }
+ return _filtroLabAtual || 0;
+}
+
+function recarregarLista() {
+ listar(_filtroDiaAtual, _paginaAtual);
+}
+
+function irPagina(page) {
+ listar(getFiltroDiaAtivo(), page || 1);
+}
+
 $(document).ready(function(){
  listar(diaAtualAgenda(), 1);
-})
+});
 
 // FUNÇÃO LISTAR CONTEUDOS DA PAGINA
-function listar(filtro=null,page=1) {
+function listar(filtro, page) {
+ page = page || 1;
+ if (filtro !== null && filtro !== undefined && filtro !== '') {
+  _filtroDiaAtual = parseInt(filtro, 10);
+ }
+ _filtroLabAtual = getFiltroLabAtivo();
+ _paginaAtual = page;
 
  $.ajax({
     url: url_base+listaAgenda,
     method: "post",
-    data: {filtro,page},
-    dataType: "json", 
+    data: {
+     filtro: _filtroDiaAtual,
+     page: page,
+     laboratorio_id: _filtroLabAtual
+    },
+    dataType: "json",
     success: function(result){
+     if (!result || typeof result.itens === 'undefined') {
+      $('#listar').html('<div class="alert alert-warning m-3">Não foi possível carregar a lista.</div>');
+      return;
+     }
 
      $('#listar').html(result.itens);
-     $('#pagination').html(result.pagination);
+     $('#pagination').html(result.pagination || '');
 
-     $('#fil-1').removeClass('active')
-     $('#fil-2').removeClass('active')
-     $('#fil-3').removeClass('active')
-     $('#fil-4').removeClass('active')
-     $('#fil-5').removeClass('active')
-     $('#fil-6').removeClass('active')
+     if (result.laboratorio_id !== undefined && $('#filtro_laboratorio').length) {
+      $('#filtro_laboratorio').val(String(result.laboratorio_id || 0));
+      _filtroLabAtual = parseInt(result.laboratorio_id, 10) || 0;
+     }
 
-     if(result.filtro == 1){
-      $('#fil-1').addClass('active')
-  } else if(result.filtro  == 2){
-      $('#fil-2').addClass('active')
-  } else if(result.filtro  == 3){
-      $('#fil-3').addClass('active')
-  } else if(result.filtro  == 4){
-      $('#fil-4').addClass('active')
-  } else if(result.filtro  == 5){
-      $('#fil-5').addClass('active')
-  } else if(result.filtro  == 6){
-      $('#fil-6').addClass('active')
-  } 
-},
+     $('#fil-1').removeClass('active');
+     $('#fil-2').removeClass('active');
+     $('#fil-3').removeClass('active');
+     $('#fil-4').removeClass('active');
+     $('#fil-5').removeClass('active');
+     $('#fil-6').removeClass('active');
 
-})
+     var dia = parseInt(result.filtro, 10) || _filtroDiaAtual;
+     _filtroDiaAtual = dia;
+     if (dia >= 1 && dia <= 6) {
+      $('#fil-' + dia).addClass('active');
+     }
+    },
+    error: function(xhr, status, err) {
+     $('#listar').html('<div class="alert alert-danger m-3">Erro ao carregar agendamentos. Tente novamente.</div>');
+    }
+ });
 }
 
 // FUNÇÃO QUE CARREGA A MODAL E OS DADOS
+var _ultimoHorarioVer = null;
+
 function ver_info(id, funcao) {
+ _ultimoHorarioVer = id;
 
    $.ajax({
     url: url_base+formulario,
@@ -88,8 +136,9 @@ function excluir(id) {
         data: {id},
         dataType: "text",
         success: function(result){
+            var ok = String(result).trim() === '1';
 
-            if(result){
+            if(ok){
                 Swal.fire({
               title: "Removido!",
               text: "Horário removido do plano.",
@@ -102,10 +151,16 @@ function excluir(id) {
               icon: "error"
           });
             }
-            
-            listar(diaAtualAgenda(), 1);
+
+            recarregarLista();
+            if (ok && _ultimoHorarioVer) {
+             ver_info(_ultimoHorarioVer, 'editar');
+            }
 
         },
+        error: function() {
+         Swal.fire({ title: "Erro", text: "Falha na comunicação.", icon: "error" });
+        }
 
     
     })
@@ -115,12 +170,16 @@ function excluir(id) {
 
 }
 
-function editar(id_agenda=null,funcao) {
+function editar(id_agenda, funcao) {
 
    $.ajax({
     url: url_base+edicao,
     method: "post",
-    data: {id_agenda,funcao},
+    data: {
+     id_agenda: id_agenda || '',
+     funcao: funcao,
+     dia_semana: getFiltroDiaAtivo()
+    },
     dataType: "json",
     success: function(result) {
 
@@ -162,14 +221,15 @@ function infoAlunoPlano() {
   });
 }
 
-function select_dia_semana(id_horario=null) {
+function select_dia_semana(id_horario) {
+  id_horario = id_horario || 0;
   var dia_semana = document.getElementById("dia_semana").value;
   var laboratorio_id = document.getElementById("laboratorio_id") ? document.getElementById("laboratorio_id").value : 0;
   
   $.ajax({
    type: 'POST',
    url: url_base+'painel/agenda/laboratorio/horarios',
-   data: {dia_semana, id_horario, laboratorio_id},
+   data: {dia_semana, id_horario: id_horario, laboratorio_id},
    success: function(e) {
     document.getElementById("horarios").innerHTML = e;
   }
@@ -200,7 +260,7 @@ $(document).on("submit", "#form", function(event) {
                });
                 $('#btn-fechar-ag').click();
 
-                listar(diaAtualAgenda(), 1);
+                recarregarLista();
 
             }
 

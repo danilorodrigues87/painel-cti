@@ -155,7 +155,7 @@ class AiTutor {
 			$chatForAi[] = $m;
 		}
 
-		$reply = LmsAiService::chat((int)$u->id_admin, $chatForAi, self::systemPrompt($context));
+		$reply = LmsAiService::chat((int)$u->id_admin, $chatForAi, self::systemPrompt($context), 'tutor');
 		$assistant = [
 			'id' => 'm_'.time().'_a',
 			'role' => 'assistant',

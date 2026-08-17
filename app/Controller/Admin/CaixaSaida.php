@@ -63,7 +63,8 @@ $quantidadeTotal = EntityCaixa::getCaixa($where, null, null, 'COUNT(*) as qtd')-
 
 
 		//INSTANCIA DE PAGINAÇÃO
-$obPagination = new Pagination($quantidadeTotal,$paginaAtual,5);
+$limite = (int)(getenv('PAGINATION_LIMIT') ?: 10);
+$obPagination = new Pagination($quantidadeTotal,$paginaAtual,$limite);
 
 		//RESULTADOS DA PAGINA
 $results = EntityCaixa::getCaixa($where, 'id ASC', $obPagination->getLimit());
@@ -91,8 +92,7 @@ $itens .= '<tr>
 <a class="btn btn-secondary" href="#" onclick="list_itens('.$obDados->id.', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
 </td>
 
-</tr>
-<script src="'.URL.'/resources/js/js_mascara.js"></script>';
+</tr>';
 
 }
 
@@ -114,6 +114,7 @@ $table = '<div class="card-body">
 <tbody>'.$itens.'</tbody>
 </table>
 </div>
+<script src="'.URL.'/resources/js/js_mascara.js"></script>
 </div>';
 
 		//RETORNA
@@ -169,17 +170,12 @@ private static function getForm($request) {
 
         if ($dados['vencimento'] > DateTimeHelper::hoje()) {
             $vencido = 'vence em';
-
-            if (isset($obMatricula['desconto_pontualidade']) && $obMatricula['desconto_pontualidade']) {
-                $valorComDesconto = $dados['valor'] * 90 / 100;
-                $desconto = $dados['valor'] - $valorComDesconto;
-            }
         } else {
             $vencido = 'vencido há';
         }
 
         $valor = $dados['valor'];
-        $valorPagar = $dados['valor'] - $desconto;
+        $valorPagar = $dados['valor'];
 
         $vencimento = DateTimeHelper::databr($dados['vencimento']);
 
@@ -253,7 +249,7 @@ private static function getForm($request) {
     <input type="datetime-local" name="data_pagamento" ' . $habilitado . ' value="' . DateTimeHelper::agora() . '" class="form-control">
     </div> 
     <div class="form-group col-md-6">
-    <label>Valor recebido</label>
+    <label>Valor pago</label>
     <input type="text" id="valor_recebido" name="valor_recebido" class="form-control" oninput="calcularTroco()" required>
     </div>
     <div class="form-group col-md-6">

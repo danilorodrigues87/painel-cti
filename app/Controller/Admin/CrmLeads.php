@@ -86,7 +86,7 @@ class CrmLeads extends Page{
 		$dadosUser = parent::getIdAdmin();
 		$id_admin  = (int)$dadosUser['usuario']['id_admin'];
 		$paginaAtual = $postVars['page'] ?? 1;
-		$limite = (int)(getenv('PAGINATION_LIMIT') ?: 5);
+		$limite = (int)(getenv('PAGINATION_LIMIT') ?: 10);
 
 		$funilAtivo = self::resolverFunilFiltro($postVars, $id_admin);
 
@@ -94,12 +94,16 @@ class CrmLeads extends Page{
 		$whereFiltro = $whereBase.self::montarFiltroFunil($funilAtivo).self::montarFiltrosBusca($postVars);
 
 		$colunas = [];
-		$totais  = [];
+		$totaisPagina  = [];
 
 		foreach(self::$statusPermitidos as $status){
 			$colunas[$status] = [];
-			$totais[$status]  = 0;
+			$totaisPagina[$status]  = 0;
 		}
+
+		$agregados = self::agregarPorStatus($whereFiltro);
+		$contagensGlobais = $agregados['contagens'];
+		$totaisGlobaisRaw = $agregados['totais'];
 
 		$quantidadeTotal = (int)EntityCrmLeads::getLeads($whereFiltro, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
 		$obPagination = new Pagination($quantidadeTotal, $paginaAtual, $limite);
@@ -114,7 +118,7 @@ class CrmLeads extends Page{
 			$status = in_array($obLead->status, self::$statusPermitidos) ? $obLead->status : 'novo';
 
 			$valorEstimado = (float)($obLead->valor_estimado ?? 0);
-			$totais[$status] += $valorEstimado;
+			$totaisPagina[$status] += $valorEstimado;
 
 			$ultimaAtualizacao = self::getUltimaAtualizacao($obLead->id, $obLead->data_cadastro);
 			$horasSemContato   = self::horasDesde($ultimaAtualizacao);
@@ -139,18 +143,48 @@ class CrmLeads extends Page{
 		$funis  = self::listarFunisAdmin($id_admin);
 
 		$totaisFormatados = [];
-		foreach($totais as $status => $valor){
+		foreach($totaisGlobaisRaw as $status => $valor){
 			$totaisFormatados[$status] = NumeroHelper::moedaBr($valor);
 		}
 
 		return json_encode([
-			'colunas'     => $colunas,
-			'totais'      => $totaisFormatados,
-			'cursos'      => $cursos,
-			'funis'       => $funis,
-			'funil_ativo' => $funilAtivo,
-			'pagination'  => parent::getPagination($request, $obPagination)
+			'colunas'            => $colunas,
+			'totais'             => $totaisFormatados,
+			'contagens_globais'  => $contagensGlobais,
+			'cursos'             => $cursos,
+			'funis'              => $funis,
+			'funil_ativo'        => $funilAtivo,
+			'pagination'         => parent::getPagination($request, $obPagination)
 		]);
+	}
+
+	/**
+	 * @return array{contagens:array<string,int>,totais:array<string,float>}
+	 */
+	private static function agregarPorStatus(string $whereFiltro): array {
+		$contagens = [];
+		$totais = [];
+		foreach(self::$statusPermitidos as $status){
+			$contagens[$status] = 0;
+			$totais[$status] = 0.0;
+		}
+
+		$results = EntityCrmLeads::getLeads(
+			$whereFiltro,
+			null,
+			null,
+			'status, COUNT(*) as qtd, SUM(COALESCE(valor_estimado,0)) as soma',
+			null,
+			'status'
+		);
+
+		while ($row = $results->fetchObject()) {
+			$status = in_array($row->status ?? '', self::$statusPermitidos) ? $row->status : 'novo';
+			$contagens[$status] = (int)($row->qtd ?? 0);
+			$totais[$status] = (float)($row->soma ?? 0);
+		}
+
+		return ['contagens' => $contagens, 'totais' => $totais];
 	}
 
 	public static function getFunis($request){

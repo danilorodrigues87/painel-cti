@@ -64,7 +64,8 @@ $quantidadeTotal = EntityCaixa::getCaixa($where, null, null, 'COUNT(*) as qtd')-
 
 
 		//INSTANCIA DE PAGINAÇÃO
-$obPagination = new Pagination($quantidadeTotal,$paginaAtual,5);
+$limite = (int)(getenv('PAGINATION_LIMIT') ?: 10);
+$obPagination = new Pagination($quantidadeTotal,$paginaAtual,$limite);
 
 		//RESULTADOS DA PAGINA
 $results = EntityCaixa::getCaixa($where, 'vencimento DESC', $obPagination->getLimit());
@@ -90,9 +91,7 @@ while ($obDados = $results->fetchObject(EntityCaixa::class)) {
 	<td>
 	<a class="btn btn-secondary" href="#" onclick="list_itens('.$obDados->id.', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
     </td>
-	</td>
-	</tr>
-	<script src="'.URL.'/resources/js/js_mascara.js"></script>';
+	</tr>';
 
 }
 
@@ -114,6 +113,7 @@ $table = '<div class="card-body">
 <tbody>'.$itens.'</tbody>
 </table>
 </div>
+<script src="'.URL.'/resources/js/js_mascara.js"></script>
 </div>';
 
 		//RETORNA

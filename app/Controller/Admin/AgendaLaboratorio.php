@@ -17,35 +17,10 @@ class AgendaLaboratorio extends Page {
 
 	private static $dias = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado'];
 
-	private static function garantirLabPadrao($id_admin) {
-		$total = (int)Laboratorios::getLabs('id_admin = '.(int)$id_admin, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
-		if($total > 0){
-			return;
-		}
-
-		$ob = new Laboratorios;
-		$ob->id_admin = $id_admin;
-		$ob->nome = 'Laboratório Principal';
-		$ob->qtd_computadores = 10;
-		$ob->cadastrar();
-
-		$labId = (int)$ob->id;
-		$horarios = Horarios::getHorarios('id_admin = '.(int)$id_admin.' AND laboratorio_id IS NULL');
-		while ($h = $horarios->fetchObject(Horarios::class)) {
-			$upd = new Horarios;
-			$upd->id = (int)$h->id;
-			$upd->laboratorio_id = $labId;
-			$upd->inicio = $h->inicio;
-			$upd->final = $h->final;
-			$upd->vagas_ocupadas = (int)$h->vagas_ocupadas;
-			$upd->dia_semana = (int)$h->dia_semana;
-			$upd->atualizar();
-		}
-	}
-
 	private static function getDadosItem($request, &$obPagination) {
 		$id_admin = parent::getIdAdminInt();
-		self::garantirLabPadrao($id_admin);
+		AgendaHelper::garantirSchemaV2();
+		AgendaHelper::garantirLabPadrao($id_admin);
 		AgendaHelper::migrarLegado($id_admin);
 
 		$data = date('Y-m-d');
@@ -57,8 +32,12 @@ class AgendaLaboratorio extends Page {
 		$postVars = $request->getPostVars();
 		$paginaAtual = $postVars['page'] ?? 1;
 		$filtro = !empty($postVars['filtro']) ? (int)$postVars['filtro'] : $dia;
+		$labId = (int)($postVars['laboratorio_id'] ?? 0);
 
 		$where = 'horarios.id_admin = '.(int)$id_admin.' AND horarios.dia_semana = '.(int)$filtro;
+		if($labId > 0){
+			$where .= ' AND horarios.laboratorio_id = '.$labId;
+		}
 		$innerJoin = 'LEFT JOIN laboratorios ON laboratorios.id = horarios.laboratorio_id';
 		$fields = 'horarios.*, laboratorios.nome as lab_nome, laboratorios.qtd_computadores';
 
@@ -87,21 +66,40 @@ class AgendaLaboratorio extends Page {
 			<th>Laboratório</th><th>Inicia</th><th>Termina</th><th>Vagas</th><th>Info</th>
 			</tr></thead><tbody>'.$itens.'</tbody></table></div></div>';
 
-		return ['table' => $table, 'filtro' => $filtro];
+		return ['table' => $table, 'filtro' => $filtro, 'laboratorio_id' => $labId];
+	}
+
+	private static function optionsLabsAtivos(int $id_admin): string {
+		$html = '<option value="0">Todos os laboratórios</option>';
+		$results = Laboratorios::getLabs('id_admin = '.$id_admin.' AND ativo = 1', 'nome ASC');
+		while ($lab = $results->fetchObject(Laboratorios::class)) {
+			$html .= '<option value="'.(int)$lab->id.'">'.htmlspecialchars($lab->nome).'</option>';
+		}
+		return $html;
 	}
 
 	public static function index($request) {
-		$content = View::render('admin/modules/agenda/ag_laboratorio', []);
+		$id_admin = parent::getIdAdminInt();
+		AgendaHelper::garantirLabPadrao($id_admin);
+		$content = View::render('admin/modules/agenda/ag_laboratorio', [
+			'labs_options' => self::optionsLabsAtivos($id_admin),
+		]);
 		return parent::getPanel('Agendamentos', $content, 'agenda', $request);
 	}
 
 	public static function getInfo($request) {
+		try {
 		$dados = self::getDadosItem($request, $obPagination);
 		return json_encode([
-			'itens'      => $dados['table'],
-			'filtro'     => $dados['filtro'],
-			'pagination' => parent::getPagination($request, $obPagination)
+			'itens'           => $dados['table'],
+			'filtro'          => $dados['filtro'],
+			'laboratorio_id'  => $dados['laboratorio_id'],
+			'pagination'      => parent::getPagination($request, $obPagination)
 		]);
+		} catch (\Throwable $e) {
+			http_response_code(500);
+			return json_encode(['erro' => $e->getMessage(), 'itens' => '', 'pagination' => '']);
+		}
 	}
 
 	public static function verDados($request) {
@@ -172,9 +170,12 @@ class AgendaLaboratorio extends Page {
 		$postVars = $request->getPostVars();
 		$id_admin = parent::getIdAdminInt();
 
-		$dia_semana = (int)date('w');
-		if($dia_semana === 0){
-			$dia_semana = 1;
+		$dia_semana = (int)($postVars['dia_semana'] ?? 0);
+		if($dia_semana <= 0 || $dia_semana > 6){
+			$dia_semana = (int)date('w');
+			if($dia_semana === 0){
+				$dia_semana = 1;
+			}
 		}
 
 		$innerJoin = 'INNER JOIN usuarios ON matriculas.id_aluno = usuarios.id';
@@ -343,17 +344,17 @@ class AgendaLaboratorio extends Page {
 		$id_admin = parent::getIdAdminInt();
 
 		if(!TenantHelper::pertence('agenda_plano', $id, $id_admin)){
-			return 'Registro não encontrado.';
+			return '0';
 		}
 
 		$plano = AgendaPlano::getById($id, $id_admin);
 		if(!$plano){
-			return 'Registro não encontrado.';
+			return '0';
 		}
 
 		$plano->inativar();
 		AgendaHelper::recalcularVagasHorario((int)$plano->id_horario);
-		return true;
+		return '1';
 	}
 
 	/** Modal: agendar reposição (avulso) */

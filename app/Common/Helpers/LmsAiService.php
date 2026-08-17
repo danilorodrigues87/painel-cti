@@ -16,7 +16,7 @@ class LmsAiService {
 		return self::$lastError;
 	}
 
-	public static function chat(int $idAdmin, array $messages, string $systemPrompt = ''): string {
+	public static function chat(int $idAdmin, array $messages, string $systemPrompt = '', string $feature = 'chat'): string {
 		self::$lastError = null;
 		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
 		if (!$cfg instanceof EscolaIntegracoes || !$cfg->temAiAtivo()) {
@@ -31,20 +31,20 @@ class LmsAiService {
 		}
 
 		if ($provider === 'gemini') {
-			$text = self::callGemini($key, $model, $messages, $systemPrompt);
+			$text = self::callGemini($idAdmin, $feature, $key, $model, $messages, $systemPrompt);
 			if ($text !== null) {
 				return $text;
 			}
 			// Fallback de modelo antigo → novo
 			if (stripos($model, '1.5') !== false) {
-				$text = self::callGemini($key, 'gemini-2.0-flash', $messages, $systemPrompt);
+				$text = self::callGemini($idAdmin, $feature, $key, 'gemini-2.0-flash', $messages, $systemPrompt);
 				if ($text !== null) {
 					return $text;
 				}
 			}
 			return self::stubReply($messages, true);
 		}
-		$text = self::callOpenAiCompatible($key, $model, $messages, $systemPrompt, null);
+		$text = self::callOpenAiCompatible($idAdmin, $feature, $provider, $key, $model, $messages, $systemPrompt, null);
 		return $text !== null ? $text : self::stubReply($messages, true);
 	}
 
@@ -52,7 +52,7 @@ class LmsAiService {
 	 * Chat usando credencial salva (ignora toggle pedagógico ai_ativo).
 	 * Retorna null se sem chave ou API falhou (sem stub).
 	 */
-	public static function chatComCredencial(int $idAdmin, array $messages, string $systemPrompt = ''): ?string {
+	public static function chatComCredencial(int $idAdmin, array $messages, string $systemPrompt = '', string $feature = 'chat'): ?string {
 		self::$lastError = null;
 		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
 		if (!$cfg instanceof EscolaIntegracoes) {
@@ -71,16 +71,16 @@ class LmsAiService {
 		}
 
 		if ($provider === 'gemini') {
-			$text = self::callGemini($key, $model, $messages, $systemPrompt);
+			$text = self::callGemini($idAdmin, $feature, $key, $model, $messages, $systemPrompt);
 			if ($text !== null) {
 				return $text;
 			}
 			if (stripos($model, '1.5') !== false) {
-				return self::callGemini($key, 'gemini-2.0-flash', $messages, $systemPrompt);
+				return self::callGemini($idAdmin, $feature, $key, 'gemini-2.0-flash', $messages, $systemPrompt);
 			}
 			return null;
 		}
-		return self::callOpenAiCompatible($key, $model, $messages, $systemPrompt, null);
+		return self::callOpenAiCompatible($idAdmin, $feature, $provider, $key, $model, $messages, $systemPrompt, null);
 	}
 
 	private static function stubReply(array $messages, bool $configuredButFailed): string {
@@ -103,7 +103,16 @@ class LmsAiService {
 	}
 
 	/** @return string|null texto ou null se falhou */
-	private static function callOpenAiCompatible(?string $key, string $model, array $messages, string $systemPrompt, ?string $baseUrl = null): ?string {
+	private static function callOpenAiCompatible(
+		int $idAdmin,
+		string $feature,
+		string $provider,
+		?string $key,
+		string $model,
+		array $messages,
+		string $systemPrompt,
+		?string $baseUrl = null
+	): ?string {
 		$url = ($baseUrl ?: 'https://api.openai.com/v1').'/chat/completions';
 		$payloadMessages = [];
 		if ($systemPrompt !== '') {
@@ -121,6 +130,7 @@ class LmsAiService {
 			'temperature' => 0.7,
 		], JSON_UNESCAPED_UNICODE);
 
+		$t0 = microtime(true);
 		$ch = curl_init($url);
 		curl_setopt_array($ch, [
 			CURLOPT_RETURNTRANSFER => true,
@@ -136,21 +146,34 @@ class LmsAiService {
 		$code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		$err = curl_error($ch);
 		curl_close($ch);
+		$latencyMs = (int)round((microtime(true) - $t0) * 1000);
+
 		if ($raw === false) {
 			self::$lastError = 'cURL: '.$err;
-			return null;
-		}
-		if ($code >= 400) {
-			self::$lastError = 'OpenAI HTTP '.$code.': '.mb_substr((string)$raw, 0, 120);
+			AiUsageLogger::logFromOpenAiResponse($idAdmin, $feature, $provider, $model, 0, $latencyMs, null, false, self::$lastError);
 			return null;
 		}
 		$data = json_decode($raw, true);
+		if ($code >= 400) {
+			self::$lastError = 'OpenAI HTTP '.$code.': '.mb_substr((string)$raw, 0, 120);
+			AiUsageLogger::logFromOpenAiResponse($idAdmin, $feature, $provider, $model, $code, $latencyMs, is_array($data) ? $data : null, false, self::$lastError);
+			return null;
+		}
 		$text = $data['choices'][0]['message']['content'] ?? null;
-		return is_string($text) && $text !== '' ? $text : null;
+		$ok = is_string($text) && $text !== '';
+		AiUsageLogger::logFromOpenAiResponse($idAdmin, $feature, $provider, $model, $code, $latencyMs, is_array($data) ? $data : null, $ok, $ok ? null : 'Resposta vazia');
+		return $ok ? $text : null;
 	}
 
 	/** @return string|null */
-	private static function callGemini(?string $key, string $model, array $messages, string $systemPrompt): ?string {
+	private static function callGemini(
+		int $idAdmin,
+		string $feature,
+		?string $key,
+		string $model,
+		array $messages,
+		string $systemPrompt
+	): ?string {
 		$model = preg_replace('#^models/#', '', $model);
 		$url = 'https://generativelanguage.googleapis.com/v1beta/models/'.rawurlencode($model).':generateContent?key='.urlencode((string)$key);
 
@@ -177,6 +200,7 @@ class LmsAiService {
 		}
 
 		$body = json_encode($payload, JSON_UNESCAPED_UNICODE);
+		$t0 = microtime(true);
 		$ch = curl_init($url);
 		curl_setopt_array($ch, [
 			CURLOPT_RETURNTRANSFER => true,
@@ -189,17 +213,23 @@ class LmsAiService {
 		$code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		$err = curl_error($ch);
 		curl_close($ch);
+		$latencyMs = (int)round((microtime(true) - $t0) * 1000);
+
 		if ($raw === false) {
 			self::$lastError = 'cURL Gemini: '.$err;
-			return null;
-		}
-		if ($code >= 400) {
-			self::$lastError = 'Gemini HTTP '.$code.': '.mb_substr((string)$raw, 0, 160);
+			AiUsageLogger::logFromGeminiResponse($idAdmin, $feature, $model, 0, $latencyMs, null, false, self::$lastError);
 			return null;
 		}
 		$data = json_decode($raw, true);
+		if ($code >= 400) {
+			self::$lastError = 'Gemini HTTP '.$code.': '.mb_substr((string)$raw, 0, 160);
+			AiUsageLogger::logFromGeminiResponse($idAdmin, $feature, $model, $code, $latencyMs, is_array($data) ? $data : null, false, self::$lastError);
+			return null;
+		}
 		$text = $data['candidates'][0]['content']['parts'][0]['text'] ?? null;
-		return is_string($text) && $text !== '' ? $text : null;
+		$ok = is_string($text) && $text !== '';
+		AiUsageLogger::logFromGeminiResponse($idAdmin, $feature, $model, $code, $latencyMs, is_array($data) ? $data : null, $ok, $ok ? null : 'Resposta vazia');
+		return $ok ? $text : null;
 	}
 
 	/**
@@ -233,7 +263,7 @@ class LmsAiService {
 		if ($lessonContext !== '') {
 			$user = "Contexto da aula (use só como referência, sem inventar fatos):\n{$lessonContext}\n\n".$user;
 		}
-		$raw = self::chat($idAdmin, [['role' => 'user', 'content' => $user]], $sys);
+		$raw = self::chat($idAdmin, [['role' => 'user', 'content' => $user]], $sys, 'essay');
 		$json = self::parseJsonFromLlm($raw);
 		if (!is_array($json)) {
 			$retry = self::avaliarExpressaoNoEnunciado($prompt, $answer);
@@ -380,7 +410,7 @@ class LmsAiService {
 		$prompt = "Avalie esta simulação de role play. Responda APENAS JSON válido com keys: overallScore (0-100), summary, strengths (array), improvements (array), mistakes (array), reviewTopics (array).\n"
 			."Cenário: ".($scenario['title'] ?? '')."\nObjetivos: ".json_encode($scenario['objectives'] ?? [], JSON_UNESCAPED_UNICODE)."\n"
 			."Diálogo:\n".$transcript;
-		$raw = self::chat($idAdmin, [['role' => 'user', 'content' => $prompt]], 'Você é um avaliador pedagógico rigoroso.');
+		$raw = self::chat($idAdmin, [['role' => 'user', 'content' => $prompt]], 'Você é um avaliador pedagógico rigoroso.', 'roleplay_eval');
 		$json = null;
 		if (preg_match('/\{.*\}/s', $raw, $m)) {
 			$json = json_decode($m[0], true);

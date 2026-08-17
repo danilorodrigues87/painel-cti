@@ -65,6 +65,7 @@ class Tts {
 			'instructions' => 'Fale em português do Brasil, com sotaque brasileiro neutro, tom de professor calmo, claro e didático, em ritmo levemente pausado.',
 		], JSON_UNESCAPED_UNICODE);
 
+		$t0 = microtime(true);
 		$ch = curl_init('https://api.openai.com/v1/audio/speech');
 		curl_setopt_array($ch, [
 			CURLOPT_RETURNTRANSFER => true,
@@ -80,14 +81,19 @@ class Tts {
 		$code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		$err = curl_error($ch);
 		curl_close($ch);
+		$latencyMs = (int)round((microtime(true) - $t0) * 1000);
 
 		if ($raw === false) {
+			\App\Common\Helpers\AiUsageLogger::logTts($idAdmin, 'gpt-4o-mini-tts', 0, $latencyMs, mb_strlen($text), false, 'cURL: '.$err);
 			return self::err('Falha de rede no TTS: '.$err, 502);
 		}
 		if ($code >= 400) {
 			$snip = mb_substr((string)$raw, 0, 200);
+			\App\Common\Helpers\AiUsageLogger::logTts($idAdmin, 'gpt-4o-mini-tts', $code, $latencyMs, mb_strlen($text), false, $snip);
 			return self::err('TTS HTTP '.$code.': '.$snip, 502);
 		}
+
+		\App\Common\Helpers\AiUsageLogger::logTts($idAdmin, 'gpt-4o-mini-tts', $code, $latencyMs, mb_strlen($text), true);
 
 		return [
 			'code' => 200,

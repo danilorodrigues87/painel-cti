@@ -7,10 +7,12 @@ use \App\Model\Entity\Laboratorios as EntityLabs;
 use \App\Model\Entity\Horarios as EntityHorarios;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\AgendaHelper;
 
 class AgendaLaboratorios extends Page {
 
 	public static function index($request) {
+		AgendaHelper::garantirSchemaV2();
 		$content = View::render('admin/modules/agenda/ag_laboratorios', []);
 		return parent::getPanel('Laboratórios', $content, 'agenda');
 	}
@@ -60,6 +62,7 @@ class AgendaLaboratorios extends Page {
 	}
 
 	public static function getInfo($request) {
+		AgendaHelper::garantirSchemaV2();
 		$obPagination = null;
 		return json_encode([
 			'itens'      => self::getItens($request, $obPagination),

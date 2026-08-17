@@ -152,7 +152,7 @@ $filtragem = '';
 
     //PAGINA ATUAL
     $postVars = $request->getPostVars();
-    //$paginaAtual = $postVars['page'] ?? 1;
+    $paginaAtual = $postVars['page'] ?? 1;
 
 // Definindo os campos
 $campos = [
@@ -337,21 +337,21 @@ $filtragem =
 
 
 // QUANTIDADE TOTAL DE REGISTROS
-  $quantidadeTotal = Caixa::getCaixa($whereClause, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+  $quantidadeTotal = (int)Caixa::getCaixa($whereClause, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+
+  $totalValorPagoGlobal = (float)(Caixa::getCaixa($whereClause, null, null, 'SUM(COALESCE(valor_pago,0)) as total')->fetchObject()->total ?? 0);
 
 // INSTANCIA DE PAGINAÇÃO
- // $obPagination = new Pagination($quantidadeTotal,$paginaAtual,5);
+  $limite = (int)(getenv('PAGINATION_LIMIT') ?: 10);
+  $obPagination = new Pagination($quantidadeTotal, $paginaAtual, $limite);
 
 // RESULTADOS DA PAGINA
-  $results = Caixa::getCaixa($whereClause, 'ultima_alteracao DESC');
+  $results = Caixa::getCaixa($whereClause, 'ultima_alteracao DESC', $obPagination->getLimit());
 
 $itens = '';
-$totalValorPago = 0.0;
 
     //REDERIZA O ITEM
 while ($obDados = $results->fetchObject(Caixa::class)) {
-
-  $totalValorPago += (float)($obDados->valor_pago ?? 0);
 
   $ultima_alteracao = $obDados->ultima_alteracao ? DateTimeHelper::databr($obDados->ultima_alteracao).' as '.DateTimeHelper::horario($obDados->ultima_alteracao) : '__/__/__';
 
@@ -373,8 +373,7 @@ while ($obDados = $results->fetchObject(Caixa::class)) {
   '. (($valor_pagoChbx) ? '<td>R$ <span class="mascara-dinheiro">'.$obDados->valor_pago.'</span></td>' : '') .'
   '. (($forma_pgtoChbx) ? '<td>'.$obDados->tipo_pagamento.'</td>' : '') .'
   '. (($acoesChbx) ? '<td class="relatorio-acoes no-print d-print-none"><div class="btn-group btn-group-sm no-print d-print-none"><button type="button" class="btn btn-outline-secondary" title="58mm" onclick="reciboAbrir('.(int)$obDados->id.',\'58mm\')"><i class="fas fa-print"></i></button><button type="button" class="btn btn-outline-secondary" title="A4" onclick="reciboAbrir('.(int)$obDados->id.',\'a4\')">A4</button><button type="button" class="btn btn-outline-primary" title="E-mail" onclick="reciboEnviar(['.(int)$obDados->id.'],\'email\')"><i class="fas fa-envelope"></i></button><button type="button" class="btn btn-outline-success" title="WhatsApp" onclick="reciboEnviar(['.(int)$obDados->id.'],\'whatsapp\')"><i class="fab fa-whatsapp"></i></button></div></td>' : '') .'
-  </tr>
-  <script src="'.URL.'/resources/js/js_mascara.js"></script>';
+  </tr>';
 
 }
 
@@ -399,6 +398,7 @@ $table = '<div class="card-body relatorio-financeiro-conteudo">
 <tbody>' . $itens . '</tbody>
 </table>
 </div>
+<script src="'.URL.'/resources/js/js_mascara.js"></script>
 </div>';
 
 
@@ -418,7 +418,7 @@ $table = '<div class="card-body relatorio-financeiro-conteudo">
     'emitido_em' => $emitidoEm,
     'emitido_por' => $emitidoPor,
     'total_registros' => (int)$quantidadeTotal,
-    'total_recebido' => NumeroHelper::moedaBr($totalValorPago),
+    'total_recebido' => NumeroHelper::moedaBr($totalValorPagoGlobal),
   ]);
 
 $dados['filtragem'] = $filtragem;
@@ -438,6 +438,7 @@ public static function getInfo($request) {
     return json_encode([
         'itens' => $dadosInfo['itens'],
         'filtragem' => $dadosInfo['filtragem'],
+        'pagination' => parent::getPagination($request, $obPagination),
         'debug' => $dadosInfo['debug']
     ]);
 }

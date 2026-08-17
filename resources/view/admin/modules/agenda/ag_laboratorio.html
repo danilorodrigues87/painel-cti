@@ -3,6 +3,13 @@
   <li class="breadcrumb-item active">Agendamentos</li>
 </ol> 
 
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2 mt-2">
+  <label class="form-label mb-0 me-1" for="filtro_laboratorio">Laboratório:</label>
+  <select id="filtro_laboratorio" class="form-select form-select-sm" style="max-width:280px" onchange="listar(getFiltroDiaAtivo(), 1)">
+    {{labs_options}}
+  </select>
+</div>
+
 <ul class="nav nav-tabs">
         <li class="nav-item">
             <a class="nav-link bg-success text-light" href="#" onclick="editar('','novo')" >Adicionar ao plano</a>
@@ -33,11 +40,8 @@
 
 	<div id="listar"></div>
 
-	<nav class="container">
-		<ul class="pagination">
-			<div id="pagination">
-			</div>	
-		</ul>
+	<nav class="container mt-3" aria-label="Paginação">
+		<div id="pagination"></div>
 	</nav>
 </div>
 
@@ -69,4 +73,4 @@
 	let salvar = 'painel/agenda/laboratorio/salvar';
 	let deletar = 'painel/agenda/laboratorio/excluir';
 </script>
-<script src="{{URL}}/resources/js/agenda.js?v=20260721av"></script>
+<script src="{{URL}}/resources/js/agenda.js?v=20260817excl"></script>

@@ -24,9 +24,11 @@ function montarCardLead(lead){
 	</div>`;
 }
 
-function atualizarContadores(colunas){
+function atualizarContadores(contagens){
 	STATUS_COLUNAS.forEach(function(status){
-		const qtd = (colunas[status] || []).length;
+		const qtd = (contagens && contagens[status] !== undefined)
+			? contagens[status]
+			: 0;
 		$('#count-'+status).text(qtd);
 	});
 }
@@ -195,7 +197,7 @@ function popularFiltroCursos(cursos){
 	}
 }
 
-function renderizarKanban(colunas, totais){
+function renderizarKanban(colunas, totais, contagensGlobais){
 	STATUS_COLUNAS.forEach(function(status){
 		const $coluna = $('#coluna-'+status);
 		$coluna.empty();
@@ -205,10 +207,14 @@ function renderizarKanban(colunas, totais){
 		});
 	});
 
-	atualizarContadores(colunas);
+	atualizarContadores(contagensGlobais || {});
 	if(totais){
 		atualizarTotais(totais);
 	}
+}
+
+function irPagina(page){
+	carregarLeads(page || 1);
 }
 
 function listar(filtro=null, page=1){
@@ -239,7 +245,7 @@ function carregarLeads(page){
 
 			if(result.colunas){
 				popularFiltroCursos(result.cursos || []);
-				renderizarKanban(result.colunas, result.totais || {});
+				renderizarKanban(result.colunas, result.totais || {}, result.contagens_globais || {});
 			}
 
 			if(result.pagination !== undefined){

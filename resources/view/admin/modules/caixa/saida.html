@@ -25,11 +25,8 @@
 <div class="card shadow mb-4">
 	<div id="listar"></div>
 
-	<nav class="container">
-		<ul class="pagination">
-			<div id="pagination">
-			</div>	
-		</ul>
+	<nav class="container mt-3" aria-label="Paginação">
+		<div id="pagination"></div>
 	</nav>
 
 </div>
@@ -50,50 +47,52 @@
 	let formulario = 'painel/caixa/saida/form';
 	let edicao = 'painel/caixa/saida/save';
 </script>
-<script src="{{URL}}/resources/js/ajax.js?v=20260717n"></script>
+<script src="{{URL}}/resources/js/ajax.js?v=20260817cx"></script>
 
 <script>
+	function ativarAbaCaixa(filtro) {
+		$('#fil-hoje, #fil-semana, #fil-mes, #fil-atraso').removeClass('active');
+		if (filtro === 'semana') {
+			$('#fil-semana').addClass('active');
+		} else if (filtro === 'mes') {
+			$('#fil-mes').addClass('active');
+		} else if (filtro === 'atraso') {
+			$('#fil-atraso').addClass('active');
+		} else {
+			$('#fil-hoje').addClass('active');
+		}
+	}
 
- 	// CHAMA A FUNÇÃO LISTAR AO CARREGAR A PAGINA
-	$(document).ready(function(){
-		listar('hoje',1);
-
-	})
- 	// FUNÇÃO LITSAR MOVIMENTAÇÃ CAIXA
-	function listar(filtro=null,page=1) {
+	function listar(filtro, page) {
+		page = page || 1;
+		if (arguments.length >= 1) {
+			_ultimoFiltroLista = filtro;
+		}
+		var filtroEnvio = (_ultimoFiltroLista !== null && _ultimoFiltroLista !== undefined && _ultimoFiltroLista !== '')
+			? _ultimoFiltroLista
+			: (filtro || 'hoje');
 
 		$.ajax({
-			url: url_base+listagem,
-			method: "post",
-			data: {filtro,page},
-			dataType: "json",
-			success: function(result){
-
-				$('#listar').html(result.itens);
-				$('#pagination').html(result.pagination);
-
-				$('#fil-hoje').removeClass('active')
-				$('#fil-semana').removeClass('active')
-				$('#fil-mes').removeClass('active')
-				$('#fil-atraso').removeClass('active')
-
-				if(filtro == ''){
-					$('#fil-hoje').addClass('active')
-				} else if(filtro == 'hoje'){
-					$('#fil-hoje').addClass('active')
-				} else if(filtro == 'semana'){
-					$('#fil-semana').addClass('active')
-				} else if(filtro == 'mes'){
-					$('#fil-mes').addClass('active')
-				} else if(filtro == 'atraso'){
-					$('#fil-atraso').addClass('active')
-				} else {
-					$('#fil-hoje').addClass('active')
+			url: url_base + listagem,
+			method: 'post',
+			data: { filtro: filtroEnvio, page: page },
+			dataType: 'json',
+			success: function(result) {
+				if (!result || typeof result.itens === 'undefined') {
+					$('#listar').html('<div class="alert alert-warning m-3">Não foi possível carregar a lista.</div>');
+					return;
 				}
-
-
+				$('#listar').html(result.itens);
+				$('#pagination').html(result.pagination || '');
+				ativarAbaCaixa(filtroEnvio);
 			},
-
-		})
+			error: function() {
+				$('#listar').html('<div class="alert alert-danger m-3">Erro ao carregar saídas.</div>');
+			}
+		});
 	}
+
+	$(document).ready(function() {
+		listar('hoje', 1);
+	});
 </script>

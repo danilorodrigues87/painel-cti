@@ -14,7 +14,14 @@ class AgendaHorarios extends Page {
 	private static $dias = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado'];
 
 	public static function index($request) {
-		$content = View::render('admin/modules/agenda/ag_horarios', []);
+		$id_admin = parent::getIdAdminInt();
+		AgendaHelper::garantirLabPadrao($id_admin);
+		$labsHtml = '<option value="0">Todos os laboratórios</option>';
+		$results = EntityLabs::getLabs('id_admin = '.(int)$id_admin.' AND ativo = 1', 'nome ASC');
+		while ($lab = $results->fetchObject(EntityLabs::class)) {
+			$labsHtml .= '<option value="'.(int)$lab->id.'">'.htmlspecialchars($lab->nome).'</option>';
+		}
+		$content = View::render('admin/modules/agenda/ag_horarios', ['labs_options' => $labsHtml]);
 		return parent::getPanel('Horários', $content, 'agenda');
 	}
 
@@ -22,8 +29,12 @@ class AgendaHorarios extends Page {
 		$id_admin = parent::getIdAdminInt();
 		$postVars = $request->getPostVars();
 		$paginaAtual = $postVars['page'] ?? 1;
+		$labId = (int)($postVars['laboratorio_id'] ?? 0);
 
 		$where = 'horarios.id_admin = '.(int)$id_admin;
+		if($labId > 0){
+			$where .= ' AND horarios.laboratorio_id = '.$labId;
+		}
 		$innerJoin = 'LEFT JOIN laboratorios ON laboratorios.id = horarios.laboratorio_id';
 		$fields = 'horarios.*, laboratorios.nome as lab_nome, laboratorios.qtd_computadores';
 
@@ -53,11 +64,20 @@ class AgendaHorarios extends Page {
 	}
 
 	public static function getInfo($request) {
-		$obPagination = null;
-		return json_encode([
-			'itens'      => self::getItens($request, $obPagination),
-			'pagination' => parent::getPagination($request, $obPagination)
-		]);
+		try {
+			$id_admin = parent::getIdAdminInt();
+			AgendaHelper::garantirLabPadrao($id_admin);
+			$obPagination = null;
+			$postVars = $request->getPostVars();
+			return json_encode([
+				'itens'           => self::getItens($request, $obPagination),
+				'laboratorio_id'  => (int)($postVars['laboratorio_id'] ?? 0),
+				'pagination'      => parent::getPagination($request, $obPagination)
+			]);
+		} catch (\Throwable $e) {
+			http_response_code(500);
+			return json_encode(['erro' => $e->getMessage(), 'itens' => '', 'pagination' => '']);
+		}
 	}
 
 	private static function selectLabs($id_admin, $selected = 0) {

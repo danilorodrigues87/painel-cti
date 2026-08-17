@@ -1,24 +1,26 @@
 
+var _relatorioPagina = 1;
+
+function coletarDadosRelatorio(page) {
+ var data = { page: page || 1 };
+ var $form = $('#formBusca');
+ if ($form.length) {
+  $form.serializeArray().forEach(function (item) {
+   data[item.name] = item.value;
+  });
+ }
+ return data;
+}
+
+function irPagina(page) {
+ listar(null, page || 1);
+}
+
 // LISTAGEM POR BUSCA
 $(document).on("submit", "#formBusca", function(event) {
-    event.preventDefault(); // Evita o envio do formulário de forma tradicional
-    $.ajax({
-     url: url_base+listagem,
-     type: "POST",
-        data: $(this).serialize(), // Serializa os dados do formulário
-        dataType: "json", 
-        success: function(result) {
-
-
-            $('#listar').html(result.itens);
-            $('#filtragem').html(result.filtragem);
-
-        }
-    });
+    event.preventDefault();
+    listar(null, 1);
 });
-
-
-
 
 // CHAMA A FUNÇÃO LISTAR AO CARREGAR A PAGINA
 $(document).ready(function(){
@@ -49,34 +51,37 @@ function prepararImpressaoRelatorio() {
 
     window.addEventListener('beforeprint', function () {
         document.querySelectorAll(
-            '#filtragem, #relatorio-filtragem, .relatorio-acoes, #listar .btn-group, #listar button'
+            '#filtragem, #relatorio-filtragem, .relatorio-acoes, #listar .btn-group, #listar button, #pagination'
         ).forEach(esconder);
     });
 
     window.addEventListener('afterprint', restaurar);
 }
 
-
-
-
-// FUNÇÃO LITSAR CONTEUDOS DA PAGINA
-function listar(filtro=null,page=1) {
+// FUNÇÃO LISTAR CONTEUDOS DA PAGINA
+function listar(filtro, page) {
+ page = page || 1;
+ _relatorioPagina = page;
 
  $.ajax({
     url: url_base+listagem,
     method: "post",
-    data: {filtro,page},
-    dataType: "json", 
+    data: coletarDadosRelatorio(page),
+    dataType: "json",
     success: function(result){
-
-
-        $('#listar').html(result.itens);
-        $('#filtragem').html(result.filtragem);
- 
-
-},
-
-})
+        if (!result) return;
+        if (result.filtragem !== undefined) {
+            $('#filtragem').html(result.filtragem);
+        }
+        if (result.itens !== undefined) {
+            $('#listar').html(result.itens);
+        }
+        $('#pagination').html(result.pagination || '');
+    },
+    error: function() {
+        $('#listar').html('<div class="alert alert-danger">Erro ao carregar relatório.</div>');
+    }
+ });
 }
 
 /** Força fundo branco e texto preto no clone (ignora tema escuro do painel). */

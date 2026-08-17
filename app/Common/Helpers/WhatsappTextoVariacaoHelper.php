@@ -53,7 +53,8 @@ class WhatsappTextoVariacaoHelper {
 		$out = LmsAiService::chatComCredencial(
 			$idAdmin,
 			[['role' => 'user', 'content' => $original]],
-			$system
+			$system,
+			'whatsapp_variacao'
 		);
 		if ($out === null) {
 			return null;

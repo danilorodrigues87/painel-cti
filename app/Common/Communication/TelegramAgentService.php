@@ -101,7 +101,7 @@ class TelegramAgentService {
 			$messages[] = ['role' => 'user', 'content' => $text];
 		}
 
-		$resposta = LmsAiService::chatComCredencial($idAdmin, $messages, $system);
+		$resposta = LmsAiService::chatComCredencial($idAdmin, $messages, $system, 'telegram');
 		if ($resposta === null || trim($resposta) === '') {
 			$resposta = 'Não consegui consultar a IA agora'
 				.(LmsAiService::getLastError() ? ' ('.LmsAiService::getLastError().')' : '')
