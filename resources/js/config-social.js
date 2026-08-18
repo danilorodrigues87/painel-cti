@@ -207,6 +207,9 @@ $(function () {
 		postSocialCfg({ acao: 'testar' }).done(function (res) {
 			var html = '<div class="text-start small" style="white-space:pre-wrap;text-align:left;">';
 			html += esc((res && res.message) || 'Sem resposta.');
+			if (res && res.scopes_faltando && res.scopes_faltando.length) {
+				html += '\n\nReconecte com Facebook para solicitar os escopos novos (ex.: após App Review).';
+			}
 			html += '</div>';
 			Swal.fire({
 				title: res && res.success ? 'Diagnóstico Meta' : 'Falha na conexão',
@@ -220,7 +223,9 @@ $(function () {
 
 	$('#btn-subscribe').on('click', function () {
 		postSocialCfg({ acao: 'subscribe_webhooks' }).done(function (res) {
-			Swal.fire(res && res.success ? 'OK' : 'Falha', (res && res.message) || '', res && res.success ? 'success' : 'error');
+			var icon = res && res.success ? (res.partial ? 'warning' : 'success') : 'error';
+			var title = res && res.success ? (res.partial ? 'Parcial' : 'OK') : 'Falha';
+			Swal.fire(title, (res && res.message) || '', icon);
 		});
 	});
 

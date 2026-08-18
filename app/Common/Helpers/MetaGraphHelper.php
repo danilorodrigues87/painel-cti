@@ -38,10 +38,16 @@ class MetaGraphHelper {
 
 	/** Escopos publicação + automações (comentários → DM). Requer App Review para Live. */
 	public static function oauthScopes(): string {
-		return implode(',', [
+		return implode(',', self::escoposOAuthLista());
+	}
+
+	/** @return array<int,string> */
+	public static function escoposOAuthLista(): array {
+		return [
 			'pages_show_list',
 			'pages_manage_posts',
 			'pages_read_engagement',
+			'pages_read_user_content',
 			'pages_manage_metadata',
 			'pages_manage_engagement',
 			'pages_messaging',
@@ -50,7 +56,35 @@ class MetaGraphHelper {
 			'instagram_manage_comments',
 			'instagram_manage_messages',
 			'business_management',
-		]);
+		];
+	}
+
+	/**
+	 * Escopos esperados no token da Page (exclui user-only, ex.: business_management).
+	 * @return array<int,string>
+	 */
+	public static function escoposPageTokenEsperados(): array {
+		$skip = ['business_management'];
+		return array_values(array_filter(
+			self::escoposOAuthLista(),
+			static fn(string $s): bool => !in_array($s, $skip, true)
+		));
+	}
+
+	/**
+	 * @param array<int,string> $scopes
+	 * @return array<int,string>
+	 */
+	public static function escoposOAuthAusentes(array $scopes, bool $pageToken = true): array {
+		$need = $pageToken ? self::escoposPageTokenEsperados() : self::escoposOAuthLista();
+		$have = array_map('strtolower', $scopes);
+		$out = [];
+		foreach ($need as $s) {
+			if (!in_array(strtolower($s), $have, true)) {
+				$out[] = $s;
+			}
+		}
+		return $out;
 	}
 
 	public static function oauthAuthorizeUrl(int $idAdmin, string $state): string {
@@ -157,7 +191,7 @@ class MetaGraphHelper {
 			$out['token_scopes'] = $diag['scopes'] ?? [];
 			$out['token_app_id'] = $diag['app_id'] ?? '';
 			$out['token_page_id'] = $diag['page_id'] ?? '';
-			$missing = self::escoposMessagingAusentes($diag['scopes'] ?? []);
+			$missing = self::escoposOAuthAusentes($diag['scopes'] ?? [], true);
 			if ($missing) {
 				$out['scopes_faltando'] = $missing;
 			}
@@ -204,6 +238,7 @@ class MetaGraphHelper {
 		}
 		if (!empty($out['scopes_faltando'])) {
 			$linhas[] = 'Faltam escopos: '.implode(', ', $out['scopes_faltando']);
+			$linhas[] = 'Reconecte com Facebook (OAuth) após aprovação da Meta para renovar permissões.';
 		}
 		if (!empty($out['app_mismatch'])) {
 			$linhas[] = 'Token é de outro App — gere pelo App CTI ou OAuth.';
@@ -380,16 +415,27 @@ class MetaGraphHelper {
 		$page = self::subscribePageApps($pageId, $pageToken);
 		$msgs = [(string)($page['message'] ?? 'Page: erro')];
 		$ok = !empty($page['ok']);
+		$partial = false;
 
 		$ig = null;
 		if ($igUserId !== '') {
 			$ig = self::subscribeInstagramApps($igUserId, $pageToken);
-			$msgs[] = (string)($ig['message'] ?? 'Instagram: erro');
-			$ok = $ok && !empty($ig['ok']);
+			if (!empty($ig['ok'])) {
+				$msgs[] = (string)($ig['message'] ?? 'Instagram OK');
+			} else {
+				$partial = !empty($page['ok']);
+				$igErr = (string)($ig['message'] ?? 'Falha Instagram');
+				if (stripos($igErr, '#3') !== false || stripos($igErr, 'capability') !== false) {
+					$msgs[] = 'Instagram: API indisponível (#3) — inscreva "comments" manualmente no App Meta (Webhooks → Instagram).';
+				} else {
+					$msgs[] = 'Instagram: '.$igErr;
+				}
+			}
 		}
 
 		return [
 			'ok'      => $ok,
+			'partial' => $partial,
 			'message' => implode(' ', $msgs),
 			'page'    => $page,
 			'ig'      => $ig,

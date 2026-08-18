@@ -443,9 +443,13 @@ class ConfigSocial extends Page {
 		}
 		$igId = trim((string)($cfg->meta_ig_user_id ?? ''));
 		$r = MetaGraphHelper::subscribeAllWebhooks($pageId, $token, $igId !== '' ? $igId : null);
+		$pageOk = !empty($r['page']['ok']);
 		return json_encode([
-			'success' => !empty($r['ok']),
+			'success' => $pageOk,
+			'partial' => !empty($r['partial']),
 			'message' => $r['message'] ?? '',
+			'page_ok' => $pageOk,
+			'ig_ok'   => $igId === '' ? null : !empty($r['ig']['ok']),
 		], JSON_UNESCAPED_UNICODE);
 	}
 }
