@@ -46,10 +46,25 @@ class MetaWebhookLog {
 				'meta_message_id' => $metaMessageId,
 				'payload_resumo'  => $resumo !== null ? mb_substr($resumo, 0, 500) : null,
 				'status'          => $status,
-				'detalhe'         => $detalhe,
+				'detalhe'         => $detalhe !== null ? mb_substr($detalhe, 0, 65000) : null,
 			]);
 		} catch (\Throwable $e) {
 			// não interrompe webhook
 		}
+	}
+
+	/** @return array<int,array<string,mixed>> */
+	public static function listRecentes(?int $idAdmin, string $tipo, int $limite = 30): array {
+		if (!self::tabelaExiste()) {
+			return [];
+		}
+		$limite = max(1, min(100, $limite));
+		$where = 'tipo = "'.addslashes($tipo).'"';
+		if ($idAdmin && $idAdmin > 0) {
+			$where .= ' AND (id_admin = '.(int)$idAdmin.' OR id_admin IS NULL)';
+		}
+		$sql = 'SELECT * FROM meta_webhook_log WHERE '.$where
+			.' ORDER BY id DESC LIMIT '.$limite;
+		return (new Database('meta_webhook_log'))->execute($sql)->fetchAll(\PDO::FETCH_ASSOC) ?: [];
 	}
 }

@@ -10,6 +10,7 @@ use App\Common\Helpers\MetaGraphHelper;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\SocialAutomacao;
 use App\Model\Entity\SocialAutomacaoLog;
+use App\Model\Entity\MetaWebhookLog;
 
 class ConfigSocial extends Page {
 
@@ -388,12 +389,14 @@ class ConfigSocial extends Page {
 
 	private static function logAutomacoes(): string {
 		if (!SocialAutomacao::tabelaExiste()) {
-			return json_encode(['success' => true, 'itens' => []]);
+			return json_encode(['success' => true, 'itens' => [], 'webhook_debug' => []]);
 		}
 		$idAdmin = TenantHelper::getIdAdmin();
+		$webhookDebug = MetaWebhookLog::listRecentes($idAdmin, 'comentario', 25);
 		return json_encode([
 			'success' => true,
 			'itens' => SocialAutomacaoLog::listRecentes($idAdmin, 40),
+			'webhook_debug' => $webhookDebug,
 		], JSON_UNESCAPED_UNICODE);
 	}
 

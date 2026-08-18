@@ -3,11 +3,12 @@
 namespace App\Common\Helpers;
 
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\MetaWebhookLog;
 use App\Model\Entity\SocialAutomacao;
 use App\Model\Entity\SocialAutomacaoLog;
 
 /**
- * Processa webhooks Meta: comentário com keyword → private reply (DM).
+ * Webhook Meta: comentário com keyword → private reply (DM).
  */
 class SocialAutomacaoService {
 
@@ -20,7 +21,20 @@ class SocialAutomacaoService {
 			return $resumo;
 		}
 
+		if (self::parecePayloadComentario($payload)) {
+			self::logDebugWebhook($idAdminFixo, 'recebido', $payload, null);
+		}
+
 		$eventos = self::extrairComentarios($payload);
+		if (self::parecePayloadComentario($payload)) {
+			self::logDebugWebhook(
+				$idAdminFixo,
+				count($eventos) > 0 ? 'extraido' : 'sem_parse',
+				$payload,
+				count($eventos).' comentário(s) extraído(s)'
+			);
+		}
+
 		foreach ($eventos as $ev) {
 			$resumo['processados']++;
 			$cfg = null;
@@ -31,6 +45,12 @@ class SocialAutomacaoService {
 			}
 			if (!$cfg instanceof EscolaIntegracoes) {
 				$resumo['ignorados']++;
+				self::logDebugWebhook(
+					$idAdminFixo,
+					'escola_nao_encontrada',
+					$ev,
+					'page='.($ev['page_id'] ?? '').' ig='.($ev['ig_id'] ?? '')
+				);
 				continue;
 			}
 			$r = self::processarEvento($cfg, $ev);
@@ -141,58 +161,130 @@ class SocialAutomacaoService {
 			}
 			$entryId = (string)($entry['id'] ?? '');
 
-			// Instagram Graph: object=instagram, field=comments
-			if ($object === 'instagram' || isset($entry['changes'])) {
-				foreach (($entry['changes'] ?? []) as $change) {
-					if (!is_array($change)) {
-						continue;
-					}
-					$field = (string)($change['field'] ?? '');
-					$value = $change['value'] ?? [];
-					if (!is_array($value)) {
-						continue;
-					}
-					if ($field === 'comments' || $field === 'live_comments') {
-						$cid = (string)($value['id'] ?? '');
-						$text = (string)($value['text'] ?? $value['message'] ?? '');
-						if ($cid !== '') {
-							$out[] = [
-								'comment_id' => $cid,
-								'texto' => $text,
-								'canal' => 'instagram',
-								'ig_id' => $entryId,
-								'page_id' => '',
-							];
-						}
-					}
-					// Facebook Page feed comment
-					if ($field === 'feed') {
-						$item = (string)($value['item'] ?? '');
-						$verb = (string)($value['verb'] ?? '');
-						if ($item === 'comment' && ($verb === 'add' || $verb === '')) {
-							$cid = (string)($value['comment_id'] ?? $value['id'] ?? '');
-							$text = (string)($value['message'] ?? '');
-							if ($cid !== '') {
-								$out[] = [
-									'comment_id' => $cid,
-									'texto' => $text,
-									'canal' => 'facebook',
-									'page_id' => $entryId,
-									'ig_id' => '',
-								];
-							}
-						}
-					}
+			// Instagram API: field/value direto no entry (sem changes)
+			$flatField = (string)($entry['field'] ?? '');
+			if ($flatField !== '' && isset($entry['value']) && is_array($entry['value'])) {
+				$parsed = self::parseCommentChange($flatField, $entry['value'], $object, $entryId);
+				if ($parsed !== null) {
+					$out[] = $parsed;
 				}
 			}
 
-			// Alguns payloads page usam messaging — ignoramos (não é keyword em comentário)
-		}
-
-		if ($object === 'page') {
-			// já coberto em changes feed acima via entry id = page
+			foreach (($entry['changes'] ?? []) as $change) {
+				if (!is_array($change)) {
+					continue;
+				}
+				$field = (string)($change['field'] ?? '');
+				$value = $change['value'] ?? [];
+				if (!is_array($value)) {
+					continue;
+				}
+				$parsed = self::parseCommentChange($field, $value, $object, $entryId);
+				if ($parsed !== null) {
+					$out[] = $parsed;
+				}
+			}
 		}
 
 		return $out;
+	}
+
+	/**
+	 * @param array<string,mixed> $value
+	 * @return array{comment_id:string,texto:string,canal:string,page_id?:string,ig_id?:string}|null
+	 */
+	private static function parseCommentChange(string $field, array $value, string $object, string $entryId): ?array {
+		if ($field === 'comments' || $field === 'live_comments') {
+			$cid = trim((string)($value['id'] ?? $value['comment_id'] ?? ''));
+			$text = trim((string)($value['text'] ?? $value['message'] ?? ''));
+			if ($cid === '') {
+				return null;
+			}
+			return [
+				'comment_id' => $cid,
+				'texto'      => $text,
+				'canal'      => 'instagram',
+				'ig_id'      => $entryId,
+				'page_id'    => '',
+			];
+		}
+
+		if ($field !== 'feed') {
+			return null;
+		}
+
+		$item = (string)($value['item'] ?? '');
+		$verb = strtolower(trim((string)($value['verb'] ?? '')));
+		if ($item !== 'comment') {
+			return null;
+		}
+		if ($verb !== '' && !in_array($verb, ['add', 'edited', 'remove'], true)) {
+			return null;
+		}
+		if ($verb === 'remove') {
+			return null;
+		}
+
+		$cid = trim((string)($value['comment_id'] ?? $value['id'] ?? ''));
+		$text = trim((string)($value['message'] ?? $value['text'] ?? ''));
+		if ($cid === '') {
+			return null;
+		}
+
+		return [
+			'comment_id' => $cid,
+			'texto'      => $text,
+			'canal'      => 'facebook',
+			'page_id'    => $entryId,
+			'ig_id'      => '',
+		];
+	}
+
+	/** @param array<string,mixed> $payload */
+	private static function parecePayloadComentario(array $payload): bool {
+		$object = (string)($payload['object'] ?? '');
+		foreach (($payload['entry'] ?? []) as $entry) {
+			if (!is_array($entry)) {
+				continue;
+			}
+			$flat = (string)($entry['field'] ?? '');
+			if (in_array($flat, ['comments', 'live_comments', 'feed'], true)) {
+				return true;
+			}
+			foreach (($entry['changes'] ?? []) as $change) {
+				if (!is_array($change)) {
+					continue;
+				}
+				$f = (string)($change['field'] ?? '');
+				if (in_array($f, ['comments', 'live_comments', 'feed'], true)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @param array<string,mixed>|null $context
+	 */
+	private static function logDebugWebhook(?int $idAdmin, string $evento, $context, ?string $nota): void {
+		$json = json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		if (!is_string($json)) {
+			$json = '{}';
+		}
+		$object = is_array($context) ? (string)($context['object'] ?? '') : '';
+		if ($object === '' && is_array($context)) {
+			$object = (string)($context['canal'] ?? 'comentario');
+		}
+
+		MetaWebhookLog::registrar(
+			$idAdmin && $idAdmin > 0 ? $idAdmin : null,
+			'comentario',
+			'debug',
+			$evento,
+			null,
+			'object='.$object.($nota ? ' · '.$nota : ''),
+			$json
+		);
 	}
 }

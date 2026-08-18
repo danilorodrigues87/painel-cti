@@ -498,8 +498,9 @@ class MetaGraphHelper {
 	 */
 	public static function privateReplyInstagram(string $pageId, string $pageToken, string $commentId, string $text): array {
 		return self::postJson($pageId.'/messages', [
-			'recipient' => ['comment_id' => $commentId],
-			'message' => ['text' => $text],
+			'messaging_product' => 'instagram',
+			'recipient'         => ['comment_id' => $commentId],
+			'message'           => ['text' => $text],
 		], $pageToken);
 	}
 

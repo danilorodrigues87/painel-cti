@@ -80,19 +80,40 @@ function carregarLog() {
 		var itens = (res && res.itens) || [];
 		if (!itens.length) {
 			$('#lista-log-auto').html('<li class="list-group-item text-muted">Sem eventos ainda.</li>');
-			return;
+		} else {
+			var html = '';
+			itens.forEach(function (l) {
+				html += '<li class="list-group-item py-2">' +
+					'<span class="badge bg-' + (l.status === 'ok' ? 'success' : (l.status === 'erro' ? 'danger' : 'secondary')) + '">' + esc(l.status) + '</span> ' +
+					'<span class="text-muted">' + esc(l.canal) + '</span> · ' +
+					esc((l.comentario_txt || '').slice(0, 60)) +
+					(l.erro_msg ? '<div class="text-danger">' + esc(l.erro_msg) + '</div>' : '') +
+					'<div class="text-muted" style="font-size:0.75rem">' + esc(l.created_at || '') + '</div></li>';
+			});
+			$('#lista-log-auto').html(html);
 		}
-		var html = '';
-		itens.forEach(function (l) {
-			html += '<li class="list-group-item py-2">' +
-				'<span class="badge bg-' + (l.status === 'ok' ? 'success' : (l.status === 'erro' ? 'danger' : 'secondary')) + '">' + esc(l.status) + '</span> ' +
-				'<span class="text-muted">' + esc(l.canal) + '</span> · ' +
-				esc((l.comentario_txt || '').slice(0, 60)) +
-				(l.erro_msg ? '<div class="text-danger">' + esc(l.erro_msg) + '</div>' : '') +
-				'<div class="text-muted" style="font-size:0.75rem">' + esc(l.created_at || '') + '</div></li>';
-		});
-		$('#lista-log-auto').html(html);
+		renderWebhookDebug((res && res.webhook_debug) || []);
 	});
+}
+
+function renderWebhookDebug(itens) {
+	if (!itens.length) {
+		$('#lista-webhook-debug').html('<li class="list-group-item text-muted">Nenhum webhook de comentário recebido ainda.</li>');
+		return;
+	}
+	var html = '';
+	itens.forEach(function (l) {
+		var badge = l.evento === 'recebido' ? 'primary'
+			: (l.evento === 'extraido' ? 'success'
+				: (l.evento === 'sem_parse' ? 'warning'
+					: (l.evento === 'escola_nao_encontrada' ? 'danger' : 'secondary')));
+		html += '<li class="list-group-item py-2">' +
+			'<span class="badge bg-' + badge + '">' + esc(l.evento || l.status) + '</span> ' +
+			esc(l.payload_resumo || '') +
+			(l.detalhe ? '<pre class="mt-1 mb-0 p-2 bg-light border rounded" style="font-size:0.7rem;max-height:180px;overflow:auto;white-space:pre-wrap;">' + esc(l.detalhe) + '</pre>' : '') +
+			'<div class="text-muted" style="font-size:0.75rem">' + esc(l.created_at || '') + '</div></li>';
+	});
+	$('#lista-webhook-debug').html(html);
 }
 
 function showModal(id) {
@@ -118,6 +139,10 @@ $(function () {
 	}
 
 	carregar();
+
+	$('#btn-recarregar-debug').on('click', function () {
+		carregarLog();
+	});
 
 	$('#btn-salvar').on('click', function () {
 		postSocialCfg({
