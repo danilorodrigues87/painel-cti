@@ -33,6 +33,7 @@ class Meta {
 
 		$raw = file_get_contents('php://input');
 		if (!self::validarAssinatura((string)$raw)) {
+			MetaWebhookDebug::logEvento('global/assinatura_invalida', 'POST rejeitado — assinatura inválida ou ausente');
 			http_response_code(403);
 			return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
 		}
@@ -67,6 +68,7 @@ class Meta {
 
 		$raw = file_get_contents('php://input');
 		if (!self::validarAssinatura((string)$raw)) {
+			MetaWebhookDebug::logEvento('escola/assinatura_invalida', 'POST rejeitado — assinatura inválida ou ausente');
 			http_response_code(403);
 			return json_encode(['success' => false, 'message' => 'Assinatura inválida.']);
 		}

@@ -75,8 +75,27 @@ function carregarRegras() {
 	});
 }
 
+function renderWebhookDebugStatus(st) {
+	if (!st) {
+		$('#webhook-debug-status').html('<span class="text-warning">Status indisponível — arquivos antigos no servidor?</span>');
+		return;
+	}
+	var ok = st.file_ok || st.db_ok;
+	var html = '<div><strong>Versão debug:</strong> ' + esc(st.code_version || '?') + '</div>';
+	html += '<div><strong>Log arquivo:</strong> ' + (st.file_ok ? '<span class="text-success">OK</span>' : '<span class="text-danger">sem permissão</span>');
+	html += ' · <code class="small">' + esc(st.file_path || '') + '</code>';
+	if (st.file_size) html += ' · ' + st.file_size + ' bytes';
+	html += '</div>';
+	html += '<div><strong>Log banco (meta_webhook_log):</strong> ' + (st.db_ok ? '<span class="text-success">tabela OK</span>' : '<span class="text-danger">tabela ausente — rode meta_messaging.sql</span>') + '</div>';
+	if (!ok) {
+		html += '<div class="text-danger mt-1">Envie os arquivos PHP novos ao servidor e crie a pasta <code>uploads/logs/</code> gravável.</div>';
+	}
+	$('#webhook-debug-status').html(html);
+}
+
 function carregarLog() {
 	postSocialCfg({ acao: 'log_automacoes' }).done(function (res) {
+		renderWebhookDebugStatus(res && res.debug_status);
 		var itens = (res && res.itens) || [];
 		if (!itens.length) {
 			$('#lista-log-auto').html('<li class="list-group-item text-muted">Sem eventos ainda.</li>');
@@ -149,6 +168,21 @@ $(function () {
 
 	$('#btn-recarregar-debug').on('click', function () {
 		carregarLog();
+	});
+
+	$('#btn-ping-debug').on('click', function () {
+		postSocialCfg({ acao: 'webhook_debug_status' }).done(function (res) {
+			if (!res || !res.success) {
+				return Swal.fire('Erro', (res && res.message) || 'Falha', 'error');
+			}
+			renderWebhookDebugStatus(res.status);
+			var merged = (res.status && res.status.recent_file) || [];
+			if (res.status && res.status.recent_db && res.status.recent_db.length) {
+				merged = merged.concat(res.status.recent_db);
+			}
+			renderWebhookDebug(merged.slice(0, 40));
+			Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Teste gravado no log', showConfirmButton: false, timer: 2000 });
+		});
 	});
 
 	$('#btn-salvar').on('click', function () {

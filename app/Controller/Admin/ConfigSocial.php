@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\MetaGraphHelper;
+use App\Common\Helpers\MetaWebhookDebug;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\SocialAutomacao;
 use App\Model\Entity\SocialAutomacaoLog;
@@ -77,6 +78,9 @@ class ConfigSocial extends Page {
 		}
 		if ($acao === 'subscribe_webhooks') {
 			return self::subscribeWebhooks();
+		}
+		if ($acao === 'webhook_debug_status') {
+			return self::webhookDebugStatus();
 		}
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 	}
@@ -388,16 +392,37 @@ class ConfigSocial extends Page {
 	}
 
 	private static function logAutomacoes(): string {
-		if (!SocialAutomacao::tabelaExiste()) {
-			return json_encode(['success' => true, 'itens' => [], 'webhook_debug' => []]);
-		}
 		$idAdmin = TenantHelper::getIdAdmin();
-		$webhookDebug = MetaWebhookLog::listRecentesTipos($idAdmin, ['comentario', 'webhook_inbound'], 40);
+		$status = MetaWebhookDebug::status($idAdmin);
+		$webhookDebug = $status['recent_db'];
+		if (!$webhookDebug && !empty($status['recent_file'])) {
+			$webhookDebug = $status['recent_file'];
+		} elseif (!empty($status['recent_file'])) {
+			$webhookDebug = array_merge($status['recent_file'], $webhookDebug);
+		}
+		$itens = SocialAutomacao::tabelaExiste()
+			? SocialAutomacaoLog::listRecentes($idAdmin, 40)
+			: [];
 		return json_encode([
 			'success' => true,
-			'itens' => SocialAutomacaoLog::listRecentes($idAdmin, 40),
-			'webhook_debug' => $webhookDebug,
+			'itens' => $itens,
+			'webhook_debug' => array_slice($webhookDebug, 0, 40),
+			'debug_status' => [
+				'code_version' => $status['code_version'],
+				'db_ok' => $status['db_ok'],
+				'file_ok' => $status['file_ok'],
+				'file_path' => $status['file_path'],
+				'file_size' => $status['file_size'],
+			],
 		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function webhookDebugStatus(): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$status = MetaWebhookDebug::status($idAdmin);
+		MetaWebhookDebug::logEvento('painel/ping', 'Teste manual do painel · id_admin='.$idAdmin);
+		$status = MetaWebhookDebug::status($idAdmin);
+		return json_encode(['success' => true, 'status' => $status], JSON_UNESCAPED_UNICODE);
 	}
 
 	private static function subscribeWebhooks(): string {

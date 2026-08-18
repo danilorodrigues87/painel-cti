@@ -102,8 +102,12 @@
 		<div class="card shadow mb-3">
 			<div class="card-header d-flex justify-content-between align-items-center">
 				<span>Debug webhook comentários</span>
-				<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-recarregar-debug">Atualizar</button>
+				<div>
+					<button type="button" class="btn btn-sm btn-outline-primary me-1" id="btn-ping-debug">Testar log</button>
+					<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-recarregar-debug">Atualizar</button>
+				</div>
 			</div>
+			<div class="card-body py-2 small" id="webhook-debug-status">Carregando status do debug…</div>
 			<div class="card-body p-0">
 				<ul class="list-group list-group-flush small" id="lista-webhook-debug"></ul>
 			</div>
@@ -183,4 +187,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-social.js?v=20260818c"></script>
+<script src="{{URL}}/resources/js/config-social.js?v=20260818d"></script>
