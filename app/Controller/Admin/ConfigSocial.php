@@ -392,7 +392,7 @@ class ConfigSocial extends Page {
 			return json_encode(['success' => true, 'itens' => [], 'webhook_debug' => []]);
 		}
 		$idAdmin = TenantHelper::getIdAdmin();
-		$webhookDebug = MetaWebhookLog::listRecentes($idAdmin, 'comentario', 25);
+		$webhookDebug = MetaWebhookLog::listRecentesTipos($idAdmin, ['comentario', 'webhook_inbound'], 40);
 		return json_encode([
 			'success' => true,
 			'itens' => SocialAutomacaoLog::listRecentes($idAdmin, 40),

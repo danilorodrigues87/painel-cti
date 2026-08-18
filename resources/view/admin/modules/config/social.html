@@ -108,7 +108,9 @@
 				<ul class="list-group list-group-flush small" id="lista-webhook-debug"></ul>
 			</div>
 			<div class="card-footer small text-muted">
-				Mostra se a Meta enviou eventos de <code>feed</code> / <code>comments</code> e o JSON recebido. Comente em um post e clique Atualizar.
+				Registra <strong>todo</strong> POST em <code>/webhook/meta</code>. Envie uma DM de teste: deve aparecer <code>mensagem</code> aqui.
+				Comente em um post: deve aparecer <code>comentario?</code> ou <code>feed</code>/<code>comments</code>.
+				Se DM aparece e comentário não, a Meta não está enviando evento de comentário.
 			</div>
 		</div>
 	</div>
@@ -181,4 +183,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-social.js?v=20260818b"></script>
+<script src="{{URL}}/resources/js/config-social.js?v=20260818c"></script>

@@ -23,6 +23,14 @@ class SocialAutomacaoService {
 
 		if (self::parecePayloadComentario($payload)) {
 			self::logDebugWebhook($idAdminFixo, 'recebido', $payload, null);
+			if (self::payloadComentarioSemValores($payload)) {
+				self::logDebugWebhook(
+					$idAdminFixo,
+					'sem_valores',
+					$payload,
+					'Meta enviou só changed_fields — ative Include Values no App Dashboard'
+				);
+			}
 		}
 
 		$eventos = self::extrairComentarios($payload);
@@ -242,7 +250,6 @@ class SocialAutomacaoService {
 
 	/** @param array<string,mixed> $payload */
 	private static function parecePayloadComentario(array $payload): bool {
-		$object = (string)($payload['object'] ?? '');
 		foreach (($payload['entry'] ?? []) as $entry) {
 			if (!is_array($entry)) {
 				continue;
@@ -250,6 +257,13 @@ class SocialAutomacaoService {
 			$flat = (string)($entry['field'] ?? '');
 			if (in_array($flat, ['comments', 'live_comments', 'feed'], true)) {
 				return true;
+			}
+			if (!empty($entry['changed_fields']) && is_array($entry['changed_fields'])) {
+				foreach ($entry['changed_fields'] as $f) {
+					if (in_array((string)$f, ['comments', 'live_comments', 'feed'], true)) {
+						return true;
+					}
+				}
 			}
 			foreach (($entry['changes'] ?? []) as $change) {
 				if (!is_array($change)) {
@@ -259,6 +273,19 @@ class SocialAutomacaoService {
 				if (in_array($f, ['comments', 'live_comments', 'feed'], true)) {
 					return true;
 				}
+			}
+		}
+		return false;
+	}
+
+	/** @param array<string,mixed> $payload */
+	private static function payloadComentarioSemValores(array $payload): bool {
+		foreach (($payload['entry'] ?? []) as $entry) {
+			if (!is_array($entry)) {
+				continue;
+			}
+			if (!empty($entry['changed_fields']) && empty($entry['changes']) && !isset($entry['value'])) {
+				return true;
 			}
 		}
 		return false;

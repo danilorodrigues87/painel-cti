@@ -98,17 +98,24 @@ function carregarLog() {
 
 function renderWebhookDebug(itens) {
 	if (!itens.length) {
-		$('#lista-webhook-debug').html('<li class="list-group-item text-muted">Nenhum webhook de comentário recebido ainda.</li>');
+		$('#lista-webhook-debug').html(
+			'<li class="list-group-item text-muted">Nenhum evento registrado. '
+			+ 'Confirme que a tabela <code>meta_webhook_log</code> existe (SQL meta_messaging.sql) '
+			+ 'e que os arquivos novos foram enviados ao servidor.</li>'
+		);
 		return;
 	}
 	var html = '';
 	itens.forEach(function (l) {
-		var badge = l.evento === 'recebido' ? 'primary'
-			: (l.evento === 'extraido' ? 'success'
-				: (l.evento === 'sem_parse' ? 'warning'
-					: (l.evento === 'escola_nao_encontrada' ? 'danger' : 'secondary')));
+		var ev = l.evento || l.status || '';
+		var badge = 'secondary';
+		if (ev.indexOf('mensagem') >= 0 || ev === 'mensagem') badge = 'info';
+		if (ev.indexOf('comentario') >= 0 || ev === 'recebido' || ev === 'extraido') badge = 'primary';
+		if (ev === 'sem_parse' || ev === 'sem_valores') badge = 'warning';
+		if (ev === 'escola_nao_encontrada') badge = 'danger';
+		if (l.tipo === 'webhook_inbound' && ev.indexOf('comentario') >= 0) badge = 'primary';
 		html += '<li class="list-group-item py-2">' +
-			'<span class="badge bg-' + badge + '">' + esc(l.evento || l.status) + '</span> ' +
+			'<span class="badge bg-' + badge + '">' + esc(l.tipo + ': ' + ev) + '</span> ' +
 			esc(l.payload_resumo || '') +
 			(l.detalhe ? '<pre class="mt-1 mb-0 p-2 bg-light border rounded" style="font-size:0.7rem;max-height:180px;overflow:auto;white-space:pre-wrap;">' + esc(l.detalhe) + '</pre>' : '') +
 			'<div class="text-muted" style="font-size:0.75rem">' + esc(l.created_at || '') + '</div></li>';

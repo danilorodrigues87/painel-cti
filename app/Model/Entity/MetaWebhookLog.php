@@ -55,11 +55,19 @@ class MetaWebhookLog {
 
 	/** @return array<int,array<string,mixed>> */
 	public static function listRecentes(?int $idAdmin, string $tipo, int $limite = 30): array {
-		if (!self::tabelaExiste()) {
+		return self::listRecentesTipos($idAdmin, [$tipo], $limite);
+	}
+
+	/** @param array<int,string> $tipos */
+	public static function listRecentesTipos(?int $idAdmin, array $tipos, int $limite = 30): array {
+		if (!self::tabelaExiste() || !$tipos) {
 			return [];
 		}
 		$limite = max(1, min(100, $limite));
-		$where = 'tipo = "'.addslashes($tipo).'"';
+		$tiposSql = array_map(static function (string $t): string {
+			return '"'.addslashes($t).'"';
+		}, $tipos);
+		$where = 'tipo IN ('.implode(',', $tiposSql).')';
 		if ($idAdmin && $idAdmin > 0) {
 			$where .= ' AND (id_admin = '.(int)$idAdmin.' OR id_admin IS NULL)';
 		}

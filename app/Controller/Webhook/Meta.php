@@ -5,6 +5,7 @@ namespace App\Controller\Webhook;
 use App\Common\Helpers\MetaGraphHelper;
 use App\Common\Helpers\SocialAutomacaoService;
 use App\Common\Helpers\MetaMessagingService;
+use App\Common\Helpers\MetaWebhookDebug;
 use App\Model\Entity\EscolaIntegracoes;
 
 /**
@@ -39,6 +40,7 @@ class Meta {
 		$payload = json_decode((string)$raw, true);
 		$resumo = ['comentarios' => ['processados' => 0], 'messaging' => ['processados' => 0]];
 		if (is_array($payload)) {
+			MetaWebhookDebug::logInbound(null, $payload, 'global');
 			$resumo['comentarios'] = SocialAutomacaoService::processarPayload(null, $payload);
 			$resumo['messaging'] = MetaMessagingService::processarPayload(null, $payload);
 		}
@@ -72,6 +74,7 @@ class Meta {
 		$payload = json_decode((string)$raw, true);
 		$resumo = ['comentarios' => ['processados' => 0], 'messaging' => ['processados' => 0]];
 		if (is_array($payload)) {
+			MetaWebhookDebug::logInbound($idAdmin, $payload, 'escola');
 			$resumo['comentarios'] = SocialAutomacaoService::processarPayload($idAdmin, $payload);
 			$resumo['messaging'] = MetaMessagingService::processarPayload($idAdmin, $payload);
 		}
