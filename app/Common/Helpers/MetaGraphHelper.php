@@ -173,8 +173,20 @@ class MetaGraphHelper {
 		if (!empty($sub['ok'])) {
 			$out['webhook_fields'] = $sub['fields'] ?? [];
 			$out['webhook_messages_ok'] = !empty($sub['messages_ok']);
+			$out['webhook_feed_ok'] = in_array('feed', $out['webhook_fields'], true);
 		} else {
 			$out['webhook_diag_erro'] = (string)($sub['message'] ?? 'Não foi possível ler webhooks da Page.');
+		}
+
+		$igId = trim((string)($cfg->meta_ig_user_id ?? ''));
+		if ($igId !== '') {
+			$igSub = self::getInstagramWebhookFields($igId, $token);
+			if (!empty($igSub['ok'])) {
+				$out['ig_webhook_fields'] = $igSub['fields'] ?? [];
+				$out['ig_webhook_comments_ok'] = !empty($igSub['comments_ok']);
+			} else {
+				$out['ig_webhook_diag_erro'] = (string)($igSub['message'] ?? 'Falha subscribed_apps IG');
+			}
 		}
 
 		$linhas = [$out['message']];
@@ -206,6 +218,17 @@ class MetaGraphHelper {
 			$linhas[] = 'Webhooks Page: '.implode(', ', $out['webhook_fields']);
 		} elseif (!empty($out['webhook_diag_erro'])) {
 			$linhas[] = 'Webhooks: '.$out['webhook_diag_erro'];
+		}
+		if (isset($out['webhook_feed_ok']) && !$out['webhook_feed_ok']) {
+			$linhas[] = 'Page sem "feed" — comentários Facebook não chegam. Clique Assinar webhooks.';
+		}
+		if (!empty($out['ig_webhook_fields'])) {
+			$linhas[] = 'Webhooks Instagram: '.implode(', ', $out['ig_webhook_fields']);
+		} elseif (!empty($out['ig_webhook_diag_erro'])) {
+			$linhas[] = 'Webhooks IG: '.$out['ig_webhook_diag_erro'];
+		}
+		if (isset($out['ig_webhook_comments_ok']) && !$out['ig_webhook_comments_ok']) {
+			$linhas[] = 'Instagram sem "comments" — comentários IG não chegam. Clique Assinar webhooks.';
 		}
 		if (isset($out['webhook_messages_ok']) && !$out['webhook_messages_ok']) {
 			$linhas[] = 'Campo "messages" ausente — clique Assinar webhooks.';
@@ -297,7 +320,99 @@ class MetaGraphHelper {
 			'ok'          => true,
 			'fields'      => $fields,
 			'messages_ok' => in_array('messages', $fields, true),
+			'feed_ok'     => in_array('feed', $fields, true),
 		];
+	}
+
+	/**
+	 * @return array{ok:bool,fields?:array,comments_ok?:bool,messages_ok?:bool,message?:string}
+	 */
+	public static function getInstagramWebhookFields(string $igUserId, string $pageToken): array {
+		$igUserId = trim($igUserId);
+		if ($igUserId === '') {
+			return ['ok' => false, 'message' => 'Instagram User ID vazio.'];
+		}
+		$res = self::get($igUserId.'/subscribed_apps', [], $pageToken);
+		if (empty($res['ok'])) {
+			return ['ok' => false, 'message' => (string)($res['message'] ?? 'Falha subscribed_apps IG')];
+		}
+		$fields = self::extrairSubscribedFields($res['data']['data'] ?? []);
+		return [
+			'ok'           => true,
+			'fields'       => $fields,
+			'comments_ok'  => in_array('comments', $fields, true),
+			'messages_ok'  => in_array('messages', $fields, true),
+		];
+	}
+
+	/** @param array<int,mixed> $rows */
+	private static function extrairSubscribedFields(array $rows): array {
+		$fields = [];
+		foreach ($rows as $row) {
+			if (!is_array($row)) {
+				continue;
+			}
+			$appId = (string)($row['id'] ?? '');
+			if ($appId !== '' && self::appId() !== '' && $appId !== self::appId()) {
+				continue;
+			}
+			$sf = $row['subscribed_fields'] ?? [];
+			if (is_array($sf)) {
+				foreach ($sf as $f) {
+					$fields[] = (string)$f;
+				}
+			}
+		}
+		return array_values(array_unique($fields));
+	}
+
+	/**
+	 * Page (feed/messages) + Instagram (comments/messages).
+	 * @return array{ok:bool,message?:string,page?:array,ig?:array}
+	 */
+	public static function subscribeAllWebhooks(string $pageId, string $pageToken, ?string $igUserId = null): array {
+		$pageId = trim($pageId);
+		$igUserId = trim((string)$igUserId);
+		if ($pageId === '' || trim($pageToken) === '') {
+			return ['ok' => false, 'message' => 'Page/token ausentes.'];
+		}
+
+		$page = self::subscribePageApps($pageId, $pageToken);
+		$msgs = [(string)($page['message'] ?? 'Page: erro')];
+		$ok = !empty($page['ok']);
+
+		$ig = null;
+		if ($igUserId !== '') {
+			$ig = self::subscribeInstagramApps($igUserId, $pageToken);
+			$msgs[] = (string)($ig['message'] ?? 'Instagram: erro');
+			$ok = $ok && !empty($ig['ok']);
+		}
+
+		return [
+			'ok'      => $ok,
+			'message' => implode(' ', $msgs),
+			'page'    => $page,
+			'ig'      => $ig,
+		];
+	}
+
+	/**
+	 * Assina Instagram Professional (comments → automação keyword).
+	 * @return array{ok:bool,message?:string}
+	 */
+	public static function subscribeInstagramApps(string $igUserId, string $pageToken): array {
+		$igUserId = trim($igUserId);
+		if ($igUserId === '') {
+			return ['ok' => false, 'message' => 'Instagram User ID vazio.'];
+		}
+		$fields = 'comments,live_comments,mentions,messages';
+		$r = self::post($igUserId.'/subscribed_apps', [
+			'subscribed_fields' => $fields,
+		], $pageToken);
+		if (empty($r['ok'])) {
+			return ['ok' => false, 'message' => $r['message'] ?? 'Falha ao assinar webhooks do Instagram.'];
+		}
+		return ['ok' => true, 'message' => 'Instagram inscrito (comments/messages).'];
 	}
 
 	/**

@@ -10,7 +10,7 @@ use App\Model\Entity\MetaWebhookLog;
  */
 class MetaWebhookDebug {
 
-	public const CODE_VERSION = '20260818d';
+	public const CODE_VERSION = '20260818e';
 
 	public static function logInbound(?int $idAdmin, array $payload, string $rota = 'global'): void {
 		$object = (string)($payload['object'] ?? '?');

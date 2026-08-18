@@ -176,9 +176,10 @@ class ConfigSocial extends Page {
 			$pageId = trim((string)($cfg->meta_page_id ?? ''));
 			$pageToken = $cfg->getMetaPageTokenDescriptografada();
 			if ($pageId !== '' && $pageToken) {
-				$sub = MetaGraphHelper::subscribePageApps($pageId, $pageToken);
+				$igId = trim((string)($cfg->meta_ig_user_id ?? ''));
+				$sub = MetaGraphHelper::subscribeAllWebhooks($pageId, $pageToken, $igId !== '' ? $igId : null);
 				$subscribeMsg = !empty($sub['ok'])
-					? ' Webhooks da Page re-inscritos.'
+					? ' Webhooks Page+Instagram re-inscritos.'
 					: (' Aviso webhooks: '.($sub['message'] ?? 'falha'));
 			}
 		}
@@ -326,7 +327,11 @@ class ConfigSocial extends Page {
 		$cfg->salvarMeta($p['page_token']);
 
 		// Assina webhooks da Page (feed/messages) para keyword→DM
-		MetaGraphHelper::subscribePageApps((string)$p['page_id'], (string)$p['page_token']);
+		MetaGraphHelper::subscribeAllWebhooks(
+			(string)$p['page_id'],
+			(string)$p['page_token'],
+			($p['ig_user_id'] ?? '') !== '' ? (string)$p['ig_user_id'] : null
+		);
 
 		$n = count($pages['pages']);
 		$request->getRouter()->redirect('/painel/config/social?oauth=ok&pages='.$n);
@@ -436,7 +441,8 @@ class ConfigSocial extends Page {
 		if (!$token || $pageId === '') {
 			return json_encode(['success' => false, 'message' => 'Page/token ausentes.']);
 		}
-		$r = MetaGraphHelper::subscribePageApps($pageId, $token);
+		$igId = trim((string)($cfg->meta_ig_user_id ?? ''));
+		$r = MetaGraphHelper::subscribeAllWebhooks($pageId, $token, $igId !== '' ? $igId : null);
 		return json_encode([
 			'success' => !empty($r['ok']),
 			'message' => $r['message'] ?? '',
