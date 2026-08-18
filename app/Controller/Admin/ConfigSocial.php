@@ -166,9 +166,20 @@ class ConfigSocial extends Page {
 			return json_encode(['success' => false, 'message' => EscolaIntegracoes::getUltimoErro() ?: 'Falha ao salvar.']);
 		}
 		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$subscribeMsg = '';
+		if ($cfg instanceof EscolaIntegracoes) {
+			$pageId = trim((string)($cfg->meta_page_id ?? ''));
+			$pageToken = $cfg->getMetaPageTokenDescriptografada();
+			if ($pageId !== '' && $pageToken) {
+				$sub = MetaGraphHelper::subscribePageApps($pageId, $pageToken);
+				$subscribeMsg = !empty($sub['ok'])
+					? ' Webhooks da Page re-inscritos.'
+					: (' Aviso webhooks: '.($sub['message'] ?? 'falha'));
+			}
+		}
 		return json_encode([
 			'success' => true,
-			'message' => 'Configuração salva.',
+			'message' => 'Configuração salva.'.$subscribeMsg,
 			'meta_pronto' => $cfg instanceof EscolaIntegracoes && $cfg->temMetaPronto(),
 		], JSON_UNESCAPED_UNICODE);
 	}
@@ -182,6 +193,13 @@ class ConfigSocial extends Page {
 			'page_name' => $res['page_name'] ?? null,
 			'ig_username' => $res['ig_username'] ?? null,
 			'auth_error' => !empty($res['auth_error']),
+			'token_type' => $res['token_type'] ?? null,
+			'token_scopes' => $res['token_scopes'] ?? [],
+			'token_app_id' => $res['token_app_id'] ?? null,
+			'token_page_id' => $res['token_page_id'] ?? null,
+			'scopes_faltando' => $res['scopes_faltando'] ?? [],
+			'app_mismatch' => !empty($res['app_mismatch']),
+			'webhook_fields' => $res['webhook_fields'] ?? [],
 		], JSON_UNESCAPED_UNICODE);
 	}
 

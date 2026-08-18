@@ -102,9 +102,12 @@ class MetaConversa {
 				$upd['foto_url'] = trim((string)$extras['foto_url']);
 				$existente->foto_url = $upd['foto_url'];
 			}
-			if ($pageId !== '' && trim((string)($existente->page_id ?? '')) === '') {
-				$upd['page_id'] = $pageId;
-				$existente->page_id = $pageId;
+			if ($pageId !== '') {
+				$atual = trim((string)($existente->page_id ?? ''));
+				if ($atual === '' || self::pageIdPrecisaCorrigir($atual, $pageId)) {
+					$upd['page_id'] = $pageId;
+					$existente->page_id = $pageId;
+				}
 			}
 			if ($upd) {
 				(new Database('meta_conversas'))->update('id = '.(int)$existente->id, $upd);
@@ -180,6 +183,22 @@ class MetaConversa {
 	public static function normalizarCanal(string $canal): string {
 		$c = strtolower(trim($canal));
 		return $c === 'instagram' ? 'instagram' : 'messenger';
+	}
+
+	/** IG Business IDs começam com 178414; Page ID da Meta é o numérico da Facebook Page. */
+	public static function pageIdPrecisaCorrigir(string $atual, string $correto): bool {
+		$atual = trim($atual);
+		$correto = trim($correto);
+		if ($correto === '' || $atual === $correto) {
+			return false;
+		}
+		if ($atual === '') {
+			return true;
+		}
+		if (str_starts_with($atual, '178414') && !str_starts_with($correto, '178414')) {
+			return true;
+		}
+		return false;
 	}
 
 	public static function labelCanal(string $canal): string {

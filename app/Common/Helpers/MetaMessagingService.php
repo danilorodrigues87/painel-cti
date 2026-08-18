@@ -96,8 +96,11 @@ class MetaMessagingService {
 		}
 
 		$idAdmin = (int)$cfg->id_admin;
-		if ($pageId === '') {
-			$pageId = trim((string)($cfg->meta_page_id ?? ''));
+		$cfgPageId = trim((string)($cfg->meta_page_id ?? ''));
+		if ($cfgPageId !== '') {
+			$pageId = $cfgPageId;
+		} elseif ($pageId === '') {
+			$pageId = $cfgPageId;
 		}
 
 		$perfil = self::resolverPerfil($cfg, $participantId, $canal);
@@ -211,6 +214,17 @@ class MetaMessagingService {
 				}
 			}
 
+			// Handover protocol / secondary channel
+			foreach (($entry['standby'] ?? []) as $item) {
+				if (!is_array($item)) {
+					continue;
+				}
+				$parsed = self::parseMessagingItem($item, $object, $pageId, $igId);
+				if ($parsed !== null) {
+					$out[] = $parsed;
+				}
+			}
+
 			// Instagram standalone: alguns payloads usam messaging em changes
 			foreach (($entry['changes'] ?? []) as $change) {
 				if (!is_array($change)) {
@@ -303,11 +317,16 @@ class MetaMessagingService {
 			}
 		}
 
+		$resolvedPageId = $pageId;
+		if ($resolvedPageId === '' && $canal === 'messenger') {
+			$resolvedPageId = $recipientId;
+		}
+
 		return [
 			'tipo_evento'     => 'message',
 			'canal'           => $canal,
-			'page_id'         => $pageId !== '' ? $pageId : $recipientId,
-			'ig_id'           => $igId,
+			'page_id'         => $resolvedPageId,
+			'ig_id'           => $igId !== '' ? $igId : ($canal === 'instagram' ? $recipientId : ''),
 			'participant_id'  => $participantId,
 			'meta_message_id' => (string)($msg['mid'] ?? ''),
 			'texto'           => $texto,
@@ -388,14 +407,25 @@ class MetaMessagingService {
 		}
 
 		$token = $cfg->getMetaPageTokenDescriptografada();
-		$pageId = trim((string)($conversa->page_id ?? $cfg->meta_page_id ?? ''));
+		$pageId = trim((string)($cfg->meta_page_id ?? ''));
+		if ($pageId === '') {
+			$pageId = trim((string)($conversa->page_id ?? ''));
+		}
+		$storedPageId = trim((string)($conversa->page_id ?? ''));
+		$cfgPageId = trim((string)($cfg->meta_page_id ?? ''));
+		if ($cfgPageId !== '' && MetaConversa::pageIdPrecisaCorrigir($storedPageId, $cfgPageId)) {
+			(new \App\Model\Db\Database('meta_conversas'))->update('id = '.(int)$conversa->id, ['page_id' => $cfgPageId]);
+			$conversa->page_id = $cfgPageId;
+			$pageId = $cfgPageId;
+		}
 		$participantId = trim((string)($conversa->participant_id ?? ''));
+		$canal = MetaConversa::normalizarCanal((string)($conversa->canal ?? 'messenger'));
 
 		if (!$token || $pageId === '' || $participantId === '') {
 			return ['ok' => false, 'message' => 'Page/token/participante ausentes.'];
 		}
 
-		$api = MetaGraphHelper::sendMessage($pageId, $token, $participantId, $texto);
+		$api = MetaGraphHelper::sendMessage($pageId, $token, $participantId, $texto, null, $canal);
 		if (empty($api['ok'])) {
 			return ['ok' => false, 'message' => (string)($api['message'] ?? 'Falha ao enviar.')];
 		}

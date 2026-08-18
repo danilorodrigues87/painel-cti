@@ -150,7 +150,121 @@ class MetaGraphHelper {
 				$out['message'] = 'Page OK; Instagram falhou: '.($ig['message'] ?? 'erro');
 			}
 		}
+
+		$diag = self::diagnosticarToken($token);
+		if (!empty($diag['ok'])) {
+			$out['token_type'] = $diag['type'] ?? '';
+			$out['token_scopes'] = $diag['scopes'] ?? [];
+			$out['token_app_id'] = $diag['app_id'] ?? '';
+			$out['token_page_id'] = $diag['page_id'] ?? '';
+			$missing = self::escoposMessagingAusentes($diag['scopes'] ?? []);
+			if ($missing) {
+				$out['scopes_faltando'] = $missing;
+				$out['message'] .= ' · Faltam escopos: '.implode(', ', $missing);
+			}
+			if (!empty($diag['app_id']) && self::appId() !== '' && (string)$diag['app_id'] !== self::appId()) {
+				$out['app_mismatch'] = true;
+				$out['message'] .= ' · Token é de outro App (#'.$diag['app_id'].'). Gere token do App CTI.';
+			}
+			if (($diag['type'] ?? '') !== 'PAGE') {
+				$out['message'] .= ' · Token não é Page — use token da Page CTI Educacional.';
+			}
+		}
+
+		$sub = self::getPageWebhookFields($pageId, $token);
+		if (!empty($sub['ok'])) {
+			$out['webhook_fields'] = $sub['fields'] ?? [];
+			if (empty($sub['messages_ok'])) {
+				$out['message'] .= ' · Page sem campo "messages" nos webhooks — clique Assinar webhooks.';
+			}
+		}
+
 		return $out;
+	}
+
+	/**
+	 * @return array{ok:bool,type?:string,app_id?:string,page_id?:string,scopes?:array,message?:string}
+	 */
+	public static function diagnosticarToken(string $token): array {
+		$token = trim($token);
+		if ($token === '') {
+			return ['ok' => false, 'message' => 'Token vazio.'];
+		}
+		$appToken = self::appId().'|'.self::appSecret();
+		if (self::appId() === '' || self::appSecret() === '') {
+			return ['ok' => false, 'message' => 'META_APP_ID/SECRET ausentes no .env.'];
+		}
+		$res = self::get('debug_token', [
+			'input_token' => $token,
+		], $appToken);
+		if (empty($res['ok'])) {
+			return ['ok' => false, 'message' => (string)($res['message'] ?? 'debug_token falhou')];
+		}
+		$d = $res['data']['data'] ?? [];
+		$scopes = [];
+		if (!empty($d['scopes']) && is_array($d['scopes'])) {
+			$scopes = array_values(array_map('strval', $d['scopes']));
+		}
+		return [
+			'ok'      => true,
+			'type'    => (string)($d['type'] ?? ''),
+			'app_id'  => (string)($d['app_id'] ?? ''),
+			'page_id' => (string)($d['profile_id'] ?? ''),
+			'valid'   => !empty($d['is_valid']),
+			'scopes'  => $scopes,
+		];
+	}
+
+	/**
+	 * @param array<int,string> $scopes
+	 * @return array<int,string>
+	 */
+	public static function escoposMessagingAusentes(array $scopes): array {
+		$need = ['pages_messaging', 'instagram_manage_messages'];
+		$have = array_map('strtolower', $scopes);
+		$out = [];
+		foreach ($need as $s) {
+			if (!in_array(strtolower($s), $have, true)) {
+				$out[] = $s;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * @return array{ok:bool,fields?:array,messages_ok?:bool,message?:string}
+	 */
+	public static function getPageWebhookFields(string $pageId, string $pageToken): array {
+		$pageId = trim($pageId);
+		if ($pageId === '') {
+			return ['ok' => false, 'message' => 'Page ID vazio.'];
+		}
+		$res = self::get($pageId.'/subscribed_apps', [], $pageToken);
+		if (empty($res['ok'])) {
+			return ['ok' => false, 'message' => (string)($res['message'] ?? 'Falha subscribed_apps')];
+		}
+		$fields = [];
+		foreach (($res['data']['data'] ?? []) as $row) {
+			if (!is_array($row)) {
+				continue;
+			}
+			$appId = (string)($row['id'] ?? '');
+			if ($appId !== '' && self::appId() !== '' && $appId !== self::appId()) {
+				continue;
+			}
+			$sf = $row['subscribed_fields'] ?? [];
+			if (is_array($sf)) {
+				foreach ($sf as $f) {
+					$fields[] = (string)$f;
+				}
+			}
+		}
+		$fields = array_values(array_unique($fields));
+		return [
+			'ok'          => true,
+			'fields'      => $fields,
+			'messages_ok' => in_array('messages', $fields, true),
+		];
 	}
 
 	/**
@@ -376,11 +490,14 @@ class MetaGraphHelper {
 		string $pageToken,
 		string $recipientId,
 		string $text,
-		?string $messagingTag = null
+		?string $messagingTag = null,
+		string $canal = 'messenger'
 	): array {
+		$canal = strtolower(trim($canal)) === 'instagram' ? 'instagram' : 'messenger';
 		$body = [
-			'recipient' => ['id' => $recipientId],
-			'message'   => ['text' => $text],
+			'messaging_product' => $canal,
+			'recipient'         => ['id' => $recipientId],
+			'message'           => ['text' => $text],
 		];
 		if ($messagingTag !== null && trim($messagingTag) !== '') {
 			$body['messaging_type'] = 'MESSAGE_TAG';
