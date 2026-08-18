@@ -199,7 +199,12 @@ class ConfigSocial extends Page {
 			'token_page_id' => $res['token_page_id'] ?? null,
 			'scopes_faltando' => $res['scopes_faltando'] ?? [],
 			'app_mismatch' => !empty($res['app_mismatch']),
+			'token_nao_page' => !empty($res['token_nao_page']),
+			'token_diag_erro' => $res['token_diag_erro'] ?? null,
 			'webhook_fields' => $res['webhook_fields'] ?? [],
+			'webhook_messages_ok' => array_key_exists('webhook_messages_ok', $res) ? (bool)$res['webhook_messages_ok'] : null,
+			'webhook_diag_erro' => $res['webhook_diag_erro'] ?? null,
+			'app_id_esperado' => MetaGraphHelper::appId() !== '' ? MetaGraphHelper::appId() : null,
 		], JSON_UNESCAPED_UNICODE);
 	}
 

@@ -139,24 +139,15 @@ $(function () {
 
 	$('#btn-testar').on('click', function () {
 		postSocialCfg({ acao: 'testar' }).done(function (res) {
-			var html = esc((res && res.message) || '');
-			if (res && res.token_type) {
-				html += '<hr class="my-2"><div class="text-start small">';
-				html += '<div><strong>Tipo token:</strong> ' + esc(res.token_type) + '</div>';
-				if (res.token_app_id) html += '<div><strong>App ID:</strong> ' + esc(res.token_app_id) + '</div>';
-				if (res.token_page_id) html += '<div><strong>Page no token:</strong> ' + esc(res.token_page_id) + '</div>';
-				if (res.webhook_fields && res.webhook_fields.length) {
-					html += '<div><strong>Webhooks Page:</strong> ' + esc(res.webhook_fields.join(', ')) + '</div>';
-				}
-				if (res.scopes_faltando && res.scopes_faltando.length) {
-					html += '<div class="text-danger"><strong>Faltam:</strong> ' + esc(res.scopes_faltando.join(', ')) + '</div>';
-				}
-				html += '</div>';
-			}
+			var html = '<div class="text-start small" style="white-space:pre-wrap;text-align:left;">';
+			html += esc((res && res.message) || 'Sem resposta.');
+			html += '</div>';
 			Swal.fire({
-				title: res && res.success ? 'Diagnóstico Meta' : 'Falha',
+				title: res && res.success ? 'Diagnóstico Meta' : 'Falha na conexão',
 				html: html,
-				icon: res && res.success ? 'success' : 'error'
+				width: 620,
+				icon: res && res.success ? 'info' : 'error',
+				confirmButtonText: 'Fechar'
 			});
 		});
 	});

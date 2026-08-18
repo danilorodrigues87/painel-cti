@@ -160,24 +160,57 @@ class MetaGraphHelper {
 			$missing = self::escoposMessagingAusentes($diag['scopes'] ?? []);
 			if ($missing) {
 				$out['scopes_faltando'] = $missing;
-				$out['message'] .= ' · Faltam escopos: '.implode(', ', $missing);
 			}
 			if (!empty($diag['app_id']) && self::appId() !== '' && (string)$diag['app_id'] !== self::appId()) {
 				$out['app_mismatch'] = true;
-				$out['message'] .= ' · Token é de outro App (#'.$diag['app_id'].'). Gere token do App CTI.';
 			}
-			if (($diag['type'] ?? '') !== 'PAGE') {
-				$out['message'] .= ' · Token não é Page — use token da Page CTI Educacional.';
-			}
+			$out['token_nao_page'] = (($diag['type'] ?? '') !== 'PAGE');
+		} else {
+			$out['token_diag_erro'] = (string)($diag['message'] ?? 'Diagnóstico do token indisponível.');
 		}
 
 		$sub = self::getPageWebhookFields($pageId, $token);
 		if (!empty($sub['ok'])) {
 			$out['webhook_fields'] = $sub['fields'] ?? [];
-			if (empty($sub['messages_ok'])) {
-				$out['message'] .= ' · Page sem campo "messages" nos webhooks — clique Assinar webhooks.';
-			}
+			$out['webhook_messages_ok'] = !empty($sub['messages_ok']);
+		} else {
+			$out['webhook_diag_erro'] = (string)($sub['message'] ?? 'Não foi possível ler webhooks da Page.');
 		}
+
+		$linhas = [$out['message']];
+		if (!empty($out['token_type'])) {
+			$linhas[] = 'Tipo token: '.$out['token_type'];
+		}
+		if (!empty($out['token_app_id'])) {
+			$linhas[] = 'App ID token: '.$out['token_app_id'].(self::appId() !== '' ? ' (esperado: '.self::appId().')' : '');
+		}
+		if (!empty($out['token_page_id'])) {
+			$linhas[] = 'Page no token: '.$out['token_page_id'];
+		}
+		if (!empty($out['token_scopes'])) {
+			$linhas[] = 'Escopos: '.implode(', ', $out['token_scopes']);
+		}
+		if (!empty($out['scopes_faltando'])) {
+			$linhas[] = 'Faltam escopos: '.implode(', ', $out['scopes_faltando']);
+		}
+		if (!empty($out['app_mismatch'])) {
+			$linhas[] = 'Token é de outro App — gere pelo App CTI ou OAuth.';
+		}
+		if (!empty($out['token_nao_page'])) {
+			$linhas[] = 'Token não é Page — use token da Page CTI Educacional.';
+		}
+		if (!empty($out['token_diag_erro'])) {
+			$linhas[] = 'Diag token: '.$out['token_diag_erro'];
+		}
+		if (!empty($out['webhook_fields'])) {
+			$linhas[] = 'Webhooks Page: '.implode(', ', $out['webhook_fields']);
+		} elseif (!empty($out['webhook_diag_erro'])) {
+			$linhas[] = 'Webhooks: '.$out['webhook_diag_erro'];
+		}
+		if (isset($out['webhook_messages_ok']) && !$out['webhook_messages_ok']) {
+			$linhas[] = 'Campo "messages" ausente — clique Assinar webhooks.';
+		}
+		$out['message'] = implode("\n", $linhas);
 
 		return $out;
 	}
