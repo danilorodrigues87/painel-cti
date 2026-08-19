@@ -145,6 +145,16 @@ class MetaMessagingService {
 			mb_substr($texto !== '' ? $texto : '[anexo]', 0, 120)
 		);
 
+		$preview = $texto !== '' ? $texto : ($tipoMsg !== 'text' ? '['.$tipoMsg.']' : '[mensagem]');
+		StaffNotificacaoService::novaMensagemMeta(
+			$idAdmin,
+			(int)$conversa->id,
+			$canal,
+			(string)($conversa->nome_contato ?? ''),
+			$preview,
+			$mid !== '' ? $mid : null
+		);
+
 		return 'salvo';
 	}
 

@@ -478,3 +478,31 @@ html[data-bs-theme="dark"] main a:not(.btn):not(.nav-link):not(.dropdown-item):n
 html[data-bs-theme="dark"] main a:not(.btn):not(.nav-link):not(.dropdown-item):not(.page-link):hover {
   color: var(--bs-link-hover-color);
 }
+
+/* Notificações staff (navbar) */
+.staff-notif-menu {
+  max-height: min(70vh, 420px);
+  overflow: hidden;
+}
+.staff-notif-lista {
+  max-height: min(60vh, 360px);
+  overflow-y: auto;
+}
+.staff-notif-item {
+  white-space: normal;
+}
+.staff-notif-item.staff-notif-unread {
+  background: rgba(13, 110, 253, 0.08);
+}
+html[data-bs-theme="dark"] .staff-notif-item.staff-notif-unread {
+  background: rgba(13, 110, 253, 0.15);
+}
+#nav-notif-wrap .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+}
+.staff-notif-badge {
+  font-size: 10px;
+  min-width: 18px;
+  line-height: 1.2;
+  padding: 2px 5px;
+}

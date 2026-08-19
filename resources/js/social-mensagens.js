@@ -307,4 +307,11 @@ $(function(){
 
 	$('#btn-meta-arquivar').on('click', arquivarConversa);
 	$('#btn-meta-reabrir').on('click', reabrirConversa);
+
+	// Deep-link: /painel/social/mensagens?conversa=ID
+	var params = new URLSearchParams(window.location.search || '');
+	var convParam = parseInt(params.get('conversa') || '0', 10);
+	if (convParam > 0) {
+		setTimeout(function () { abrirConversa(convParam); }, 600);
+	}
 });

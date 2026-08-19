@@ -2,6 +2,7 @@
 
 use \App\Http\Response;
 use \App\Common;
+use \App\Controller\Admin;
 
 
 
@@ -13,6 +14,18 @@ $obRouter->post('/painel/get_cidades',[
 	function($request){
 		return new Response(200,Common\Functions::getCidades($request));
 	}
+]);
+
+
+
+// Notificações in-app (sino navbar)
+$obRouter->post('/painel/notificacoes', [
+	'middlewares' => [
+		'required-admin-login',
+	],
+	function ($request) {
+		return new Response(200, Admin\StaffNotificacoes::getInfo($request), 'application/json');
+	},
 ]);
 
 

@@ -17,7 +17,7 @@
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="{{favicon_url}}">
   <link href="{{URL}}/resources/css/styles.css" rel="stylesheet" />
-  <link href="{{URL}}/resources/css/panel-theme.css?v=20260728c" rel="stylesheet" />
+  <link href="{{URL}}/resources/css/panel-theme.css?v=20260819a" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.12.4/dist/sweetalert2.min.css">
   <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -32,6 +32,21 @@
     <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
     <div class="navbar-brand d-none d-md-inline-block form-inline ms-auto me-0 me-md-3 my-2 my-md-0 ps-3"></div>
     <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
+      <li class="nav-item dropdown d-none" id="nav-notif-wrap">
+        <a class="nav-link position-relative py-2" id="navNotificacoes" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="Notificações">
+          <i class="fas fa-bell fa-fw"></i>
+          <span class="staff-notif-badge position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="staff-notif-badge">0</span>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end staff-notif-menu p-0" aria-labelledby="navNotificacoes" style="min-width:320px;max-width:380px;">
+          <li class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+            <strong class="small mb-0">Notificações</strong>
+            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="staff-notif-marcar-todas">Marcar todas</button>
+          </li>
+          <li id="staff-notif-lista" class="staff-notif-lista">
+            <div class="px-3 py-3 text-muted small">Carregando…</div>
+          </li>
+        </ul>
+      </li>
       <li class="nav-item dropdown">
         <a class="nav-link dropdown-toggle d-flex align-items-center" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
           <img id="nav-user-foto" src="{{foto_url}}" alt="" width="28" height="28" class="rounded-circle me-1" style="object-fit:cover;border:1px solid rgba(255,255,255,.35);">
@@ -72,6 +87,7 @@
   <script src="{{URL}}/resources/js/js_mascara.js"></script>
   <script src="{{URL}}/resources/js/campanha-heartbeat.js?v=20260717a"></script>
   <script src="{{URL}}/resources/js/panel-theme.js?v=20260728b"></script>
+  <script src="{{URL}}/resources/js/staff-notificacoes.js?v=20260819a"></script>
   <script>
     let estadoCidades = 'painel/get_cidades';
     let resetarSenha = 'reset_senha';

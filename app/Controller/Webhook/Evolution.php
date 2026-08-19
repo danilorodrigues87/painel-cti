@@ -6,6 +6,7 @@ use App\Common\Communication\EvolutionApiService;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Communication\WhatsappChatbotService;
 use App\Common\Communication\WhatsappMediaStorage;
+use App\Common\Helpers\StaffNotificacaoService;
 use App\Common\Environment;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
@@ -178,6 +179,17 @@ class Evolution {
 			// Reações não disparam o chatbot de menu
 			if (!$fromMe && $tipo !== 'reaction') {
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
+				$preview = trim((string)$corpo);
+				if ($preview === '' && $mediaUrl) {
+					$preview = $tipo === 'audio' ? '[áudio]' : ($tipo === 'image' ? '[imagem]' : '['.$tipo.']');
+				}
+				StaffNotificacaoService::novaMensagemWhatsapp(
+					$idAdmin,
+					(int)$conversa->id,
+					$conversa->nome_contato ?? $nome,
+					$preview !== '' ? $preview : '[mensagem]',
+					is_string($waId) ? $waId : null
+				);
 			}
 			$processadas++;
 		}
