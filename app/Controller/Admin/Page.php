@@ -85,6 +85,7 @@ class Page {
 			'foto_url' => $fotoUser,
 			'logo_url' => BrandingHelper::urlLogoCti(),
 			'favicon_url' => BrandingHelper::urlFaviconCti(),
+			'pwa_apple_icon_url' => \App\Common\Helpers\PwaHelper::appleTouchIconUrl(),
 			'onesignal_head' => \App\Common\Helpers\OneSignalHelper::htmlHeadSnippet(),
 		]);
 	}

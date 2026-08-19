@@ -11,6 +11,8 @@ var STATIC_PATHS = [
 	'resources/js/url-base.js',
 	'resources/js/sidebarToggle.js',
 	'resources/js/panel-theme.js',
+	'resources/pwa/icon-192.png',
+	'resources/pwa/icon-512.png',
 	'resources/assets/img/icons/icone.png',
 ];
 

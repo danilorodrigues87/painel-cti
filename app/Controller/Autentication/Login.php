@@ -38,6 +38,7 @@ class Login{
 			'title' => 'Login Sistema',
 			'content' => $content,
 			'favicon_url' => $faviconUrl,
+			'pwa_apple_icon_url' => \App\Common\Helpers\PwaHelper::appleTouchIconUrl(),
 		]);
 	}
 

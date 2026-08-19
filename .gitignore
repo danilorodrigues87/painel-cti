@@ -4,6 +4,11 @@
 .cursor/
 .vscode/
 resources/assets/img/*
+!resources/assets/img/icons/
+!resources/assets/img/icons/icone.png
+!resources/assets/img/icons/logo-2.png
+!resources/assets/img/icons/client.png
+!resources/assets/img/bg-cti2.jpg
 uploads/*
 database/*
 

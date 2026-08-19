@@ -7,9 +7,44 @@ namespace App\Common\Helpers;
  */
 class PwaHelper {
 
+	private static function urlBase(): string {
+		return rtrim((string)URL, '/');
+	}
+
+	private static function raizProjeto(): ?string {
+		$raiz = realpath(__DIR__.'/../../../');
+		return $raiz !== false ? $raiz : null;
+	}
+
+	private static function arquivoExiste(string $relPath): bool {
+		$raiz = self::raizProjeto();
+		if ($raiz === null) {
+			return false;
+		}
+		return is_file($raiz.'/'.str_replace('/', DIRECTORY_SEPARATOR, ltrim($relPath, '/')));
+	}
+
+	/** URL pública de ícone PWA com fallback para favicon CTI. */
+	public static function iconUrl(string $filename, ?string $fallbackRel = null): string {
+		$rel = 'resources/pwa/'.$filename;
+		if (self::arquivoExiste($rel)) {
+			return self::urlBase().'/'.$rel;
+		}
+		if ($fallbackRel !== null && self::arquivoExiste($fallbackRel)) {
+			return self::urlBase().'/'.ltrim($fallbackRel, '/');
+		}
+		return self::urlBase().'/'.BrandingHelper::ICONE_CTI;
+	}
+
+	public static function appleTouchIconUrl(): string {
+		return self::iconUrl('icon-192.png', BrandingHelper::ICONE_CTI);
+	}
+
 	public static function manifestArray(): array {
-		$base = rtrim((string)URL, '/');
-		$icon = $base.'/resources/assets/img/icons/icone.png';
+		$base = self::urlBase();
+		$icon192 = self::iconUrl('icon-192.png', BrandingHelper::ICONE_CTI);
+		$icon512 = self::iconUrl('icon-512.png', BrandingHelper::ICONE_CTI);
+		$iconMask = self::iconUrl('icon-512-maskable.png', BrandingHelper::ICONE_CTI);
 
 		return [
 			'name'             => 'CTI Educacional — Painel',
@@ -20,27 +55,27 @@ class PwaHelper {
 			'id'               => $base.'/painel',
 			'display'          => 'standalone',
 			'orientation'      => 'any',
-			'background_color' => '#212529',
+			'background_color' => '#000000',
 			'theme_color'      => '#212529',
 			'lang'             => 'pt-BR',
 			'categories'       => ['business', 'productivity'],
 			'icons'            => [
 				[
-					'src'   => $icon,
-					'sizes' => '192x192',
-					'type'  => 'image/png',
+					'src'     => $icon192,
+					'sizes'   => '192x192',
+					'type'    => 'image/png',
 					'purpose' => 'any',
 				],
 				[
-					'src'   => $icon,
-					'sizes' => '512x512',
-					'type'  => 'image/png',
+					'src'     => $icon512,
+					'sizes'   => '512x512',
+					'type'    => 'image/png',
 					'purpose' => 'any',
 				],
 				[
-					'src'   => $icon,
-					'sizes' => '512x512',
-					'type'  => 'image/png',
+					'src'     => $iconMask,
+					'sizes'   => '512x512',
+					'type'    => 'image/png',
 					'purpose' => 'maskable',
 				],
 			],
@@ -53,7 +88,6 @@ class PwaHelper {
 	}
 
 	public static function serviceWorkerAllowedHeader(): string {
-		$base = rtrim((string)URL, '/');
-		return $base.'/';
+		return self::urlBase().'/';
 	}
 }
