@@ -56,14 +56,18 @@ class StaffNotificacaoService {
 			? 'wa:'.md5($waMessageId)
 			: 'wa:conv:'.$conversaId.':'.time();
 
-		StaffNotificacao::criar([
+		$link = '/painel/whatsapp?conversa='.(int)$conversaId;
+		$id = StaffNotificacao::criar([
 			'id_admin'  => $idAdmin,
 			'tipo'      => 'whatsapp_mensagem',
 			'titulo'    => $titulo,
 			'mensagem'  => mb_substr($msg, 0, 500),
-			'link'      => '/painel/whatsapp?conversa='.(int)$conversaId,
+			'link'      => $link,
 			'ref_chave' => $ref,
 		]);
+		if ($id !== null) {
+			OneSignalPushService::enviarEscola($idAdmin, 'whatsapp_mensagem', $titulo, $msg, $link);
+		}
 	}
 
 	public static function novaMensagemMeta(
@@ -90,14 +94,18 @@ class StaffNotificacaoService {
 			? 'meta:'.md5($metaMessageId)
 			: 'meta:conv:'.$conversaId.':'.time();
 
-		StaffNotificacao::criar([
+		$link = '/painel/social/mensagens?conversa='.(int)$conversaId;
+		$id = StaffNotificacao::criar([
 			'id_admin'  => $idAdmin,
 			'tipo'      => $tipo,
 			'titulo'    => $titulo,
 			'mensagem'  => mb_substr($msg, 0, 500),
-			'link'      => '/painel/social/mensagens?conversa='.(int)$conversaId,
+			'link'      => $link,
 			'ref_chave' => $ref,
 		]);
+		if ($id !== null) {
+			OneSignalPushService::enviarEscola($idAdmin, $tipo, $titulo, $msg, $link);
+		}
 	}
 
 	public static function labelTipo(string $tipo): string {

@@ -85,6 +85,7 @@ class Page {
 			'foto_url' => $fotoUser,
 			'logo_url' => BrandingHelper::urlLogoCti(),
 			'favicon_url' => BrandingHelper::urlFaviconCti(),
+			'onesignal_head' => \App\Common\Helpers\OneSignalHelper::htmlHeadSnippet(),
 		]);
 	}
 

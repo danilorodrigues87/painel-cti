@@ -17,4 +17,8 @@ RewriteRule ^(.*)$ ./index.php [QSA,NC]
     Header set Service-Worker-Allowed "/"
     Header set Cache-Control "no-cache"
   </FilesMatch>
+  <FilesMatch "^OneSignalSDK(Updater)?Worker\.js$">
+    Header set Service-Worker-Allowed "/"
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
 </IfModule>

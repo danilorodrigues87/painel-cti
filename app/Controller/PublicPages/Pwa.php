@@ -18,4 +18,20 @@ class Pwa {
 		}
 		return (string)file_get_contents($path);
 	}
+
+	public static function oneSignalWorker(Request $request): string {
+		$path = realpath(__DIR__.'/../../../OneSignalSDKWorker.js');
+		if ($path === false || !is_readable($path)) {
+			return '// OneSignal worker não encontrado';
+		}
+		return (string)file_get_contents($path);
+	}
+
+	public static function oneSignalUpdaterWorker(Request $request): string {
+		$path = realpath(__DIR__.'/../../../OneSignalSDKUpdaterWorker.js');
+		if ($path === false || !is_readable($path)) {
+			return '// OneSignal updater worker não encontrado';
+		}
+		return (string)file_get_contents($path);
+	}
 }
