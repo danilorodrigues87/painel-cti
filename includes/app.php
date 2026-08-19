@@ -78,6 +78,9 @@ MiddlewareQueue::setMap([
 	'student-jwt' => \App\Http\Middleware\StudentJwtAuth::class,
 	'editor-jwt' => \App\Http\Middleware\EditorJwtAuth::class,
 	'cors-student' => \App\Http\Middleware\CorsStudent::class,
+	'cors-conect' => \App\Http\Middleware\CorsConect::class,
+	'candidato-jwt' => \App\Http\Middleware\CandidatoJwtAuth::class,
+	'empresa-jwt' => \App\Http\Middleware\EmpresaJwtAuth::class,
 	'cache' => \App\Http\Middleware\Cache::class
 ]);
 

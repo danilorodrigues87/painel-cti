@@ -49,6 +49,8 @@ class CrmLeads extends Page{
 		'Google',
 		'Indicação',
 		'Panfleto',
+		'Conecta Jovem',
+		'Conect Jovem',
 		'Outros'
 	];
 

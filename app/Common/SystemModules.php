@@ -234,6 +234,11 @@ class SystemModules {
 				]
 			]
 		],
+		'conect_jovem' => [
+			'label' => 'Conecta Jovem',
+			'link' => URL.'/painel/conect',
+			'icon' => 'fa-solid fa-briefcase'
+		],
 		'whatsapp' => [
 			'label' => 'WhatsApp',
 			'link' => URL.'/painel/whatsapp',

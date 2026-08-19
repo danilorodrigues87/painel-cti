@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Model\Entity;
+
+use App\Model\Db\Database;
+use PDO;
+
+class CjEmpresa {
+
+	public $id;
+	public $id_usuario;
+	public $cnpj;
+	public $razao_social;
+	public $nome_fantasia;
+	public $whatsapp;
+	public $email;
+	public $contato_nome;
+	public $cidade_id;
+	public $bairro;
+	public $uf;
+	public $status = 'pendente';
+
+	public static function tabelaExiste(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$stmt = (new Database())->execute("SHOW TABLES LIKE 'cj_empresas'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	public static function getById(int $id): ?self {
+		if (!self::tabelaExiste() || $id <= 0) {
+			return null;
+		}
+		$row = (new Database('cj_empresas'))->select('id = '.(int)$id, null, '1')->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
+	public static function getByUsuarioId(int $idUsuario): ?self {
+		if (!self::tabelaExiste() || $idUsuario <= 0) {
+			return null;
+		}
+		$row = (new Database('cj_empresas'))->select('id_usuario = '.(int)$idUsuario, null, '1')->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
+	public static function getByCnpj(string $cnpj): ?self {
+		$cnpj = preg_replace('/\D+/', '', $cnpj) ?: '';
+		if (!self::tabelaExiste() || strlen($cnpj) !== 14) {
+			return null;
+		}
+		$row = (new Database('cj_empresas'))->select('cnpj = "'.$cnpj.'"', null, '1')->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
+	public static function inserir(array $dados): ?int {
+		if (!self::tabelaExiste()) {
+			return null;
+		}
+		$id = (new Database('cj_empresas'))->insert($dados);
+		return $id ? (int)$id : null;
+	}
+
+	public static function listarPublicas(?int $cidadeId = null, int $limit = 100): array {
+		if (!self::tabelaExiste()) {
+			return [];
+		}
+		$where = 'e.status = "aprovada"';
+		if ($cidadeId !== null && $cidadeId > 0) {
+			$where .= ' AND e.cidade_id = '.(int)$cidadeId;
+		}
+		$sql = 'SELECT e.*, c.nome AS cidade_nome FROM cj_empresas e '
+			.'LEFT JOIN cidades c ON c.id = e.cidade_id '
+			.'WHERE '.$where.' ORDER BY e.nome_fantasia ASC LIMIT '.(int)$limit;
+		$stmt = (new Database())->execute($sql);
+		return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+	}
+}

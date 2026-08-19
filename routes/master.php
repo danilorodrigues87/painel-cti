@@ -122,6 +122,37 @@ $obRouter->post('/master/bunny', [
 	}
 ]);
 
+$obRouter->get('/master/conect', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectJovem::index($request));
+	}
+]);
+
+$obRouter->post('/master/conect/empresa/{id}/aprovar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectJovem::aprovarEmpresa($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect/vaga/{id}/aprovar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectJovem::aprovarVaga($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect/vaga/{id}/reprovar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectJovem::reprovarVaga($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
 $obRouter->get('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

@@ -20,3 +20,5 @@ include __DIR__.'/api/v1/student.php';
 
 include __DIR__.'/api/v1/editor.php';
 
+include __DIR__.'/api/v1/conect.php';
+

@@ -73,7 +73,7 @@ class Login{
 		}
 
 		// verifia se o usuário tem permissão para acessar
-		if($obUser->nivel == 'Cliente' || $obUser->nivel == 'Empresa'){
+		if($obUser->nivel == 'Cliente' || $obUser->nivel == 'Empresa' || $obUser->nivel == 'Candidato'){
 
 			// Retorna um alerta de acesso negado
 		return self::getLogin($request,'Você não tem permissão para acessar essa área.');
