@@ -58,6 +58,28 @@
 		$b.removeClass('d-none').text(n > 99 ? '99+' : String(n));
 	}
 
+	function isMobile() {
+		return window.matchMedia('(max-width: 767.98px)').matches;
+	}
+
+	function openMobileBackdrop() {
+		if (!isMobile() || $('.staff-notif-backdrop').length) {
+			return;
+		}
+		var $bd = $('<div class="staff-notif-backdrop" aria-hidden="true"></div>');
+		$bd.on('click', function () {
+			var toggle = document.getElementById('navNotificacoes');
+			if (toggle && typeof bootstrap !== 'undefined') {
+				bootstrap.Dropdown.getOrCreateInstance(toggle).hide();
+			}
+		});
+		$('body').append($bd);
+	}
+
+	function closeMobileBackdrop() {
+		$('.staff-notif-backdrop').remove();
+	}
+
 	function renderLista(itens, sqlOk, msg) {
 		var $box = $('#staff-notif-lista').empty();
 		if (!sqlOk) {
@@ -75,12 +97,12 @@
 			$a.attr('data-id', n.id);
 			if (!lida) $a.addClass('staff-notif-unread');
 			$a.html(
-				'<div class="d-flex gap-2">'
-				+ '<div class="pt-1"><i class="' + esc(n.tipo_icon || 'fas fa-bell') + '"></i></div>'
+				'<div class="d-flex gap-2 align-items-start">'
+				+ '<div class="pt-1 flex-shrink-0"><i class="' + esc(n.tipo_icon || 'fas fa-bell') + '"></i></div>'
 				+ '<div class="flex-grow-1 min-w-0">'
-				+ '<div class="fw-semibold small text-truncate">' + esc(n.titulo) + '</div>'
-				+ '<div class="text-muted small text-truncate">' + esc(n.mensagem) + '</div>'
-				+ '<div class="text-muted" style="font-size:11px;">' + esc(fmtTempo(n.created_at)) + '</div>'
+				+ '<div class="fw-semibold small staff-notif-titulo">' + esc(n.titulo) + '</div>'
+				+ '<div class="text-muted small staff-notif-msg">' + esc(n.mensagem) + '</div>'
+				+ '<div class="text-muted staff-notif-time" style="font-size:11px;">' + esc(fmtTempo(n.created_at)) + '</div>'
 				+ '</div></div>'
 			);
 			$a.on('click', function (e) {
@@ -143,9 +165,16 @@
 
 		$('#navNotificacoes').on('show.bs.dropdown', function () {
 			aberto = true;
+			openMobileBackdrop();
 			carregar(false);
+		}).on('shown.bs.dropdown', function () {
+			if (isMobile()) {
+				var $menu = $('#nav-notif-wrap .staff-notif-menu');
+				$menu.css({ transform: 'none', inset: 'auto 8px auto 8px' });
+			}
 		}).on('hide.bs.dropdown', function () {
 			aberto = false;
+			closeMobileBackdrop();
 		});
 
 		$('#staff-notif-marcar-todas').on('click', function (e) {

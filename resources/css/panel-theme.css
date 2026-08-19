@@ -481,15 +481,25 @@ html[data-bs-theme="dark"] main a:not(.btn):not(.nav-link):not(.dropdown-item):n
 
 /* Notificações staff (navbar) */
 .staff-notif-menu {
+  min-width: 300px;
+  max-width: 380px;
   max-height: min(70vh, 420px);
   overflow: hidden;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.15);
 }
 .staff-notif-lista {
   max-height: min(60vh, 360px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .staff-notif-item {
   white-space: normal;
+}
+.staff-notif-item .staff-notif-titulo,
+.staff-notif-item .staff-notif-msg {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .staff-notif-item.staff-notif-unread {
   background: rgba(13, 110, 253, 0.08);
@@ -505,6 +515,38 @@ html[data-bs-theme="dark"] .staff-notif-item.staff-notif-unread {
   min-width: 18px;
   line-height: 1.2;
   padding: 2px 5px;
+}
+
+/* Mobile: painel fixo, largura total, sem corte */
+.staff-notif-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(0, 0, 0, 0.45);
+}
+@media (max-width: 767.98px) {
+  .sb-nav-fixed .sb-topnav {
+    overflow: visible !important;
+  }
+  #nav-notif-wrap .staff-notif-menu {
+    position: fixed !important;
+    inset: auto 8px auto 8px !important;
+    top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    transform: none !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: calc(100vh - 72px - env(safe-area-inset-top, 0px)) !important;
+    margin: 0 !important;
+    z-index: 1055 !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  }
+  .staff-notif-lista {
+    max-height: calc(100vh - 140px - env(safe-area-inset-top, 0px));
+  }
+  .staff-notif-marcar-btn {
+    font-size: 0.875rem;
+  }
 }
 
 /* Banner instalar PWA */
