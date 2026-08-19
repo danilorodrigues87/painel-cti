@@ -11,3 +11,10 @@ RewriteRule ^(.*)$ ./index.php [QSA,NC]
   AddHandler application/x-httpd-ea-php81___lsphp .php .php8 .phtml
 </IfModule>
 # php -- END cPanel-generated handler, do not edit
+
+<IfModule mod_headers.c>
+  <FilesMatch "^sw\.js$">
+    Header set Service-Worker-Allowed "/"
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

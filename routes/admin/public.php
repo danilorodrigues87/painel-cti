@@ -65,3 +65,19 @@ $obRouter->get('/ajuda/{slug}', [
 		return new Response(200, \App\Controller\Admin\Ajuda::artigoPublico($request, $slug));
 	}
 ]);
+
+// PWA — manifest dinâmico + service worker (fallback se .htaccess não servir sw.js)
+$obRouter->get('/manifest.webmanifest', [
+	function ($request) {
+		return new Response(200, PublicPages\Pwa::manifest($request), 'application/manifest+json');
+	}
+]);
+
+$obRouter->get('/sw.js', [
+	function ($request) {
+		$response = new Response(200, PublicPages\Pwa::serviceWorker($request), 'application/javascript');
+		$response->addHeader('Service-Worker-Allowed', \App\Common\Helpers\PwaHelper::serviceWorkerAllowedHeader());
+		$response->addHeader('Cache-Control', 'no-cache');
+		return $response;
+	}
+]);
