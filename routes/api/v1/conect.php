@@ -31,7 +31,7 @@ $obRouter->get('/api/v1/conect/public/vagas', [
 $obRouter->get('/api/v1/conect/public/vagas/{slug}', [
 	'middlewares' => $conectMw,
 	function ($request, $slug) use ($respond) {
-		return $respond(Conect\PublicApi::vagaDetalhe($request, (string)$slug);
+		return $respond(Conect\PublicApi::vagaDetalhe($request, (string)$slug));
 	}
 ]);
 
