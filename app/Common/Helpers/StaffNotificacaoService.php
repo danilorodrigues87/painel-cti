@@ -24,7 +24,10 @@ class StaffNotificacaoService {
 		}
 
 		$verMeta = in_array('social', $slugs, true)
-			&& ModuleGateHelper::podeAcessar('Redes sociais', $idAdmin, $acessoUsuario);
+			&& (
+				ModuleGateHelper::podeAcessar('Redes sociais', $idAdmin, $acessoUsuario)
+				|| $nivel === 'Diretor'
+			);
 		if ($verMeta) {
 			$tipos[] = 'meta_messenger';
 			$tipos[] = 'meta_instagram';

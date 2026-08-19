@@ -30,11 +30,12 @@ class StaffNotificacoes extends Page {
 
 		if (!StaffNotificacao::tabelaExiste()) {
 			return json_encode([
-				'success' => true,
-				'sql_ok'  => false,
-				'nao_lidas' => 0,
-				'itens'   => [],
-				'message' => 'Execute database/staff_notificacoes.sql no phpMyAdmin.',
+				'success'    => true,
+				'sql_ok'     => false,
+				'habilitado' => true,
+				'nao_lidas'  => 0,
+				'itens'      => [],
+				'message'    => 'Execute database/staff_notificacoes.sql no phpMyAdmin.',
 			], JSON_UNESCAPED_UNICODE);
 		}
 

@@ -6,7 +6,17 @@
 	var aberto = false;
 
 	function baseUrl() {
-		return (typeof URL !== 'undefined' && URL) ? URL : '';
+		if (typeof url_base !== 'undefined' && url_base) {
+			return String(url_base).replace(/\/?$/, '');
+		}
+		var origin = window.location.origin || '';
+		var path = window.location.pathname || '/';
+		var match = path.match(/^(.*)\/(?:painel|master)(?:\/.*)?$/);
+		if (match) {
+			var basePath = match[1] || '';
+			return origin + basePath;
+		}
+		return origin;
 	}
 
 	function postNotif(data, cb) {
@@ -88,14 +98,20 @@
 	function carregar(silent) {
 		postNotif({ acao: 'listar' }, function (res) {
 			if (!res || !res.success) {
-				if (!silent) renderLista([], false, 'Indisponível');
-				return;
-			}
-			if (res.habilitado === false) {
-				$('#nav-notif-wrap').addClass('d-none');
+				if (!silent) {
+					$('#nav-notif-wrap').removeClass('d-none');
+					renderLista([], false, 'Não foi possível carregar notificações. Confira se os arquivos foram publicados no servidor.');
+				}
 				return;
 			}
 			$('#nav-notif-wrap').removeClass('d-none');
+			if (res.habilitado === false) {
+				renderBadge(0);
+				if (aberto || !silent) {
+					renderLista([], true, 'Sem módulos de atendimento (WhatsApp / Redes sociais) neste usuário.');
+				}
+				return;
+			}
 			renderBadge(res.nao_lidas);
 			if (aberto || !silent) {
 				renderLista(res.itens || [], res.sql_ok !== false, res.message);
@@ -105,9 +121,11 @@
 
 	function contagem() {
 		postNotif({ acao: 'contagem' }, function (res) {
-			if (res && res.success && res.habilitado !== false) {
+			if (res && res.success) {
 				$('#nav-notif-wrap').removeClass('d-none');
-				renderBadge(res.nao_lidas);
+				if (res.habilitado !== false) {
+					renderBadge(res.nao_lidas);
+				}
 			}
 		});
 	}
