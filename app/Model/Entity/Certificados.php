@@ -68,4 +68,30 @@ class Certificados{
 
 	}
 
+	public static function tabelaExiste(): bool {
+		static $ok = null;
+		if ($ok !== null) {
+			return $ok;
+		}
+		try {
+			$stmt = (new Database())->execute("SHOW TABLES LIKE 'certificados'");
+			$ok = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$ok = false;
+		}
+		return $ok;
+	}
+
+	/** @return \PDOStatement|false */
+	public static function listByAluno(int $idAluno, int $idAdmin) {
+		if (!self::tabelaExiste() || $idAluno <= 0) {
+			return false;
+		}
+		$where = 'certificados.id_aluno = '.(int)$idAluno;
+		if ($idAdmin > 0) {
+			$where .= ' AND certificados.id_admin = '.(int)$idAdmin;
+		}
+		return self::getCertificados($where, 'certificados.id DESC');
+	}
+
 }

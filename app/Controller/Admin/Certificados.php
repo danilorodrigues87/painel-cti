@@ -4,7 +4,8 @@ namespace App\Controller\Admin;
 use \App\Utils\View;
 use \App\Model\Entity\Trilhas as EntityTrilhas;
 use \App\Model\Entity\User as EntityUser;
-use \App\Model\Entity\Certificados as EntityCertificados;
+use App\Common\Helpers\ConectCandidatoFormacaoHelper;
+use App\Model\Entity\Certificados as EntityCertificados;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\TenantHelper;
 
@@ -317,6 +318,13 @@ public static function setNewCertificado($request){
    $obData->cadastrar();
 }
 
+if($obData instanceof EntityCertificados && (int)($obData->id ?? 0) > 0){
+   $fresh = EntityCertificados::getCertificadoById((int)$obData->id);
+   if ($fresh instanceof EntityCertificados) {
+      ConectCandidatoFormacaoHelper::syncFromCertificadoEscola($fresh);
+   }
+}
+
 if(!$obData){
  $resposta ["erro"] = 'Erro ao cadastrar certificado';
 }
@@ -336,17 +344,18 @@ public static function deleteCertificado($request){
    return 'Registro não encontrado.';
  }
 
-		//NOVA INSTANCIA
+ $row = EntityCertificados::getCertificadoById($id);
+
  $obData = new EntityCertificados;
  $obData->id = $id;
- $obData->excluir();
+ $ok = $obData->excluir();
 
- if($obData){
+ if ($ok && $row instanceof EntityCertificados) {
+   ConectCandidatoFormacaoHelper::removerCertificadoEscola((int)$row->id_aluno, (int)$row->id_trilha);
    return true;
-} else {
-   return 'Erro ao excluir esse certificado';
-}
+ }
 
+ return 'Erro ao excluir esse certificado';
 }
 
 }

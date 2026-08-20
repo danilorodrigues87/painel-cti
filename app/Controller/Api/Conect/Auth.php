@@ -7,11 +7,12 @@ use App\Common\Helpers\ConectCandidatoAuthHelper;
 use App\Common\Helpers\ConectJovemCrmHelper;
 use App\Common\Helpers\ConectJovemLeadRouter;
 use App\Model\Entity\CjCandidato;
-use App\Model\Entity\CjCandidatoHabilidade;
 use App\Model\Entity\User;
 use Firebase\JWT\JWT;
 
 class Auth {
+
+	use PerfilCandidatoResponse;
 
 	private static function respond(array $body, int $code = 200): array {
 		return [
@@ -149,10 +150,6 @@ class Auth {
 		if (!$user || !$candidato) {
 			return self::respond(['message' => 'Não autenticado.'], 401);
 		}
-		$habilidades = CjCandidatoHabilidade::listarPorCandidato((int)$candidato->id);
-		return self::respond([
-			'user'      => ConectApiMapper::userCandidato($user, $candidato),
-			'candidato' => ConectApiMapper::candidatoPerfil($candidato, $habilidades),
-		]);
+		return self::respond(self::perfilResponse($user, $candidato));
 	}
 }

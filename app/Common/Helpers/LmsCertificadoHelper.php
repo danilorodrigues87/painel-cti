@@ -3,6 +3,7 @@
 namespace App\Common\Helpers;
 
 use App\Model\Entity\EscolasAssinantes;
+use App\Common\Helpers\ConectCandidatoFormacaoHelper;
 use App\Model\Entity\LmsCertificado;
 use App\Model\Entity\LmsCurso;
 use App\Model\Entity\LmsModulo;
@@ -56,7 +57,11 @@ class LmsCertificadoHelper {
 			}
 
 			LmsConquistaHelper::recalcular($idAdmin, $idAluno);
-			return LmsCertificado::getById((int)$existente->id) ?: $existente;
+			$fresh = LmsCertificado::getById((int)$existente->id) ?: $existente;
+			if ($fresh instanceof LmsCertificado) {
+				ConectCandidatoFormacaoHelper::syncFromCertificado($fresh);
+			}
+			return $fresh;
 		}
 
 		$ob = new LmsCertificado();
@@ -84,7 +89,11 @@ class LmsCertificadoHelper {
 
 		LmsConquistaHelper::recalcular($idAdmin, $idAluno);
 
-		return LmsCertificado::getById((int)$ob->id) ?: $ob;
+		$emitido = LmsCertificado::getById((int)$ob->id) ?: $ob;
+		if ($emitido instanceof LmsCertificado) {
+			ConectCandidatoFormacaoHelper::syncFromCertificado($emitido);
+		}
+		return $emitido;
 	}
 
 	/**

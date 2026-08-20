@@ -27,8 +27,9 @@ class ConectApiMapper {
 	/**
 	 * @param object|array<string,mixed> $candidato
 	 * @param list<string> $habilidades
+	 * @param list<array<string,mixed>> $formacao
 	 */
-	public static function candidatoPerfil($candidato, array $habilidades = []): array {
+	public static function candidatoPerfil($candidato, array $habilidades = [], array $formacao = [], bool $temSelo = false): array {
 		$c = is_array($candidato) ? $candidato : (array)$candidato;
 		return [
 			'id'              => (int)($c['id'] ?? 0),
@@ -42,6 +43,24 @@ class ConectApiMapper {
 			'disponibilidade' => (string)($c['disponibilidade'] ?? 'imediata'),
 			'tipo'            => (string)($c['tipo'] ?? 'externo'),
 			'habilidades'     => $habilidades,
+			'formacao'        => $formacao,
+			'temSeloCertificado' => $temSelo,
+		];
+	}
+
+	/**
+	 * @param array<string,mixed>|object $row
+	 */
+	public static function formacao($row): array {
+		$r = is_array($row) ? $row : (array)$row;
+		return [
+			'id'              => (int)($r['id'] ?? 0),
+			'titulo'          => (string)($r['titulo'] ?? ''),
+			'origem'          => (string)($r['origem'] ?? 'manual'),
+			'status'          => (string)($r['status'] ?? 'em_andamento'),
+			'cargaH'          => isset($r['carga_h']) ? (int)$r['carga_h'] : null,
+			'seloCertificado' => !empty($r['selo_certificado']),
+			'concluidoEm'     => (string)($r['concluido_em'] ?? ''),
 		];
 	}
 

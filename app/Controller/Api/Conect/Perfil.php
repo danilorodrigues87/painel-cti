@@ -9,6 +9,8 @@ use App\Model\Entity\User;
 
 class Perfil {
 
+	use PerfilCandidatoResponse;
+
 	private static function respond(array $body, int $code = 200): array {
 		return [
 			'code' => $code,
@@ -78,10 +80,9 @@ class Perfil {
 			return self::respond(['message' => 'Perfil não encontrado.'], 404);
 		}
 
-		return self::respond([
-			'message'   => 'Perfil atualizado.',
-			'user'      => ConectApiMapper::userCandidato($user, $candidatoAtual),
-			'candidato' => ConectApiMapper::candidatoPerfil($candidatoAtual),
-		]);
+		return self::respond(array_merge(
+			['message' => 'Perfil atualizado.'],
+			self::perfilResponse($user, $candidatoAtual)
+		));
 	}
 }
