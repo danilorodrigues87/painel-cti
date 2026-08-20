@@ -24,6 +24,61 @@ class ConectApiMapper {
 		];
 	}
 
+	/**
+	 * @param object|array<string,mixed> $candidato
+	 * @param list<string> $habilidades
+	 */
+	public static function candidatoPerfil($candidato, array $habilidades = []): array {
+		$c = is_array($candidato) ? $candidato : (array)$candidato;
+		return [
+			'id'              => (int)($c['id'] ?? 0),
+			'nome'            => (string)($c['nome'] ?? ''),
+			'email'           => (string)($c['email'] ?? ''),
+			'whatsapp'        => (string)($c['whatsapp'] ?? ''),
+			'resumo'          => (string)($c['resumo'] ?? ''),
+			'cidadeId'        => isset($c['cidade_id']) && (int)$c['cidade_id'] > 0 ? (int)$c['cidade_id'] : null,
+			'bairro'          => (string)($c['bairro'] ?? ''),
+			'uf'              => (string)($c['uf'] ?? ''),
+			'disponibilidade' => (string)($c['disponibilidade'] ?? 'imediata'),
+			'tipo'            => (string)($c['tipo'] ?? 'externo'),
+			'habilidades'     => $habilidades,
+		];
+	}
+
+	/**
+	 * @param array<string,mixed>|object $row
+	 */
+	public static function candidatura($row): array {
+		$r = is_array($row) ? $row : (array)$row;
+		return [
+			'id'               => (int)($r['id'] ?? 0),
+			'vagaId'           => (int)($r['id_vaga'] ?? 0),
+			'vagaTitulo'       => (string)($r['vaga_titulo'] ?? ''),
+			'vagaSlug'         => (string)($r['vaga_slug'] ?? ''),
+			'tipoVaga'         => (string)($r['tipo_vaga'] ?? ''),
+			'empresaNome'      => (string)($r['empresa_nome'] ?? ''),
+			'status'           => (string)($r['status'] ?? 'enviada'),
+			'mensagemCandidato'=> (string)($r['mensagem_candidato'] ?? ''),
+			'createdAt'        => (string)($r['created_at'] ?? ''),
+		];
+	}
+
+	/**
+	 * @param array<string,mixed>|object $row
+	 */
+	public static function notificacao($row): array {
+		$r = is_array($row) ? $row : (array)$row;
+		return [
+			'id'        => (int)($r['id'] ?? 0),
+			'tipo'      => (string)($r['tipo'] ?? 'system'),
+			'titulo'    => (string)($r['titulo'] ?? ''),
+			'mensagem'  => (string)($r['mensagem'] ?? ''),
+			'link'      => !empty($r['link']) ? (string)$r['link'] : null,
+			'lida'      => !empty($r['lido_em']),
+			'createdAt' => (string)($r['created_at'] ?? ''),
+		];
+	}
+
 	public static function userEmpresa($user, $empresa): array {
 		return [
 			'id'        => (int)($user->id ?? 0),

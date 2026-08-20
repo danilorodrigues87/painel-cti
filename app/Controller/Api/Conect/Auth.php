@@ -6,6 +6,7 @@ use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectJovemCrmHelper;
 use App\Common\Helpers\ConectJovemLeadRouter;
 use App\Model\Entity\CjCandidato;
+use App\Model\Entity\CjCandidatoHabilidade;
 use App\Model\Entity\User;
 use Firebase\JWT\JWT;
 
@@ -145,16 +146,10 @@ class Auth {
 		if (!$user || !$candidato) {
 			return self::respond(['message' => 'Não autenticado.'], 401);
 		}
+		$habilidades = CjCandidatoHabilidade::listarPorCandidato((int)$candidato->id);
 		return self::respond([
 			'user'      => ConectApiMapper::userCandidato($user, $candidato),
-			'candidato' => [
-				'id'        => (int)$candidato->id,
-				'nome'      => (string)$candidato->nome,
-				'whatsapp'  => (string)$candidato->whatsapp,
-				'resumo'    => (string)($candidato->resumo ?? ''),
-				'cidadeId'  => (int)($candidato->cidade_id ?? 0) ?: null,
-				'tipo'      => (string)$candidato->tipo,
-			],
+			'candidato' => ConectApiMapper::candidatoPerfil($candidato, $habilidades),
 		]);
 	}
 }

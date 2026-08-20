@@ -85,6 +85,41 @@ $obRouter->get('/api/v1/conect/me', [
 	}
 ]);
 
+$obRouter->put('/api/v1/conect/me', [
+	'middlewares' => $conectAuth,
+	function ($request) use ($respond) {
+		return $respond(Conect\Perfil::atualizar($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/candidaturas', [
+	'middlewares' => $conectAuth,
+	function ($request) use ($respond) {
+		return $respond(Conect\Candidaturas::listar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/candidaturas', [
+	'middlewares' => $conectAuth,
+	function ($request) use ($respond) {
+		return $respond(Conect\Candidaturas::criar($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/notificacoes', [
+	'middlewares' => $conectAuth,
+	function ($request) use ($respond) {
+		return $respond(Conect\Notificacoes::listar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/notificacoes/{id}/lida', [
+	'middlewares' => $conectAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(Conect\Notificacoes::marcarLida($request, (int)$id));
+	}
+]);
+
 // ——— Empresa auth ———
 $obRouter->post('/api/v1/conect-empresa/auth/login', [
 	'middlewares' => $conectMw,
