@@ -3,6 +3,7 @@
 namespace App\Controller\Api\Conect;
 
 use App\Common\Helpers\ConectApiMapper;
+use App\Common\Helpers\ConectCandidatoAuthHelper;
 use App\Common\Helpers\ConectJovemCrmHelper;
 use App\Common\Helpers\ConectJovemLeadRouter;
 use App\Model\Entity\CjCandidato;
@@ -30,12 +31,14 @@ class Auth {
 		if (!$user instanceof User || !password_verify($password, (string)$user->senha)) {
 			return self::respond(['message' => 'Credenciais inválidas.'], 401);
 		}
-		if (($user->nivel ?? '') !== 'Candidato') {
-			return self::respond(['message' => 'Use o login de candidato.'], 403);
+		if (!ConectCandidatoAuthHelper::podeAcessarConect($user)) {
+			return self::respond([
+				'message' => ConectCandidatoAuthHelper::mensagemLoginIncorreto($user, 'candidato'),
+			], 403);
 		}
-		$candidato = CjCandidato::getByUsuarioId((int)$user->id);
+		$candidato = ConectCandidatoAuthHelper::resolverPerfil($user);
 		if (!$candidato) {
-			return self::respond(['message' => 'Perfil de candidato não encontrado.'], 403);
+			return self::respond(['message' => 'Perfil de candidato não encontrado. Cadastre-se no portal ou peça à escola parceira.'], 403);
 		}
 
 		$expiresIn = 86400;

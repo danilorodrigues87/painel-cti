@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Common\Helpers\ConectCandidatoAuthHelper;
 use App\Model\Entity\User;
 use App\Model\Entity\CjCandidato;
 use Firebase\JWT\JWT;
@@ -24,11 +25,11 @@ class CandidatoJwtAuth {
 
 		$id = (int)($decode['sub'] ?? 0);
 		$user = $id > 0 ? User::getUserById($id) : null;
-		if (!$user instanceof User || ($user->nivel ?? '') !== 'Candidato') {
+		if (!$user instanceof User || !ConectCandidatoAuthHelper::podeAcessarConect($user)) {
 			throw new \Exception('Acesso apenas para candidatos', 403);
 		}
 
-		$candidato = CjCandidato::getByUsuarioId((int)$user->id);
+		$candidato = ConectCandidatoAuthHelper::resolverPerfil($user);
 		if (!$candidato instanceof CjCandidato) {
 			throw new \Exception('Perfil de candidato não encontrado', 403);
 		}

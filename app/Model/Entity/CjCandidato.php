@@ -52,6 +52,15 @@ class CjCandidato {
 		return $row instanceof self ? $row : null;
 	}
 
+	public static function getByEmail(string $email): ?self {
+		$email = strtolower(trim($email));
+		if (!self::tabelaExiste() || $email === '') {
+			return null;
+		}
+		$row = self::select('LOWER(c.email) = "'.addslashes($email).'"', null, '1')->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
 	public static function select(?string $where = null, ?string $order = null, ?string $limit = null) {
 		return (new Database('cj_candidatos c'))->select($where, $order, $limit, 'c.*');
 	}

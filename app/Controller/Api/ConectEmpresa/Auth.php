@@ -3,6 +3,7 @@
 namespace App\Controller\Api\ConectEmpresa;
 
 use App\Common\Helpers\ConectApiMapper;
+use App\Common\Helpers\ConectCandidatoAuthHelper;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\User;
 use Firebase\JWT\JWT;
@@ -28,7 +29,9 @@ class Auth {
 			return self::respond(['message' => 'Credenciais inválidas.'], 401);
 		}
 		if (($user->nivel ?? '') !== 'Empresa') {
-			return self::respond(['message' => 'Use o login de empresa.'], 403);
+			return self::respond([
+				'message' => ConectCandidatoAuthHelper::mensagemLoginIncorreto($user, 'empresa'),
+			], 403);
 		}
 		$empresa = CjEmpresa::getByUsuarioId((int)$user->id);
 		if (!$empresa) {
