@@ -92,6 +92,13 @@ $obRouter->put('/api/v1/conect/me', [
 	}
 ]);
 
+$obRouter->post('/api/v1/conect/me/foto', [
+	'middlewares' => $conectAuth,
+	function ($request) use ($respond) {
+		return $respond(Conect\Foto::upload($request));
+	}
+]);
+
 $obRouter->get('/api/v1/conect/candidaturas', [
 	'middlewares' => $conectAuth,
 	function ($request) use ($respond) {
@@ -142,6 +149,13 @@ $obRouter->get('/api/v1/conect-empresa/me', [
 	}
 ]);
 
+$obRouter->put('/api/v1/conect-empresa/me', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Perfil::atualizar($request));
+	}
+]);
+
 $obRouter->get('/api/v1/conect-empresa/vagas', [
 	'middlewares' => $empresaAuth,
 	function ($request) use ($respond) {
@@ -153,5 +167,54 @@ $obRouter->post('/api/v1/conect-empresa/vagas', [
 	'middlewares' => $empresaAuth,
 	function ($request) use ($respond) {
 		return $respond(ConectEmpresa\Vagas::criar($request));
+	}
+]);
+
+$obRouter->put('/api/v1/conect-empresa/vagas/{id}', [
+	'middlewares' => $empresaAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(ConectEmpresa\Vagas::atualizar($request, (int)$id));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/vagas/{id}/acao', [
+	'middlewares' => $empresaAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(ConectEmpresa\Vagas::acao($request, (int)$id));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/candidaturas', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Candidaturas::listar($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/candidaturas/{id}', [
+	'middlewares' => $empresaAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(ConectEmpresa\Candidaturas::detalhe($request, (int)$id));
+	}
+]);
+
+$obRouter->put('/api/v1/conect-empresa/candidaturas/{id}', [
+	'middlewares' => $empresaAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(ConectEmpresa\Candidaturas::atualizarStatus($request, (int)$id));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/logo', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Logo::upload($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/talentos', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Talentos::buscar($request));
 	}
 ]);

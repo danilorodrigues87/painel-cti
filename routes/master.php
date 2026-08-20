@@ -129,6 +129,20 @@ $obRouter->get('/master/conect', [
 	}
 ]);
 
+$obRouter->get('/master/conect-branding', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectBranding::index($request));
+	}
+]);
+
+$obRouter->post('/master/conect-branding', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectBranding::salvar($request), 'application/json');
+	}
+]);
+
 $obRouter->post('/master/conect/empresa/{id}/aprovar', [
 	'middlewares' => ['required-master-login'],
 	function ($request, $id) {

@@ -349,6 +349,18 @@ Bot Telegram **nativo** no painel (somente leitura): consultas de agenda, financ
 
 > OpenClaw / Agent API HTTP foram removidos do produto. Tabelas `agent_api_*` (se existirem) são legado e podem ser descartadas.
 
+### 5.13 Conecta Jovem (empregabilidade)
+
+Portal público **Conecta Jovem** (`conectjovem.com.br`) — SPA React + API no painel.
+
+- **SQL:** `database/conect_jovem.sql` (tabelas `cj_*`)
+- **API:** `/api/v1/conect/*` (candidato), `/api/v1/conect-empresa/*` (empresa), `/api/v1/conect/public/*` (público)
+- **CORS:** `CONECT_CORS_ORIGINS` no `.env`; middleware `cors-conect`
+- **Master:** `/master/conect` (moderação), `/master/conect-branding` (logo/hero/textos)
+- **Escola:** `/painel/conect` (candidatos vinculados + cadastro manual)
+- **SPA:** repo `conectajovem` — consome API; deploy cPanel Git (`DEPLOY.md`)
+- **Roadmap / operação / smoke:** **`docs/CONECT_ROADMAP.md`** (fases 1–6 consolidadas)
+
 Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 
 ---
@@ -673,6 +685,7 @@ Detalhe: `database/LMS_CHECKLIST_PRODUCAO.md`
 | **Fase D–E+** | Outros gateways atrás de `PixGatewayInterface` | Adiado |
 | **Fase 3c** | Multi-números na UI + distribuição avançada | Schema `whatsapp_numeros` pronto |
 | **Fase 5+** | Templates editáveis de automação CRM por escola | Feito — `/painel/crm/automacao` |
+| **Conecta Jovem** | Portal empregabilidade (fases 1–6) | Feito — `docs/CONECT_ROADMAP.md` |
 | **Master fase 2+** | Dashboard SaaS, e-mail cobrança, trial 14d, valor por escola, login só Assinatura se inativa | Feito — `database/saas_fase2plus.sql` |
 | **Master RBAC** | CRUD `/master/usuarios` + permissões por slug (`ead_cursos`, …); instrutores editam catálogo CTI | Futuro — `EditorAuthHelper::canEditCatalogCti` já é ponto de extensão |
 | **Master RBAC** | CRUD `/master/usuarios` + permissões por slug (`ead_cursos`, …); instrutores editam catálogo CTI | Futuro — `EditorAuthHelper::canEditCatalogCti` já é ponto de extensão |
