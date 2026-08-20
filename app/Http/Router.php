@@ -8,6 +8,7 @@ use \Throwable;
 use \ReflectionFunction;
 use \App\Http\Middleware\Queue as MiddlewareQueue;
 use \App\Http\Middleware\CorsStudent;
+use \App\Http\Middleware\CorsConect;
 use \App\Utils\View;
 
 
@@ -180,11 +181,16 @@ class Router{
 		try {
 			$uri = $this->getUri();
 
-			// Preflight da API aluno: CORS sem depender de rota cadastrada
-			if (strtoupper($this->request->getHttpMethod()) === 'OPTIONS'
-				&& CorsStudent::isStudentApiUri($uri)) {
-				CorsStudent::applyHeaders();
-				return new Response(204, '', 'application/json');
+			// Preflight: CORS sem depender de rota cadastrada (OPTIONS não existe nas rotas GET/POST)
+			if (strtoupper($this->request->getHttpMethod()) === 'OPTIONS') {
+				if (CorsStudent::isStudentApiUri($uri)) {
+					CorsStudent::applyHeaders();
+					return new Response(204, '', 'application/json');
+				}
+				if (CorsConect::isConectApiUri($uri)) {
+					CorsConect::applyHeaders();
+					return new Response(204, '', 'application/json');
+				}
 			}
 
 			//OBTEM A ROTA ATUAL
@@ -210,9 +216,13 @@ class Router{
 			return (new MiddlewareQueue($route['middlewares'],$route['controller'],$args))->next($this->request);
 
 		} catch (\Throwable $e) {
-			// 404/405 da API aluno ainda precisam de CORS (middleware não chega a rodar)
-			if (CorsStudent::isStudentApiUri($this->getUri())) {
+			// 404/405 da API externa ainda precisam de CORS (middleware não chega a rodar)
+			$errUri = $this->getUri();
+			if (CorsStudent::isStudentApiUri($errUri)) {
 				CorsStudent::applyHeaders();
+				$this->contentType = 'application/json';
+			} elseif (CorsConect::isConectApiUri($errUri)) {
+				CorsConect::applyHeaders();
 				$this->contentType = 'application/json';
 			}
 			$code = (int)$e->getCode();
