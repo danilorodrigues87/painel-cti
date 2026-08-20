@@ -76,10 +76,11 @@ class Candidaturas {
 			$row = CjCandidatura::getById($id) ?? $row;
 		}
 
-		$candidato = CjCandidato::getById((int)$row['id_candidato']);
-		$habilidades = $candidato ? CjCandidatoHabilidade::listarPorCandidato((int)$candidato->id) : [];
-		$formacao = $candidato ? ConectCandidatoFormacaoHelper::listarParaApi((int)$candidato->id) : [];
-		$temSelo = $candidato ? CjCandidatoFormacao::temSeloCertificado((int)$candidato->id) : false;
+		$candidato = CjCandidato::getByIdEnriched((int)$row['id_candidato']);
+		$candidatoId = $candidato ? (int)($candidato['id'] ?? 0) : 0;
+		$habilidades = $candidatoId > 0 ? CjCandidatoHabilidade::listarPorCandidato($candidatoId) : [];
+		$formacao = $candidatoId > 0 ? ConectCandidatoFormacaoHelper::listarParaApi($candidatoId) : [];
+		$temSelo = $candidatoId > 0 ? CjCandidatoFormacao::temSeloCertificado($candidatoId) : false;
 
 		return self::respond([
 			'candidatura' => ConectApiMapper::candidaturaEmpresa($row),

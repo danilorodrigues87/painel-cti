@@ -11,23 +11,32 @@ use App\Model\Entity\User;
 
 trait PerfilCandidatoResponse {
 
-	private static function perfilResponse(User $user, CjCandidato $candidato): array {
-		if (($user->nivel ?? '') === 'Cliente' || ($candidato->tipo ?? '') === 'aluno') {
+	/** @param array<string,mixed>|CjCandidato $candidato */
+	private static function perfilResponse(User $user, $candidato): array {
+		$id = is_array($candidato) ? (int)($candidato['id'] ?? 0) : (int)$candidato->id;
+		$tipo = is_array($candidato) ? (string)($candidato['tipo'] ?? 'externo') : (string)($candidato->tipo ?? 'externo');
+
+		if (($user->nivel ?? '') === 'Cliente' || $tipo === 'aluno') {
 			ConectCandidatoFormacaoHelper::syncAllForUsuario((int)$user->id);
 		}
 
-		if (empty($candidato->foto) && User::temColunaFoto() && !empty($user->foto)) {
-			CjCandidato::atualizar((int)$candidato->id, ['foto' => (string)$user->foto]);
-			$candidato = CjCandidato::getById((int)$candidato->id) ?? $candidato;
+		$row = CjCandidato::getByIdEnriched($id);
+		if (!$row) {
+			$row = is_array($candidato) ? $candidato : (array)$candidato;
 		}
 
-		$habilidades = CjCandidatoHabilidade::listarPorCandidato((int)$candidato->id);
-		$formacao = ConectCandidatoFormacaoHelper::listarParaApi((int)$candidato->id);
-		$temSelo = CjCandidatoFormacao::temSeloCertificado((int)$candidato->id);
+		if (($row['foto'] ?? null) === null && User::temColunaFoto() && !empty($user->foto)) {
+			CjCandidato::atualizar($id, ['foto' => (string)$user->foto]);
+			$row = CjCandidato::getByIdEnriched($id) ?? $row;
+		}
+
+		$habilidades = CjCandidatoHabilidade::listarPorCandidato($id);
+		$formacao = ConectCandidatoFormacaoHelper::listarParaApi($id);
+		$temSelo = CjCandidatoFormacao::temSeloCertificado($id);
 
 		return [
-			'user'      => ConectApiMapper::userCandidato($user, $candidato),
-			'candidato' => ConectApiMapper::candidatoPerfil($candidato, $habilidades, $formacao, $temSelo),
+			'user'      => ConectApiMapper::userCandidato($user, (object)$row),
+			'candidato' => ConectApiMapper::candidatoPerfil($row, $habilidades, $formacao, $temSelo),
 		];
 	}
 }

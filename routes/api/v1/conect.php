@@ -99,6 +99,13 @@ $obRouter->post('/api/v1/conect/me/foto', [
 	}
 ]);
 
+$obRouter->get('/api/v1/conect/me/foto/arquivo', [
+	'middlewares' => $conectAuth,
+	function ($request) {
+		return Conect\Foto::arquivo($request);
+	}
+]);
+
 $obRouter->get('/api/v1/conect/candidaturas', [
 	'middlewares' => $conectAuth,
 	function ($request) use ($respond) {

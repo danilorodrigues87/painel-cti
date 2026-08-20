@@ -3,6 +3,8 @@
 namespace App\Controller\Api\ConectEmpresa;
 
 use App\Common\Helpers\ConectApiMapper;
+use App\Common\Helpers\ConectEnderecoHelper;
+use App\Model\Db\Database;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\User;
 
@@ -32,8 +34,10 @@ class Perfil {
 			$fantasia = trim((string)($post['nomeFantasia'] ?? $post['nome_fantasia'] ?? ''));
 			if ($fantasia !== '') {
 				$dados['nome_fantasia'] = $fantasia;
-				$user->nome = $fantasia;
-				$user->atualizar();
+				if ((string)($user->nome ?? '') !== $fantasia) {
+					$user->nome = $fantasia;
+					(new Database('usuarios'))->update('id = '.(int)$user->id, ['nome' => $fantasia]);
+				}
 			}
 		}
 		if (array_key_exists('contatoNome', $post) || array_key_exists('contato_nome', $post)) {
@@ -48,15 +52,29 @@ class Perfil {
 				$dados['email'] = $email;
 			}
 		}
+		if (array_key_exists('logradouro', $post)) {
+			$val = trim((string)$post['logradouro']);
+			$dados['logradouro'] = $val !== '' ? mb_substr($val, 0, 191) : null;
+		}
+		if (array_key_exists('numero', $post)) {
+			$val = trim((string)$post['numero']);
+			$dados['numero'] = $val !== '' ? mb_substr($val, 0, 20) : null;
+		}
 		if (array_key_exists('cidadeId', $post) || array_key_exists('cidade_id', $post)) {
 			$cidadeId = (int)($post['cidadeId'] ?? $post['cidade_id'] ?? 0);
 			$dados['cidade_id'] = $cidadeId > 0 ? $cidadeId : null;
+			if ($cidadeId > 0) {
+				$loc = ConectEnderecoHelper::localPorCidadeId($cidadeId);
+				if ($loc['uf'] !== '') {
+					$dados['uf'] = $loc['uf'];
+				}
+			}
 		}
 		if (array_key_exists('bairro', $post)) {
 			$bairro = trim((string)$post['bairro']);
-			$dados['bairro'] = $bairro !== '' ? $bairro : null;
+			$dados['bairro'] = $bairro !== '' ? mb_substr($bairro, 0, 120) : null;
 		}
-		if (array_key_exists('uf', $post)) {
+		if (array_key_exists('uf', $post) && !isset($dados['uf'])) {
 			$uf = strtoupper(substr(trim((string)$post['uf']), 0, 2));
 			$dados['uf'] = $uf !== '' ? $uf : null;
 		}
@@ -66,12 +84,12 @@ class Perfil {
 		}
 
 		CjEmpresa::atualizar((int)$empresa->id, $dados);
-		$empresaAtual = CjEmpresa::getById((int)$empresa->id);
+		$empresaRow = CjEmpresa::getByIdEnriched((int)$empresa->id) ?? (array)$empresa;
 
 		return self::respond([
 			'message' => 'Perfil atualizado.',
-			'user'    => ConectApiMapper::userEmpresa($user, $empresaAtual),
-			'empresa' => ConectApiMapper::empresaPerfil($empresaAtual),
+			'user'    => ConectApiMapper::userEmpresa($user, $empresaRow),
+			'empresa' => ConectApiMapper::empresaPerfil($empresaRow),
 		]);
 	}
 }

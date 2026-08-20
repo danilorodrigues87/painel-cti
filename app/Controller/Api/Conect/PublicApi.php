@@ -6,6 +6,7 @@ use App\Common\Helpers\ConectApiMapper;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\CjPortalBranding;
 use App\Model\Entity\CjVaga;
+use App\Common\Helpers\ConectEnderecoHelper;
 use App\Model\Entity\EstadoCidades;
 
 class PublicApi {
@@ -83,14 +84,7 @@ class PublicApi {
 	}
 
 	public static function estados($request): array {
-		$rows = EstadoCidades::getEstados(null, 'nome ASC');
-		$items = [];
-		if ($rows) {
-			while ($r = $rows->fetch(\PDO::FETCH_ASSOC)) {
-				$items[] = ['id' => (int)$r['id'], 'nome' => (string)$r['nome'], 'uf' => (string)($r['uf'] ?? '')];
-			}
-		}
-		return self::respond(['items' => $items]);
+		return self::respond(['items' => ConectEnderecoHelper::listarEstadosApi()]);
 	}
 
 	public static function cidadesPorEstado($request, int $estadoId): array {

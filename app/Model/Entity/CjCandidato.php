@@ -44,6 +44,34 @@ class CjCandidato {
 		return $row instanceof self ? $row : null;
 	}
 
+	/** @return array<string,mixed>|null */
+	public static function getByIdEnriched(int $id): ?array {
+		if (!self::tabelaExiste() || $id <= 0) {
+			return null;
+		}
+		$sql = 'SELECT c.*, ci.nome AS cidade_nome FROM cj_candidatos c '
+			.'LEFT JOIN cidades ci ON ci.id = c.cidade_id '
+			.'WHERE c.id = '.(int)$id.' LIMIT 1';
+		$stmt = (new Database())->execute($sql);
+		$row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+		if (!is_array($row)) {
+			return null;
+		}
+		if (!empty($row['cidade_id'])) {
+			$loc = \App\Common\Helpers\ConectEnderecoHelper::localPorCidadeId((int)$row['cidade_id']);
+			if ($loc['uf'] !== '' && empty($row['uf'])) {
+				$row['uf'] = $loc['uf'];
+			}
+			if (!empty($loc['estadoId'])) {
+				$row['estado_id'] = $loc['estadoId'];
+			}
+			if ($loc['cidadeNome'] !== '') {
+				$row['cidade_nome'] = $loc['cidadeNome'];
+			}
+		}
+		return $row;
+	}
+
 	public static function getByUsuarioId(int $idUsuario): ?self {
 		if (!self::tabelaExiste() || $idUsuario <= 0) {
 			return null;
@@ -76,6 +104,10 @@ class CjCandidato {
 	public static function atualizar(int $id, array $dados): bool {
 		if (!self::tabelaExiste() || $id <= 0) {
 			return false;
+		}
+		$dados = \App\Common\Helpers\ConectSchemaHelper::filtrar('cj_candidatos', $dados);
+		if ($dados === []) {
+			return true;
 		}
 		return (new Database('cj_candidatos'))->update('id = '.(int)$id, $dados);
 	}

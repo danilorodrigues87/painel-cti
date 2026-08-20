@@ -21,6 +21,16 @@ class UserFotoHelper {
 		return rtrim((string)URL, '/').'/uploads'.self::DIR_RELATIVO.$foto;
 	}
 
+	/** Caminho absoluto no disco (basename validado). */
+	public static function caminhoAbsoluto(?string $foto): ?string {
+		$foto = trim((string)$foto);
+		if ($foto === '' || strpos($foto, '..') !== false || strpos($foto, '/') !== false) {
+			return null;
+		}
+		$path = __DIR__.'/../../uploads'.self::DIR_RELATIVO.$foto;
+		return is_file($path) ? $path : null;
+	}
+
 	/**
 	 * Processa upload de foto. Retorna o basename novo ou o valor atual se não houver arquivo.
 	 */

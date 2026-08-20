@@ -4,6 +4,8 @@ namespace App\Controller\Api\ConectEmpresa;
 
 use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectCandidatoAuthHelper;
+use App\Common\Helpers\ConectCnpjHelper;
+use App\Common\Helpers\ConectEnderecoHelper;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\User;
 use Firebase\JWT\JWT;
@@ -68,9 +70,21 @@ class Auth {
 		$contato = trim((string)($post['contatoNome'] ?? $post['contato_nome'] ?? ''));
 		$cidadeId = (int)($post['cidadeId'] ?? $post['cidade_id'] ?? 0);
 		$uf = strtoupper(substr(trim((string)($post['uf'] ?? '')), 0, 2));
+		if ($cidadeId > 0) {
+			$loc = ConectEnderecoHelper::localPorCidadeId($cidadeId);
+			if ($loc['uf'] !== '') {
+				$uf = $loc['uf'];
+			}
+		}
+
+		$autoAprovada = ConectCnpjHelper::validar($cnpj);
+		$statusEmpresa = $autoAprovada ? 'aprovada' : 'pendente';
 
 		if (strlen($cnpj) !== 14 || $razao === '' || $email === '' || strlen($senha) < 6) {
 			return self::respond(['message' => 'CNPJ, razão social, e-mail e senha são obrigatórios.'], 400);
+		}
+		if (!ConectCnpjHelper::validar($cnpj)) {
+			return self::respond(['message' => 'CNPJ inválido. Verifique os dígitos informados.'], 400);
 		}
 		if (CjEmpresa::getByCnpj($cnpj)) {
 			return self::respond(['message' => 'CNPJ já cadastrado.'], 409);
@@ -102,7 +116,8 @@ class Auth {
 			'contato_nome'  => $contato,
 			'cidade_id'     => $cidadeId > 0 ? $cidadeId : null,
 			'uf'            => $uf !== '' ? $uf : null,
-			'status'        => 'pendente',
+			'status'        => $statusEmpresa,
+			'aprovada_em'   => $autoAprovada ? date('Y-m-d H:i:s') : null,
 		]);
 
 		if (!$empresaId) {
@@ -111,7 +126,9 @@ class Auth {
 
 		$empresa = CjEmpresa::getById($empresaId);
 		return self::respond([
-			'message' => 'Cadastro recebido. Aguarde aprovação da equipe CTI.',
+			'message' => $autoAprovada
+				? 'Cadastro concluído! CNPJ validado — sua empresa já está aprovada para publicar vagas.'
+				: 'Cadastro recebido. Aguarde aprovação da equipe CTI.',
 			'empresa' => ConectApiMapper::userEmpresa($user, $empresa),
 		], 201);
 	}
@@ -122,9 +139,10 @@ class Auth {
 		if (!$user || !$empresa) {
 			return self::respond(['message' => 'Não autenticado.'], 401);
 		}
+		$empresaRow = CjEmpresa::getByIdEnriched((int)$empresa->id) ?? (array)$empresa;
 		return self::respond([
-			'user'    => ConectApiMapper::userEmpresa($user, $empresa),
-			'empresa' => ConectApiMapper::empresaPerfil($empresa),
+			'user'    => ConectApiMapper::userEmpresa($user, $empresaRow),
+			'empresa' => ConectApiMapper::empresaPerfil($empresaRow),
 		]);
 	}
 }

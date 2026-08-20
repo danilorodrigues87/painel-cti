@@ -31,11 +31,23 @@ class ConectApiMapper {
 	 */
 	public static function candidatoPerfil($candidato, array $habilidades = [], array $formacao = [], bool $temSelo = false): array {
 		$c = is_array($candidato) ? $candidato : (array)$candidato;
+		if (!empty($c['cidade_id']) && empty($c['cidade_nome'])) {
+			$loc = ConectEnderecoHelper::localPorCidadeId((int)$c['cidade_id']);
+			$c['cidade_nome'] = $loc['cidadeNome'];
+			if (empty($c['uf'])) {
+				$c['uf'] = $loc['uf'];
+			}
+			if (empty($c['estado_id']) && !empty($loc['estadoId'])) {
+				$c['estado_id'] = $loc['estadoId'];
+			}
+		}
 		$fotoBasename = $c['foto'] ?? null;
 		$fotoUrl = null;
 		if (!empty($fotoBasename)) {
 			$fotoUrl = UserFotoHelper::urlPublica((string)$fotoBasename);
 		}
+		$formacaoAcad = ConectEnderecoHelper::decodeListaJson($c['formacao_academica_json'] ?? null);
+		$experiencias = ConectEnderecoHelper::decodeListaJson($c['experiencias_json'] ?? null);
 		return [
 			'id'              => (int)($c['id'] ?? 0),
 			'nome'            => (string)($c['nome'] ?? ''),
@@ -43,13 +55,20 @@ class ConectApiMapper {
 			'whatsapp'        => (string)($c['whatsapp'] ?? ''),
 			'resumo'          => (string)($c['resumo'] ?? ''),
 			'cidadeId'        => isset($c['cidade_id']) && (int)$c['cidade_id'] > 0 ? (int)$c['cidade_id'] : null,
+			'cidadeNome'      => (string)($c['cidade_nome'] ?? ''),
+			'estadoId'        => isset($c['estado_id']) && (int)$c['estado_id'] > 0 ? (int)$c['estado_id'] : null,
+			'logradouro'      => (string)($c['logradouro'] ?? ''),
+			'numero'          => (string)($c['numero'] ?? ''),
 			'bairro'          => (string)($c['bairro'] ?? ''),
-			'uf'              => (string)($c['uf'] ?? ''),
+			'uf'              => strtoupper((string)($c['uf'] ?? '')),
+			'endereco'        => ConectEnderecoHelper::formatarEndereco($c),
 			'disponibilidade' => (string)($c['disponibilidade'] ?? 'imediata'),
 			'tipo'            => (string)($c['tipo'] ?? 'externo'),
 			'fotoUrl'         => $fotoUrl,
 			'habilidades'     => $habilidades,
 			'formacao'        => $formacao,
+			'formacaoAcademica'=> $formacaoAcad,
+			'experiencias'    => $experiencias,
 			'temSeloCertificado' => $temSelo,
 		];
 	}
@@ -109,6 +128,16 @@ class ConectApiMapper {
 
 	public static function empresaPerfil($empresa): array {
 		$e = is_array($empresa) ? $empresa : (array)$empresa;
+		if (!empty($e['cidade_id']) && empty($e['cidade_nome'])) {
+			$loc = ConectEnderecoHelper::localPorCidadeId((int)$e['cidade_id']);
+			$e['cidade_nome'] = $loc['cidadeNome'];
+			if (empty($e['uf'])) {
+				$e['uf'] = $loc['uf'];
+			}
+			if (!empty($loc['estadoId'])) {
+				$e['estado_id'] = $loc['estadoId'];
+			}
+		}
 		return [
 			'id'           => (int)($e['id'] ?? 0),
 			'cnpj'         => (string)($e['cnpj'] ?? ''),
@@ -119,8 +148,13 @@ class ConectApiMapper {
 			'email'        => (string)($e['email'] ?? ''),
 			'contatoNome'  => (string)($e['contato_nome'] ?? ''),
 			'cidadeId'     => isset($e['cidade_id']) && (int)$e['cidade_id'] > 0 ? (int)$e['cidade_id'] : null,
+			'cidadeNome'   => (string)($e['cidade_nome'] ?? ''),
+			'estadoId'     => isset($e['estado_id']) && (int)$e['estado_id'] > 0 ? (int)$e['estado_id'] : null,
+			'logradouro'   => (string)($e['logradouro'] ?? ''),
+			'numero'       => (string)($e['numero'] ?? ''),
 			'bairro'       => (string)($e['bairro'] ?? ''),
-			'uf'           => (string)($e['uf'] ?? ''),
+			'uf'           => strtoupper((string)($e['uf'] ?? '')),
+			'endereco'     => ConectEnderecoHelper::formatarEndereco($e),
 			'status'       => (string)($e['status'] ?? 'pendente'),
 		];
 	}
@@ -142,13 +176,14 @@ class ConectApiMapper {
 	}
 
 	public static function userEmpresa($user, $empresa): array {
+		$e = is_array($empresa) ? $empresa : (array)$empresa;
 		return [
 			'id'        => (int)($user->id ?? 0),
 			'nome'      => (string)($user->nome ?? ''),
 			'email'     => (string)($user->email ?? ''),
 			'nivel'     => 'Empresa',
-			'empresaId' => (int)($empresa->id ?? 0),
-			'status'    => (string)($empresa->status ?? 'pendente'),
+			'empresaId' => (int)($e['id'] ?? 0),
+			'status'    => (string)($e['status'] ?? 'pendente'),
 		];
 	}
 
