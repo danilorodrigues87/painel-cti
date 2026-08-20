@@ -59,12 +59,22 @@ class CjCandidatura {
 		if (!empty($filtros['id_candidato'])) {
 			$where[] = 'c.id_candidato = '.(int)$filtros['id_candidato'];
 		}
+		if (!empty($filtros['id_empresa'])) {
+			$where[] = 'v.id_empresa = '.(int)$filtros['id_empresa'];
+		}
+		if (!empty($filtros['status'])) {
+			$where[] = 'c.status = "'.addslashes((string)$filtros['status']).'"';
+		}
 		$limit = max(1, min(100, (int)($filtros['limit'] ?? 50)));
-		$sql = 'SELECT c.*, v.titulo AS vaga_titulo, v.slug AS vaga_slug, v.tipo_vaga, '
-			.'v.status AS vaga_status, e.nome_fantasia AS empresa_nome '
+		$sql = 'SELECT c.*, v.id_empresa, v.titulo AS vaga_titulo, v.slug AS vaga_slug, v.tipo_vaga, '
+			.'v.status AS vaga_status, e.nome_fantasia AS empresa_nome, '
+			.'cd.nome AS candidato_nome, cd.email AS candidato_email, cd.whatsapp AS candidato_whatsapp, '
+			.'cd.resumo AS candidato_resumo, cd.disponibilidade AS candidato_disponibilidade, '
+			.'cd.tipo AS candidato_tipo '
 			.'FROM cj_candidaturas c '
 			.'INNER JOIN cj_vagas v ON v.id = c.id_vaga '
 			.'INNER JOIN cj_empresas e ON e.id = v.id_empresa '
+			.'INNER JOIN cj_candidatos cd ON cd.id = c.id_candidato '
 			.'WHERE '.implode(' AND ', $where).' '
 			.'ORDER BY c.created_at DESC, c.id DESC '
 			.'LIMIT '.$limit;
@@ -78,5 +88,12 @@ class CjCandidatura {
 		}
 		$id = (new Database('cj_candidaturas'))->insert($dados);
 		return $id ? (int)$id : null;
+	}
+
+	public static function atualizar(int $id, array $dados): bool {
+		if (!self::tabelaExiste() || $id <= 0) {
+			return false;
+		}
+		return (new Database('cj_candidaturas'))->update('id = '.(int)$id, $dados);
 	}
 }

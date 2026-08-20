@@ -122,6 +122,9 @@ class Auth {
 		if (!$user || !$empresa) {
 			return self::respond(['message' => 'Não autenticado.'], 401);
 		}
-		return self::respond(['user' => ConectApiMapper::userEmpresa($user, $empresa)]);
+		return self::respond([
+			'user'    => ConectApiMapper::userEmpresa($user, $empresa),
+			'empresa' => ConectApiMapper::empresaPerfil($empresa),
+		]);
 	}
 }

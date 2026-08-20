@@ -20,7 +20,7 @@ class PublicApi {
 	public static function branding($request): array {
 		return self::respond([
 			'branding' => ConectApiMapper::branding(CjPortalBranding::get()),
-			'sqlOk'    => CjVaga::tabelaExiste(),
+			'sqlOk'    => CjPortalBranding::tabelasExistem(),
 		]);
 	}
 

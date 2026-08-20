@@ -31,6 +31,7 @@ class Page {
 			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',
 			'current_portal'       => $menuAtivo === 'portal' ? 'active' : '',
 			'current_conect'       => $menuAtivo === 'conect' ? 'active' : '',
+			'current_conect_branding' => $menuAtivo === 'conect-branding' ? 'active' : '',
 			'current_bunny'        => $menuAtivo === 'bunny' ? 'active' : '',
 			'current_documentacao' => $menuAtivo === 'documentacao' ? 'active' : '',
 			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',

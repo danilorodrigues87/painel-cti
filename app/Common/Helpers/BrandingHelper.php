@@ -15,6 +15,7 @@ class BrandingHelper {
 	public const DIR_MODELO_CERT = '/img/certificado/modelos/';
 	public const DIR_CONQUISTAS = '/img/conquistas/';
 	public const DIR_PORTAL = '/img/portal/';
+	public const DIR_CONECT = '/img/conect/';
 	public const MODELO_CERT_PADRAO = 'uploads/img/certificado/modelo_cert.png';
 
 	public static function urlBase(): string {
@@ -165,6 +166,26 @@ class BrandingHelper {
 	}
 
 	private static function urlPortalArquivo(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_PORTAL);
+	}
+
+	public static function processarUploadConectLogo(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_CONECT, $atual, 2 * 1024 * 1024);
+	}
+
+	public static function processarUploadConectHero(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_CONECT, $atual, 5 * 1024 * 1024);
+	}
+
+	public static function urlConectLogo(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_CONECT);
+	}
+
+	public static function urlConectHero(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_CONECT);
+	}
+
+	private static function urlUploadArquivo(?string $arquivo, string $dirRelativo): ?string {
 		$arquivo = trim((string)$arquivo);
 		if ($arquivo === '' || strpos($arquivo, '..') !== false || strpos($arquivo, '/') !== false || strpos($arquivo, '\\') !== false) {
 			return null;
@@ -173,11 +194,11 @@ class BrandingHelper {
 		if ($raiz === false) {
 			return null;
 		}
-		$fs = $raiz.DIRECTORY_SEPARATOR.'uploads'.str_replace('/', DIRECTORY_SEPARATOR, self::DIR_PORTAL).$arquivo;
+		$fs = $raiz.DIRECTORY_SEPARATOR.'uploads'.str_replace('/', DIRECTORY_SEPARATOR, $dirRelativo).$arquivo;
 		if (!is_file($fs)) {
 			return null;
 		}
-		return self::urlBase().'/uploads'.self::DIR_PORTAL.$arquivo;
+		return self::urlBase().'/uploads'.$dirRelativo.$arquivo;
 	}
 
 	private static function processarUploadImagem(?array $file, string $dirRelativo, ?string $atual, int $maxBytes): ?string {

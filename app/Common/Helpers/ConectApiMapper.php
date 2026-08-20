@@ -83,6 +83,42 @@ class ConectApiMapper {
 	}
 
 	/**
+	 * Candidatura enriquecida para a área da empresa.
+	 * @param array<string,mixed>|object $row
+	 */
+	public static function candidaturaEmpresa($row): array {
+		$r = is_array($row) ? $row : (array)$row;
+		$base = self::candidatura($row);
+		return array_merge($base, [
+			'candidatoId'             => (int)($r['id_candidato'] ?? 0),
+			'candidatoNome'           => (string)($r['candidato_nome'] ?? ''),
+			'candidatoEmail'          => (string)($r['candidato_email'] ?? ''),
+			'candidatoWhatsapp'       => (string)($r['candidato_whatsapp'] ?? ''),
+			'candidatoResumo'         => (string)($r['candidato_resumo'] ?? ''),
+			'candidatoDisponibilidade'=> (string)($r['candidato_disponibilidade'] ?? ''),
+			'candidatoTipo'           => (string)($r['candidato_tipo'] ?? ''),
+			'mensagemEmpresa'         => (string)($r['mensagem_empresa'] ?? ''),
+		]);
+	}
+
+	public static function empresaPerfil($empresa): array {
+		$e = is_array($empresa) ? $empresa : (array)$empresa;
+		return [
+			'id'           => (int)($e['id'] ?? 0),
+			'cnpj'         => (string)($e['cnpj'] ?? ''),
+			'razaoSocial'  => (string)($e['razao_social'] ?? ''),
+			'nomeFantasia' => (string)($e['nome_fantasia'] ?? ''),
+			'whatsapp'     => (string)($e['whatsapp'] ?? ''),
+			'email'        => (string)($e['email'] ?? ''),
+			'contatoNome'  => (string)($e['contato_nome'] ?? ''),
+			'cidadeId'     => isset($e['cidade_id']) && (int)$e['cidade_id'] > 0 ? (int)$e['cidade_id'] : null,
+			'bairro'       => (string)($e['bairro'] ?? ''),
+			'uf'           => (string)($e['uf'] ?? ''),
+			'status'       => (string)($e['status'] ?? 'pendente'),
+		];
+	}
+
+	/**
 	 * @param array<string,mixed>|object $row
 	 */
 	public static function notificacao($row): array {
@@ -157,8 +193,8 @@ class ConectApiMapper {
 		}
 		return [
 			'nomePortal'         => (string)($r['nome_portal'] ?? 'Conecta Jovem'),
-			'logoUrl'            => !empty($r['logo']) ? self::absUrl((string)$r['logo']) : null,
-			'heroImageUrl'       => !empty($r['hero_image']) ? self::absUrl((string)$r['hero_image']) : null,
+			'logoUrl'            => BrandingHelper::urlConectLogo($r['logo'] ?? null),
+			'heroImageUrl'       => BrandingHelper::urlConectHero($r['hero_image'] ?? null),
 			'textoInstitucional' => (string)($r['texto_institucional'] ?? ''),
 			'cores'              => $cores,
 		];

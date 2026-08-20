@@ -85,6 +85,20 @@ class Candidaturas {
 			]);
 		}
 
+		$empresaId = (int)($vaga['id_empresa'] ?? 0);
+		if ($empresaId > 0 && CjNotificacao::tabelaExiste()) {
+			$empresa = \App\Model\Entity\CjEmpresa::getById($empresaId);
+			if ($empresa && (int)($empresa->id_usuario ?? 0) > 0) {
+				CjNotificacao::inserir([
+					'id_usuario' => (int)$empresa->id_usuario,
+					'tipo'       => 'candidatura',
+					'titulo'     => 'Nova candidatura',
+					'mensagem'   => ($candidato->nome ?? 'Candidato').' se candidatou à vaga "'.$tituloVaga.'".',
+					'link'       => '/empresa',
+				]);
+			}
+		}
+
 		return self::respond([
 			'message'     => 'Candidatura enviada com sucesso!',
 			'candidatura' => $row ? ConectApiMapper::candidatura($row) : null,

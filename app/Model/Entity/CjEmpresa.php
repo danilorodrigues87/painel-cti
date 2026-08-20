@@ -67,6 +67,13 @@ class CjEmpresa {
 		return $id ? (int)$id : null;
 	}
 
+	public static function atualizar(int $id, array $dados): bool {
+		if (!self::tabelaExiste() || $id <= 0) {
+			return false;
+		}
+		return (new Database('cj_empresas'))->update('id = '.(int)$id, $dados);
+	}
+
 	public static function listarPublicas(?int $cidadeId = null, int $limit = 100): array {
 		if (!self::tabelaExiste()) {
 			return [];

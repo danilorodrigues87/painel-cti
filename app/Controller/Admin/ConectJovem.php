@@ -32,10 +32,32 @@ class ConectJovem extends Page {
 				.'</div></div></div></div>'
 			: '';
 
+		$rows = '';
+		foreach ($candidatos as $c) {
+			$tipo = htmlspecialchars((string)($c['tipo'] ?? ''));
+			$nome = htmlspecialchars((string)($c['nome'] ?? ''));
+			$email = htmlspecialchars((string)($c['email'] ?? ''));
+			$whats = htmlspecialchars((string)($c['whatsapp'] ?? ''));
+			$whatsLink = preg_replace('/\D+/', '', (string)($c['whatsapp'] ?? ''));
+			$whatsCell = $whatsLink !== ''
+				? '<a href="https://wa.me/55'.$whatsLink.'" target="_blank" rel="noopener">'.$whats.'</a>'
+				: '<span class="text-muted">—</span>';
+			$rows .= '<tr>'
+				.'<td>'.$nome.'</td>'
+				.'<td class="small">'.$email.'</td>'
+				.'<td class="small">'.$whatsCell.'</td>'
+				.'<td><span class="badge bg-secondary">'.$tipo.'</span></td>'
+				.'</tr>';
+		}
+		if ($rows === '') {
+			$rows = '<tr><td colspan="4" class="text-muted">Nenhum candidato cadastrado pela escola ainda.</td></tr>';
+		}
+
 		$content = View::render('admin/modules/conect/index', [
 			'alert_sql'    => $alertSql,
 			'cards'        => $cards,
 			'cadastro_url' => URL.'/painel/conect/candidatos/novo',
+			'rows_candidatos' => $rows,
 		]);
 
 		return parent::getPage('Conecta Jovem', $content, parent::getMenu('conect_jovem', parent::getPermittedModules()));
