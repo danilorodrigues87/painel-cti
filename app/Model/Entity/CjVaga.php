@@ -34,7 +34,7 @@ class CjVaga {
 			return null;
 		}
 		$stmt = (new Database())->execute(
-			'SELECT v.*, e.nome_fantasia AS empresa_nome, c.nome AS cidade_nome FROM cj_vagas v '
+			'SELECT v.*, e.nome_fantasia AS empresa_nome, e.logo AS empresa_logo, c.nome AS cidade_nome FROM cj_vagas v '
 			.'LEFT JOIN cj_empresas e ON e.id = v.id_empresa '
 			.'LEFT JOIN cidades c ON c.id = v.cidade_id WHERE v.id = '.(int)$id.' LIMIT 1'
 		);
@@ -70,6 +70,10 @@ class CjVaga {
 		if (!empty($filtros['tipo_vaga'])) {
 			$where[] = 'v.tipo_vaga = "'.addslashes((string)$filtros['tipo_vaga']).'"';
 		}
+		if (!empty($filtros['q'])) {
+			$q = addslashes(trim((string)$filtros['q']));
+			$where[] = '(v.titulo LIKE "%'.$q.'%" OR v.descricao LIKE "%'.$q.'%" OR v.requisitos LIKE "%'.$q.'%" OR e.nome_fantasia LIKE "%'.$q.'%")';
+		}
 		if (!empty($filtros['slug'])) {
 			$where[] = 'v.slug = "'.addslashes((string)$filtros['slug']).'"';
 		}
@@ -82,7 +86,7 @@ class CjVaga {
 			: 'INNER JOIN cj_empresas e ON e.id = v.id_empresa AND e.status = "aprovada" ';
 
 		$limit = max(1, min(100, (int)($filtros['limit'] ?? 50)));
-		$sql = 'SELECT v.*, e.nome_fantasia AS empresa_nome, e.razao_social, c.nome AS cidade_nome '
+		$sql = 'SELECT v.*, e.nome_fantasia AS empresa_nome, e.logo AS empresa_logo, e.razao_social, c.nome AS cidade_nome '
 			.'FROM cj_vagas v '
 			.$joinEmpresa
 			.'LEFT JOIN cidades c ON c.id = v.cidade_id '

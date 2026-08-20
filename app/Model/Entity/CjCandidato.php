@@ -87,4 +87,36 @@ class CjCandidato {
 		$stmt = self::select('c.id_admin = '.(int)$idAdmin, 'c.created_at DESC', (string)$limit);
 		return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 	}
+
+	/**
+	 * Banco de talentos para empresas aprovadas (busca global).
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function buscarParaEmpresa(array $filtros = [], int $limit = 50): array {
+		if (!self::tabelaExiste()) {
+			return [];
+		}
+		$where = ['c.status = "ativo"'];
+		if (!empty($filtros['cidade_id'])) {
+			$where[] = 'c.cidade_id = '.(int)$filtros['cidade_id'];
+		}
+		if (!empty($filtros['uf'])) {
+			$where[] = 'c.uf = "'.addslashes(strtoupper(substr((string)$filtros['uf'], 0, 2))).'"';
+		}
+		if (!empty($filtros['habilidade'])) {
+			$hab = addslashes(trim((string)$filtros['habilidade']));
+			$where[] = 'EXISTS (SELECT 1 FROM cj_candidato_habilidades h WHERE h.id_candidato = c.id AND h.habilidade LIKE "%'.$hab.'%")';
+		}
+		if (!empty($filtros['q'])) {
+			$q = addslashes(trim((string)$filtros['q']));
+			$where[] = '(c.nome LIKE "%'.$q.'%" OR c.resumo LIKE "%'.$q.'%" OR c.email LIKE "%'.$q.'%")';
+		}
+		$lim = max(1, min(100, $limit));
+		$sql = 'SELECT c.*, ci.nome AS cidade_nome FROM cj_candidatos c '
+			.'LEFT JOIN cidades ci ON ci.id = c.cidade_id '
+			.'WHERE '.implode(' AND ', $where).' '
+			.'ORDER BY c.updated_at DESC, c.id DESC LIMIT '.$lim;
+		$stmt = (new Database())->execute($sql);
+		return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+	}
 }

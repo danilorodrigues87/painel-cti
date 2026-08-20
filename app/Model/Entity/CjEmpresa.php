@@ -12,6 +12,7 @@ class CjEmpresa {
 	public $cnpj;
 	public $razao_social;
 	public $nome_fantasia;
+	public $logo;
 	public $whatsapp;
 	public $email;
 	public $contato_nome;
@@ -74,13 +75,17 @@ class CjEmpresa {
 		return (new Database('cj_empresas'))->update('id = '.(int)$id, $dados);
 	}
 
-	public static function listarPublicas(?int $cidadeId = null, int $limit = 100): array {
+	public static function listarPublicas(?int $cidadeId = null, int $limit = 100, ?string $q = null): array {
 		if (!self::tabelaExiste()) {
 			return [];
 		}
 		$where = 'e.status = "aprovada"';
 		if ($cidadeId !== null && $cidadeId > 0) {
 			$where .= ' AND e.cidade_id = '.(int)$cidadeId;
+		}
+		if ($q !== null && trim($q) !== '') {
+			$term = addslashes(trim($q));
+			$where .= ' AND (e.nome_fantasia LIKE "%'.$term.'%" OR e.razao_social LIKE "%'.$term.'%")';
 		}
 		$sql = 'SELECT e.*, c.nome AS cidade_nome FROM cj_empresas e '
 			.'LEFT JOIN cidades c ON c.id = e.cidade_id '

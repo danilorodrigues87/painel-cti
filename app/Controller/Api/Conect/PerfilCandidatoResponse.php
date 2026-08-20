@@ -16,6 +16,11 @@ trait PerfilCandidatoResponse {
 			ConectCandidatoFormacaoHelper::syncAllForUsuario((int)$user->id);
 		}
 
+		if (empty($candidato->foto) && User::temColunaFoto() && !empty($user->foto)) {
+			CjCandidato::atualizar((int)$candidato->id, ['foto' => (string)$user->foto]);
+			$candidato = CjCandidato::getById((int)$candidato->id) ?? $candidato;
+		}
+
 		$habilidades = CjCandidatoHabilidade::listarPorCandidato((int)$candidato->id);
 		$formacao = ConectCandidatoFormacaoHelper::listarParaApi((int)$candidato->id);
 		$temSelo = CjCandidatoFormacao::temSeloCertificado((int)$candidato->id);

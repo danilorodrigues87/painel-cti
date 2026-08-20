@@ -237,6 +237,9 @@ class Router{
 
 		switch ($this->contentType) {
 			case 'application/json':
+				if (is_string($message) && (str_contains($message, '<!doctype') || str_contains($message, '<html'))) {
+					$message = 'Recurso não encontrado.';
+				}
 				return [
 					'message' => $message,
 					'erro' => $message,

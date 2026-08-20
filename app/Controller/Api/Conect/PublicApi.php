@@ -43,6 +43,9 @@ class PublicApi {
 		if (!empty($q['tipo'])) {
 			$filtros['tipo_vaga'] = (string)$q['tipo'];
 		}
+		if (!empty($q['q'])) {
+			$filtros['q'] = (string)$q['q'];
+		}
 		$rows = CjVaga::queryLista($filtros);
 		$items = array_map([ConectApiMapper::class, 'vaga'], $rows);
 		return self::respond(['items' => $items, 'sqlOk' => true]);
@@ -66,7 +69,8 @@ class PublicApi {
 		}
 		$q = $request->getQueryParams();
 		$cidadeId = !empty($q['cidade']) ? (int)$q['cidade'] : null;
-		$rows = CjEmpresa::listarPublicas($cidadeId);
+		$busca = !empty($q['q']) ? (string)$q['q'] : null;
+		$rows = CjEmpresa::listarPublicas($cidadeId, 100, $busca);
 		$items = array_map([ConectApiMapper::class, 'empresa'], $rows);
 		return self::respond(['items' => $items, 'sqlOk' => true]);
 	}

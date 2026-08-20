@@ -31,6 +31,11 @@ class ConectApiMapper {
 	 */
 	public static function candidatoPerfil($candidato, array $habilidades = [], array $formacao = [], bool $temSelo = false): array {
 		$c = is_array($candidato) ? $candidato : (array)$candidato;
+		$fotoBasename = $c['foto'] ?? null;
+		$fotoUrl = null;
+		if (!empty($fotoBasename)) {
+			$fotoUrl = UserFotoHelper::urlPublica((string)$fotoBasename);
+		}
 		return [
 			'id'              => (int)($c['id'] ?? 0),
 			'nome'            => (string)($c['nome'] ?? ''),
@@ -42,6 +47,7 @@ class ConectApiMapper {
 			'uf'              => (string)($c['uf'] ?? ''),
 			'disponibilidade' => (string)($c['disponibilidade'] ?? 'imediata'),
 			'tipo'            => (string)($c['tipo'] ?? 'externo'),
+			'fotoUrl'         => $fotoUrl,
 			'habilidades'     => $habilidades,
 			'formacao'        => $formacao,
 			'temSeloCertificado' => $temSelo,
@@ -108,6 +114,7 @@ class ConectApiMapper {
 			'cnpj'         => (string)($e['cnpj'] ?? ''),
 			'razaoSocial'  => (string)($e['razao_social'] ?? ''),
 			'nomeFantasia' => (string)($e['nome_fantasia'] ?? ''),
+			'logoUrl'      => BrandingHelper::urlConectEmpresaLogo($e['logo'] ?? null),
 			'whatsapp'     => (string)($e['whatsapp'] ?? ''),
 			'email'        => (string)($e['email'] ?? ''),
 			'contatoNome'  => (string)($e['contato_nome'] ?? ''),
@@ -164,6 +171,7 @@ class ConectApiMapper {
 			'modalidade'  => (string)($r['modalidade'] ?? ''),
 			'empresaId'   => (int)($r['id_empresa'] ?? 0),
 			'empresaNome' => (string)($r['empresa_nome'] ?? ''),
+			'empresaLogoUrl' => BrandingHelper::urlConectEmpresaLogo($r['empresa_logo'] ?? null),
 			'status'      => (string)($r['status'] ?? ''),
 			'publicadaEm' => (string)($r['publicada_em'] ?? ''),
 			'viewsCount'  => (int)($r['views_count'] ?? 0),
@@ -176,6 +184,7 @@ class ConectApiMapper {
 			'id'           => (int)($r['id'] ?? 0),
 			'nomeFantasia' => (string)($r['nome_fantasia'] ?? $r['razao_social'] ?? ''),
 			'razaoSocial'  => (string)($r['razao_social'] ?? ''),
+			'logoUrl'      => BrandingHelper::urlConectEmpresaLogo($r['logo'] ?? null),
 			'cidadeId'     => isset($r['cidade_id']) ? (int)$r['cidade_id'] : null,
 			'cidadeNome'   => (string)($r['cidade_nome'] ?? ''),
 			'uf'           => (string)($r['uf'] ?? ''),
