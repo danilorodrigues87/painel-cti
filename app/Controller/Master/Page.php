@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Model\Entity\User as EntityUser;
 use App\Common\Helpers\UserFotoHelper;
 use App\Common\Helpers\BrandingHelper;
+use App\Common\Helpers\MasterMenuHelper;
 
 class Page {
 
@@ -21,21 +22,8 @@ class Page {
 		}
 
 		$menu = View::render('master/panel', [
-			'user'                 => $nome,
-			'current_home'         => $menuAtivo === 'home' ? 'active' : '',
-			'current_escolas'      => $menuAtivo === 'escolas' ? 'active' : '',
-			'current_chamados'     => $menuAtivo === 'chamados' ? 'active' : '',
-			'current_planos'       => $menuAtivo === 'planos' ? 'active' : '',
-			'current_ead_cursos'   => $menuAtivo === 'ead_cursos' ? 'active' : '',
-			'current_assinaturas'  => $menuAtivo === 'assinaturas' ? 'active' : '',
-			'current_conquistas'   => $menuAtivo === 'conquistas' ? 'active' : '',
-			'current_portal'       => $menuAtivo === 'portal' ? 'active' : '',
-			'current_conect'       => $menuAtivo === 'conect' ? 'active' : '',
-			'current_conect_branding' => $menuAtivo === 'conect-branding' ? 'active' : '',
-			'current_conect_blog'     => $menuAtivo === 'conect-blog' ? 'active' : '',
-			'current_bunny'        => $menuAtivo === 'bunny' ? 'active' : '',
-			'current_documentacao' => $menuAtivo === 'documentacao' ? 'active' : '',
-			'current_perfil'       => $menuAtivo === 'perfil' ? 'active' : '',
+			'user'       => $nome,
+			'menu_links' => MasterMenuHelper::render($menuAtivo),
 		]);
 
 		return View::render('master/page', [

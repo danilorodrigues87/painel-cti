@@ -29,8 +29,14 @@ class CjBlogComentario {
 		$limit = max(1, min(100, $limit));
 		$offset = max(0, $offset);
 		$stmt = (new Database())->execute(
-			'SELECT * FROM cj_blog_comentarios WHERE id_post = '.(int)$postId
-			.' AND status = "publicado" ORDER BY created_at ASC LIMIT '.$limit.' OFFSET '.$offset
+			'SELECT c.*, '
+			.'cand.foto AS candidato_foto, '
+			.'emp.logo AS empresa_logo '
+			.'FROM cj_blog_comentarios c '
+			.'LEFT JOIN cj_candidatos cand ON cand.id_usuario = c.id_usuario AND c.tipo_autor = "candidato" '
+			.'LEFT JOIN cj_empresas emp ON emp.id_usuario = c.id_usuario AND c.tipo_autor = "empresa" '
+			.'WHERE c.id_post = '.(int)$postId
+			.' AND c.status = "publicado" ORDER BY c.created_at ASC LIMIT '.$limit.' OFFSET '.$offset
 		);
 		return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 	}

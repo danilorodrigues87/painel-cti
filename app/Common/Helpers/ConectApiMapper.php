@@ -311,13 +311,44 @@ class ConectApiMapper {
 	 * @param array<string,mixed> $row
 	 */
 	public static function blogComentario(array $row): array {
+		$tipo = (string)($row['tipo_autor'] ?? '');
+		$avatarUrl = null;
+		if ($tipo === 'candidato' && !empty($row['candidato_foto'])) {
+			$avatarUrl = UserFotoHelper::urlPublica((string)$row['candidato_foto']);
+		} elseif ($tipo === 'empresa' && !empty($row['empresa_logo'])) {
+			$avatarUrl = BrandingHelper::urlConectEmpresaLogo($row['empresa_logo'] ?? null);
+		}
 		return [
 			'id'           => (int)($row['id'] ?? 0),
 			'texto'        => (string)($row['texto'] ?? ''),
 			'nomeExibicao' => (string)($row['nome_exibicao'] ?? ''),
-			'tipoAutor'    => (string)($row['tipo_autor'] ?? ''),
+			'tipoAutor'    => $tipo,
+			'avatarUrl'    => $avatarUrl,
 			'createdAt'    => (string)($row['created_at'] ?? ''),
 			'usuarioId'    => (int)($row['id_usuario'] ?? 0),
+		];
+	}
+
+	/**
+	 * @param array<string,mixed> $row
+	 */
+	public static function depoimento(array $row): array {
+		$tipo = (string)($row['tipo_autor'] ?? 'manual');
+		$avatarUrl = null;
+		if (!empty($row['avatar_arquivo'])) {
+			$avatarUrl = BrandingHelper::urlConectDepoimentoAvatar($row['avatar_arquivo']);
+		} elseif ($tipo === 'candidato' && !empty($row['candidato_foto'])) {
+			$avatarUrl = UserFotoHelper::urlPublica((string)$row['candidato_foto']);
+		} elseif ($tipo === 'empresa' && !empty($row['empresa_logo'])) {
+			$avatarUrl = BrandingHelper::urlConectEmpresaLogo($row['empresa_logo'] ?? null);
+		}
+		return [
+			'id'           => (int)($row['id'] ?? 0),
+			'texto'        => (string)($row['texto'] ?? ''),
+			'nome'         => (string)($row['nome_exibicao'] ?? ''),
+			'cargo'        => (string)($row['cargo'] ?? ''),
+			'tipoAutor'    => $tipo,
+			'avatarUrl'    => $avatarUrl,
 		];
 	}
 }

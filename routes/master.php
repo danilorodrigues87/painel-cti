@@ -227,6 +227,42 @@ $obRouter->post('/master/conect-blog/comentario/{id}/remover', [
 	}
 ]);
 
+$obRouter->get('/master/conect-depoimentos', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectDepoimentos::index($request));
+	}
+]);
+
+$obRouter->get('/master/conect-depoimentos/editar/{id}', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		return new Response(200, Master\ConectDepoimentos::editar($request, (int)$id));
+	}
+]);
+
+$obRouter->post('/master/conect-depoimentos/salvar', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectDepoimentos::salvar($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-depoimentos/buscar', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectDepoimentos::buscar($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-depoimentos/{id}/excluir', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectDepoimentos::excluir($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
 $obRouter->get('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

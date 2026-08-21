@@ -4,6 +4,7 @@ namespace App\Controller\Api\Conect;
 
 use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectContactHelper;
+use App\Model\Entity\CjDepoimento;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\CjPortalBranding;
 use App\Model\Entity\CjVaga;
@@ -118,5 +119,14 @@ class PublicApi {
 		}
 
 		return self::respond(['message' => $result['message']]);
+	}
+
+	public static function depoimentos($request): array {
+		if (!CjDepoimento::tabelaExiste()) {
+			return self::respond(['items' => [], 'sqlOk' => false]);
+		}
+		$rows = CjDepoimento::listarPublicos(12);
+		$items = array_map([ConectApiMapper::class, 'depoimento'], $rows);
+		return self::respond(['items' => $items, 'sqlOk' => true]);
 	}
 }
