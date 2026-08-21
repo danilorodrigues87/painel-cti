@@ -167,6 +167,66 @@ $obRouter->post('/master/conect/vaga/{id}/reprovar', [
 	}
 ]);
 
+$obRouter->get('/master/conect-blog', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectBlog::index($request));
+	}
+]);
+
+$obRouter->get('/master/conect-blog/editar/{id}', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		return new Response(200, Master\ConectBlog::editar($request, (int)$id));
+	}
+]);
+
+$obRouter->post('/master/conect-blog/salvar', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectBlog::salvar($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-blog/upload-imagem', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectBlog::uploadImagem($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-blog/post/{id}/publicar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectBlog::publicar($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect-blog/post/{id}/despublicar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectBlog::despublicar($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect-blog/post/{id}/excluir', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectBlog::excluirPost($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect-blog/comentario/{id}/remover', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectBlog::removerComentario($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
 $obRouter->get('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

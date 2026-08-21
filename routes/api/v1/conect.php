@@ -7,6 +7,7 @@ use App\Controller\Api\ConectEmpresa;
 $conectMw = ['cors-conect', 'api'];
 $conectAuth = ['cors-conect', 'api', 'candidato-jwt'];
 $empresaAuth = ['cors-conect', 'api', 'empresa-jwt'];
+$portalAuth = ['cors-conect', 'api', 'conect-portal-jwt'];
 
 $respond = static function (array $res) {
 	$contentType = $res['contentType'] ?? 'application/json';
@@ -60,6 +61,55 @@ $obRouter->get('/api/v1/conect/public/estados/{id}/cidades', [
 	'middlewares' => $conectMw,
 	function ($request, $id) use ($respond) {
 		return $respond(Conect\PublicApi::cidadesPorEstado($request, (int)$id));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/public/contato', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\PublicApi::contato($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/public/blog/categorias', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Blog::categorias($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/public/blog/posts', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Blog::posts($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/public/blog/posts/{slug}', [
+	'middlewares' => $conectMw,
+	function ($request, $slug) use ($respond) {
+		return $respond(Conect\Blog::postDetalhe($request, (string)$slug));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/public/blog/posts/{slug}/comentarios', [
+	'middlewares' => $conectMw,
+	function ($request, $slug) use ($respond) {
+		return $respond(Conect\Blog::comentarios($request, (string)$slug));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/blog/posts/{slug}/comentarios', [
+	'middlewares' => $portalAuth,
+	function ($request, $slug) use ($respond) {
+		return $respond(Conect\Blog::criarComentario($request, (string)$slug));
+	}
+]);
+
+$obRouter->delete('/api/v1/conect/blog/comentarios/{id}', [
+	'middlewares' => $portalAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(Conect\Blog::excluirComentario($request, (int)$id));
 	}
 ]);
 
