@@ -5,6 +5,7 @@ namespace App\Controller\Master;
 use App\Utils\View;
 use App\Model\Entity\CjPortalBranding;
 use App\Common\Helpers\BrandingHelper;
+use App\Common\Helpers\ConectRedesSociaisHelper;
 
 class ConectBranding extends Page {
 
@@ -19,10 +20,17 @@ class ConectBranding extends Page {
 		$row = CjPortalBranding::get();
 		$logoUrl = BrandingHelper::urlConectLogo($row->logo ?? null);
 		$heroUrl = BrandingHelper::urlConectHero($row->hero_image ?? null);
+		$redes = ConectRedesSociaisHelper::decode($row->redes_sociais_json ?? null);
 
 		$content = View::render('master/modules/conect-branding/index', [
 			'nome_portal'         => htmlspecialchars((string)($row->nome_portal ?? 'Conecta Jovem'), ENT_QUOTES, 'UTF-8'),
 			'texto_institucional' => htmlspecialchars((string)($row->texto_institucional ?? ''), ENT_QUOTES, 'UTF-8'),
+			'redes_linkedin'      => htmlspecialchars($redes['linkedin'] ?? '', ENT_QUOTES, 'UTF-8'),
+			'redes_instagram'     => htmlspecialchars($redes['instagram'] ?? '', ENT_QUOTES, 'UTF-8'),
+			'redes_github'        => htmlspecialchars($redes['github'] ?? '', ENT_QUOTES, 'UTF-8'),
+			'redes_portfolio'     => htmlspecialchars($redes['portfolio'] ?? '', ENT_QUOTES, 'UTF-8'),
+			'redes_facebook'      => htmlspecialchars($redes['facebook'] ?? '', ENT_QUOTES, 'UTF-8'),
+			'redes_tiktok'        => htmlspecialchars($redes['tiktok'] ?? '', ENT_QUOTES, 'UTF-8'),
 			'logo_preview'        => $logoUrl
 				? htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8')
 				: 'https://conectajovem.com.br/logo-conect-jovem.png',
@@ -54,6 +62,18 @@ class ConectBranding extends Page {
 			$row->nome_portal = 'Conecta Jovem';
 		}
 		$row->texto_institucional = trim((string)($post['texto_institucional'] ?? ''));
+
+		$redesInput = [
+			'linkedin'  => (string)($post['redes_linkedin'] ?? ''),
+			'instagram' => (string)($post['redes_instagram'] ?? ''),
+			'github'    => (string)($post['redes_github'] ?? ''),
+			'portfolio' => (string)($post['redes_portfolio'] ?? ''),
+			'facebook'  => (string)($post['redes_facebook'] ?? ''),
+			'tiktok'    => (string)($post['redes_tiktok'] ?? ''),
+		];
+		$row->redes_sociais_json = ConectRedesSociaisHelper::encode(
+			ConectRedesSociaisHelper::sanitizar($redesInput)
+		);
 
 		$restaurarLogo = !empty($post['restaurar_logo']);
 		$restaurarHero = !empty($post['restaurar_hero']);

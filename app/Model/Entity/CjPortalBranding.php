@@ -13,6 +13,7 @@ class CjPortalBranding {
 	public $hero_image;
 	public $cores_json;
 	public $texto_institucional;
+	public $redes_sociais_json;
 	public $updated_at;
 
 	public static function tabelasExistem(): bool {
@@ -61,6 +62,9 @@ class CjPortalBranding {
 			'hero_image'          => $this->hero_image !== null && $this->hero_image !== '' ? (string)$this->hero_image : null,
 			'texto_institucional' => $this->texto_institucional !== null && trim((string)$this->texto_institucional) !== ''
 				? trim((string)$this->texto_institucional)
+				: null,
+			'redes_sociais_json'  => $this->redes_sociais_json !== null && trim((string)$this->redes_sociais_json) !== ''
+				? (string)$this->redes_sociais_json
 				: null,
 		];
 		if ($existe) {

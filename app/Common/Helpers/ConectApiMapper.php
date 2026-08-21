@@ -245,6 +245,7 @@ class ConectApiMapper {
 			'logoUrl'            => BrandingHelper::urlConectLogo($r['logo'] ?? null),
 			'heroImageUrl'       => BrandingHelper::urlConectHero($r['hero_image'] ?? null),
 			'textoInstitucional' => (string)($r['texto_institucional'] ?? ''),
+			'redesSociais'       => ConectRedesSociaisHelper::decode($r['redes_sociais_json'] ?? null),
 			'cores'              => $cores,
 		];
 	}
