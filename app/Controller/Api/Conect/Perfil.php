@@ -4,6 +4,7 @@ namespace App\Controller\Api\Conect;
 
 use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectEnderecoHelper;
+use App\Common\Helpers\ConectRedesSociaisHelper;
 use App\Common\Helpers\ConectSchemaHelper;
 use App\Model\Db\Database;
 use App\Model\Entity\CjCandidato;
@@ -94,6 +95,11 @@ class Perfil {
 		if (array_key_exists('formacaoAcademica', $post)) {
 			$dados['formacao_academica_json'] = ConectEnderecoHelper::encodeListaJson(
 				ConectEnderecoHelper::sanitizarFormacaoAcademica($post['formacaoAcademica'])
+			);
+		}
+		if (array_key_exists('redesSociais', $post) && ConectSchemaHelper::temColuna('cj_candidatos', 'redes_sociais_json')) {
+			$dados['redes_sociais_json'] = ConectRedesSociaisHelper::encode(
+				ConectRedesSociaisHelper::sanitizar($post['redesSociais'])
 			);
 		}
 

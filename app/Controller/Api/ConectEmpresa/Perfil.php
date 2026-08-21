@@ -4,6 +4,8 @@ namespace App\Controller\Api\ConectEmpresa;
 
 use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectEnderecoHelper;
+use App\Common\Helpers\ConectRedesSociaisHelper;
+use App\Common\Helpers\ConectSchemaHelper;
 use App\Model\Db\Database;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\User;
@@ -77,6 +79,11 @@ class Perfil {
 		if (array_key_exists('uf', $post) && !isset($dados['uf'])) {
 			$uf = strtoupper(substr(trim((string)$post['uf']), 0, 2));
 			$dados['uf'] = $uf !== '' ? $uf : null;
+		}
+		if (array_key_exists('redesSociais', $post) && ConectSchemaHelper::temColuna('cj_empresas', 'redes_sociais_json')) {
+			$dados['redes_sociais_json'] = ConectRedesSociaisHelper::encode(
+				ConectRedesSociaisHelper::sanitizar($post['redesSociais'])
+			);
 		}
 
 		if ($dados === []) {

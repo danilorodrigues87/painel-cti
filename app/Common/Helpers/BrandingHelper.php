@@ -17,6 +17,7 @@ class BrandingHelper {
 	public const DIR_PORTAL = '/img/portal/';
 	public const DIR_CONECT = '/img/conect/';
 	public const DIR_CONECT_EMPRESAS = '/img/conect/empresas/';
+	public const DIR_CONECT_BLOG = '/img/conect/blog/';
 	public const MODELO_CERT_PADRAO = 'uploads/img/certificado/modelo_cert.png';
 
 	public static function urlBase(): string {
@@ -192,6 +193,14 @@ class BrandingHelper {
 
 	public static function urlConectEmpresaLogo(?string $arquivo): ?string {
 		return self::urlUploadArquivo($arquivo, self::DIR_CONECT_EMPRESAS);
+	}
+
+	public static function processarUploadConectBlogImagem(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_CONECT_BLOG, $atual, 5 * 1024 * 1024);
+	}
+
+	public static function urlConectBlogImagem(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_CONECT_BLOG);
 	}
 
 	private static function urlUploadArquivo(?string $arquivo, string $dirRelativo): ?string {

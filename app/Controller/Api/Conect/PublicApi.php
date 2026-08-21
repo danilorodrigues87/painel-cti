@@ -3,6 +3,7 @@
 namespace App\Controller\Api\Conect;
 
 use App\Common\Helpers\ConectApiMapper;
+use App\Common\Helpers\ConectContactHelper;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\CjPortalBranding;
 use App\Model\Entity\CjVaga;
@@ -96,5 +97,26 @@ class PublicApi {
 			}
 		}
 		return self::respond(['items' => $items]);
+	}
+
+	public static function contato($request): array {
+		$post = $request->getPostVars() ?: [];
+		if (!empty($post['website'])) {
+			return self::respond(['message' => 'Mensagem enviada com sucesso.']);
+		}
+
+		$result = ConectContactHelper::enviar(
+			(string)($post['nome'] ?? ''),
+			(string)($post['email'] ?? ''),
+			(string)($post['assunto'] ?? ''),
+			(string)($post['mensagem'] ?? ''),
+			(string)($post['whatsapp'] ?? '')
+		);
+
+		if (!$result['ok']) {
+			return self::respond(['message' => $result['message']], 400);
+		}
+
+		return self::respond(['message' => $result['message']]);
 	}
 }

@@ -48,6 +48,7 @@ class ConectApiMapper {
 		}
 		$formacaoAcad = ConectEnderecoHelper::decodeListaJson($c['formacao_academica_json'] ?? null);
 		$experiencias = ConectEnderecoHelper::decodeListaJson($c['experiencias_json'] ?? null);
+		$redes = ConectRedesSociaisHelper::decode($c['redes_sociais_json'] ?? null);
 		return [
 			'id'              => (int)($c['id'] ?? 0),
 			'nome'            => (string)($c['nome'] ?? ''),
@@ -70,6 +71,7 @@ class ConectApiMapper {
 			'formacaoAcademica'=> $formacaoAcad,
 			'experiencias'    => $experiencias,
 			'temSeloCertificado' => $temSelo,
+			'redesSociais'    => $redes,
 		];
 	}
 
@@ -138,6 +140,7 @@ class ConectApiMapper {
 				$e['estado_id'] = $loc['estadoId'];
 			}
 		}
+		$redes = ConectRedesSociaisHelper::decode($e['redes_sociais_json'] ?? null);
 		return [
 			'id'           => (int)($e['id'] ?? 0),
 			'cnpj'         => (string)($e['cnpj'] ?? ''),
@@ -156,6 +159,7 @@ class ConectApiMapper {
 			'uf'           => strtoupper((string)($e['uf'] ?? '')),
 			'endereco'     => ConectEnderecoHelper::formatarEndereco($e),
 			'status'       => (string)($e['status'] ?? 'pendente'),
+			'redesSociais' => $redes,
 		];
 	}
 
@@ -223,6 +227,7 @@ class ConectApiMapper {
 			'cidadeId'     => isset($r['cidade_id']) ? (int)$r['cidade_id'] : null,
 			'cidadeNome'   => (string)($r['cidade_nome'] ?? ''),
 			'uf'           => (string)($r['uf'] ?? ''),
+			'redesSociais' => ConectRedesSociaisHelper::decode($r['redes_sociais_json'] ?? null),
 		];
 	}
 
@@ -259,5 +264,60 @@ class ConectApiMapper {
 			$text = 'vaga';
 		}
 		return mb_substr($text, 0, 200);
+	}
+
+	/**
+	 * @param array<string,mixed> $row
+	 */
+	public static function blogCategoria(array $row): array {
+		return [
+			'id'    => (int)($row['id'] ?? 0),
+			'nome'  => (string)($row['nome'] ?? ''),
+			'slug'  => (string)($row['slug'] ?? ''),
+			'ordem' => (int)($row['ordem'] ?? 0),
+		];
+	}
+
+	/**
+	 * @param array<string,mixed> $row
+	 */
+	public static function blogPostResumo(array $row): array {
+		return [
+			'id'             => (int)($row['id'] ?? 0),
+			'titulo'         => (string)($row['titulo'] ?? ''),
+			'slug'           => (string)($row['slug'] ?? ''),
+			'resumo'         => (string)($row['resumo'] ?? ''),
+			'capaUrl'        => BrandingHelper::urlConectBlogImagem($row['capa'] ?? null),
+			'categoriaNome'  => (string)($row['categoria_nome'] ?? ''),
+			'categoriaSlug'  => (string)($row['categoria_slug'] ?? ''),
+			'autorNome'      => (string)($row['autor_nome'] ?? 'Conecta Jovem'),
+			'publicadoEm'    => (string)($row['publicado_em'] ?? ''),
+			'comentariosCount' => (int)($row['comentarios_count'] ?? 0),
+		];
+	}
+
+	/**
+	 * @param array<string,mixed> $row
+	 */
+	public static function blogPost(array $row): array {
+		$resumo = self::blogPostResumo($row);
+		$resumo['corpoHtml'] = ConectBlogSanitizer::html((string)($row['corpo_html'] ?? ''));
+		$resumo['metaTitle'] = (string)($row['meta_title'] ?? $row['titulo'] ?? '');
+		$resumo['metaDescription'] = (string)($row['meta_description'] ?? $row['resumo'] ?? '');
+		return $resumo;
+	}
+
+	/**
+	 * @param array<string,mixed> $row
+	 */
+	public static function blogComentario(array $row): array {
+		return [
+			'id'           => (int)($row['id'] ?? 0),
+			'texto'        => (string)($row['texto'] ?? ''),
+			'nomeExibicao' => (string)($row['nome_exibicao'] ?? ''),
+			'tipoAutor'    => (string)($row['tipo_autor'] ?? ''),
+			'createdAt'    => (string)($row['created_at'] ?? ''),
+			'usuarioId'    => (int)($row['id_usuario'] ?? 0),
+		];
 	}
 }
