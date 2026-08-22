@@ -159,7 +159,8 @@ Execute no phpMyAdmin (ordem):
 
 1. **`database/conect_jovem.sql`** — todas as tabelas `cj_*` (obrigatório)
 2. **`database/conect_jovem_analytics.sql`** — visitantes, pageviews e compartilhamentos (relatórios Master)
-3. **`database/conect_jovem_formacao_escola_index.sql`** — opcional (performance índices formação)
+3. **`database/conect_jovem_formacao_concluido_texto.sql`** — conclusão do selo como texto (`Janeiro de 2025`)
+4. **`database/conect_jovem_formacao_escola_index.sql`** — opcional (performance índices formação)
 
 Tabelas principais:
 

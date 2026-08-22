@@ -87,8 +87,16 @@ class ConectApiMapper {
 			'status'          => (string)($r['status'] ?? 'em_andamento'),
 			'cargaH'          => isset($r['carga_h']) ? (int)$r['carga_h'] : null,
 			'seloCertificado' => !empty($r['selo_certificado']),
-			'concluidoEm'     => (string)($r['concluido_em'] ?? ''),
+			'concluidoEm'     => self::normalizarConcluidoEm((string)($r['concluido_em'] ?? '')),
 		];
+	}
+
+	private static function normalizarConcluidoEm(string $value): string {
+		$value = trim($value);
+		if ($value === '' || $value === '0000-00-00' || str_starts_with($value, '0000-00-00')) {
+			return '';
+		}
+		return $value;
 	}
 
 	/**

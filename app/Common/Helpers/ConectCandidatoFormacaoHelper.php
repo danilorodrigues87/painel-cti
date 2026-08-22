@@ -45,9 +45,11 @@ class ConectCandidatoFormacaoHelper {
 			$titulo = trim((string)($cert->modulos ?? '')) ?: 'Formação certificada';
 		}
 
-		$conclusao = (string)($cert->conclusao ?? '');
-		if ($conclusao === '') {
-			$conclusao = date('Y-m-d');
+		$conclusao = trim((string)($cert->conclusao ?? ''));
+		if ($conclusao !== '') {
+			$conclusao = mb_substr($conclusao, 0, 120);
+		} else {
+			$conclusao = null;
 		}
 
 		$dados = [
@@ -97,7 +99,7 @@ class ConectCandidatoFormacaoHelper {
 		}
 
 		$valido = LmsCertificadoHelper::aindaValido($cert, $idAluno, $idAdmin);
-		$conclusao = (string)($cert->conclusao ?? '');
+		$conclusao = trim((string)($cert->conclusao ?? ''));
 		if ($conclusao === '') {
 			$conclusao = date('Y-m-d');
 		}
