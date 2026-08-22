@@ -34,14 +34,24 @@ class CjBlogPost {
 		if (!self::tabelaExiste() || $slug === '') {
 			return null;
 		}
-		$filtros = ['slug' => $slug, 'limit' => 1];
-		if ($apenasPublicado) {
-			$filtros['status'] = 'publicado';
-		} else {
-			$filtros['status_any'] = true;
+		$slug = trim(rawurldecode($slug));
+		$candidatos = array_values(array_unique(array_filter([
+			$slug,
+			ConectApiMapper::slugify($slug),
+		])));
+		foreach ($candidatos as $try) {
+			$filtros = ['slug' => $try, 'limit' => 1];
+			if ($apenasPublicado) {
+				$filtros['status'] = 'publicado';
+			} else {
+				$filtros['status_any'] = true;
+			}
+			$rows = self::queryLista($filtros);
+			if (!empty($rows[0])) {
+				return $rows[0];
+			}
 		}
-		$rows = self::queryLista($filtros);
-		return $rows[0] ?? null;
+		return null;
 	}
 
 	/**
@@ -103,6 +113,28 @@ class CjBlogPost {
 		$sql .= ' LIMIT 1';
 		$stmt = (new Database())->execute($sql);
 		return $stmt && (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+	}
+
+	public static function normalizarSlugsNoBanco(): int {
+		if (!self::tabelaExiste()) {
+			return 0;
+		}
+		$stmt = (new Database())->execute('SELECT id, slug FROM cj_blog_posts');
+		$rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+		$atualizados = 0;
+		foreach ($rows as $row) {
+			$id = (int)($row['id'] ?? 0);
+			$atual = (string)($row['slug'] ?? '');
+			$novo = ConectApiMapper::slugify($atual);
+			if ($id <= 0 || $novo === '' || $novo === $atual) {
+				continue;
+			}
+			$novo = self::slugUnico($novo, $id);
+			if ((new Database('cj_blog_posts'))->update('id = '.$id, ['slug' => $novo])) {
+				$atualizados++;
+			}
+		}
+		return $atualizados;
 	}
 
 	public static function inserir(array $dados): int {

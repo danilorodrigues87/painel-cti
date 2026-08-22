@@ -259,7 +259,23 @@ class ConectApiMapper {
 
 	public static function slugify(string $text): string {
 		$text = mb_strtolower(trim($text));
-		$text = preg_replace('/[^\pL\d]+/u', '-', $text) ?? '';
+		$map = [
+			'á' => 'a', 'à' => 'a', 'ã' => 'a', 'â' => 'a', 'ä' => 'a',
+			'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+			'í' => 'i', 'ì' => 'i', 'î' => 'i', 'ï' => 'i',
+			'ó' => 'o', 'ò' => 'o', 'õ' => 'o', 'ô' => 'o', 'ö' => 'o',
+			'ú' => 'u', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+			'ç' => 'c', 'ñ' => 'n',
+		];
+		$text = strtr($text, $map);
+		if (function_exists('iconv')) {
+			$ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+			if ($ascii !== false && $ascii !== '') {
+				$text = $ascii;
+			}
+		}
+		$text = preg_replace('/[^a-z0-9]+/', '-', $text) ?? '';
+		$text = preg_replace('/-+/', '-', $text) ?? '';
 		$text = trim($text, '-');
 		if ($text === '') {
 			$text = 'vaga';
@@ -286,7 +302,7 @@ class ConectApiMapper {
 		return [
 			'id'             => (int)($row['id'] ?? 0),
 			'titulo'         => (string)($row['titulo'] ?? ''),
-			'slug'           => (string)($row['slug'] ?? ''),
+			'slug'           => ConectApiMapper::slugify((string)($row['slug'] ?? '')),
 			'resumo'         => (string)($row['resumo'] ?? ''),
 			'capaUrl'        => BrandingHelper::urlConectBlogImagem($row['capa'] ?? null),
 			'categoriaNome'  => (string)($row['categoria_nome'] ?? ''),

@@ -18,6 +18,8 @@ class ConectBlog extends Page {
 			return parent::getPanel('Conecta Jovem — Blog', $content, 'conect-blog');
 		}
 
+		CjBlogPost::normalizarSlugsNoBanco();
+
 		$posts = CjBlogPost::queryLista(['status_any' => true, 'limit' => 100]);
 		$rows = '';
 		foreach ($posts as $p) {

@@ -92,17 +92,17 @@ $obRouter->get('/api/v1/conect/public/blog/posts', [
 	}
 ]);
 
-$obRouter->get('/api/v1/conect/public/blog/posts/{slug}', [
-	'middlewares' => $conectMw,
-	function ($request, $slug) use ($respond) {
-		return $respond(Conect\Blog::postDetalhe($request, (string)$slug));
-	}
-]);
-
 $obRouter->get('/api/v1/conect/public/blog/posts/{slug}/comentarios', [
 	'middlewares' => $conectMw,
 	function ($request, $slug) use ($respond) {
 		return $respond(Conect\Blog::comentarios($request, (string)$slug));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/public/blog/posts/{slug}', [
+	'middlewares' => $conectMw,
+	function ($request, $slug) use ($respond) {
+		return $respond(Conect\Blog::postDetalhe($request, (string)$slug));
 	}
 ]);
 
