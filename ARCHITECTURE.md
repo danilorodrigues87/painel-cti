@@ -362,6 +362,13 @@ Portal público **Conecta Jovem** (`conectjovem.com.br`) — SPA React + API no 
 - **SPA:** repo `conectajovem` — consome API; deploy cPanel Git (`DEPLOY.md`)
 - **Roadmap / operação / smoke:** **`docs/CONECT_ROADMAP.md`** (fases 1–6 consolidadas)
 
+### 5.14 Prospecção de empresas (Master)
+
+- **SQL:** `database/master_prospeccao_empresas.sql`
+- **Tela:** `/master/prospeccao-empresas` — base local + importação Google sob demanda
+- **Env:** `GOOGLE_PLACES_API_KEY` (Places API New; cobrada por busca)
+- **Doc:** `docs/PROSPECCAO_EMPRESAS.md`
+
 Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /courses` com `modules[].curriculum[]`; `videos[]` + `videoUrl` embed; `GET /dashboard` com `continueLesson` mesmo em 0%; `GET /ranking?scope=school|global`; assessments (`start`/`answer`/`finalize`); roleplay; AI tutor; certificates EAD; notes; presence; branding.
 
 ---

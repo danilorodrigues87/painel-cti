@@ -60,6 +60,14 @@ class MasterMenuHelper {
 				],
 			],
 			[
+				'id'    => 'prospeccao',
+				'label' => 'Prospecção',
+				'icon'  => 'fas fa-search-location',
+				'items' => [
+					['id' => 'prospeccao-empresas', 'label' => 'Empresas (Maps)', 'url' => '/master/prospeccao-empresas', 'icon' => 'fas fa-building'],
+				],
+			],
+			[
 				'id'    => 'conta',
 				'label' => 'Conta',
 				'icon'  => 'fas fa-user-cog',

@@ -284,6 +284,27 @@ $obRouter->post('/master/conect-relatorios/export', [
 	}
 ]);
 
+$obRouter->get('/master/prospeccao-empresas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ProspeccaoEmpresas::index($request));
+	}
+]);
+
+$obRouter->post('/master/prospeccao-empresas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ProspeccaoEmpresas::getInfo($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/prospeccao-empresas/export', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return Master\ProspeccaoEmpresas::exportCsv($request);
+	}
+]);
+
 $obRouter->get('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

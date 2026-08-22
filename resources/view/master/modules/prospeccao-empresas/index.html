@@ -1,0 +1,117 @@
+<h1 class="mt-4">Prospecção — Empresas (Google Maps)</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Prospecção</li>
+	<li class="breadcrumb-item active">Empresas</li>
+</ol>
+
+{{alert_google}}
+
+<div class="row g-3 mb-3" id="prosp-stats">
+	<div class="col-md-4">
+		<div class="card shadow-sm h-100">
+			<div class="card-body">
+				<div class="text-muted small">Salvas no banco</div>
+				<div class="fs-4 fw-semibold" id="stat-total">—</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-4">
+		<div class="card shadow-sm h-100">
+			<div class="card-body">
+				<div class="text-muted small">Com WhatsApp</div>
+				<div class="fs-4 fw-semibold" id="stat-whatsapp">—</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-4">
+		<div class="card shadow-sm h-100">
+			<div class="card-body">
+				<div class="text-muted small">Última importação</div>
+				<div class="fs-6 fw-semibold" id="stat-ultima">—</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="card shadow-sm mb-3 border-warning">
+	<div class="card-header bg-warning bg-opacity-10">
+		<strong><i class="fas fa-cloud-download-alt me-1"></i> Importar do Google (API paga)</strong>
+	</div>
+	<div class="card-body">
+		<p class="text-muted small mb-3">
+			Cada busca ou página extra consome créditos do Google Places. Os resultados são salvos no banco para uso posterior sem novo custo.
+		</p>
+		<div class="row g-2 align-items-end">
+			<div class="col-md-8">
+				<label class="form-label small">Busca no Maps</label>
+				<input type="text" class="form-control" id="google-q" placeholder="Ex.: clínicas odontológicas em Campinas SP">
+			</div>
+			<div class="col-md-4">
+				<button type="button" class="btn btn-warning w-100" id="btn-google-buscar">
+					<i class="fas fa-search me-1"></i> Buscar e salvar
+				</button>
+			</div>
+		</div>
+		<div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+			<button type="button" class="btn btn-sm btn-outline-secondary d-none" id="btn-google-mais">Carregar mais do Google</button>
+			<span class="small text-muted d-none" id="google-info"></span>
+		</div>
+	</div>
+</div>
+
+<div class="card shadow-sm mb-3">
+	<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+		<strong>Base local (sem custo de API)</strong>
+		<button type="button" class="btn btn-sm btn-outline-success" id="btn-export-csv">
+			<i class="fas fa-file-csv me-1"></i> Exportar CSV
+		</button>
+	</div>
+	<div class="card-body border-bottom">
+		<div class="row g-2 align-items-end">
+			<div class="col-md-6">
+				<label class="form-label small">Filtrar</label>
+				<input type="text" class="form-control form-control-sm" id="filt-q" placeholder="Nome, endereço, telefone ou query">
+			</div>
+			<div class="col-md-3">
+				<div class="form-check mt-4">
+					<input class="form-check-input" type="checkbox" id="filt-whatsapp">
+					<label class="form-check-label small" for="filt-whatsapp">Só com WhatsApp</label>
+				</div>
+			</div>
+			<div class="col-md-3">
+				<button type="button" class="btn btn-primary btn-sm w-100" id="btn-filtrar">
+					<i class="fas fa-filter me-1"></i> Aplicar
+				</button>
+			</div>
+		</div>
+	</div>
+	<div class="table-responsive">
+		<table class="table table-sm table-hover mb-0 align-middle">
+			<thead>
+				<tr>
+					<th>Nome</th>
+					<th>Endereço</th>
+					<th>Telefone</th>
+					<th>WhatsApp</th>
+					<th>Maps</th>
+					<th>Nota</th>
+					<th>Importado</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody id="tb-empresas">
+				<tr><td colspan="8" class="text-muted text-center py-4">Carregando…</td></tr>
+			</tbody>
+		</table>
+	</div>
+	<div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+		<span class="small text-muted" id="lista-info"></span>
+		<div class="btn-group btn-group-sm">
+			<button type="button" class="btn btn-outline-secondary" id="btn-prev" disabled>Anterior</button>
+			<button type="button" class="btn btn-outline-secondary" id="btn-next" disabled>Próxima</button>
+		</div>
+	</div>
+</div>
+
+<script>window.PROSP_GOOGLE_OK = {{google_ok}};</script>
+<script src="{{URL}}/resources/js/master-prospeccao-empresas.js?v=20260822a"></script>
