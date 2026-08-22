@@ -9,6 +9,47 @@ class GooglePlacesHelper {
 	private const API_URL = 'https://places.googleapis.com/v1/places:searchText';
 	private const RATE_WINDOW = 3600;
 	private const RATE_MAX = 30;
+	private const CACHE_VIEWPORT_TTL = 86400;
+	private const CACHE_SESSAO_TTL = 3600;
+
+	private const QUERY_EMPRESAS_CIDADE = 'comércio serviços lojas empresas estabelecimentos';
+
+	/** @var list<string> */
+	private const TIPOS_IGNORAR = [
+		'locality',
+		'administrative_area_level_1',
+		'administrative_area_level_2',
+		'administrative_area_level_3',
+		'administrative_area_level_4',
+		'administrative_area_level_5',
+		'country',
+		'political',
+		'postal_code',
+		'route',
+		'street_address',
+		'premise',
+		'subpremise',
+		'plus_code',
+		'neighborhood',
+		'sublocality',
+		'sublocality_level_1',
+		'sublocality_level_2',
+		'colloquial_area',
+		'archipelago',
+		'continent',
+		'geocode',
+		'intersection',
+	];
+
+	/** @var list<string> */
+	private const PALAVRAS_NEGOCIO = [
+		'padaria', 'restaurante', 'clínica', 'clinica', 'mercado', 'farmácia', 'farmacia',
+		'loja', 'hotel', 'bar', 'salão', 'salao', 'oficina', 'escola', 'igreja', 'posto',
+		'banco', 'academia', 'pet', 'veterinár', 'veterinar', 'dentista', 'odontol',
+		'advogad', 'contabil', 'constru', 'imobili', 'supermercado', 'açougue', 'acougue',
+		'pizzaria', 'lanchonete', 'distribuidor', 'indústria', 'industria', 'fábrica', 'fabrica',
+		'consultório', 'consultorio', 'hospital', 'laboratório', 'laboratorio', 'ótica', 'otica',
+	];
 
 	public static function apiKey(): string {
 		Environment::load(__DIR__.'/../../../');
@@ -20,7 +61,7 @@ class GooglePlacesHelper {
 	}
 
 	/**
-	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null}
+	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string}
 	 */
 	public static function searchText(string $query, ?string $pageToken = null): array {
 		$key = self::apiKey();
@@ -31,18 +72,102 @@ class GooglePlacesHelper {
 		if (mb_strlen($query) < 3) {
 			return ['success' => false, 'message' => 'Informe pelo menos 3 caracteres na busca.'];
 		}
-		if (!self::permitirRequisicao()) {
-			return ['success' => false, 'message' => 'Limite de buscas Google atingido (30/hora). Tente mais tarde.'];
+
+		$pageToken = ($pageToken !== null && trim($pageToken) !== '') ? trim($pageToken) : null;
+		$modoCidade = self::pareceConsultaCidade($query);
+
+		if ($modoCidade) {
+			return self::searchEmpresasPorCidade($query, $pageToken);
 		}
 
-		$body = [
+		if ($pageToken !== null) {
+			$sessao = self::carregarSessaoBusca(self::chaveSessao($query));
+			if ($sessao !== null) {
+				return self::executarSearchText($sessao['body'], $pageToken, 'geral');
+			}
+		}
+
+		$body = self::corpoBuscaGeral($query);
+		self::salvarSessaoBusca(self::chaveSessao($query), $body);
+		return self::executarSearchText($body, $pageToken, 'geral');
+	}
+
+	/**
+	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string}
+	 */
+	private static function searchEmpresasPorCidade(string $query, ?string $pageToken): array {
+		$cidadeNorm = self::normalizarCidade($query);
+		$chave = self::chaveSessao($cidadeNorm);
+
+		if ($pageToken !== null) {
+			$sessao = self::carregarSessaoBusca($chave);
+			if ($sessao !== null) {
+				return self::executarSearchText($sessao['body'], $pageToken, 'cidade');
+			}
+			return [
+				'success' => false,
+				'message' => 'Sessão de paginação expirada. Faça a busca inicial novamente.',
+			];
+		}
+
+		$cacheKey = md5(mb_strtolower($cidadeNorm));
+		$viewport = self::carregarCacheViewport($cacheKey);
+		if ($viewport === null) {
+			if (!self::permitirRequisicao()) {
+				return ['success' => false, 'message' => 'Limite de buscas Google atingido (30/hora). Tente mais tarde.'];
+			}
+			$viewport = self::buscarViewportCidade($cidadeNorm, $cacheKey);
+		}
+		if ($viewport === null) {
+			return [
+				'success' => false,
+				'message' => 'Não foi possível localizar a cidade "'.$query.'". Tente "Guapiara SP" ou "Guapiara, SP".',
+			];
+		}
+
+		$body = self::corpoBuscaCidade($viewport);
+		self::salvarSessaoBusca($chave, $body);
+
+		return self::executarSearchText($body, null, 'cidade');
+	}
+
+	/** @return array<string,mixed> */
+	private static function corpoBuscaGeral(string $query): array {
+		return [
 			'textQuery'      => $query,
 			'languageCode'   => 'pt-BR',
 			'regionCode'     => 'BR',
 			'pageSize'       => 20,
+			'includePureServiceAreaBusinesses' => true,
 		];
-		if ($pageToken !== null && trim($pageToken) !== '') {
-			$body['pageToken'] = trim($pageToken);
+	}
+
+	/** @param array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}} $viewport */
+	private static function corpoBuscaCidade(array $viewport): array {
+		return [
+			'textQuery'      => self::QUERY_EMPRESAS_CIDADE,
+			'languageCode'   => 'pt-BR',
+			'regionCode'     => 'BR',
+			'pageSize'       => 20,
+			'includePureServiceAreaBusinesses' => true,
+			'locationRestriction' => [
+				'rectangle' => $viewport,
+			],
+		];
+	}
+
+	/**
+	 * @param array<string,mixed> $body
+	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string}
+	 */
+	private static function executarSearchText(array $body, ?string $pageToken, string $modo): array {
+		if ($pageToken === null && !self::permitirRequisicao()) {
+			return ['success' => false, 'message' => 'Limite de buscas Google atingido (30/hora). Tente mais tarde.'];
+		}
+
+		$reqBody = $body;
+		if ($pageToken !== null) {
+			$reqBody['pageToken'] = $pageToken;
 		}
 
 		$fieldMask = implode(',', [
@@ -54,12 +179,14 @@ class GooglePlacesHelper {
 			'places.googleMapsUri',
 			'places.websiteUri',
 			'places.rating',
+			'places.types',
+			'places.primaryType',
 			'nextPageToken',
 		]);
 
-		$response = self::httpPost(self::API_URL, $body, [
+		$response = self::httpPost(self::API_URL, $reqBody, [
 			'Content-Type: application/json',
-			'X-Goog-Api-Key: '.$key,
+			'X-Goog-Api-Key: '.self::apiKey(),
 			'X-Goog-FieldMask: '.$fieldMask,
 		]);
 
@@ -81,7 +208,7 @@ class GooglePlacesHelper {
 			if (!is_array($place)) {
 				continue;
 			}
-			$normalized = self::normalizarPlace($place);
+			$normalized = self::normalizarPlace($place, $modo === 'cidade');
 			if ($normalized !== null) {
 				$items[] = $normalized;
 			}
@@ -91,11 +218,149 @@ class GooglePlacesHelper {
 			'success'        => true,
 			'items'          => $items,
 			'nextPageToken'  => isset($data['nextPageToken']) ? (string)$data['nextPageToken'] : null,
+			'modo'           => $modo,
+		];
+	}
+
+	private static function pareceConsultaCidade(string $query): bool {
+		$q = mb_strtolower(trim($query));
+		if ($q === '') {
+			return false;
+		}
+		foreach (self::PALAVRAS_NEGOCIO as $palavra) {
+			if (mb_strpos($q, $palavra) !== false) {
+				return false;
+			}
+		}
+		if (preg_match('/\bem\s+\S/u', $q)) {
+			return false;
+		}
+		return (bool)preg_match(
+			'/^[\p{L}\s\-\.\']+(?:[\s,\-\/]+(?:ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to))?$/iu',
+			$q
+		);
+	}
+
+	private static function normalizarCidade(string $query): string {
+		$q = trim(preg_replace('/\s+/u', ' ', $query) ?: $query);
+		$q = preg_replace('/\s*[-\/]\s*/u', ', ', $q) ?: $q;
+
+		if (preg_match('/^(.+?)[,\s]+(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)$/iu', $q, $m)) {
+			$cidade = self::titulo(trim($m[1]));
+			$uf = strtoupper($m[2]);
+			return $cidade.', '.$uf.', Brasil';
+		}
+
+		if (!preg_match('/brasil/iu', $q)) {
+			$q .= ', Brasil';
+		}
+		return self::titulo($q);
+	}
+
+	private static function titulo(string $texto): string {
+		return mb_convert_case($texto, MB_CASE_TITLE, 'UTF-8');
+	}
+
+	/**
+	 * @return array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}}|null
+	 */
+	private static function buscarViewportCidade(string $cidadeNorm, string $cacheKey): ?array {
+		$body = [
+			'textQuery'    => $cidadeNorm,
+			'languageCode' => 'pt-BR',
+			'regionCode'   => 'BR',
+			'pageSize'     => 3,
+		];
+		$fieldMask = 'places.viewport,places.location,places.types,places.primaryType';
+
+		$response = self::httpPost(self::API_URL, $body, [
+			'Content-Type: application/json',
+			'X-Goog-Api-Key: '.self::apiKey(),
+			'X-Goog-FieldMask: '.$fieldMask,
+		]);
+
+		if (!$response['ok'] || !is_array($response['json'])) {
+			return null;
+		}
+
+		foreach (($response['json']['places'] ?? []) as $place) {
+			if (!is_array($place)) {
+				continue;
+			}
+			$viewport = self::extrairViewport($place);
+			if ($viewport !== null) {
+				$viewport = self::expandirViewport($viewport);
+				self::salvarCacheViewport($cacheKey, $viewport);
+				return $viewport;
+			}
+		}
+
+		return null;
+	}
+
+	/** @param array<string,mixed> $place */
+	private static function extrairViewport(array $place): ?array {
+		if (isset($place['viewport']) && is_array($place['viewport'])) {
+			$low = $place['viewport']['low'] ?? null;
+			$high = $place['viewport']['high'] ?? null;
+			if (is_array($low) && is_array($high)
+				&& isset($low['latitude'], $low['longitude'], $high['latitude'], $high['longitude'])) {
+				return [
+					'low'  => [
+						'latitude'  => (float)$low['latitude'],
+						'longitude' => (float)$low['longitude'],
+					],
+					'high' => [
+						'latitude'  => (float)$high['latitude'],
+						'longitude' => (float)$high['longitude'],
+					],
+				];
+			}
+		}
+
+		if (isset($place['location']) && is_array($place['location'])
+			&& isset($place['location']['latitude'], $place['location']['longitude'])) {
+			$lat = (float)$place['location']['latitude'];
+			$lng = (float)$place['location']['longitude'];
+			$delta = 0.06;
+			return [
+				'low'  => ['latitude' => $lat - $delta, 'longitude' => $lng - $delta],
+				'high' => ['latitude' => $lat + $delta, 'longitude' => $lng + $delta],
+			];
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}} $viewport
+	 * @return array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}}
+	 */
+	private static function expandirViewport(array $viewport): array {
+		$latSpan = abs($viewport['high']['latitude'] - $viewport['low']['latitude']);
+		$lngSpan = abs($viewport['high']['longitude'] - $viewport['low']['longitude']);
+		$minSpan = 0.04;
+		$padLat = max(0.01, ($minSpan - $latSpan) / 2);
+		$padLng = max(0.01, ($minSpan - $lngSpan) / 2);
+
+		return [
+			'low'  => [
+				'latitude'  => $viewport['low']['latitude'] - $padLat,
+				'longitude' => $viewport['low']['longitude'] - $padLng,
+			],
+			'high' => [
+				'latitude'  => $viewport['high']['latitude'] + $padLat,
+				'longitude' => $viewport['high']['longitude'] + $padLng,
+			],
 		];
 	}
 
 	/** @param array<string,mixed> $place */
-	private static function normalizarPlace(array $place): ?array {
+	private static function normalizarPlace(array $place, bool $modoCidade): ?array {
+		if ($modoCidade && self::deveIgnorarPlace($place)) {
+			return null;
+		}
+
 		$rawId = (string)($place['id'] ?? '');
 		$placeId = str_starts_with($rawId, 'places/') ? substr($rawId, 7) : $rawId;
 		if ($placeId === '') {
@@ -132,6 +397,93 @@ class GooglePlacesHelper {
 			'site'            => trim((string)($place['websiteUri'] ?? '')),
 			'nota'            => $nota,
 		];
+	}
+
+	/** @param array<string,mixed> $place */
+	private static function deveIgnorarPlace(array $place): bool {
+		$tipos = [];
+		if (!empty($place['primaryType'])) {
+			$tipos[] = (string)$place['primaryType'];
+		}
+		if (!empty($place['types']) && is_array($place['types'])) {
+			foreach ($place['types'] as $t) {
+				$tipos[] = (string)$t;
+			}
+		}
+		$tipos = array_unique(array_filter($tipos));
+		if ($tipos === []) {
+			return false;
+		}
+		foreach ($tipos as $tipo) {
+			if (!in_array($tipo, self::TIPOS_IGNORAR, true)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static function chaveSessao(string $query): string {
+		return md5(mb_strtolower(trim($query)));
+	}
+
+	/** @param array<string,mixed> $body */
+	private static function salvarSessaoBusca(string $chave, array $body): void {
+		$dir = sys_get_temp_dir().'/prospeccao_places_sessao';
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		@file_put_contents($dir.'/'.$chave.'.json', json_encode([
+			'body'    => $body,
+			'expires' => time() + self::CACHE_SESSAO_TTL,
+		]));
+	}
+
+	/** @return array{body:array<string,mixed>}|null */
+	private static function carregarSessaoBusca(string $chave): ?array {
+		$file = sys_get_temp_dir().'/prospeccao_places_sessao/'.$chave.'.json';
+		if (!is_file($file)) {
+			return null;
+		}
+		$data = json_decode((string)file_get_contents($file), true);
+		if (!is_array($data) || empty($data['body']) || !is_array($data['body'])) {
+			return null;
+		}
+		if (!empty($data['expires']) && (int)$data['expires'] < time()) {
+			@unlink($file);
+			return null;
+		}
+		return ['body' => $data['body']];
+	}
+
+	/**
+	 * @param array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}} $viewport
+	 */
+	private static function salvarCacheViewport(string $chave, array $viewport): void {
+		$dir = sys_get_temp_dir().'/prospeccao_places_viewport';
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		@file_put_contents($dir.'/'.$chave.'.json', json_encode([
+			'viewport' => $viewport,
+			'expires'  => time() + self::CACHE_VIEWPORT_TTL,
+		]));
+	}
+
+	/** @return array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}}|null */
+	private static function carregarCacheViewport(string $chave): ?array {
+		$file = sys_get_temp_dir().'/prospeccao_places_viewport/'.$chave.'.json';
+		if (!is_file($file)) {
+			return null;
+		}
+		$data = json_decode((string)file_get_contents($file), true);
+		if (!is_array($data) || empty($data['viewport']) || !is_array($data['viewport'])) {
+			return null;
+		}
+		if (!empty($data['expires']) && (int)$data['expires'] < time()) {
+			@unlink($file);
+			return null;
+		}
+		return $data['viewport'];
 	}
 
 	/** @param array<string,mixed> $body */

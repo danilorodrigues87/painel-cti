@@ -108,13 +108,22 @@ class ProspeccaoEmpresas extends Page {
 
 		$result = ProspeccaoEmpresasHelper::importarDoGoogle($q, $pageToken);
 
+		$msg = $result['novos'].' novo(s), '.$result['atualizados'].' atualizado(s).';
+		if (($result['totalPagina'] ?? 0) === 0) {
+			$msg = 'Nenhum estabelecimento encontrado nesta página. '
+				.'Use "Carregar mais" se disponível, ou refine a busca (ex.: "padaria em Guapiara SP").';
+		} elseif (($result['modo'] ?? '') === 'cidade') {
+			$msg .= ' Modo cidade: comércios e serviços na região.';
+		}
+
 		return json_encode([
 			'success'         => true,
 			'novos'           => $result['novos'],
 			'atualizados'     => $result['atualizados'],
 			'totalPagina'     => $result['totalPagina'],
 			'nextPageToken'   => $result['nextPageToken'],
-			'message'         => $result['novos'].' novo(s), '.$result['atualizados'].' atualizado(s).',
+			'modo'            => $result['modo'] ?? 'geral',
+			'message'         => $msg,
 		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 	}
 

@@ -113,7 +113,9 @@
 				$('#btn-google-mais').addClass('d-none');
 			}
 			$('#google-info').removeClass('d-none').text(res.message || 'Importação concluída.');
-			Swal.fire('Importado', res.message || 'Dados salvos no banco.', 'success');
+			var icon = (res.totalPagina || 0) > 0 ? 'success' : 'info';
+			var title = (res.totalPagina || 0) > 0 ? 'Importado' : 'Sem resultados nesta página';
+			Swal.fire(title, res.message || 'Dados salvos no banco.', icon);
 			carregarStats();
 			carregarLista(1);
 		}, 'json').fail(function () {

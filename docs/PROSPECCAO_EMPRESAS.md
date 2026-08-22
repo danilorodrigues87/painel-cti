@@ -48,7 +48,8 @@ GOOGLE_PLACES_API_KEY=sua_chave_aqui
 ### Importar do Google (pago)
 
 - Card amarelo **“Importar do Google”**.
-- Digite a query (ex.: `padaria em Ribeirão Preto SP`).
+- **Só cidade** (ex.: `Guapiara SP`, `guapiara-sp`) → busca **comércios e serviços** na região (não retorna a cidade em si). Use **Carregar mais** para próximas páginas (20 por requisição).
+- **Cidade + segmento** (ex.: `padaria em Ribeirão Preto SP`) → busca específica.
 - **Buscar e salvar** → grava/atualiza por `place_id` (sem duplicar).
 - **Carregar mais** → próxima página Google (nova cobrança).
 
@@ -68,6 +69,7 @@ GOOGLE_PLACES_API_KEY=sua_chave_aqui
 
 ## 5. Limitações
 
+- Busca por **cidade** traz estabelecimentos comerciais/serviços indexados no Google — não lista 100% das empresas de um município; use **Carregar mais** e repita importações ao longo do tempo.
 - Nem todo estabelecimento tem telefone no Google.
 - Dados podem ficar desatualizados até nova importação.
 - Sem API key: lista/CSV funcionam; importação Google bloqueada.

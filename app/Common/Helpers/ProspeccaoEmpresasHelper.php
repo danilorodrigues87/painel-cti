@@ -102,6 +102,7 @@ class ProspeccaoEmpresasHelper {
 			'atualizados'    => $atualizados,
 			'nextPageToken'  => $result['nextPageToken'] ?? null,
 			'totalPagina'    => count($result['items'] ?? []),
+			'modo'           => $result['modo'] ?? 'geral',
 		];
 	}
 
