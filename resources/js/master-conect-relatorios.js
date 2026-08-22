@@ -135,6 +135,9 @@
 				$('#kpi-visitas').text(fmtNum(k.visitas) + ' pageviews');
 				$('#kpi-shares').text(fmtNum(k.compartilhamentos));
 				$('#kpi-novos-visitantes').text(fmtNum(k.novos_visitantes));
+				// #region agent log
+				fetch('http://127.0.0.1:7299/ingest/c2f3b05d-73bd-477d-8214-a3a1d104df4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6b4d05'},body:JSON.stringify({sessionId:'6b4d05',location:'master-conect-relatorios.js:resumo',message:'master shares payload',data:{compartilhamentos:k.compartilhamentos,sharesPlataforma:k.shares_plataforma,topPaginas:(k.top_paginas||[]).slice(0,3)},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
+				// #endregion
 				renderSerie(k.serie_diaria || []);
 				renderShares(k.shares_plataforma || []);
 				renderTopPaginas(k.top_paginas || []);
