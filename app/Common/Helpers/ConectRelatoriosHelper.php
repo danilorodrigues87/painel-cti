@@ -180,7 +180,7 @@ class ConectRelatoriosHelper {
 		}
 		if (!empty($filtros['q'])) {
 			$q = addslashes(trim((string)$filtros['q']));
-			$where[] = '(c.nome LIKE "%'.$q.'%" OR c.email LIKE "%'.$q.'%")';
+			$where[] = '(c.nome LIKE "%'.$q.'%" OR c.email LIKE "%'.$q.'%" OR c.whatsapp LIKE "%'.$q.'%")';
 		}
 		return ['where' => implode(' AND ', $where), 'params' => $filtros];
 	}
@@ -197,7 +197,7 @@ class ConectRelatoriosHelper {
 				$selo = '0';
 			}
 		}
-		return 'SELECT c.id, c.nome, c.email, c.tipo, c.status, c.uf, c.created_at, '
+		return 'SELECT c.id, c.nome, c.email, c.whatsapp, c.tipo, c.status, c.uf, c.created_at, '
 			.'ci.nome AS cidade_nome, '
 			.'e.nome AS escola_nome, '
 			.'('.$selo.') AS tem_selo '
@@ -236,16 +236,6 @@ class ConectRelatoriosHelper {
 			$stmt = (new Database())->execute($sql);
 			$rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 		} catch (\Throwable $e) {
-			// #region agent log
-			@file_put_contents(__DIR__.'/../../../debug-6b4d05.log', json_encode([
-				'sessionId' => '6b4d05',
-				'location'  => 'ConectRelatoriosHelper.php:listarCandidatos',
-				'message'   => 'sql error',
-				'data'      => ['error' => $e->getMessage()],
-				'timestamp' => (int)(microtime(true) * 1000),
-				'hypothesisId' => 'H-candidatos',
-			], JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND);
-			// #endregion
 			throw $e;
 		}
 		return array_map([self::class, 'mapCandidatoRow'], $rows);
@@ -254,20 +244,23 @@ class ConectRelatoriosHelper {
 	/** @param array<string,mixed> $row */
 	private static function mapCandidatoRow(array $row): array {
 		$uf = (string)($row['uf'] ?? $row['estado_uf'] ?? '');
+		$whatsapp = trim((string)($row['whatsapp'] ?? ''));
 		return [
-			'id'          => (int)($row['id'] ?? 0),
-			'nome'        => (string)($row['nome'] ?? ''),
-			'email'       => (string)($row['email'] ?? ''),
-			'tipo'        => (string)($row['tipo'] ?? ''),
-			'tipoLabel'   => self::TIPO_LABEL[(string)($row['tipo'] ?? '')] ?? (string)($row['tipo'] ?? ''),
-			'status'      => (string)($row['status'] ?? ''),
-			'escolaNome'  => (string)($row['escola_nome'] ?? '—'),
-			'cidadeNome'  => (string)($row['cidade_nome'] ?? '—'),
-			'uf'          => $uf !== '' ? $uf : '—',
-			'estadoNome'  => (string)($row['estado_nome'] ?? '—'),
-			'temSelo'     => !empty($row['tem_selo']),
-			'createdAt'   => (string)($row['created_at'] ?? ''),
-			'createdAtBr' => self::formatDataBr($row['created_at'] ?? ''),
+			'id'            => (int)($row['id'] ?? 0),
+			'nome'          => (string)($row['nome'] ?? ''),
+			'email'         => (string)($row['email'] ?? ''),
+			'whatsapp'      => $whatsapp,
+			'whatsappDigits'=> preg_replace('/\D+/', '', $whatsapp) ?: '',
+			'tipo'          => (string)($row['tipo'] ?? ''),
+			'tipoLabel'     => self::TIPO_LABEL[(string)($row['tipo'] ?? '')] ?? (string)($row['tipo'] ?? ''),
+			'status'        => (string)($row['status'] ?? ''),
+			'escolaNome'    => (string)($row['escola_nome'] ?? '—'),
+			'cidadeNome'    => (string)($row['cidade_nome'] ?? '—'),
+			'uf'            => $uf !== '' ? $uf : '—',
+			'estadoNome'    => (string)($row['estado_nome'] ?? '—'),
+			'temSelo'       => !empty($row['tem_selo']),
+			'createdAt'     => (string)($row['created_at'] ?? ''),
+			'createdAtBr'   => self::formatDataBr($row['created_at'] ?? ''),
 		];
 	}
 
@@ -280,13 +273,14 @@ class ConectRelatoriosHelper {
 		}
 		fwrite($out, "\xEF\xBB\xBF");
 		fputcsv($out, [
-			'ID', 'Nome', 'E-mail', 'Tipo', 'Status', 'Escola', 'Cidade', 'UF', 'Estado', 'Selo', 'Cadastro',
+			'ID', 'Nome', 'E-mail', 'WhatsApp', 'Tipo', 'Status', 'Escola', 'Cidade', 'UF', 'Estado', 'Selo', 'Cadastro',
 		], ';');
 		foreach ($rows as $r) {
 			fputcsv($out, [
 				$r['id'],
 				$r['nome'],
 				$r['email'],
+				$r['whatsapp'],
 				$r['tipoLabel'],
 				$r['status'],
 				$r['escolaNome'],

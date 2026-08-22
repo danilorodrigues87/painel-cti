@@ -156,6 +156,16 @@
 		});
 	}
 
+	function whatsCell(r) {
+		var w = r.whatsapp || '';
+		var digits = r.whatsappDigits || String(w).replace(/\D+/g, '');
+		if (!digits) {
+			return '<span class="text-muted">—</span>';
+		}
+		var label = w || digits;
+		return '<a href="https://wa.me/55' + esc(digits) + '" target="_blank" rel="noopener" class="small text-nowrap">' + esc(label) + '</a>';
+	}
+
 	function carregarCandidatos(page) {
 		candPage = page || 1;
 		var payload = $.extend({ acao: 'candidatos', page: candPage }, filtrosComuns());
@@ -178,7 +188,7 @@
 					$tb.append(
 						'<tr>'
 						+ '<td>' + esc(r.nome) + '</td>'
-						+ '<td class="small">' + esc(r.email) + '</td>'
+						+ '<td>' + whatsCell(r) + '</td>'
 						+ '<td class="small">' + esc(r.tipoLabel) + '</td>'
 						+ '<td class="small">' + esc(r.escolaNome) + '</td>'
 						+ '<td class="small">' + esc(r.cidadeNome) + '</td>'
