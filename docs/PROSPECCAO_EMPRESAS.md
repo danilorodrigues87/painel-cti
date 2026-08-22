@@ -48,10 +48,16 @@ GOOGLE_PLACES_API_KEY=sua_chave_aqui
 ### Importar do Google (pago)
 
 - Card amarelo **“Importar do Google”**.
-- **Só cidade** (ex.: `Guapiara SP`, `guapiara-sp`) → busca **comércios e serviços** na região (não retorna a cidade em si). Use **Carregar mais** para próximas páginas (20 por requisição).
+- **Buscar e salvar** — 1 página (20 resultados).
+- **Todas as páginas** — até 3 páginas da busca atual (~60 resultados).
+- **Só cidade** (ex.: `Guapiara SP`) — aparecem botões extras:
+  - **Por categorias** — 15 segmentos (comércio, restaurantes, clínicas…) × 1 página cada.
+  - **Importação completa** — busca geral + 15 categorias × até 3 páginas (~48 requisições, ~US$ 1,50).
 - **Cidade + segmento** (ex.: `padaria em Ribeirão Preto SP`) → busca específica.
-- **Buscar e salvar** → grava/atualiza por `place_id` (sem duplicar).
-- **Carregar mais** → próxima página Google (nova cobrança).
+- **Carregar mais** — próxima página da última busca simples.
+- Limite de segurança: **80 requisições/hora** por IP no painel.
+
+**Custo referência:** Text Search ~US$ 0,032 por requisição.
 
 ---
 
@@ -69,7 +75,7 @@ GOOGLE_PLACES_API_KEY=sua_chave_aqui
 
 ## 5. Limitações
 
-- Busca por **cidade** traz estabelecimentos comerciais/serviços indexados no Google — não lista 100% das empresas de um município; use **Carregar mais** e repita importações ao longo do tempo.
+- Busca por **cidade** não traz 100% das empresas do município — o Google limita resultados por query (~60). **Importação completa** maximiza cobertura combinando categorias.
 - Nem todo estabelecimento tem telefone no Google.
 - Dados podem ficar desatualizados até nova importação.
 - Sem API key: lista/CSV funcionam; importação Google bloqueada.

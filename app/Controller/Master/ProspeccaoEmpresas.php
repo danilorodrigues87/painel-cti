@@ -50,6 +50,9 @@ class ProspeccaoEmpresas extends Page {
 			if ($acao === 'buscar') {
 				return self::buscar($post);
 			}
+			if ($acao === 'import_info') {
+				return self::importInfo($post);
+			}
 			if ($acao === 'excluir') {
 				return self::excluir($post);
 			}
@@ -105,15 +108,34 @@ class ProspeccaoEmpresas extends Page {
 		if ($pageToken === '') {
 			$pageToken = null;
 		}
+		$estrategia = trim((string)($post['estrategia'] ?? 'pagina'));
+		if ($estrategia === '') {
+			$estrategia = 'pagina';
+		}
+		$categoriaIndex = isset($post['categoriaIndex']) ? (int)$post['categoriaIndex'] : null;
 
-		$result = ProspeccaoEmpresasHelper::importarDoGoogle($q, $pageToken);
+		$result = ProspeccaoEmpresasHelper::importarDoGoogle(
+			$q,
+			$pageToken,
+			$estrategia,
+			$categoriaIndex
+		);
 
 		$msg = $result['novos'].' novo(s), '.$result['atualizados'].' atualizado(s).';
+		if (!empty($result['paginas']) && $result['paginas'] > 1) {
+			$msg .= ' '.$result['paginas'].' página(s) Google.';
+		}
+		if (!empty($result['requisicoes']) && $result['requisicoes'] > 1) {
+			$msg .= ' '.$result['requisicoes'].' requisição(ões) API.';
+		}
+		if (!empty($result['categoria'])) {
+			$msg .= ' Categoria: '.$result['categoria'].'.';
+		}
 		if (($result['totalPagina'] ?? 0) === 0) {
-			$msg = 'Nenhum estabelecimento encontrado nesta página. '
-				.'Use "Carregar mais" se disponível, ou refine a busca (ex.: "padaria em Guapiara SP").';
+			$msg = 'Nenhum estabelecimento nesta etapa. '
+				.'Tente "Importação completa" ou busca por segmento (ex.: "padaria em Guapiara SP").';
 		} elseif (($result['modo'] ?? '') === 'cidade') {
-			$msg .= ' Modo cidade: comércios e serviços na região.';
+			$msg .= ' Modo cidade.';
 		}
 
 		return json_encode([
@@ -123,8 +145,30 @@ class ProspeccaoEmpresas extends Page {
 			'totalPagina'     => $result['totalPagina'],
 			'nextPageToken'   => $result['nextPageToken'],
 			'modo'            => $result['modo'] ?? 'geral',
+			'requisicoes'     => $result['requisicoes'] ?? 1,
+			'paginas'         => $result['paginas'] ?? 1,
+			'categoria'       => $result['categoria'] ?? null,
+			'categorias'      => $result['categorias'] ?? null,
 			'message'         => $msg,
 		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	}
+
+	private static function importInfo(array $post): string {
+		$q = trim((string)($post['q'] ?? ''));
+		$isCidade = GooglePlacesHelper::pareceConsultaCidade($q);
+		$categorias = GooglePlacesHelper::getCategoriasCidade();
+		$totalCats = count($categorias);
+		$maxPag = 3;
+		$reqCompleta = $isCidade ? (1 + $totalCats) * $maxPag : $maxPag;
+
+		return json_encode([
+			'success'           => true,
+			'isCidade'          => $isCidade,
+			'totalCategorias'   => $totalCats,
+			'reqEstimadaCompleta' => $reqCompleta,
+			'custoEstimadoUsd'  => round($reqCompleta * 0.032, 2),
+			'categorias'        => array_column($categorias, 'label'),
+		], JSON_UNESCAPED_UNICODE);
 	}
 
 	private static function excluir(array $post): string {

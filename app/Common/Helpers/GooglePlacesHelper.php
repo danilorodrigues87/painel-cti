@@ -8,11 +8,31 @@ class GooglePlacesHelper {
 
 	private const API_URL = 'https://places.googleapis.com/v1/places:searchText';
 	private const RATE_WINDOW = 3600;
-	private const RATE_MAX = 30;
+	private const RATE_MAX = 80;
 	private const CACHE_VIEWPORT_TTL = 86400;
 	private const CACHE_SESSAO_TTL = 3600;
+	private const MAX_PAGINAS_AUTO = 3;
 
 	private const QUERY_EMPRESAS_CIDADE = 'comércio serviços lojas empresas estabelecimentos';
+
+	/** @var list<array{label:string,query:string}> */
+	private const CATEGORIAS_CIDADE = [
+		['label' => 'Comércio e lojas',           'query' => 'comércio lojas varejo'],
+		['label' => 'Serviços gerais',            'query' => 'serviços prestadores'],
+		['label' => 'Restaurantes e bares',       'query' => 'restaurantes bares lanchonetes'],
+		['label' => 'Mercados e padarias',        'query' => 'supermercados mercados padarias'],
+		['label' => 'Farmácias',                  'query' => 'farmácias drogarias'],
+		['label' => 'Clínicas e consultórios',    'query' => 'clínicas consultórios odontologia'],
+		['label' => 'Oficinas e autopeças',       'query' => 'oficinas mecânicas autopeças'],
+		['label' => 'Salões e beleza',            'query' => 'salões beleza barbearias'],
+		['label' => 'Escolas e cursos',           'query' => 'escolas cursos educação'],
+		['label' => 'Hotéis e pousadas',          'query' => 'hotéis pousadas hospedagem'],
+		['label' => 'Construção',                 'query' => 'construção materiais de construção'],
+		['label' => 'Contabilidade e advocacia',  'query' => 'contabilidade advocacia'],
+		['label' => 'Indústria',                  'query' => 'indústria fábricas'],
+		['label' => 'Postos de combustível',      'query' => 'postos combustível'],
+		['label' => 'Academias',                  'query' => 'academias fitness'],
+	];
 
 	/** @var list<string> */
 	private const TIPOS_IGNORAR = [
@@ -60,6 +80,46 @@ class GooglePlacesHelper {
 		return self::apiKey() !== '';
 	}
 
+	/** @return list<array{label:string,query:string}> */
+	public static function getCategoriasCidade(): array {
+		return self::CATEGORIAS_CIDADE;
+	}
+
+	public static function pareceConsultaCidade(string $query): bool {
+		return self::detectarConsultaCidade($query);
+	}
+
+	/**
+	 * @param array{estrategia?:string,pageToken?:?string,categoriaIndex?:?int} $opts
+	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string,paginas?:int,requisicoes?:int,categoria?:?string}
+	 */
+	public static function searchAvancado(string $query, array $opts = []): array {
+		$estrategia = (string)($opts['estrategia'] ?? 'pagina');
+		$pageToken = isset($opts['pageToken']) ? (string)$opts['pageToken'] : null;
+		if ($pageToken === '') {
+			$pageToken = null;
+		}
+		$categoriaIndex = isset($opts['categoriaIndex']) ? (int)$opts['categoriaIndex'] : null;
+
+		if ($estrategia === 'todas_paginas') {
+			return self::buscarTodasPaginas($query);
+		}
+		if ($estrategia === 'categorias') {
+			return self::buscarVariasCategorias($query, false);
+		}
+		if ($estrategia === 'categorias_todas_paginas') {
+			return self::buscarVariasCategorias($query, true);
+		}
+		if ($estrategia === 'categoria') {
+			return self::buscarUmaCategoria($query, $categoriaIndex ?? 0, $pageToken, false);
+		}
+		if ($estrategia === 'categoria_todas_paginas') {
+			return self::buscarUmaCategoria($query, $categoriaIndex ?? 0, null, true);
+		}
+
+		return self::searchText($query, $pageToken);
+	}
+
 	/**
 	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string}
 	 */
@@ -74,7 +134,7 @@ class GooglePlacesHelper {
 		}
 
 		$pageToken = ($pageToken !== null && trim($pageToken) !== '') ? trim($pageToken) : null;
-		$modoCidade = self::pareceConsultaCidade($query);
+		$modoCidade = self::detectarConsultaCidade($query);
 
 		if ($modoCidade) {
 			return self::searchEmpresasPorCidade($query, $pageToken);
@@ -125,7 +185,7 @@ class GooglePlacesHelper {
 			];
 		}
 
-		$body = self::corpoBuscaCidade($viewport);
+		$body = self::corpoBuscaCidade($viewport, null);
 		self::salvarSessaoBusca($chave, $body);
 
 		return self::executarSearchText($body, null, 'cidade');
@@ -143,9 +203,9 @@ class GooglePlacesHelper {
 	}
 
 	/** @param array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}} $viewport */
-	private static function corpoBuscaCidade(array $viewport): array {
+	private static function corpoBuscaCidade(array $viewport, ?string $textQuery = null): array {
 		return [
-			'textQuery'      => self::QUERY_EMPRESAS_CIDADE,
+			'textQuery'      => $textQuery ?? self::QUERY_EMPRESAS_CIDADE,
 			'languageCode'   => 'pt-BR',
 			'regionCode'     => 'BR',
 			'pageSize'       => 20,
@@ -157,12 +217,222 @@ class GooglePlacesHelper {
 	}
 
 	/**
+	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string,paginas?:int,requisicoes?:int}
+	 */
+	private static function buscarTodasPaginas(string $query): array {
+		$query = trim($query);
+		if (mb_strlen($query) < 3) {
+			return ['success' => false, 'message' => 'Informe pelo menos 3 caracteres na busca.'];
+		}
+
+		$allItems = [];
+		$pageToken = null;
+		$paginas = 0;
+		$modo = 'geral';
+		$ultimoErro = null;
+
+		do {
+			$result = self::searchText($query, $pageToken);
+			if (empty($result['success'])) {
+				$ultimoErro = (string)($result['message'] ?? 'Falha na busca Google.');
+				if ($paginas === 0) {
+					return $result;
+				}
+				break;
+			}
+			$modo = (string)($result['modo'] ?? 'geral');
+			foreach (($result['items'] ?? []) as $item) {
+				$pid = (string)($item['placeId'] ?? '');
+				if ($pid !== '') {
+					$allItems[$pid] = $item;
+				}
+			}
+			$pageToken = $result['nextPageToken'] ?? null;
+			$paginas++;
+			if ($pageToken !== null && $paginas < self::MAX_PAGINAS_AUTO) {
+				usleep(350000);
+			}
+		} while ($pageToken !== null && $paginas < self::MAX_PAGINAS_AUTO);
+
+		return [
+			'success'       => true,
+			'items'         => array_values($allItems),
+			'nextPageToken' => null,
+			'modo'          => $modo,
+			'paginas'       => $paginas,
+			'requisicoes'   => $paginas,
+			'message'       => $ultimoErro,
+		];
+	}
+
+	/**
+	 * @return array{success:bool,message?:string,items?:array,modo?:string,requisicoes?:int,categorias?:int}
+	 */
+	private static function buscarVariasCategorias(string $query, bool $todasPaginas): array {
+		if (!self::detectarConsultaCidade($query)) {
+			return [
+				'success' => false,
+				'message' => 'Importação por categorias exige busca só com o nome da cidade (ex.: Guapiara SP).',
+			];
+		}
+
+		$viewport = self::viewportDaCidade($query);
+		if ($viewport === null) {
+			return ['success' => false, 'message' => 'Não foi possível localizar a cidade informada.'];
+		}
+
+		$allItems = [];
+		$requisicoes = 0;
+		$ultimoErro = null;
+
+		foreach (self::CATEGORIAS_CIDADE as $idx => $cat) {
+			$result = self::executarBuscaCategoria($query, $viewport, $idx, $todasPaginas);
+			if (empty($result['success'])) {
+				$ultimoErro = (string)($result['message'] ?? '');
+				if (str_contains($ultimoErro, 'Limite de buscas')) {
+					break;
+				}
+				continue;
+			}
+			$requisicoes += (int)($result['requisicoes'] ?? 1);
+			foreach (($result['items'] ?? []) as $item) {
+				$pid = (string)($item['placeId'] ?? '');
+				if ($pid !== '') {
+					$allItems[$pid] = $item;
+				}
+			}
+		}
+
+		if ($allItems === [] && $ultimoErro !== null) {
+			return ['success' => false, 'message' => $ultimoErro];
+		}
+
+		return [
+			'success'     => true,
+			'items'       => array_values($allItems),
+			'modo'        => 'cidade',
+			'requisicoes' => $requisicoes,
+			'categorias'  => count(self::CATEGORIAS_CIDADE),
+		];
+	}
+
+	/**
+	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string,paginas?:int,requisicoes?:int,categoria?:string}
+	 */
+	private static function buscarUmaCategoria(string $query, int $categoriaIndex, ?string $pageToken, bool $todasPaginas): array {
+		if (!self::detectarConsultaCidade($query)) {
+			return [
+				'success' => false,
+				'message' => 'Importação por categorias exige busca só com o nome da cidade (ex.: Guapiara SP).',
+			];
+		}
+		if ($categoriaIndex < 0 || $categoriaIndex >= count(self::CATEGORIAS_CIDADE)) {
+			return ['success' => false, 'message' => 'Categoria inválida.'];
+		}
+
+		$viewport = self::viewportDaCidade($query);
+		if ($viewport === null) {
+			return ['success' => false, 'message' => 'Não foi possível localizar a cidade informada.'];
+		}
+
+		if ($todasPaginas) {
+			return self::executarBuscaCategoria($query, $viewport, $categoriaIndex, true);
+		}
+
+		$cat = self::CATEGORIAS_CIDADE[$categoriaIndex];
+		$chave = self::chaveSessao(self::normalizarCidade($query).'|cat|'.$categoriaIndex);
+		if ($pageToken !== null) {
+			$sessao = self::carregarSessaoBusca($chave);
+			if ($sessao !== null) {
+				$result = self::executarSearchText($sessao['body'], $pageToken, 'cidade');
+				$result['categoria'] = $cat['label'];
+				$result['requisicoes'] = 1;
+				return $result;
+			}
+			return ['success' => false, 'message' => 'Sessão de paginação expirada. Refaça a importação.'];
+		}
+
+		$body = self::corpoBuscaCidade($viewport, $cat['query']);
+		self::salvarSessaoBusca($chave, $body);
+		$result = self::executarSearchText($body, null, 'cidade');
+		$result['categoria'] = $cat['label'];
+		$result['requisicoes'] = 1;
+		return $result;
+	}
+
+	/**
+	 * @param array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}} $viewport
+	 * @return array{success:bool,message?:string,items?:array,paginas?:int,requisicoes?:int,categoria?:string}
+	 */
+	private static function executarBuscaCategoria(string $query, array $viewport, int $categoriaIndex, bool $todasPaginas): array {
+		$cat = self::CATEGORIAS_CIDADE[$categoriaIndex];
+		$body = self::corpoBuscaCidade($viewport, $cat['query']);
+		$chave = self::chaveSessao(self::normalizarCidade($query).'|cat|'.$categoriaIndex);
+		self::salvarSessaoBusca($chave, $body);
+
+		$allItems = [];
+		$pageToken = null;
+		$paginas = 0;
+		$ultimoErro = null;
+
+		do {
+			$result = self::executarSearchText($body, $pageToken, 'cidade');
+			if (empty($result['success'])) {
+				$ultimoErro = (string)($result['message'] ?? '');
+				if ($paginas === 0) {
+					return $result;
+				}
+				break;
+			}
+			foreach (($result['items'] ?? []) as $item) {
+				$pid = (string)($item['placeId'] ?? '');
+				if ($pid !== '') {
+					$allItems[$pid] = $item;
+				}
+			}
+			$pageToken = $result['nextPageToken'] ?? null;
+			$paginas++;
+			if ($pageToken !== null && $paginas < self::MAX_PAGINAS_AUTO) {
+				usleep(350000);
+			}
+		} while ($todasPaginas && $pageToken !== null && $paginas < self::MAX_PAGINAS_AUTO);
+
+		if ($allItems === [] && $ultimoErro !== null) {
+			return ['success' => false, 'message' => $ultimoErro];
+		}
+
+		return [
+			'success'     => true,
+			'items'       => array_values($allItems),
+			'paginas'     => $paginas,
+			'requisicoes' => $paginas,
+			'categoria'   => $cat['label'],
+		];
+	}
+
+	/**
+	 * @return array{low:array{latitude:float,longitude:float},high:array{latitude:float,longitude:float}}|null
+	 */
+	private static function viewportDaCidade(string $query): ?array {
+		$cidadeNorm = self::normalizarCidade($query);
+		$cacheKey = md5(mb_strtolower($cidadeNorm));
+		$viewport = self::carregarCacheViewport($cacheKey);
+		if ($viewport !== null) {
+			return $viewport;
+		}
+		if (!self::permitirRequisicao()) {
+			return null;
+		}
+		return self::buscarViewportCidade($cidadeNorm, $cacheKey);
+	}
+
+	/**
 	 * @param array<string,mixed> $body
 	 * @return array{success:bool,message?:string,items?:array,nextPageToken?:string|null,modo?:string}
 	 */
 	private static function executarSearchText(array $body, ?string $pageToken, string $modo): array {
-		if ($pageToken === null && !self::permitirRequisicao()) {
-			return ['success' => false, 'message' => 'Limite de buscas Google atingido (30/hora). Tente mais tarde.'];
+		if (!self::permitirRequisicao()) {
+			return ['success' => false, 'message' => 'Limite de buscas Google atingido ('.self::RATE_MAX.'/hora). Tente mais tarde.'];
 		}
 
 		$reqBody = $body;
@@ -222,7 +492,7 @@ class GooglePlacesHelper {
 		];
 	}
 
-	private static function pareceConsultaCidade(string $query): bool {
+	private static function detectarConsultaCidade(string $query): bool {
 		$q = mb_strtolower(trim($query));
 		if ($q === '') {
 			return false;

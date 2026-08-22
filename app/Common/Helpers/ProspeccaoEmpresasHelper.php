@@ -80,19 +80,29 @@ class ProspeccaoEmpresasHelper {
 	}
 
 	/**
-	 * @param array<string,mixed> $filtros
-	 * @return array{novos:int,atualizados:int,nextPageToken:?string,totalPagina:int}
+	 * @return array{novos:int,atualizados:int,nextPageToken:?string,totalPagina:int,modo:string,requisicoes?:int,paginas?:int,categoria?:?string,categorias?:?int}
 	 */
-	public static function importarDoGoogle(string $query, ?string $pageToken = null): array {
-		$result = GooglePlacesHelper::searchText($query, $pageToken);
+	public static function importarDoGoogle(
+		string $query,
+		?string $pageToken = null,
+		string $estrategia = 'pagina',
+		?int $categoriaIndex = null
+	): array {
+		$result = GooglePlacesHelper::searchAvancado($query, [
+			'estrategia'      => $estrategia,
+			'pageToken'       => $pageToken,
+			'categoriaIndex'  => $categoriaIndex,
+		]);
 		if (empty($result['success'])) {
 			throw new \RuntimeException((string)($result['message'] ?? 'Falha na busca Google.'));
 		}
 
+		$queryOrigem = self::montarQueryOrigem($query, $estrategia, $result);
+
 		$novos = 0;
 		$atualizados = 0;
 		foreach (($result['items'] ?? []) as $item) {
-			$r = ProspeccaoEmpresa::upsertFromGoogle($item, $query);
+			$r = ProspeccaoEmpresa::upsertFromGoogle($item, $queryOrigem);
 			$novos += (int)($r['novos'] ?? 0);
 			$atualizados += (int)($r['atualizados'] ?? 0);
 		}
@@ -102,8 +112,26 @@ class ProspeccaoEmpresasHelper {
 			'atualizados'    => $atualizados,
 			'nextPageToken'  => $result['nextPageToken'] ?? null,
 			'totalPagina'    => count($result['items'] ?? []),
-			'modo'           => $result['modo'] ?? 'geral',
+			'modo'           => (string)($result['modo'] ?? 'geral'),
+			'requisicoes'    => isset($result['requisicoes']) ? (int)$result['requisicoes'] : null,
+			'paginas'        => isset($result['paginas']) ? (int)$result['paginas'] : null,
+			'categoria'      => isset($result['categoria']) ? (string)$result['categoria'] : null,
+			'categorias'     => isset($result['categorias']) ? (int)$result['categorias'] : null,
 		];
+	}
+
+	/** @param array<string,mixed> $result */
+	private static function montarQueryOrigem(string $query, string $estrategia, array $result): string {
+		if (!empty($result['categoria'])) {
+			return $query.' · '.$result['categoria'];
+		}
+		if (in_array($estrategia, ['categorias', 'categorias_todas_paginas'], true)) {
+			return $query.' · categorias';
+		}
+		if ($estrategia === 'todas_paginas') {
+			return $query.' · todas páginas';
+		}
+		return $query;
 	}
 
 	/** @param array<string,mixed> $filtros */
