@@ -135,9 +135,6 @@
 				$('#kpi-visitas').text(fmtNum(k.visitas) + ' pageviews');
 				$('#kpi-shares').text(fmtNum(k.compartilhamentos));
 				$('#kpi-novos-visitantes').text(fmtNum(k.novos_visitantes));
-				// #region agent log
-				fetch('http://127.0.0.1:7299/ingest/c2f3b05d-73bd-477d-8214-a3a1d104df4e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6b4d05'},body:JSON.stringify({sessionId:'6b4d05',location:'master-conect-relatorios.js:resumo',message:'master shares payload',data:{compartilhamentos:k.compartilhamentos,sharesPlataforma:k.shares_plataforma,topPaginas:(k.top_paginas||[]).slice(0,3)},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-				// #endregion
 				renderSerie(k.serie_diaria || []);
 				renderShares(k.shares_plataforma || []);
 				renderTopPaginas(k.top_paginas || []);
@@ -166,7 +163,8 @@
 
 		$.post(url_base + API, payload, function (res) {
 			if (!res || !res.success) {
-				$('#tb-candidatos').html('<tr><td colspan="8" class="text-danger text-center py-3">Erro ao carregar</td></tr>');
+				var msg = (res && res.message) ? res.message : 'Erro ao carregar';
+				$('#tb-candidatos').html('<tr><td colspan="8" class="text-danger text-center py-3">' + esc(msg) + '</td></tr>');
 				return;
 			}
 			var $tb = $('#tb-candidatos').empty();
@@ -196,8 +194,13 @@
 			$('#rel-cand-info').text(total + ' registro(s) · página ' + candPage + ' de ' + pages);
 			$('#btn-cand-prev').prop('disabled', candPage <= 1);
 			$('#btn-cand-next').prop('disabled', candPage >= pages);
-		}, 'json').fail(function () {
-			$('#tb-candidatos').html('<tr><td colspan="8" class="text-danger text-center py-3">Falha de rede</td></tr>');
+		}, 'json').fail(function (xhr) {
+			var msg = 'Falha de rede';
+			try {
+				var err = xhr.responseJSON;
+				if (err && err.message) msg = err.message;
+			} catch (e) {}
+			$('#tb-candidatos').html('<tr><td colspan="8" class="text-danger text-center py-3">' + esc(msg) + '</td></tr>');
 		});
 	}
 

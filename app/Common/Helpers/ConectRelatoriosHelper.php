@@ -186,17 +186,24 @@ class ConectRelatoriosHelper {
 	}
 
 	private static function sqlCandidatosBase(): string {
-		$selo = CjCandidatoFormacao::tabelaExiste()
-			? 'EXISTS(SELECT 1 FROM cj_candidato_formacao f WHERE f.id_candidato = c.id AND f.selo_certificado = 1)'
-			: '0';
+		$selo = '0';
+		if (CjCandidatoFormacao::tabelaExiste()) {
+			try {
+				$stmt = (new Database())->execute("SHOW COLUMNS FROM cj_candidato_formacao LIKE 'selo_certificado'");
+				if ($stmt && $stmt->rowCount() > 0) {
+					$selo = 'EXISTS(SELECT 1 FROM cj_candidato_formacao f WHERE f.id_candidato = c.id AND f.selo_certificado = 1)';
+				}
+			} catch (\Throwable $e) {
+				$selo = '0';
+			}
+		}
 		return 'SELECT c.id, c.nome, c.email, c.tipo, c.status, c.uf, c.created_at, '
-			.'ci.nome AS cidade_nome, est.nome AS estado_nome, est.uf AS estado_uf, '
+			.'ci.nome AS cidade_nome, '
 			.'e.nome AS escola_nome, '
 			.'('.$selo.') AS tem_selo '
 			.'FROM cj_candidatos c '
 			.'LEFT JOIN escolas_assinantes e ON e.id = c.id_admin '
-			.'LEFT JOIN cidades ci ON ci.id = c.cidade_id '
-			.'LEFT JOIN estados est ON est.id = ci.estados_id ';
+			.'LEFT JOIN cidades ci ON ci.id = c.cidade_id ';
 	}
 
 	/** @param array<string,mixed> $filtros */
@@ -225,8 +232,22 @@ class ConectRelatoriosHelper {
 			.'WHERE '.$w['where'].' '
 			.'ORDER BY c.created_at DESC, c.id DESC '
 			.'LIMIT '.$limit.' OFFSET '.$offset;
-		$stmt = (new Database())->execute($sql);
-		$rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+		try {
+			$stmt = (new Database())->execute($sql);
+			$rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+		} catch (\Throwable $e) {
+			// #region agent log
+			@file_put_contents(__DIR__.'/../../../debug-6b4d05.log', json_encode([
+				'sessionId' => '6b4d05',
+				'location'  => 'ConectRelatoriosHelper.php:listarCandidatos',
+				'message'   => 'sql error',
+				'data'      => ['error' => $e->getMessage()],
+				'timestamp' => (int)(microtime(true) * 1000),
+				'hypothesisId' => 'H-candidatos',
+			], JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND);
+			// #endregion
+			throw $e;
+		}
 		return array_map([self::class, 'mapCandidatoRow'], $rows);
 	}
 

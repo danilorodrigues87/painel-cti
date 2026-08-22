@@ -169,15 +169,19 @@ class CjAnalytics {
 		}
 		$limit = max(1, min(20, $limit));
 		$stmt = (new Database())->execute(
-			'SELECT path, COUNT(*) AS visitas FROM cj_analytics_visitas WHERE '
+			'SELECT CASE '
+			.'WHEN LOCATE("?", path) > 0 THEN TRIM(TRAILING "/" FROM SUBSTRING_INDEX(path, "?", 1)) '
+			.'ELSE TRIM(TRAILING "/" FROM path) '
+			.'END AS path, COUNT(*) AS visitas FROM cj_analytics_visitas WHERE '
 			.self::wherePeriodo('created_at', $de, $ate)
 			.' GROUP BY path ORDER BY visitas DESC LIMIT '.$limit
 		);
 		$rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 		$out = [];
 		foreach ($rows as $r) {
+			$path = self::normalizarPath((string)($r['path'] ?? '/'));
 			$out[] = [
-				'path'    => (string)($r['path'] ?? '/'),
+				'path'    => $path,
 				'visitas' => (int)($r['visitas'] ?? 0),
 			];
 		}
@@ -230,10 +234,21 @@ class CjAnalytics {
 
 	private static function normalizarPath(string $path): string {
 		$path = trim($path);
+		$qPos = strpos($path, '?');
+		if ($qPos !== false) {
+			$path = substr($path, 0, $qPos);
+		}
+		$hPos = strpos($path, '#');
+		if ($hPos !== false) {
+			$path = substr($path, 0, $hPos);
+		}
 		if ($path === '' || !str_starts_with($path, '/')) {
 			$path = '/'.$path;
 		}
 		$path = preg_replace('#/+#', '/', $path) ?? '/';
+		if ($path !== '/' && str_ends_with($path, '/')) {
+			$path = rtrim($path, '/');
+		}
 		return mb_substr($path, 0, 255);
 	}
 

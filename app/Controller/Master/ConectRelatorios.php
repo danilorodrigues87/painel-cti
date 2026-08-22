@@ -70,27 +70,35 @@ class ConectRelatorios extends Page {
 	}
 
 	private static function candidatos(array $post): string {
-		$filtros = [
-			'de'       => (string)($post['de'] ?? ''),
-			'ate'      => (string)($post['ate'] ?? ''),
-			'id_admin' => (int)($post['id_admin'] ?? 0),
-			'uf'       => (string)($post['uf'] ?? ''),
-			'tipo'     => (string)($post['tipo'] ?? ''),
-			'status'   => (string)($post['status'] ?? ''),
-			'q'        => (string)($post['q'] ?? ''),
-		];
-		$page = max(1, (int)($post['page'] ?? 1));
-		$limit = 50;
-		$offset = ($page - 1) * $limit;
-		$total = ConectRelatoriosHelper::contarCandidatos($filtros);
-		$items = ConectRelatoriosHelper::listarCandidatos($filtros, $limit, $offset);
+		try {
+			$filtros = [
+				'de'       => (string)($post['de'] ?? ''),
+				'ate'      => (string)($post['ate'] ?? ''),
+				'id_admin' => (int)($post['id_admin'] ?? 0),
+				'uf'       => (string)($post['uf'] ?? ''),
+				'tipo'     => (string)($post['tipo'] ?? ''),
+				'status'   => (string)($post['status'] ?? ''),
+				'q'        => (string)($post['q'] ?? ''),
+			];
+			$page = max(1, (int)($post['page'] ?? 1));
+			$limit = 50;
+			$offset = ($page - 1) * $limit;
+			$total = ConectRelatoriosHelper::contarCandidatos($filtros);
+			$items = ConectRelatoriosHelper::listarCandidatos($filtros, $limit, $offset);
 
-		return json_encode([
-			'success' => true,
-			'items'   => $items,
-			'total'   => $total,
-			'page'    => $page,
-			'pages'   => max(1, (int)ceil($total / $limit)),
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			$json = json_encode([
+				'success' => true,
+				'items'   => $items,
+				'total'   => $total,
+				'page'    => $page,
+				'pages'   => max(1, (int)ceil($total / $limit)),
+			], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+			return is_string($json) ? $json : json_encode(['success' => false, 'message' => 'Erro ao gerar resposta.'], JSON_UNESCAPED_UNICODE);
+		} catch (\Throwable $e) {
+			return json_encode([
+				'success' => false,
+				'message' => 'Erro ao carregar candidatos: '.$e->getMessage(),
+			], JSON_UNESCAPED_UNICODE);
+		}
 	}
 }
