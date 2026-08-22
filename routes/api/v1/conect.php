@@ -78,6 +78,13 @@ $obRouter->get('/api/v1/conect/public/depoimentos', [
 	}
 ]);
 
+$obRouter->post('/api/v1/conect/public/analytics/event', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Analytics::event($request));
+	}
+]);
+
 $obRouter->get('/api/v1/conect/public/blog/categorias', [
 	'middlewares' => $conectMw,
 	function ($request) use ($respond) {

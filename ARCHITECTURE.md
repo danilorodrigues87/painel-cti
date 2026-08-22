@@ -356,7 +356,8 @@ Portal público **Conecta Jovem** (`conectjovem.com.br`) — SPA React + API no 
 - **SQL:** `database/conect_jovem.sql` (tabelas `cj_*`)
 - **API:** `/api/v1/conect/*` (candidato), `/api/v1/conect-empresa/*` (empresa), `/api/v1/conect/public/*` (público)
 - **CORS:** `CONECT_CORS_ORIGINS` no `.env`; middleware `cors-conect`
-- **Master:** `/master/conect` (moderação), `/master/conect-branding` (logo/hero/textos)
+- **Master:** `/master/conect` (moderação), `/master/conect-branding` (logo/hero/textos), `/master/conect-relatorios` (KPIs, analytics, candidatos, CSV)
+- **Analytics:** `database/conect_jovem_analytics.sql`; API `POST /conect/public/analytics/event`; SPA grava pageviews e shares first-party (sem GA)
 - **Escola:** `/painel/conect` (candidatos vinculados + cadastro manual)
 - **SPA:** repo `conectajovem` — consome API; deploy cPanel Git (`DEPLOY.md`)
 - **Roadmap / operação / smoke:** **`docs/CONECT_ROADMAP.md`** (fases 1–6 consolidadas)

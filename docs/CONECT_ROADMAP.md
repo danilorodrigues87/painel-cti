@@ -3,7 +3,7 @@
 > Documento consolidado das fases 1–6 do portal **Conecta Jovem** (`conectajovem.com.br`).  
 > Backend: **painel-cti** · SPA: **conectajovem** (React/Vite).
 
-**Última atualização:** 2026-08-20
+**Última atualização:** 2026-08-22
 
 ---
 
@@ -124,6 +124,33 @@ Painel escola /painel/conect (candidatos da escola)
 
 Este arquivo + referências em `ARCHITECTURE.md` e `conectajovem/README.md`.
 
+### Fase 7 — Relatórios Master + Analytics ✅
+
+**Master:** `/master/conect-relatorios` (menu Conecta Jovem → Relatórios)
+
+| Recurso | Descrição |
+|---------|-----------|
+| KPIs | Novos candidatos/empresas, views de vagas, visitantes únicos, pageviews, compartilhamentos |
+| Gráficos | Série diária (tráfego × cadastros × shares), candidatos por escola, shares por plataforma |
+| Funil | Visitas em `/cadastro` vs candidatos cadastrados no período |
+| Top páginas | Caminhos mais visitados no portal |
+| Lista candidatos | Filtros (escola, UF, tipo, status, busca), paginação, **export CSV** |
+
+**SQL analytics:** `database/conect_jovem_analytics.sql` — tabelas `cj_analytics_visitantes`, `cj_analytics_visitas`, `cj_analytics_compartilhamentos`.
+
+**API pública (coleta SPA):**
+
+| POST | `/conect/public/analytics/event` |
+|------|----------------------------------|
+| `tipo=pageview` | `visitorKey` (UUID), `path`, `referrer?` |
+| `tipo=share` | `plataforma` (`whatsapp`, `facebook`, `linkedin`, `twitter`, `copy`), `path`, `slug?`, `titulo?` |
+
+Rate limit por IP (120 eventos/hora). Sem persistência de IP nas tabelas (LGPD).
+
+**SPA:** `src/lib/analytics.ts` + `AnalyticsTracker` (pageview por rota); `BlogShare` registra cliques de compartilhamento.
+
+**Backend:** `CjAnalytics.php`, `ConectRelatoriosHelper.php`, `Master/ConectRelatorios.php`, `resources/js/master-conect-relatorios.js`.
+
 ---
 
 ## 4. Checklist SQL (primeira instalação)
@@ -131,7 +158,8 @@ Este arquivo + referências em `ARCHITECTURE.md` e `conectajovem/README.md`.
 Execute no phpMyAdmin (ordem):
 
 1. **`database/conect_jovem.sql`** — todas as tabelas `cj_*` (obrigatório)
-2. **`database/conect_jovem_formacao_escola_index.sql`** — opcional (performance índices formação)
+2. **`database/conect_jovem_analytics.sql`** — visitantes, pageviews e compartilhamentos (relatórios Master)
+3. **`database/conect_jovem_formacao_escola_index.sql`** — opcional (performance índices formação)
 
 Tabelas principais:
 
@@ -145,6 +173,9 @@ Tabelas principais:
 | `cj_vagas` | Vagas (moderação Master) |
 | `cj_candidaturas` | Candidaturas por vaga |
 | `cj_notificacoes` | In-app candidato/empresa |
+| `cj_analytics_visitantes` | Visitantes anônimos (UUID) |
+| `cj_analytics_visitas` | Pageviews por rota |
+| `cj_analytics_compartilhamentos` | Cliques em compartilhar (blog) |
 
 ---
 
@@ -203,6 +234,7 @@ Base: `{URL}/api/v1`
 | GET | `/conect/public/cidades` |
 | GET | `/conect/public/estados` |
 | GET | `/conect/public/estados/{id}/cidades` |
+| POST | `/conect/public/analytics/event` — body `tipo`, `visitorKey`/`plataforma`, `path` |
 
 ### Candidato (`Authorization: Bearer`, nível Candidato ou Cliente)
 
@@ -254,6 +286,7 @@ Base: `{URL}/api/v1`
 |-----|--------|
 | `/master/conect` | Aprovar empresas e vagas |
 | `/master/conect-branding` | Logo, hero, textos |
+| `/master/conect-relatorios` | KPIs, gráficos, lista candidatos, CSV |
 
 ### Painel escola
 
@@ -270,7 +303,7 @@ Base: `{URL}/api/v1`
 
 1. Git pull / upload dos arquivos PHP alterados
 2. Confirmar `.env` (`CONECT_CORS_ORIGINS`, `JWT_KEY`)
-3. SQL aplicado (`conect_jovem.sql`)
+3. SQL aplicado (`conect_jovem.sql` + `conect_jovem_analytics.sql` se usar relatórios)
 4. Pasta `uploads/img/conect/` gravável
 5. Teste: `GET https://admin.ctieducacional.com.br/api/v1/conect/public/branding`
 6. Teste CORS: preflight `OPTIONS` → **204**
@@ -331,6 +364,13 @@ git push origin main
 
 - [ ] `/master/conect` — filas pendentes
 - [ ] `/master/conect-branding` — upload logo/hero, portal reflete após Ctrl+F5
+- [ ] `/master/conect-relatorios` — KPIs carregam; após SQL analytics, visitantes/shares aparecem
+
+### Analytics (pós-deploy SPA)
+
+- [ ] Navegar no portal → eventos em `cj_analytics_visitas`
+- [ ] Compartilhar artigo do blog → registro em `cj_analytics_compartilhamentos`
+- [ ] Master relatórios reflete gráficos no período
 
 ### Painel escola
 
@@ -354,6 +394,7 @@ git push origin main
 | Formação/selo | `ConectCandidatoFormacaoHelper.php` |
 | Branding | `Master/ConectBranding.php`, `CjPortalBranding.php`, `BrandingHelper.php` |
 | Moderação | `Master/ConectJovem.php` |
+| Relatórios | `Master/ConectRelatorios.php`, `ConectRelatoriosHelper.php`, `CjAnalytics.php` |
 | Escola | `Admin/ConectJovem.php` |
 | Mapper JSON | `ConectApiMapper.php` |
 
@@ -362,6 +403,7 @@ git push origin main
 | Área | Arquivos |
 |------|----------|
 | API client | `src/lib/api.ts` |
+| Analytics | `src/lib/analytics.ts`, `src/components/AnalyticsTracker.tsx` |
 | Branding | `src/context/BrandingContext.tsx` |
 | Home | `src/pages/HomePage.tsx`, `src/components/home/*` |
 | Candidato | `src/pages/CandidatoDashboardPage.tsx` |
@@ -378,7 +420,7 @@ Itens **fora** das fases 1–6 — candidatos a ajustes na próxima rodada:
 |------|-------|
 | Filtro candidatos por habilidade/curso (empresa) | Previsto no briefing original |
 | Push / e-mail transacional | Hoje só notificações in-app |
-| Painel escola: relatórios e exportação | CRM já recebe leads externos |
+| Painel escola: relatórios e exportação | CRM já recebe leads externos; Master tem relatórios globais |
 | Edição de vaga com re-moderação parcial | Hoje título/descrição em vaga publicada → pendente |
 | PWA / notificações mobile | Opcional |
 | Módulo `conect_jovem` no plano SaaS | Liberar por escola se necessário |
@@ -398,6 +440,7 @@ Itens **fora** das fases 1–6 — candidatos a ajustes na próxima rodada:
 | Branding não muda | Cache SPA | Ctrl+F5; logo via API não exige rebuild |
 | Upload branding falha | Permissão pasta | `chmod`/gravável em `uploads/img/conect/` |
 | Selo não aparece | Certificado não emitido pela escola | Emitir em Certificados admin; não confundir com EAD auto |
+| Relatórios sem visitantes | SQL analytics não aplicado | Executar `conect_jovem_analytics.sql`; rebuild/deploy SPA |
 
 ---
 

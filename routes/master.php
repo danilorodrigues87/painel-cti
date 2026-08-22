@@ -263,6 +263,27 @@ $obRouter->post('/master/conect-depoimentos/{id}/excluir', [
 	}
 ]);
 
+$obRouter->get('/master/conect-relatorios', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectRelatorios::index($request));
+	}
+]);
+
+$obRouter->post('/master/conect-relatorios', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectRelatorios::getInfo($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-relatorios/export', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return Master\ConectRelatorios::exportCsv($request);
+	}
+]);
+
 $obRouter->get('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {
