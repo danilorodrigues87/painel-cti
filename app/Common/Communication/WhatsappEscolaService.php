@@ -64,6 +64,8 @@ class WhatsappEscolaService {
 				? (string)($integracao->whatsapp_msg_fora ?? '')
 				: '',
 			'horario_ok'      => EscolaIntegracoes::temColunasHorarioWhatsapp(),
+			'menu_ok'         => EscolaIntegracoes::temColunasMenuWhatsapp(),
+			'menu'            => self::getConfigMenu($idAdmin),
 		];
 
 		if (!$api->isConfigured()) {
@@ -513,12 +515,79 @@ class WhatsappEscolaService {
 		$ob->whatsapp_horario_fim = trim((string)($dados['whatsapp_horario_fim'] ?? '')) ?: null;
 		$ob->whatsapp_dias = trim((string)($dados['whatsapp_dias'] ?? '1,2,3,4,5')) ?: '1,2,3,4,5';
 		$ob->whatsapp_msg_fora = trim((string)($dados['whatsapp_msg_fora'] ?? ''));
+		if (EscolaIntegracoes::temColunasMenuWhatsapp()) {
+			$ob->whatsapp_menu_ativo = !empty($dados['whatsapp_menu_ativo']) ? 1 : 0;
+			$ob->whatsapp_menu_manual_ativo = !empty($dados['whatsapp_menu_manual_ativo']) ? 1 : 0;
+			$ob->whatsapp_menu_titulo = trim((string)($dados['whatsapp_menu_titulo'] ?? '')) ?: null;
+			$ob->whatsapp_menu_rodape = trim((string)($dados['whatsapp_menu_rodape'] ?? '')) ?: null;
+			$ob->whatsapp_menu_msg_invalida = trim((string)($dados['whatsapp_menu_msg_invalida'] ?? '')) ?: null;
+			$palavras = trim((string)($dados['whatsapp_menu_palavras'] ?? ''));
+			$ob->whatsapp_menu_palavras = $palavras !== '' ? $palavras : null;
+		}
 
 		if (!$ob->salvar()) {
 			return ['ok' => false, 'message' => EscolaIntegracoes::getUltimoErro() ?: 'Falha ao salvar.'];
 		}
 
 		return ['ok' => true, 'message' => 'Configurações de WhatsApp salvas.'];
+	}
+
+	/**
+	 * @return array{
+	 *   menu_ativo:bool,
+	 *   menu_manual_ativo:bool,
+	 *   titulo:string,
+	 *   rodape:string,
+	 *   msg_invalida:string,
+	 *   palavras:list<string>
+	 * }
+	 */
+	public static function getConfigMenu(int $idAdmin): array {
+		$defaults = [
+			'menu_ativo'         => true,
+			'menu_manual_ativo'  => true,
+			'titulo'             => 'Olá! Sou o assistente virtual. Escolha o setor digitando o *número*:',
+			'rodape'             => 'Digite *menu* a qualquer momento para ver as opções novamente.',
+			'msg_invalida'       => 'Opção inválida. Digite o *número* do setor ou *menu* para ver as opções novamente.',
+			'palavras'           => ['menu', '0', 'inicio', 'início', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'],
+		];
+
+		if (!EscolaIntegracoes::temColunasMenuWhatsapp()) {
+			return $defaults;
+		}
+
+		$cfg = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if (!$cfg instanceof EscolaIntegracoes) {
+			return $defaults;
+		}
+
+		$palavrasRaw = trim((string)($cfg->whatsapp_menu_palavras ?? ''));
+		$palavras = $defaults['palavras'];
+		if ($palavrasRaw !== '') {
+			$parsed = array_values(array_filter(array_map(static function ($p) {
+				return mb_strtolower(trim($p), 'UTF-8');
+			}, explode(',', $palavrasRaw))));
+			if ($parsed !== []) {
+				$palavras = $parsed;
+			}
+		}
+
+		$titulo = trim((string)($cfg->whatsapp_menu_titulo ?? ''));
+		$rodape = trim((string)($cfg->whatsapp_menu_rodape ?? ''));
+		$msgInvalida = trim((string)($cfg->whatsapp_menu_msg_invalida ?? ''));
+
+		return [
+			'menu_ativo'        => (int)($cfg->whatsapp_menu_ativo ?? 1) === 1,
+			'menu_manual_ativo' => (int)($cfg->whatsapp_menu_manual_ativo ?? 1) === 1,
+			'titulo'            => $titulo !== '' ? $titulo : $defaults['titulo'],
+			'rodape'            => $rodape !== '' ? $rodape : $defaults['rodape'],
+			'msg_invalida'      => $msgInvalida !== '' ? $msgInvalida : $defaults['msg_invalida'],
+			'palavras'          => $palavras,
+		];
+	}
+
+	public static function menuAutomaticoAtivo(int $idAdmin): bool {
+		return self::getConfigMenu($idAdmin)['menu_ativo'];
 	}
 
 	public static function testarEnvio(int $idAdmin, string $telefone, string $mensagem = ''): array {

@@ -12,6 +12,19 @@ EVOLUTION_WEBHOOK_SECRET=gere_um_segredo_longo
 
 1. Bloco **WhatsApp / Evolution** em `ARCHITECTURE.md` (se ainda não rodou)
 2. Bloco **WhatsApp inbox + setores + chatbot (Fase 3b)**
+3. **Menu inicial:** `database/whatsapp_menu_config.sql`
+
+## Menu inicial (Comunicação)
+
+Em **Comunicação → WhatsApp → Menu inicial**:
+
+| Opção | Efeito |
+|-------|--------|
+| **Enviar menu automático** | Liga/desliga menu na 1ª mensagem e fluxos `primeira_msg` / `saudacao` |
+| **Permitir menu manual** | Cliente digita `menu` (ou palavras configuradas) para ver setores |
+| **Textos** | Abertura, rodapé, opção inválida, palavras-chave |
+
+Com o automático **desligado**, a 1ª mensagem fica **silenciosa** (só aparece no Inbox). Setores continuam em **WhatsApp → Setores e atendentes**.
 
 ## Plano / módulo
 

@@ -54,6 +54,7 @@ class WhatsappChatbotService {
 
 		$texto = trim((string)$texto);
 		$idAdmin = (int)$conversa->id_admin;
+		$menuCfg = WhatsappEscolaService::getConfigMenu($idAdmin);
 
 		// Fora do expediente: responde e não abre fila (exceto se já estava em fila)
 		if (in_array($estado, ['novo', '', 'aguardando_setor', 'encerrado'], true) || $status === 'fechada') {
@@ -71,9 +72,9 @@ class WhatsappChatbotService {
 		WhatsappSetor::garantirPadroes($idAdmin);
 		$setores = WhatsappSetor::listarAtivos($idAdmin);
 
-		// Após encerrar: qualquer nova mensagem do cliente reinicia o fluxo (menu)
+		// Após encerrar: qualquer nova mensagem do cliente reinicia o fluxo
 		if ($estado === 'encerrado' || $status === 'fechada') {
-			self::reiniciarAtendimento($conversa, $setores);
+			self::reiniciarAtendimento($conversa, $setores, $menuCfg, $texto);
 			return;
 		}
 
@@ -88,33 +89,56 @@ class WhatsappChatbotService {
 					self::enviarParaSetor($conversa, $escolha);
 					return;
 				}
-				if (self::pedeMenu($texto)) {
-					self::enviarMenu($conversa, $setores);
+				if (self::pedeMenu($texto, $menuCfg)) {
+					self::enviarMenu($conversa, $setores, $menuCfg);
 					return;
 				}
-				self::enviarTexto(
-					$conversa,
-					"Opção inválida. Digite o *número* do setor ou *menu* para ver as opções novamente."
-				);
-				self::enviarMenu($conversa, $setores);
+				self::enviarTexto($conversa, $menuCfg['msg_invalida']);
+				self::enviarMenu($conversa, $setores, $menuCfg);
 				return;
 			}
 
-			self::enviarMenu($conversa, $setores);
+			if (!$menuCfg['menu_ativo']) {
+				self::manterSilencioso($conversa, $texto, $setores, $menuCfg);
+				return;
+			}
+
+			self::enviarMenu($conversa, $setores, $menuCfg);
 			return;
 		}
 
-		if ($estado === 'fila' && self::pedeMenu($texto)) {
+		if ($estado === 'fila' && self::pedeMenu($texto, $menuCfg)) {
 			$conversa->atualizar([
 				'chatbot_estado' => 'aguardando_setor',
 				'setor_id'       => null,
 				'status'         => 'aberta',
 			]);
-			self::enviarMenu($conversa, $setores);
+			self::enviarMenu($conversa, $setores, $menuCfg);
 		}
 	}
 
-	private static function reiniciarAtendimento(WhatsappConversa $conversa, array $setores): void {
+	private static function manterSilencioso(
+		WhatsappConversa $conversa,
+		string $texto,
+		array $setores,
+		array $menuCfg
+	): void {
+		$conversa->atualizar([
+			'chatbot_estado' => 'novo',
+			'status'         => 'aberta',
+		]);
+
+		if ($texto !== '' && !empty($menuCfg['menu_manual_ativo']) && self::pedeMenu($texto, $menuCfg)) {
+			self::enviarMenu($conversa, $setores, $menuCfg);
+		}
+	}
+
+	private static function reiniciarAtendimento(
+		WhatsappConversa $conversa,
+		array $setores,
+		array $menuCfg,
+		string $texto = ''
+	): void {
 		$conversa->atualizar([
 			'chatbot_estado' => 'novo',
 			'status'         => 'aberta',
@@ -122,12 +146,21 @@ class WhatsappChatbotService {
 			'id_atendente'   => null,
 			'assigned_at'    => null,
 		]);
-		self::enviarMenu($conversa, $setores);
+
+		if (!$menuCfg['menu_ativo']) {
+			self::manterSilencioso($conversa, $texto, $setores, $menuCfg);
+			return;
+		}
+
+		self::enviarMenu($conversa, $setores, $menuCfg);
 	}
 
-	private static function pedeMenu(string $texto): bool {
+	private static function pedeMenu(string $texto, array $menuCfg): bool {
 		$t = mb_strtolower(trim($texto), 'UTF-8');
-		return in_array($t, ['menu', '0', 'inicio', 'início', 'oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite'], true);
+		if ($t === '') {
+			return false;
+		}
+		return in_array($t, $menuCfg['palavras'], true);
 	}
 
 	private static function interpretarEscolha(string $texto, array $setores): ?array {
@@ -155,18 +188,20 @@ class WhatsappChatbotService {
 		return $s;
 	}
 
-	private static function enviarMenu(WhatsappConversa $conversa, array $setores): void {
+	private static function enviarMenu(WhatsappConversa $conversa, array $setores, array $menuCfg): void {
 		if (!$setores) {
 			self::enviarTexto($conversa, 'Olá! No momento não há setores configurados. Aguarde um atendente.');
 			$conversa->atualizar(['chatbot_estado' => 'fila', 'status' => 'aberta']);
 			return;
 		}
 
-		$linhas = ["Olá! Sou o assistente virtual. Escolha o setor digitando o *número*:\n"];
+		$linhas = [rtrim($menuCfg['titulo'])."\n"];
 		foreach ($setores as $i => $s) {
 			$linhas[] = '*'.($i + 1).'* - '.$s['nome'];
 		}
-		$linhas[] = "\nDigite *menu* a qualquer momento para ver as opções novamente.";
+		if (trim($menuCfg['rodape']) !== '') {
+			$linhas[] = "\n".trim($menuCfg['rodape']);
+		}
 
 		self::enviarTexto($conversa, implode("\n", $linhas));
 		$conversa->atualizar([

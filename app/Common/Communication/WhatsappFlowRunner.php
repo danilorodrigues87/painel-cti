@@ -283,6 +283,9 @@ class WhatsappFlowRunner {
 			}
 
 			if (in_array($tipo, ['primeira_msg', 'saudacao'], true) && $primeira) {
+				if (!WhatsappEscolaService::menuAutomaticoAtivo($idAdmin)) {
+					continue;
+				}
 				if ($tipo === 'saudacao' && $texto !== '' && !self::isSaudacao($texto)) {
 					continue;
 				}

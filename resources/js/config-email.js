@@ -225,9 +225,10 @@ function preencherWhatsapp(w, opts){
 		$('#whatsapp_dias').val(w.dias || '1,2,3,4,5');
 		$('#whatsapp_msg_fora').val(w.msg_fora || '');
 	}
-	if(!w.horario_ok){
+	if(w.horario_ok === false){
 		msgs.push('Para horário de expediente, execute o SQL das colunas whatsapp_horario_* (veja checklist).');
 	}
+	preencherMenuWhatsapp(w);
 
 	if(msgs.length){
 		$('#alert-whatsapp-sql').removeClass('d-none').html(msgs.join('<br>'));
@@ -328,6 +329,43 @@ function whatsappQr(){
 	}, 'json');
 }
 
+function preencherMenuWhatsapp(w) {
+	const menu = (w && w.menu) ? w.menu : {};
+	const menuOk = w && w.menu_ok !== false;
+
+	if (!menuOk) {
+		$('#alert-whatsapp-menu-sql').removeClass('d-none');
+		$('#wrap-whatsapp-menu').find('input, textarea').prop('disabled', true);
+		return;
+	}
+
+	$('#alert-whatsapp-menu-sql').addClass('d-none');
+	$('#wrap-whatsapp-menu').find('input, textarea').prop('disabled', false);
+	$('#whatsapp_menu_ativo').prop('checked', menu.menu_ativo !== false);
+	$('#whatsapp_menu_manual_ativo').prop('checked', menu.menu_manual_ativo !== false);
+	$('#whatsapp_menu_titulo').val(menu.titulo || '');
+	$('#whatsapp_menu_rodape').val(menu.rodape || '');
+	$('#whatsapp_menu_msg_invalida').val(menu.msg_invalida || '');
+	$('#whatsapp_menu_palavras').val((menu.palavras || []).join(','));
+	atualizarPreviewMenuWa();
+	toggleMenuManualUi();
+}
+
+function toggleMenuManualUi() {
+	const autoOn = $('#whatsapp_menu_ativo').is(':checked');
+	$('#wrap-menu-manual').toggleClass('opacity-50', !autoOn);
+}
+
+function atualizarPreviewMenuWa() {
+	const titulo = ($('#whatsapp_menu_titulo').val() || 'Olá! Sou o assistente virtual. Escolha o setor digitando o *número*:').trim();
+	const rodape = ($('#whatsapp_menu_rodape').val() || '').trim();
+	const linhas = [titulo, '', '*1* - Comercial', '*2* - Financeiro', '*3* - Secretaria', '*4* - Pedagógico'];
+	if (rodape) {
+		linhas.push('', rodape);
+	}
+	$('#wa-menu-preview').text(linhas.join('\n'));
+}
+
 function whatsappSalvar(){
 	$.post(url_base + CONFIG_EMAIL_URL, {
 		acao: 'whatsapp_salvar',
@@ -339,7 +377,13 @@ function whatsappSalvar(){
 		whatsapp_horario_inicio: $('#whatsapp_horario_inicio').val(),
 		whatsapp_horario_fim: $('#whatsapp_horario_fim').val(),
 		whatsapp_dias: $('#whatsapp_dias').val(),
-		whatsapp_msg_fora: $('#whatsapp_msg_fora').val()
+		whatsapp_msg_fora: $('#whatsapp_msg_fora').val(),
+		whatsapp_menu_ativo: $('#whatsapp_menu_ativo').is(':checked') ? 1 : 0,
+		whatsapp_menu_manual_ativo: $('#whatsapp_menu_manual_ativo').is(':checked') ? 1 : 0,
+		whatsapp_menu_titulo: $('#whatsapp_menu_titulo').val(),
+		whatsapp_menu_rodape: $('#whatsapp_menu_rodape').val(),
+		whatsapp_menu_msg_invalida: $('#whatsapp_menu_msg_invalida').val(),
+		whatsapp_menu_palavras: $('#whatsapp_menu_palavras').val()
 	}, function(res){
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao salvar.', 'error');
@@ -827,4 +871,6 @@ $(function(){
 	$('#btn-wa-salvar').on('click', whatsappSalvar);
 	$('#btn-wa-testar').on('click', whatsappTestar);
 	$('#btn-wa-desconectar').on('click', whatsappDesconectar);
+	$('#whatsapp_menu_ativo').on('change', toggleMenuManualUi);
+	$('.wa-menu-field, #whatsapp_menu_titulo, #whatsapp_menu_rodape').on('input', atualizarPreviewMenuWa);
 });
