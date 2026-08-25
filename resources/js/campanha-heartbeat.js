@@ -18,7 +18,7 @@
 		emAndamento = true;
 		$.post(url_base + 'painel/campanhas', {
 			acao: 'processar',
-			limite: 2,
+			limite: 1,
 			silencioso: 1
 		}, function () {
 			emAndamento = false;

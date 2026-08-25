@@ -3,9 +3,12 @@ let campanhaPollFila = null;
 let campanhaPollTick = null;
 let campanhaPacingTimer = null;
 let campanhaPacing = null;
+let campanhaPacing1a1 = null;
 let campanhaTemPendentes = false;
 let campanhaProcessandoFila = false;
 let campanhaPagina = 1;
+let campanhaBibModal = null;
+let campanhaBibFormato = 'feed';
 
 function renderPaginacaoAjax($el, pag, onPage){
 	pag = pag || {};
@@ -108,6 +111,7 @@ function limparMidiaSelecionada(marcarRemocao){
 	$('#campanha_midia_tipo').val('');
 	window._campanhaArquivo = null;
 	window._campanhaMidiaExistente = null;
+	window._campanhaMidiaBiblioteca = null;
 	if(marcarRemocao){
 		$('#campanha_remover_midia').val('1');
 	} else {
@@ -121,11 +125,19 @@ function atualizarInfoMidia(){
 	const $btnRem = $('#btn-remover-midia-campanha');
 	const arquivo = window._campanhaArquivo;
 	const existente = window._campanhaMidiaExistente;
+	const biblioteca = window._campanhaMidiaBiblioteca;
 	const remover = $('#campanha_remover_midia').val() === '1';
 
 	if(arquivo && arquivo.file){
 		const tipoLabel = { image: 'Imagem', document: 'Documento', audio: 'Áudio' }[arquivo.tipo] || 'Arquivo';
 		$info.html('<span class="text-success"><i class="fas fa-check-circle"></i> '+escHtml(tipoLabel)+': '+escHtml(arquivo.file.name)+'</span>');
+		$btnRem.removeClass('d-none');
+		return;
+	}
+	if(biblioteca && biblioteca.path && !remover){
+		const fmt = biblioteca.formato === 'story' ? ' (story)' : (biblioteca.formato === 'feed' ? ' (quadrado)' : '');
+		let extra = biblioteca.url ? ' <a href="'+escHtml(biblioteca.url)+'" target="_blank" rel="noopener">ver</a>' : '';
+		$info.html('<span class="text-success"><i class="fas fa-photo-video"></i> Biblioteca: '+escHtml(biblioteca.nome || 'imagem')+escHtml(fmt)+'</span>'+extra);
 		$btnRem.removeClass('d-none');
 		return;
 	}
@@ -155,6 +167,7 @@ function selecionarArquivoCampanha(tipo, input){
 	}
 	window._campanhaArquivo = { tipo: tipo, file: file };
 	window._campanhaMidiaExistente = null;
+	window._campanhaMidiaBiblioteca = null;
 	$('#campanha_midia_tipo').val(tipo);
 	$('#campanha_remover_midia').val('0');
 	atualizarInfoMidia();
@@ -306,6 +319,7 @@ function coletarFormulario(){
 		parcelas_atraso_min: $('#parcelas_atraso_min').val() || '1',
 		destinos_json: JSON.stringify(coletarDestinosGrupos()),
 		midia_tipo: $('#campanha_midia_tipo').val() || '',
+		midia_biblioteca_path: (window._campanhaMidiaBiblioteca && window._campanhaMidiaBiblioteca.path) ? window._campanhaMidiaBiblioteca.path : '',
 		remover_midia: $('#campanha_remover_midia').val() || '0'
 	};
 }
@@ -320,8 +334,84 @@ function montarFormDataSalvar(){
 		fd.append('arquivo', window._campanhaArquivo.file);
 		fd.set('midia_tipo', window._campanhaArquivo.tipo);
 		fd.set('remover_midia', '0');
+		fd.set('midia_biblioteca_path', '');
 	}
 	return fd;
+}
+
+function renderCampBibGrid(itens){
+	const $grid = $('#camp-bib-grid');
+	if(!itens || !itens.length){
+		$grid.html('<div class="col-12 text-muted">Nenhuma imagem nesta categoria. Envie na Redes sociais → Biblioteca.</div>');
+		return;
+	}
+	$grid.html(itens.map(function(it){
+		const u = it.url || '';
+		const fmt = it.formato === 'story' ? '<span class="badge bg-info">Story</span> ' : '<span class="badge bg-secondary">Quadrado</span> ';
+		return '<div class="col-6 col-md-3"><div class="border rounded p-1">'+
+			'<img src="'+escHtml(u)+'" class="w-100" style="height:100px;object-fit:cover" alt="">'+
+			'<div class="small text-truncate mt-1">'+fmt+escHtml(it.titulo || it.path || '')+'</div>'+
+			'<button type="button" class="btn btn-sm btn-primary w-100 camp-bib-pick" data-path="'+escHtml(it.path)+'" data-url="'+escHtml(u)+'" data-nome="'+escHtml(it.titulo || it.path || '')+'" data-formato="'+escHtml(it.formato || 'feed')+'">Usar</button>'+
+			'</div></div>';
+	}).join(''));
+}
+
+function carregarCampanhaBiblioteca(){
+	const payload = { acao: 'biblioteca_listar', tipo: 'image' };
+	if(campanhaBibFormato) payload.formato = campanhaBibFormato;
+	$.post(url_base + CAMPANHAS_URL, payload, function(res){
+		if(!res || !res.success){
+			$('#camp-bib-grid').html('<div class="col-12 text-warning">'+(res && res.message ? escHtml(res.message) : 'Biblioteca indisponível.')+'</div>');
+			return;
+		}
+		renderCampBibGrid(res.itens || []);
+	}, 'json');
+}
+
+function abrirModalCampanhaBiblioteca(){
+	if(!campanhaBibModal){
+		campanhaBibModal = new bootstrap.Modal(document.getElementById('modalCampanhaBiblioteca'));
+	}
+	carregarCampanhaBiblioteca();
+	campanhaBibModal.show();
+}
+
+function selecionarMidiaBibliotecaCampanha(item){
+	window._campanhaArquivo = null;
+	window._campanhaMidiaExistente = null;
+	window._campanhaMidiaBiblioteca = {
+		path: item.path,
+		url: item.url,
+		nome: item.nome,
+		formato: item.formato,
+		tipo: 'image'
+	};
+	$('#campanha_midia_tipo').val('image');
+	$('#campanha_remover_midia').val('0');
+	$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').val('');
+	atualizarInfoMidia();
+	if(campanhaBibModal) campanhaBibModal.hide();
+}
+
+function atualizarAlertaCron(cron){
+	const $alert = $('#alert-cron-campanhas');
+	if(!cron){
+		$alert.addClass('d-none');
+		return;
+	}
+	$alert.removeClass('d-none');
+	let txt = cron.hint || '';
+	if(cron.ultima && cron.ultima.created_at){
+		const quando = String(cron.ultima.created_at).slice(0, 16).replace('T', ' ');
+		txt += ' Última execução: '+quando+' ('+(cron.ultima.origem || 'cron')+').';
+	} else if(cron.token_configurado){
+		txt += ' Nenhuma execução registrada ainda — configure o cron no cPanel.';
+	}
+	$('#cron-campanhas-texto').text(txt);
+	$('#cron-campanhas-url').text(cron.url_cron || '');
+	if(!cron.tabela_ok){
+		$('#cron-campanhas-texto').append(' Execute database/campanha_worker_runs.sql para ver o histórico.');
+	}
 }
 
 function limparFormulario(){
@@ -377,6 +467,22 @@ function atualizarTextoPacing(pacing){
 	$('#pacing-grupos-texto').html(txt);
 }
 
+function atualizarTextoPacing1a1(pacing){
+	campanhaPacing1a1 = pacing || campanhaPacing1a1;
+	const p = campanhaPacing1a1;
+	if(!p){
+		$('#pacing-1a1-texto').text('Intervalo 1:1 indisponível.');
+		return;
+	}
+	let txt = 'Intervalo entre números: <strong>'+escHtml(String(p.delay_segundos || 30))+'s</strong> (mín. 30s).';
+	if(p.pode_enviar){
+		txt += ' Próximo envio 1:1: <strong class="text-success">liberado</strong>.';
+	} else {
+		txt += ' Próximo envio 1:1 em: <strong class="text-warning">'+escHtml(formatarEspera(p.proximo_em_segundos))+'</strong>.';
+	}
+	$('#pacing-1a1-texto').html(txt);
+}
+
 function limparPacingTimer(){
 	if(campanhaPacingTimer){
 		clearTimeout(campanhaPacingTimer);
@@ -412,12 +518,15 @@ function tickPacingCountdown(){
 function processarFilaSilencioso(){
 	if(!campanhaTemPendentes || campanhaProcessandoFila) return;
 	campanhaProcessandoFila = true;
-	$.post(url_base + CAMPANHAS_URL, { acao: 'processar', limite: 3, silencioso: 1 }, function(res){
+	$.post(url_base + CAMPANHAS_URL, { acao: 'processar', limite: 1, silencioso: 1 }, function(res){
 		campanhaProcessandoFila = false;
 		if(!res || !res.success) return;
 		if(res.pacing){
 			atualizarTextoPacing(res.pacing);
 			agendarProximoEnvioGrupo();
+		}
+		if(res.pacing_1a1){
+			atualizarTextoPacing1a1(res.pacing_1a1);
 		}
 		const enviados = res.resumo && res.resumo.enviados ? res.resumo.enviados : 0;
 		carregarCampanhas({ silencioso: true });
@@ -432,7 +541,7 @@ function processarFilaSilencioso(){
 
 function iniciarAutoFila(){
 	if(!campanhaPollFila){
-		campanhaPollFila = setInterval(processarFilaSilencioso, 20000);
+		campanhaPollFila = setInterval(processarFilaSilencioso, 35000);
 	}
 	if(!campanhaPollTick){
 		campanhaPollTick = setInterval(tickPacingCountdown, 1000);
@@ -482,6 +591,9 @@ function carregarCampanhas(opts){
 		});
 		if(res.pacing) atualizarTextoPacing(res.pacing);
 		else atualizarTextoPacing(campanhaPacing);
+		if(res.pacing_1a1) atualizarTextoPacing1a1(res.pacing_1a1);
+		else if(campanhaPacing1a1) atualizarTextoPacing1a1(campanhaPacing1a1);
+		atualizarAlertaCron(res.cron);
 		if(campanhaTemPendentes){
 			iniciarAutoFila();
 			if(res.pacing) agendarProximoEnvioGrupo();
@@ -504,7 +616,8 @@ function salvarCampanha(){
 	const mensagem = ($('#campanha_mensagem').val() || '').trim();
 	const temArquivo = !!(window._campanhaArquivo && window._campanhaArquivo.file);
 	const temMidiaExistente = !!(window._campanhaMidiaExistente && $('#campanha_remover_midia').val() !== '1');
-	if(canal === 'whatsapp' && !mensagem && !temArquivo && !temMidiaExistente){
+	const temMidiaBiblioteca = !!(window._campanhaMidiaBiblioteca && window._campanhaMidiaBiblioteca.path && $('#campanha_remover_midia').val() !== '1');
+	if(canal === 'whatsapp' && !mensagem && !temArquivo && !temMidiaExistente && !temMidiaBiblioteca){
 		Swal.fire('Atenção', 'Informe uma mensagem e/ou anexe imagem, documento ou áudio.', 'warning');
 		return;
 	}
@@ -678,6 +791,16 @@ function editarCampanha(id){
 		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_min').prop('disabled', emCurso);
 		window._campanhaArquivo = null;
 		window._campanhaMidiaExistente = c.midia || seg.midia || null;
+		window._campanhaMidiaBiblioteca = null;
+		if(window._campanhaMidiaExistente && (window._campanhaMidiaExistente.origem === 'biblioteca' || String(window._campanhaMidiaExistente.path || '').indexOf('uploads/social/') === 0)){
+			window._campanhaMidiaBiblioteca = {
+				path: window._campanhaMidiaExistente.path,
+				url: window._campanhaMidiaExistente.url,
+				nome: window._campanhaMidiaExistente.nome,
+				tipo: window._campanhaMidiaExistente.tipo || 'image'
+			};
+			window._campanhaMidiaExistente = null;
+		}
 		$('#campanha_remover_midia').val('0');
 		$('#campanha_midia_tipo').val(window._campanhaMidiaExistente ? (window._campanhaMidiaExistente.tipo || '') : '');
 		$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').val('');
@@ -712,6 +835,7 @@ function processarFila(){
 $(function(){
 	window._campanhaArquivo = null;
 	window._campanhaMidiaExistente = null;
+	window._campanhaMidiaBiblioteca = null;
 
 	carregarCampanhas();
 	atualizarUiCanal();
@@ -741,6 +865,22 @@ $(function(){
 	});
 	$('#btn-remover-midia-campanha').on('click', function(){
 		limparMidiaSelecionada(true);
+	});
+
+	$('#btn-campanha-biblioteca').on('click', abrirModalCampanhaBiblioteca);
+	$('#camp-bib-filtro .nav-link').on('click', function(){
+		campanhaBibFormato = String($(this).data('formato') || '');
+		$('#camp-bib-filtro .nav-link').removeClass('active');
+		$(this).addClass('active');
+		carregarCampanhaBiblioteca();
+	});
+	$(document).on('click', '.camp-bib-pick', function(){
+		selecionarMidiaBibliotecaCampanha({
+			path: String($(this).data('path') || ''),
+			url: String($(this).data('url') || ''),
+			nome: String($(this).data('nome') || ''),
+			formato: String($(this).data('formato') || 'feed')
+		});
 	});
 
 	$(document).on('click', '.btn-iniciar', function(){

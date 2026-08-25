@@ -8,6 +8,9 @@
   var anchor = startOfWeek(new Date());
   var modalInst = null;
   var bibPickInst = null;
+  var bibFiltroFormato = 'feed';
+  var bibFiltroTipo = 'image';
+  var bibPickFormato = 'feed';
   /** @type {{path:string,tipo:string}[]} */
   var selectedMidias = [];
   var pollBusy = false;
@@ -271,9 +274,15 @@
     modalInst.show();
   }
 
+  function badgeBibFormato(fmt) {
+    if (fmt === 'story') return '<span class="badge bg-info">Story</span> ';
+    if (fmt === 'feed') return '<span class="badge bg-secondary">Quadrado</span> ';
+    return '';
+  }
+
   function renderBibGrid(target, items, pickMode) {
     if (!items || !items.length) {
-      $(target).html('<div class="col-12 text-muted">Nenhum arquivo. Execute social_fase_a_produto.sql se a aba estiver vazia após upload.</div>');
+      $(target).html('<div class="col-12 text-muted">Nenhum arquivo nesta categoria.</div>');
       return;
     }
     $(target).html(items.map(function (it) {
@@ -283,13 +292,13 @@
         ? '<video src="' + esc(u) + '" class="w-100 bib-thumb" style="height:100px;object-fit:cover;cursor:pointer" muted data-url="' + esc(u) + '" data-tipo="video" data-titulo="' + esc(it.titulo || it.path || '') + '"></video>'
         : '<img src="' + esc(u) + '" class="w-100 bib-thumb" style="height:100px;object-fit:cover;cursor:pointer" alt="" data-url="' + esc(u) + '" data-tipo="image" data-titulo="' + esc(it.titulo || it.path || '') + '">';
       var btn = pickMode
-        ? '<button type="button" class="btn btn-sm btn-primary w-100 bib-pick" data-path="' + esc(it.path) + '" data-tipo="' + esc(it.tipo || 'image') + '">Usar</button>'
+        ? '<button type="button" class="btn btn-sm btn-primary w-100 bib-pick" data-path="' + esc(it.path) + '" data-tipo="' + esc(it.tipo || 'image') + '" data-url="' + esc(u) + '" data-nome="' + esc(it.titulo || it.path || '') + '">Usar</button>'
         : '<div class="btn-group w-100">'
           + '<button type="button" class="btn btn-sm btn-outline-secondary bib-ver" data-url="' + esc(u) + '" data-tipo="' + esc(isVid ? 'video' : 'image') + '" data-titulo="' + esc(it.titulo || it.path || '') + '">Ver</button>'
           + '<button type="button" class="btn btn-sm btn-outline-danger bib-del" data-id="' + it.id + '">Excluir</button>'
           + '</div>';
       return '<div class="col-6 col-md-3"><div class="border rounded p-1">' + media +
-        '<div class="small text-truncate mt-1">' + esc(it.titulo || it.path || '') + '</div>' + btn + '</div></div>';
+        '<div class="small text-truncate mt-1">' + badgeBibFormato(it.formato) + esc(it.titulo || it.path || '') + '</div>' + btn + '</div></div>';
     }).join(''));
   }
 
@@ -309,13 +318,24 @@
   }
 
   function loadBiblioteca() {
-    postApi({ acao: 'biblioteca_listar' }).done(function (r) {
+    var payload = { acao: 'biblioteca_listar' };
+    if (bibFiltroTipo) payload.tipo = bibFiltroTipo;
+    if (bibFiltroFormato) payload.formato = bibFiltroFormato;
+    postApi(payload).done(function (r) {
       if (r && r.sql_ok === false) {
         $('#alert-sql-social').removeClass('d-none');
         $('#bib-grid').html('<div class="col-12 text-warning">' + esc(r.message || 'SQL pendente') + '</div>');
         return;
       }
       renderBibGrid('#bib-grid', (r && r.itens) || [], false);
+    });
+  }
+
+  function loadBibPickGrid() {
+    var payload = { acao: 'biblioteca_listar', tipo: 'image' };
+    if (bibPickFormato) payload.formato = bibPickFormato;
+    postApi(payload).done(function (r) {
+      renderBibGrid('#bib-pick-grid', (r && r.itens) || [], true);
     });
   }
 
@@ -340,9 +360,10 @@
     });
   }
 
-  function uploadOne(file) {
+  function uploadOne(file, formato) {
     var fd = new FormData();
     fd.append('arquivo', file);
+    if (formato) fd.append('formato', formato);
     return $.ajax({
       url: UPLOAD,
       method: 'POST',
@@ -358,7 +379,8 @@
     var chain = $.Deferred().resolve([]).promise();
     list.forEach(function (file) {
       chain = chain.then(function (acc) {
-        return uploadOne(file).then(function (r) {
+        var fmt = guessTipo(file.type || file.name) === 'video' ? '' : ($('#bib-upload-formato').val() || 'feed');
+        return uploadOne(file, fmt).then(function (r) {
           if (r && r.success && r.path) {
             acc.push({ path: r.path, tipo: r.tipo || guessTipo(r.mime || file.name), url_externa: '' });
           }
@@ -430,11 +452,29 @@
     });
 
     $('#btn-abrir-bib').on('click', function () {
-      postApi({ acao: 'biblioteca_listar' }).done(function (r) {
-        renderBibGrid('#bib-pick-grid', (r && r.itens) || [], true);
-        if (!bibPickInst) bibPickInst = new bootstrap.Modal(document.getElementById('modalBibPick'));
-        bibPickInst.show();
-      });
+      var pf = $('#post_formato').val();
+      bibPickFormato = (pf === 'story') ? 'story' : (pf === 'feed' ? 'feed' : '');
+      $('#bib-pick-filtro .nav-link').removeClass('active');
+      $('#bib-pick-filtro .nav-link[data-formato="' + (bibPickFormato || '') + '"]').addClass('active');
+      loadBibPickGrid();
+      if (!bibPickInst) bibPickInst = new bootstrap.Modal(document.getElementById('modalBibPick'));
+      bibPickInst.show();
+    });
+    $('#bib-pick-filtro .nav-link').on('click', function () {
+      bibPickFormato = String($(this).data('formato') || '');
+      $('#bib-pick-filtro .nav-link').removeClass('active');
+      $(this).addClass('active');
+      loadBibPickGrid();
+    });
+    $('#bib-filtro-formato .nav-link').on('click', function () {
+      bibFiltroFormato = String($(this).data('formato') || '');
+      bibFiltroTipo = String($(this).data('tipo') || '');
+      $('#bib-filtro-formato .nav-link').removeClass('active');
+      $(this).addClass('active');
+      if (bibFiltroFormato === 'feed' || bibFiltroFormato === 'story') {
+        $('#bib-upload-formato').val(bibFiltroFormato);
+      }
+      loadBiblioteca();
     });
     $(document).on('click', '.bib-pick', function () {
       selectedMidias.push({ path: String($(this).data('path') || ''), tipo: String($(this).data('tipo') || 'image'), url_externa: '' });

@@ -76,10 +76,16 @@ Tabela `whatsapp_numeros` já existe; hoje sincroniza 1 registro *Principal* ao 
 
 ## Cron de campanhas WhatsApp (produção)
 
-Campanhas WA usam a mesma fila de e-mail. Com o painel fechado, configure:
+Campanhas WA usam a mesma fila de e-mail. Com o painel fechado, configure no **cPanel → Cron Jobs** (a cada 1 minuto):
 
 ```cron
-* * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+* * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_SYSTEM_TOKEN&limite=1" >/dev/null 2>&1
 ```
+
+- `SYSTEM_TOKEN` deve estar no `.env` do painel (mesmo valor usado na URL).
+- `limite=1` evita timeout no HostGator e respeita o pacing 1:1 do WhatsApp.
+- Alternativa CLI: `* * * * * php /caminho/painel-cti/worker/campanhas.php 0 1`
+- Execute `database/campanha_worker_runs.sql` no phpMyAdmin para registrar histórico (visível na tela Campanhas).
+- Teste no navegador (logado ou não): `https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_TOKEN&limite=1` — deve retornar JSON com `"success": true`.
 
 Detalhes em `docs/OPERACAO_EMAIL.md` (seção Cron / HostGator).

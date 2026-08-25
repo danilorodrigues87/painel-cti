@@ -204,7 +204,7 @@ function preencherWhatsapp(w, opts){
 	$('#evolution_ativo').prop('checked', parseInt(w.ativo, 10) === 1);
 	$('#whatsapp_delay_segundos').val(w.delay || 60);
 	$('#whatsapp_max_hora').val(w.max_hora || 20);
-	const grupoDelaySeg = parseInt(w.grupo_delay, 10) || 3600;
+	const grupoDelaySeg = parseInt(w.grupo_delay, 10) || 600;
 	$('#whatsapp_grupo_delay_minutos').val(Math.max(1, Math.round(grupoDelaySeg / 60)));
 	if(w.variar_texto_ok === false){
 		$('#whatsapp_variar_texto').prop('disabled', true);

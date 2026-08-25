@@ -310,9 +310,10 @@
 							<div class="row g-2 mb-3">
 								<div class="col-12">
 									<div class="alert alert-info small mb-2 py-2">
-										<strong>Anti-bloqueio:</strong> intervalo mínimo 30s entre mensagens 1:1 (recomendado 60s).
-										Máximo sugerido: 20/hora. O sistema aplica variação aleatória (±20%) no intervalo.
-										Variação de texto das campanhas: <a href="{{URL}}/painel/config/ia">Configurações de IA</a>.
+										<strong>Envio 1:1 (leads, alunos):</strong> intervalo mínimo <strong>30 segundos</strong> entre cada número (recomendado 60s).
+										Máximo sugerido: 20/hora. O sistema envia <strong>1 mensagem por vez</strong> e respeita esse intervalo mesmo com o painel aberto.
+										<br><strong>Grupos:</strong> intervalo separado (recomendado 10 min). Variação ±20% em ambos.
+										Variação de texto: <a href="{{URL}}/painel/config/ia">Configurações de IA</a>.
 									</div>
 								</div>
 								<div class="col-6">
@@ -327,8 +328,8 @@
 								</div>
 								<div class="col-6">
 									<label class="form-label" for="whatsapp_grupo_delay_minutos">Intervalo grupos (min)</label>
-									<input type="number" class="form-control" id="whatsapp_grupo_delay_minutos" value="60" min="1" max="1440" title="Tempo mínimo entre envios para grupos/listas">
-									<div class="form-text">Campanhas em grupo/lista (+ jitter). Padrão: 60 min.</div>
+									<input type="number" class="form-control" id="whatsapp_grupo_delay_minutos" value="10" min="1" max="1440" title="Tempo mínimo entre envios para grupos/listas">
+									<div class="form-text">Campanhas em grupo/lista (+ jitter). Padrão: 10 min.</div>
 								</div>
 								<div class="col-12" id="wrap-variar-texto-wa">
 									<div class="form-check form-switch">

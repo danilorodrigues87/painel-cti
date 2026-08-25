@@ -8,8 +8,11 @@ use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Common\Communication\CampanhaWorker;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Communication\WhatsappMediaStorage;
+use App\Common\Helpers\SocialMediaStorage;
 use App\Model\Entity\Campanhas as EntityCampanhas;
 use App\Model\Entity\CampanhaFila;
+use App\Model\Entity\CampanhaWorkerRun;
+use App\Model\Entity\SocialBiblioteca;
 use App\Common\Communication\EvolutionApiService;
 
 class Campanhas extends Page {
@@ -58,6 +61,8 @@ class Campanhas extends Page {
 				return self::processarFila($postVars);
 			case 'listar_grupos_wa':
 				return self::listarGruposWa();
+			case 'biblioteca_listar':
+				return self::bibliotecaListar($postVars);
 			default:
 				return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 		}
@@ -104,6 +109,8 @@ class Campanhas extends Page {
 			'success'   => true,
 			'campanhas' => $lista,
 			'pacing'    => CampanhaWorker::infoPacingGrupo($idAdmin),
+			'pacing_1a1' => CampanhaWorker::infoPacing1a1($idAdmin),
+			'cron'      => self::metaCron(),
 			'pagination' => [
 				'page' => $page,
 				'pages' => $pages,
@@ -135,6 +142,12 @@ class Campanhas extends Page {
 		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
 		if ($soGrupos && empty($pacing['pode_enviar'])) {
 			return;
+		}
+		if (!$soGrupos) {
+			$pacing1a1 = CampanhaWorker::infoPacing1a1($idAdmin);
+			if (empty($pacing1a1['pode_enviar'])) {
+				return;
+			}
 		}
 
 		CampanhaWorker::processar($idAdmin, 1, false);
@@ -248,7 +261,7 @@ class Campanhas extends Page {
 
 			if ($id > 0) {
 				$segAntigo = json_decode($ob->segmento ?? '{}', true) ?: [];
-				if (!$removerMidia && empty($_FILES['arquivo']['tmp_name']) && !empty($segAntigo['midia'])) {
+				if (!$removerMidia && empty($_FILES['arquivo']['tmp_name']) && empty($postVars['midia_biblioteca_path']) && !empty($segAntigo['midia'])) {
 					$segmento['midia'] = $segAntigo['midia'];
 				}
 			} else {
@@ -282,7 +295,17 @@ class Campanhas extends Page {
 				'nome' => basename((string)($_FILES['arquivo']['name'] ?? $saved['relative'])),
 				'mime' => $saved['mimetype'] ?? null,
 				'url'  => $saved['url'] ?? WhatsappMediaStorage::urlPublica($saved['relative']),
+				'origem' => 'upload',
 			];
+		} elseif ($canal === 'whatsapp' && !$removerMidia) {
+			$bibPath = trim((string)($postVars['midia_biblioteca_path'] ?? ''));
+			if ($bibPath !== '' && empty($_FILES['arquivo']['tmp_name'])) {
+				$midiaBib = self::resolverMidiaBiblioteca($idAdmin, $bibPath);
+				if (!$midiaBib) {
+					return json_encode(['success' => false, 'message' => 'Mídia da biblioteca inválida ou não encontrada.']);
+				}
+				$segmento['midia'] = $midiaBib;
+			}
 		}
 
 		if ($canal === 'whatsapp' && $mensagem === '' && empty($segmento['midia'])) {
@@ -362,7 +385,7 @@ class Campanhas extends Page {
 			}
 			// WhatsApp 1:1: aplicar delay (anti-rajada); grupos usam pacing próprio
 			$aplicarDelay = ($canal === 'whatsapp' && !$isGrupo);
-			$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 3, $aplicarDelay);
+			$resumo = CampanhaWorker::processar($idAdmin, 1, $aplicarDelay);
 			$ob = EntityCampanhas::getById($id, $idAdmin);
 			$ob->recalcularTotais();
 			$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
@@ -418,7 +441,7 @@ class Campanhas extends Page {
 
 		// Grupos: 1ª mensagem agora; 1:1 WhatsApp com delay (anti-rajada)
 		$aplicarDelay = ($canal === 'whatsapp' && !$isGrupo);
-		$resumo = CampanhaWorker::processar($idAdmin, $isGrupo ? 1 : 2, $aplicarDelay);
+		$resumo = CampanhaWorker::processar($idAdmin, 1, $aplicarDelay);
 
 		$ob = EntityCampanhas::getById($id, $idAdmin);
 		$ob->recalcularTotais();
@@ -518,9 +541,10 @@ class Campanhas extends Page {
 
 	private static function processarFila(array $postVars): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$limite = min(10, max(1, (int)($postVars['limite'] ?? 5)));
 		$silencioso = !empty($postVars['silencioso']);
-		// Auto-poll: sem sleep longo na request web
+		// Poll web: 1 msg por request; manual/cron pode usar limite maior
+		$limiteMax = $silencioso ? 1 : 10;
+		$limite = min($limiteMax, max(1, (int)($postVars['limite'] ?? 5)));
 		$resumo = CampanhaWorker::processar($idAdmin, $limite, !$silencioso);
 
 		$results = EntityCampanhas::get('id_admin = '.(int)$idAdmin.' AND status = "enviando"');
@@ -529,12 +553,15 @@ class Campanhas extends Page {
 		}
 
 		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
+		$pacing1a1 = CampanhaWorker::infoPacing1a1($idAdmin);
 		$msg = 'Processados: '.$resumo['processados'].'. Enviados: '.$resumo['enviados'].'. Erros: '.$resumo['erros'].'.';
 		if ((int)$resumo['enviados'] === 0 && !empty($resumo['escolas'][$idAdmin]['whatsapp']['motivo'])) {
 			$motivo = $resumo['escolas'][$idAdmin]['whatsapp']['motivo'];
 			if ($motivo === 'pacing_grupo' && $pacing['proximo_em_segundos'] > 0) {
 				$min = (int)ceil($pacing['proximo_em_segundos'] / 60);
 				$msg .= ' Aguardando intervalo de grupos (~'.$min.' min).';
+			} elseif ($motivo === 'pacing_1a1' && $pacing1a1['proximo_em_segundos'] > 0) {
+				$msg .= ' Aguardando intervalo 1:1 (~'.$pacing1a1['proximo_em_segundos'].' s).';
 			}
 		}
 
@@ -543,6 +570,7 @@ class Campanhas extends Page {
 			'message' => $msg,
 			'resumo'  => $resumo,
 			'pacing'  => $pacing,
+			'pacing_1a1' => $pacing1a1,
 		]);
 	}
 
@@ -616,13 +644,106 @@ class Campanhas extends Page {
 		if (!is_array($m) || empty($m['path'])) {
 			return null;
 		}
-		$path = (string)$m['path'];
+		$path = ltrim(str_replace('\\', '/', (string)$m['path']), '/');
+		$url = $m['url'] ?? null;
+		if (!$url) {
+			if (strpos($path, 'uploads/social/') === 0) {
+				$url = SocialMediaStorage::urlPublica($path);
+			} else {
+				$url = WhatsappMediaStorage::urlPublica($path);
+			}
+		}
 		return [
 			'tipo' => (string)($m['tipo'] ?? 'document'),
 			'path' => $path,
 			'nome' => (string)($m['nome'] ?? basename($path)),
 			'mime' => $m['mime'] ?? null,
-			'url'  => $m['url'] ?? WhatsappMediaStorage::urlPublica($path),
+			'url'  => $url,
+			'origem' => $m['origem'] ?? (strpos($path, 'uploads/social/') === 0 ? 'biblioteca' : 'upload'),
+		];
+	}
+
+	private static function metaCron(): array {
+		$ultima = CampanhaWorkerRun::ultima();
+		$tokenOk = defined('SYSTEM_TOKEN') && SYSTEM_TOKEN !== '';
+		$base = rtrim((string)URL, '/').'/cron/campanhas?token=';
+		$tokenHint = $tokenOk ? '***' : 'SEU_SYSTEM_TOKEN';
+		return [
+			'tabela_ok' => CampanhaWorkerRun::tabelaExiste(),
+			'token_configurado' => $tokenOk,
+			'ultima' => $ultima,
+			'url_cron' => $base.$tokenHint.'&limite=1',
+			'hint' => !$tokenOk
+				? 'Defina SYSTEM_TOKEN no .env e configure o cron no cPanel (a cada 1 min).'
+				: (empty($ultima)
+					? 'Com o painel fechado, campanhas dependem do cron no cPanel. Configure a URL abaixo.'
+					: 'Cron registrado. Campanhas seguem mesmo com o painel fechado.'),
+		];
+	}
+
+	private static function bibliotecaListar(array $postVars): string {
+		if (!SocialBiblioteca::tabelaExiste()) {
+			return json_encode([
+				'success' => false,
+				'sql_ok' => false,
+				'message' => 'Execute database/social_fase_a_produto.sql',
+			], JSON_UNESCAPED_UNICODE);
+		}
+		$idAdmin = TenantHelper::getIdAdmin();
+		$tipo = trim((string)($postVars['tipo'] ?? 'image'));
+		$tipo = ($tipo === 'image' || $tipo === 'video') ? $tipo : 'image';
+		$formato = trim((string)($postVars['formato'] ?? ''));
+		$formato = in_array($formato, ['feed', 'story'], true) ? $formato : null;
+		$itens = [];
+		foreach (SocialBiblioteca::listByAdmin($idAdmin, $tipo, $formato, 120) as $b) {
+			$itens[] = [
+				'id' => (int)$b->id,
+				'titulo' => (string)($b->titulo ?? ''),
+				'tipo' => $b->tipo,
+				'formato' => $b->formato ?? null,
+				'path' => $b->path_local,
+				'url' => $b->urlPublica(),
+				'mime' => $b->mime,
+			];
+		}
+		return json_encode(['success' => true, 'sql_ok' => true, 'itens' => $itens], JSON_UNESCAPED_UNICODE);
+	}
+
+	/** @return array{tipo:string,path:string,nome:string,mime:?string,url:string,origem:string}|null */
+	private static function resolverMidiaBiblioteca(int $idAdmin, string $pathRel): ?array {
+		$pathRel = ltrim(str_replace(['..', '\\'], ['', '/'], trim($pathRel)), '/');
+		if ($pathRel === '' || strpos($pathRel, 'uploads/social/') !== 0) {
+			return null;
+		}
+		$prefix = 'uploads/social/'.(int)$idAdmin.'/';
+		if (strpos($pathRel, $prefix) !== 0 && !SocialBiblioteca::pathEmUso($idAdmin, $pathRel)) {
+			return null;
+		}
+		$abs = SocialMediaStorage::caminhoAbsoluto($pathRel);
+		if (!is_file($abs)) {
+			return null;
+		}
+		$bib = null;
+		if (SocialBiblioteca::tabelaExiste()) {
+			$rows = SocialBiblioteca::listByAdmin($idAdmin, null, null, 500);
+			foreach ($rows as $b) {
+				if ((string)$b->path_local === $pathRel) {
+					$bib = $b;
+					break;
+				}
+			}
+		}
+		$finfo = new \finfo(FILEINFO_MIME_TYPE);
+		$mime = (string)($finfo->file($abs) ?: ($bib->mime ?? 'image/jpeg'));
+		$tipo = strpos($mime, 'image/') === 0 ? 'image' : 'document';
+		$nome = $bib && $bib->titulo ? (string)$bib->titulo : basename($pathRel);
+		return [
+			'tipo' => $tipo,
+			'path' => $pathRel,
+			'nome' => $nome,
+			'mime' => $mime ?: null,
+			'url'  => SocialMediaStorage::urlPublica($pathRel),
+			'origem' => 'biblioteca',
 		];
 	}
 }

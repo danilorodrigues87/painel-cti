@@ -70,8 +70,8 @@ Reinicie Apache após alterar `.env` (XAMPP: Stop/Start Apache).
 No **Cron Jobs** do cPanel, use URL HTTP com `SYSTEM_TOKEN` do `.env` (não depende de login no painel):
 
 ```cron
-# Campanhas (e-mail + WhatsApp) — a cada minuto
-* * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+# Campanhas (e-mail + WhatsApp) — a cada minuto (limite=1 evita timeout e respeita pacing WA)
+* * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/campanhas?token=SEU_SYSTEM_TOKEN&limite=1" >/dev/null 2>&1
 
 # Social (Facebook/Instagram) — a cada 5 minutos
 */5 * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/social?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
@@ -80,7 +80,7 @@ No **Cron Jobs** do cPanel, use URL HTTP com `SYSTEM_TOKEN` do `.env` (não depe
 Alternativa CLI (se o hosting permitir `php` no cron):
 
 ```cron
-* * * * * /usr/bin/php /home/USUARIO/painel-cti/worker/campanhas.php >> /home/USUARIO/logs/cti-campanhas.log 2>&1
+* * * * * /usr/bin/php /home/USUARIO/painel-cti/worker/campanhas.php 0 1 >> /home/USUARIO/logs/cti-campanhas.log 2>&1
 */5 * * * * /usr/bin/php /home/USUARIO/painel-cti/worker/social.php >> /home/USUARIO/logs/cti-social.log 2>&1
 ```
 

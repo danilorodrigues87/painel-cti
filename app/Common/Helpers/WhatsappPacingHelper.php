@@ -7,6 +7,9 @@ namespace App\Common\Helpers;
  */
 class WhatsappPacingHelper {
 
+	/** Default intervalo entre grupos (10 min). */
+	public const DEFAULT_DELAY_GRUPO = 600;
+
 	/** Piso duro entre mensagens 1:1 em campanhas (segundos). */
 	public const FLOOR_DELAY_1A1 = 30;
 

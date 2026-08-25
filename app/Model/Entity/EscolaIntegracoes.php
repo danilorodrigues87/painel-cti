@@ -54,7 +54,7 @@ class EscolaIntegracoes {
 	public $evolution_numero;
 	public $whatsapp_delay_segundos = 60;
 	public $whatsapp_max_hora = 20;
-	public $whatsapp_grupo_delay_segundos = 3600;
+	public $whatsapp_grupo_delay_segundos = 600;
 	public $whatsapp_variar_texto = 0;
 	public $whatsapp_horario_inicio;
 	public $whatsapp_horario_fim;
@@ -810,7 +810,7 @@ class EscolaIntegracoes {
 			$dados['whatsapp_delay_segundos'] = max(30, (int)($this->whatsapp_delay_segundos ?? 60));
 			$dados['whatsapp_max_hora'] = max(1, (int)($this->whatsapp_max_hora ?? 20));
 			if (self::temColunaWhatsappGrupoDelay()) {
-				$dados['whatsapp_grupo_delay_segundos'] = max(60, (int)($this->whatsapp_grupo_delay_segundos ?? 3600));
+				$dados['whatsapp_grupo_delay_segundos'] = max(60, (int)($this->whatsapp_grupo_delay_segundos ?? 600));
 			}
 			if (self::temColunasHorarioWhatsapp()) {
 				$dados['whatsapp_horario_inicio'] = $this->whatsapp_horario_inicio ?: null;

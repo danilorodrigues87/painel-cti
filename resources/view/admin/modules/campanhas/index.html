@@ -28,6 +28,15 @@
 	<strong>Grupos (recorrente):</strong> a mesma mensagem é reenviada aos grupos selecionados no intervalo configurado, até você <em>Encerrar</em>.
 	<span id="pacing-grupos-texto" class="d-block mt-1">Carregando intervalo...</span>
 </div>
+<div class="alert alert-warning small mb-3" id="alert-pacing-1a1">
+	<strong>Leads / alunos (1:1):</strong> envia <em>1 número por vez</em>, com intervalo mínimo de 30s (configurável em Comunicação).
+	<span id="pacing-1a1-texto" class="d-block mt-1">Carregando...</span>
+</div>
+<div class="alert alert-light border small mb-3 d-none" id="alert-cron-campanhas">
+	<strong>Envio com painel fechado (cron):</strong>
+	<span id="cron-campanhas-texto">Carregando...</span>
+	<div class="mt-1"><code id="cron-campanhas-url" class="user-select-all small"></code></div>
+</div>
 
 <div class="card shadow-sm">
 	<div class="card-body p-0">
@@ -156,6 +165,9 @@
 									<i class="fas fa-file-audio"></i> Áudio
 									<input type="file" id="campanha_arquivo_audio" accept="audio/*,.ogg,.opus,.mp3,.wav,.m4a,.webm" class="d-none">
 								</label>
+								<button type="button" class="btn btn-outline-primary btn-sm" id="btn-campanha-biblioteca">
+									<i class="fas fa-photo-video"></i> Biblioteca
+								</button>
 								<button type="button" class="btn btn-outline-danger btn-sm d-none" id="btn-remover-midia-campanha">
 									Remover mídia
 								</button>
@@ -197,4 +209,23 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260731c"></script>
+<div class="modal fade" id="modalCampanhaBiblioteca" tabindex="-1" aria-hidden="true">
+	<div class="modal-dialog modal-lg">
+		<div class="modal-content">
+			<div class="modal-header py-2">
+				<h5 class="modal-title">Central de mídias</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+			</div>
+			<div class="modal-body">
+				<ul class="nav nav-pills nav-sm mb-3" id="camp-bib-filtro">
+					<li class="nav-item"><button type="button" class="nav-link active" data-formato="feed">Quadrado</button></li>
+					<li class="nav-item"><button type="button" class="nav-link" data-formato="story">Story</button></li>
+					<li class="nav-item"><button type="button" class="nav-link" data-formato="">Todos</button></li>
+				</ul>
+				<div id="camp-bib-grid" class="row g-2"></div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script src="{{URL}}/resources/js/campanhas.js?v=20260825a"></script>

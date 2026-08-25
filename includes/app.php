@@ -59,7 +59,7 @@ date_default_timezone_set(TIMEZONE);
 // Páginas HTML definem o Content-Type no Response.
 
 //DEFINE A CONSTANTE DE URL
-define('SYSTEM_TOKEN', getenv('SYSTEM_TOKEN'));
+define('SYSTEM_TOKEN', (string)Environment::get('SYSTEM_TOKEN', ''));
 
 //DEFINE O VALOR PADRÃO DAS VARIAVEIS
 View::init([

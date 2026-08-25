@@ -98,6 +98,7 @@ class SocialAgenda extends Page {
 		}
 		$idAdmin = TenantHelper::getIdAdmin();
 		$user = SessionUser::getUserLogedData();
+		$post = $request->getPostVars() ?: [];
 		$file = $_FILES['arquivo'] ?? null;
 		if (!is_array($file)) {
 			return self::json(['success' => false, 'message' => 'Arquivo ausente.']);
@@ -106,12 +107,17 @@ class SocialAgenda extends Page {
 		if (!$saved) {
 			return self::json(['success' => false, 'message' => 'Upload inválido (use imagem ≤8MB ou vídeo ≤100MB).']);
 		}
+		$formato = trim((string)($post['formato'] ?? ''));
+		if (!in_array($formato, ['feed', 'story'], true)) {
+			$formato = $saved['tipo'] === 'image' ? 'feed' : null;
+		}
 		$bibId = null;
 		if (SocialBiblioteca::tabelaExiste()) {
 			$bib = new SocialBiblioteca();
 			$bib->id_admin = $idAdmin;
 			$bib->titulo = trim((string)($file['name'] ?? '')) ?: null;
 			$bib->tipo = $saved['tipo'];
+			$bib->formato = $formato;
 			$bib->path_local = $saved['relative'];
 			$bib->mime = $saved['mime'];
 			$bib->bytes = $saved['bytes'];
@@ -123,6 +129,7 @@ class SocialAgenda extends Page {
 			'path' => $saved['relative'],
 			'url' => $saved['url'],
 			'tipo' => $saved['tipo'],
+			'formato' => $formato,
 			'mime' => $saved['mime'],
 			'bytes' => $saved['bytes'],
 			'biblioteca_id' => $bibId,
@@ -476,12 +483,15 @@ class SocialAgenda extends Page {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$tipo = trim((string)($post['tipo'] ?? ''));
 		$tipo = ($tipo === 'image' || $tipo === 'video') ? $tipo : null;
+		$formato = trim((string)($post['formato'] ?? ''));
+		$formato = in_array($formato, ['feed', 'story'], true) ? $formato : null;
 		$itens = [];
-		foreach (SocialBiblioteca::listByAdmin($idAdmin, $tipo, 120) as $b) {
+		foreach (SocialBiblioteca::listByAdmin($idAdmin, $tipo, $formato, 120) as $b) {
 			$itens[] = [
 				'id' => (int)$b->id,
 				'titulo' => (string)($b->titulo ?? ''),
 				'tipo' => $b->tipo,
+				'formato' => $b->formato ?? null,
 				'path' => $b->path_local,
 				'url' => $b->urlPublica(),
 				'mime' => $b->mime,
@@ -489,7 +499,12 @@ class SocialAgenda extends Page {
 				'created_at' => $b->created_at,
 			];
 		}
-		return self::json(['success' => true, 'sql_ok' => true, 'itens' => $itens]);
+		return self::json([
+			'success' => true,
+			'sql_ok' => true,
+			'formato_col_ok' => SocialBiblioteca::colunaFormatoExiste(),
+			'itens' => $itens,
+		]);
 	}
 
 	private static function bibliotecaExcluir(int $id): string {

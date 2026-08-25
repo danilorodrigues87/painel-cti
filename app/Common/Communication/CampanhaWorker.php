@@ -44,9 +44,9 @@ class CampanhaWorker {
 		$colunaOk = EscolaIntegracoes::temColunaWhatsappGrupoDelay();
 		$config = EscolaIntegracoes::getByIdAdmin($idAdmin);
 		if ($colunaOk && $config instanceof EscolaIntegracoes) {
-			return max(60, (int)($config->whatsapp_grupo_delay_segundos ?? 3600));
+			return max(60, (int)($config->whatsapp_grupo_delay_segundos ?? WhatsappPacingHelper::DEFAULT_DELAY_GRUPO));
 		}
-		return 3600;
+		return WhatsappPacingHelper::DEFAULT_DELAY_GRUPO;
 	}
 
 	/**
@@ -171,6 +171,55 @@ class CampanhaWorker {
 		return $n;
 	}
 
+	/** Segundos restantes até poder enviar próxima mensagem 1:1 (por escola). */
+	public static function esperaPacing1a1Escola(int $idAdmin, int $delaySegundos): int {
+		$delay = WhatsappPacingHelper::delayCampanha1a1($delaySegundos);
+		$ultimo = self::ultimoEnvio1a1Escola($idAdmin);
+		if ($ultimo === null) {
+			return 0;
+		}
+		$elapsed = time() - strtotime($ultimo);
+		return max(0, $delay - $elapsed);
+	}
+
+	/** @return array{delay_segundos:int,delay_minutos:int,ultimo_envio:?string,proximo_em_segundos:int,pode_enviar:bool} */
+	public static function infoPacing1a1(int $idAdmin): array {
+		$config = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$delayConfig = ($config instanceof EscolaIntegracoes)
+			? (int)($config->whatsapp_delay_segundos ?? WhatsappPacingHelper::DEFAULT_DELAY_1A1)
+			: WhatsappPacingHelper::DEFAULT_DELAY_1A1;
+		$delay = max(WhatsappPacingHelper::FLOOR_DELAY_1A1, $delayConfig);
+		$ultimo = self::ultimoEnvio1a1Escola($idAdmin);
+		$espera = 0;
+		if ($ultimo !== null) {
+			$elapsed = time() - strtotime($ultimo);
+			$espera = max(0, WhatsappPacingHelper::delayCampanha1a1($delay) - $elapsed);
+		}
+		return [
+			'delay_segundos'      => $delay,
+			'delay_minutos'       => (int)max(1, (int)ceil($delay / 60)),
+			'ultimo_envio'        => $ultimo,
+			'proximo_em_segundos' => $espera,
+			'pode_enviar'         => $espera <= 0,
+		];
+	}
+
+	private static function ultimoEnvio1a1Escola(int $idAdmin): ?string {
+		$sql = '
+			SELECT MAX(f.enviado_em) AS ultimo
+			FROM campanha_fila f
+			INNER JOIN campanhas c ON c.id = f.campanha_id
+			WHERE f.id_admin = '.(int)$idAdmin.'
+			  AND f.status = "enviado"
+			  AND c.canal = "whatsapp"
+			  AND f.destinatario_tipo NOT IN ("grupo","lista","whatsapp_grupos")
+			  AND f.contato NOT LIKE "%@g.us%"
+			  AND f.contato NOT LIKE "%@broadcast%"
+		';
+		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
+		return !empty($row['ultimo']) ? (string)$row['ultimo'] : null;
+	}
+
 	private static function esperaPacingCampanha(int $campanhaId, int $idAdmin, int $delay): int {
 		$sql = '
 			SELECT MAX(enviado_em) AS ultimo
@@ -251,13 +300,14 @@ class CampanhaWorker {
 		$fila = CampanhaFila::getPendentesPorCanal($escolaId, $canal, $limite);
 
 		$enviadosGrupoDesde = 0;
-		$delayGrupoSeg = 3600;
+		$delayGrupoSeg = WhatsappPacingHelper::DEFAULT_DELAY_GRUPO;
 		if ($canal === 'whatsapp') {
 			$delayGrupoSeg = self::delayGrupoSegundos($escolaId);
 			$enviadosGrupoDesde = self::contarEnviadosGrupoDesde($escolaId, $delayGrupoSeg);
 		}
 		$podeEnviarGrupo = $enviadosGrupoDesde < 1;
 		$grupoEnviadoNestaRun = false;
+		$enviado1a1NestaRun = false;
 
 		while ($item = $fila->fetchObject(CampanhaFila::class)) {
 			$resumo['processados']++;
@@ -272,7 +322,6 @@ class CampanhaWorker {
 
 			$isGrupo = $canal === 'whatsapp' && self::itemEhGrupoOuLista($item);
 			if ($isGrupo) {
-				// 1 grupo por intervalo: respeita agendada_para da campanha (prioritário)
 				if ($grupoEnviadoNestaRun) {
 					$stats['motivo'] = $stats['motivo'] ?: 'pacing_grupo';
 					break;
@@ -307,6 +356,35 @@ class CampanhaWorker {
 				}
 			} else {
 				$lockEnvio = null;
+				if ($canal === 'whatsapp') {
+					if ($enviado1a1NestaRun) {
+						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+						break;
+					}
+					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delay);
+					if ($espera1a1 > 0) {
+						if ($aplicarDelay && $espera1a1 <= 120) {
+							sleep($espera1a1);
+						} else {
+							$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+							break;
+						}
+					}
+					$lockEnvio = 'cti_1a1_send_'.(int)$escolaId;
+					$lockRow = (new \App\Model\Db\Database('campanha_fila'))
+						->execute("SELECT GET_LOCK('".addslashes($lockEnvio)."', 5) AS l")
+						->fetch(\PDO::FETCH_ASSOC);
+					if ((int)($lockRow['l'] ?? 0) !== 1) {
+						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+						break;
+					}
+					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delay);
+					if ($espera1a1 > 0) {
+						(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
+						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+						break;
+					}
+				}
 			}
 
 			$vars = [
@@ -355,6 +433,8 @@ class CampanhaWorker {
 					$proxGrupo = WhatsappPacingHelper::delayGrupoComJitter($delayGrupoSeg);
 					$campanha->agendada_para = date('Y-m-d H:i:s', time() + $proxGrupo);
 					$campanha->atualizar();
+				} elseif ($canal === 'whatsapp') {
+					$enviado1a1NestaRun = true;
 				}
 			} else {
 				$item->marcarErro($erroMsg);
@@ -362,13 +442,13 @@ class CampanhaWorker {
 				$stats['erros']++;
 			}
 
-			if ($isGrupo && !empty($lockEnvio)) {
+			if (!empty($lockEnvio)) {
 				(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
 			}
 
 			$campanha->recalcularTotais();
 
-			// Delay só para 1:1 / e-mail — grupos usam pacing via agendada_para
+			// Delay entre 1:1: sleep no cron/CLI; poll web envia só 1 por vez (pacing via DB)
 			if ($aplicarDelay && !$isGrupo) {
 				$sleepSeg = $canal === 'whatsapp'
 					? WhatsappPacingHelper::delayCampanha1a1($delay)
@@ -376,6 +456,8 @@ class CampanhaWorker {
 				if ($sleepSeg > 0) {
 					sleep($sleepSeg);
 				}
+			} elseif ($canal === 'whatsapp' && !$isGrupo) {
+				break;
 			}
 		}
 

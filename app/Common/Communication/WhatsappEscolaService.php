@@ -39,8 +39,8 @@ class WhatsappEscolaService {
 				? (int)($integracao->whatsapp_max_hora ?? 20)
 				: 20,
 			'grupo_delay'     => ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaWhatsappGrupoDelay())
-				? (int)($integracao->whatsapp_grupo_delay_segundos ?? 3600)
-				: 3600,
+				? (int)($integracao->whatsapp_grupo_delay_segundos ?? 600)
+				: 600,
 			'grupo_delay_ok'  => EscolaIntegracoes::temColunaWhatsappGrupoDelay(),
 			'variar_texto'    => ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaWhatsappVariarTexto())
 				? (int)($integracao->whatsapp_variar_texto ?? 0)
