@@ -16,6 +16,7 @@ class BrandingHelper {
 	public const DIR_CONQUISTAS = '/img/conquistas/';
 	public const DIR_PORTAL = '/img/portal/';
 	public const DIR_CONECT = '/img/conect/';
+	public const DIR_SITE_B2B = '/img/site-b2b/';
 	public const DIR_CONECT_EMPRESAS = '/img/conect/empresas/';
 	public const DIR_CONECT_BLOG = '/img/conect/blog/';
 	public const DIR_CONECT_DEPOIMENTOS = '/img/conect/depoimentos/';
@@ -186,6 +187,22 @@ class BrandingHelper {
 
 	public static function urlConectHero(?string $arquivo): ?string {
 		return self::urlUploadArquivo($arquivo, self::DIR_CONECT);
+	}
+
+	public static function processarUploadSiteB2bLogo(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_SITE_B2B, $atual, 2 * 1024 * 1024);
+	}
+
+	public static function processarUploadSiteB2bHero(?array $file, ?string $atual = null): ?string {
+		return self::processarUploadImagem($file, self::DIR_SITE_B2B, $atual, 5 * 1024 * 1024);
+	}
+
+	public static function urlSiteB2bLogo(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_SITE_B2B);
+	}
+
+	public static function urlSiteB2bHero(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_SITE_B2B);
 	}
 
 	public static function processarUploadConectEmpresaLogo(?array $file, ?string $atual = null): ?string {

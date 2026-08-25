@@ -143,6 +143,20 @@ $obRouter->post('/master/conect-branding', [
 	}
 ]);
 
+$obRouter->get('/master/site-branding', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\SiteBranding::index($request));
+	}
+]);
+
+$obRouter->post('/master/site-branding', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\SiteBranding::salvar($request), 'application/json');
+	}
+]);
+
 $obRouter->post('/master/conect/empresa/{id}/aprovar', [
 	'middlewares' => ['required-master-login'],
 	function ($request, $id) {

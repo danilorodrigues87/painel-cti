@@ -36,6 +36,7 @@ class MasterMenuHelper {
 					['id' => 'ead_cursos', 'label' => 'Cursos CTI', 'url' => '/master/ead-cursos', 'icon' => 'fas fa-book-open'],
 					['id' => 'conquistas', 'label' => 'Conquistas', 'url' => '/master/conquistas', 'icon' => 'fas fa-medal'],
 					['id' => 'portal', 'label' => 'Portal do aluno', 'url' => '/master/portal-branding', 'icon' => 'fas fa-palette'],
+					['id' => 'site-branding', 'label' => 'Site CTI', 'url' => '/master/site-branding', 'icon' => 'fas fa-globe'],
 					['id' => 'documentacao', 'label' => 'Documentação', 'url' => '/master/documentacao', 'icon' => 'fas fa-book'],
 				],
 			],
