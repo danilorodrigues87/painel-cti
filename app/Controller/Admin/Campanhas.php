@@ -158,18 +158,29 @@ class Campanhas extends Page {
 	}
 
 	private static function formatarCampanha(EntityCampanhas $c): array {
-		$pendentes = CampanhaFila::contarPorCampanha((int)$c->id, (int)$c->id_admin, 'pendente');
+		$id = (int)$c->id;
+		$idAdmin = (int)$c->id_admin;
 		$canal = ($c->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
-		$total = (int)$c->total;
-		$enviados = (int)$c->enviados;
-		$erros = (int)$c->erros;
-		$processados = $enviados + $erros;
+		$aoVivo = in_array((string)$c->status, ['enviando', 'pausada'], true);
+
+		if ($aoVivo) {
+			$total = CampanhaFila::contarPorCampanha($id, $idAdmin);
+			$enviados = CampanhaFila::contarPorCampanha($id, $idAdmin, 'enviado');
+			$erros = CampanhaFila::contarPorCampanha($id, $idAdmin, 'erro');
+			$pendentes = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
+		} else {
+			$total = (int)$c->total;
+			$enviados = (int)$c->enviados;
+			$erros = (int)$c->erros;
+			$pendentes = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
+		}
+
 		$progressoPct = ($total > 0 && !$c->ehCampanhaGrupos())
-			? min(100, (int)round(($processados / $total) * 100))
+			? min(100, (int)round((($total - $pendentes) / $total) * 100))
 			: null;
 
 		return [
-			'id'          => (int)$c->id,
+			'id'          => $id,
 			'titulo'      => $c->titulo,
 			'assunto'     => $c->assunto,
 			'canal'       => $canal,
@@ -521,6 +532,11 @@ class Campanhas extends Page {
 
 		if (!$ob instanceof EntityCampanhas) {
 			return json_encode(['success' => false, 'message' => 'Campanha não encontrada.']);
+		}
+
+		if ((string)$ob->status === 'enviando') {
+			$ob->recalcularTotais();
+			$ob = EntityCampanhas::getById($id, $idAdmin);
 		}
 
 		$erros = [];

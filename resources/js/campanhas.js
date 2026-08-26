@@ -581,6 +581,14 @@ function carregarCampanhas(opts){
 			return;
 		}
 		renderizarLista(res.campanhas);
+		if(campanhaProgressoId && res.campanhas && res.campanhas.length){
+			const emProgresso = res.campanhas.find(function(c){
+				return parseInt(c.id, 10) === parseInt(campanhaProgressoId, 10);
+			});
+			if(emProgresso){
+				atualizarModalProgressoCampanha(emProgresso);
+			}
+		}
 		if(res.pagination){
 			campanhaPagina = res.pagination.page || campanhaPagina;
 			renderPaginacaoAjax($('#paginacao-campanhas'), res.pagination, function(p){
@@ -688,9 +696,9 @@ function fecharModalProgressoCampanha(){
 	$('#modalCampanhaProgresso').modal('hide');
 }
 
-function abrirModalProgressoPreparando(titulo){
+function abrirModalProgressoPreparando(titulo, id){
 	pararPollingProgressoCampanha();
-	campanhaProgressoId = null;
+	campanhaProgressoId = id || null;
 	$('#campanha-progresso-titulo').text(titulo || 'Iniciando campanha');
 	$('#campanha-progresso-texto').text('Montando lista de destinatários…');
 	$('#campanha-progresso-detalhe').text('Aguarde, isso pode levar alguns instantes em listas grandes.');
@@ -701,6 +709,9 @@ function abrirModalProgressoPreparando(titulo){
 	$('#campanha-progresso-footer').addClass('d-none');
 	$('#modalCampanhaProgresso').modal({ backdrop: 'static', keyboard: false });
 	$('#modalCampanhaProgresso').modal('show');
+	if(id){
+		iniciarPollingProgressoCampanha(id);
+	}
 }
 
 function pctProgressoCampanha(c){
@@ -708,8 +719,8 @@ function pctProgressoCampanha(c){
 	if(c.progresso_pct != null) return Math.min(100, parseInt(c.progresso_pct, 10) || 0);
 	const total = parseInt(c.total, 10) || 0;
 	if(total <= 0) return 0;
-	const proc = (parseInt(c.enviados, 10) || 0) + (parseInt(c.erros, 10) || 0);
-	return Math.min(100, Math.round((proc / total) * 100));
+	const pendentes = parseInt(c.pendentes, 10) || 0;
+	return Math.min(100, Math.round(((total - pendentes) / total) * 100));
 }
 
 function campanhaEnvioConcluido(c){
@@ -717,8 +728,7 @@ function campanhaEnvioConcluido(c){
 	if(c.status === 'concluida') return true;
 	const pendentes = parseInt(c.pendentes, 10) || 0;
 	const total = parseInt(c.total, 10) || 0;
-	const proc = (parseInt(c.enviados, 10) || 0) + (parseInt(c.erros, 10) || 0);
-	return pendentes <= 0 && total > 0 && proc >= total;
+	return pendentes <= 0 && total > 0;
 }
 
 function finalizarProgressoCampanha(c, mensagem){
@@ -754,6 +764,10 @@ function atualizarModalProgressoCampanha(c){
 	if(!c) return;
 	campanhaProgressoId = c.id;
 	const $bar = $('#campanha-progresso-bar');
+
+	if(c.status === 'rascunho'){
+		return;
+	}
 
 	if(c.eh_grupos){
 		$('#campanha-progresso-titulo').text('Campanha recorrente ativa');
@@ -799,17 +813,18 @@ function pollDetalhesProgressoCampanha(){
 }
 
 function iniciarPollingProgressoCampanha(id){
+	if(campanhaProgressoPoll && campanhaProgressoId === id) return;
 	pararPollingProgressoCampanha();
 	campanhaProgressoId = id;
 	pollDetalhesProgressoCampanha();
-	campanhaProgressoPoll = setInterval(pollDetalhesProgressoCampanha, 3000);
+	campanhaProgressoPoll = setInterval(pollDetalhesProgressoCampanha, 2000);
 }
 
 function acaoCampanha(acao, id, confirmar){
 	const executar = function(){
 		const ehIniciar = acao === 'iniciar';
 		if(ehIniciar){
-			abrirModalProgressoPreparando('Iniciando campanha');
+			abrirModalProgressoPreparando('Iniciando campanha', id);
 		}
 		$.post(url_base + CAMPANHAS_URL, { acao: acao, id: id }, function(res){
 			if(ehIniciar){
@@ -820,14 +835,9 @@ function acaoCampanha(acao, id, confirmar){
 				}
 				carregarCampanhas();
 				if(res.campanha){
-					if(res.campanha.eh_grupos){
-						atualizarModalProgressoCampanha(res.campanha);
-					} else if(res.campanha.status === 'enviando' && (res.campanha.pendentes || 0) > 0){
-						atualizarModalProgressoCampanha(res.campanha);
+					atualizarModalProgressoCampanha(res.campanha);
+					if(!res.campanha.eh_grupos && !campanhaEnvioConcluido(res.campanha) && res.campanha.status === 'enviando'){
 						iniciarPollingProgressoCampanha(res.campanha.id);
-					} else {
-						atualizarModalProgressoCampanha(res.campanha);
-						finalizarProgressoCampanha(res.campanha, res.message);
 					}
 				} else {
 					fecharModalProgressoCampanha();
