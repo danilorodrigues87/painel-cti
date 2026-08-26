@@ -11,6 +11,8 @@ let campanhaBibModal = null;
 let campanhaBibFormato = 'feed';
 let campanhaProgressoPoll = null;
 let campanhaProgressoId = null;
+let campanhaProgressoAguardando = false;
+let campanhaListaCache = [];
 
 function renderPaginacaoAjax($el, pag, onPage){
 	pag = pag || {};
@@ -242,9 +244,11 @@ function renderizarLista(campanhas){
 	}
 
 	campanhas.forEach(function(c){
-		const progresso = c.eh_grupos
-			? (c.status === 'enviando' ? 100 : (c.enviados > 0 ? 100 : 0))
-			: (c.total > 0 ? Math.round(((c.enviados + c.erros) / c.total) * 100) : 0);
+		const progresso = c.progresso_pct != null
+			? Math.min(100, parseInt(c.progresso_pct, 10) || 0)
+			: (c.eh_grupos
+				? (c.status === 'enviando' ? 100 : (c.enviados > 0 ? 100 : 0))
+				: (c.total > 0 ? Math.round(((c.enviados + c.erros) / c.total) * 100) : 0));
 		const barraExtra = (c.eh_grupos && c.status === 'enviando') ? ' progress-bar-striped progress-bar-animated' : '';
 
 		let itensMenu = '';
@@ -255,7 +259,7 @@ function renderizarLista(campanhas){
 			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar</button></li>';
 		}
 		if(c.status === 'pausada'){
-			itensMenu += '<li><button type="button" class="dropdown-item text-success btn-iniciar" data-id="'+c.id+'"><i class="fas fa-play me-1"></i> Retomar envio</button></li>';
+			itensMenu += '<li><button type="button" class="dropdown-item text-success btn-iniciar" data-id="'+c.id+'" data-retomar="1"><i class="fas fa-play me-1"></i> Retomar envio</button></li>';
 			itensMenu += '<li><button type="button" class="dropdown-item btn-editar" data-id="'+c.id+'"><i class="fas fa-edit me-1"></i> Editar mensagem/mídia</button></li>';
 		}
 		if(c.status === 'enviando'){
@@ -275,7 +279,7 @@ function renderizarLista(campanhas){
 					+'<button type="button" class="btn btn-sm btn-outline-danger btn-cancelar" data-id="'+c.id+'" title="Encerrar"><i class="fas fa-stop"></i></button>'
 				: '')
 			+(c.status === 'rascunho' || c.status === 'pausada'
-				? '<button type="button" class="btn btn-sm btn-success btn-iniciar" data-id="'+c.id+'" title="'+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'</button>'
+				? '<button type="button" class="btn btn-sm btn-success btn-iniciar" data-id="'+c.id+'"'+(c.status === 'pausada' ? ' data-retomar="1"' : '')+' title="'+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+'</button>'
 					+(c.status === 'pausada' ? '<button type="button" class="btn btn-sm btn-outline-primary btn-editar" data-id="'+c.id+'"><i class="fas fa-edit"></i></button>' : '')
 				: '')
 			+'<button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">'
@@ -566,6 +570,22 @@ function pararAutoFila(){
 	limparPacingTimer();
 }
 
+function aplicarCampanhaNaLista(c){
+	if(!c || !c.id) return;
+	let found = false;
+	campanhaListaCache = (campanhaListaCache || []).map(function(x){
+		if(parseInt(x.id, 10) === parseInt(c.id, 10)){
+			found = true;
+			return Object.assign({}, x, c);
+		}
+		return x;
+	});
+	if(!found){
+		campanhaListaCache.unshift(c);
+	}
+	renderizarLista(campanhaListaCache);
+}
+
 function carregarCampanhas(opts){
 	opts = opts || {};
 	if(opts.page) campanhaPagina = opts.page;
@@ -581,6 +601,7 @@ function carregarCampanhas(opts){
 			return;
 		}
 		renderizarLista(res.campanhas);
+		campanhaListaCache = res.campanhas || [];
 		if(campanhaProgressoId && res.campanhas && res.campanhas.length){
 			const emProgresso = res.campanhas.find(function(c){
 				return parseInt(c.id, 10) === parseInt(campanhaProgressoId, 10);
@@ -619,7 +640,11 @@ function carregarCampanhas(opts){
 		}
 	}, 'json').fail(function(){
 		if(!opts.silencioso){
-			Swal.fire('Erro', 'Falha ao carregar campanhas.', 'error');
+			$('#lista-campanhas').html('<tr><td colspan="6" class="text-center text-danger py-4">Falha ao carregar campanhas. <a href="#" id="link-recarregar-campanhas">Tentar novamente</a></td></tr>');
+			$('#link-recarregar-campanhas').on('click', function(e){
+				e.preventDefault();
+				carregarCampanhas();
+			});
 		}
 	});
 }
@@ -693,15 +718,20 @@ function pararPollingProgressoCampanha(){
 function fecharModalProgressoCampanha(){
 	pararPollingProgressoCampanha();
 	campanhaProgressoId = null;
+	campanhaProgressoAguardando = false;
 	$('#modalCampanhaProgresso').modal('hide');
 }
 
-function abrirModalProgressoPreparando(titulo, id){
+function abrirModalProgressoPreparando(titulo, id, opts){
+	opts = opts || {};
 	pararPollingProgressoCampanha();
 	campanhaProgressoId = id || null;
+	campanhaProgressoAguardando = !!opts.aguardando;
 	$('#campanha-progresso-titulo').text(titulo || 'Iniciando campanha');
-	$('#campanha-progresso-texto').text('Montando lista de destinatários…');
-	$('#campanha-progresso-detalhe').text('Aguarde, isso pode levar alguns instantes em listas grandes.');
+	$('#campanha-progresso-texto').text(opts.retomar ? 'Retomando envio…' : 'Montando lista de destinatários…');
+	$('#campanha-progresso-detalhe').text(opts.retomar
+		? 'Confirmando retomada no servidor…'
+		: 'Aguarde, isso pode levar alguns instantes em listas grandes.');
 	$('#campanha-progresso-stats').text('');
 	const $bar = $('#campanha-progresso-bar');
 	$bar.addClass('progress-bar-striped progress-bar-animated').removeClass('bg-success');
@@ -709,9 +739,6 @@ function abrirModalProgressoPreparando(titulo, id){
 	$('#campanha-progresso-footer').addClass('d-none');
 	$('#modalCampanhaProgresso').modal({ backdrop: 'static', keyboard: false });
 	$('#modalCampanhaProgresso').modal('show');
-	if(id){
-		iniciarPollingProgressoCampanha(id);
-	}
 }
 
 function pctProgressoCampanha(c){
@@ -764,6 +791,10 @@ function atualizarModalProgressoCampanha(c){
 	if(!c) return;
 	campanhaProgressoId = c.id;
 	const $bar = $('#campanha-progresso-bar');
+
+	if(campanhaProgressoAguardando && (c.status === 'rascunho' || c.status === 'pausada')){
+		return;
+	}
 
 	if(c.status === 'rascunho'){
 		return;
@@ -820,29 +851,57 @@ function iniciarPollingProgressoCampanha(id){
 	campanhaProgressoPoll = setInterval(pollDetalhesProgressoCampanha, 2000);
 }
 
-function acaoCampanha(acao, id, confirmar){
+function concluirInicioCampanha(res){
+	campanhaProgressoAguardando = false;
+	if(!res || !res.campanha){
+		fecharModalProgressoCampanha();
+		if(res && res.message){
+			Swal.fire('OK', res.message, 'success');
+		}
+		return;
+	}
+	aplicarCampanhaNaLista(res.campanha);
+	atualizarModalProgressoCampanha(res.campanha);
+	if(res.campanha.eh_grupos){
+		$('#campanha-progresso-footer').removeClass('d-none');
+		return;
+	}
+	if(!campanhaEnvioConcluido(res.campanha) && res.campanha.status === 'enviando'){
+		iniciarPollingProgressoCampanha(res.campanha.id);
+		processarFilaSilencioso();
+	}
+	carregarCampanhas({ silencioso: true });
+}
+
+function acaoCampanha(acao, id, confirmar, retomar){
 	const executar = function(){
 		const ehIniciar = acao === 'iniciar';
 		if(ehIniciar){
-			abrirModalProgressoPreparando('Iniciando campanha', id);
+			abrirModalProgressoPreparando(retomar ? 'Retomando campanha' : 'Iniciando campanha', id, {
+				aguardando: true,
+				retomar: !!retomar
+			});
+			if(retomar){
+				const atual = (campanhaListaCache || []).find(function(x){
+					return parseInt(x.id, 10) === parseInt(id, 10);
+				});
+				if(atual){
+					aplicarCampanhaNaLista(Object.assign({}, atual, {
+						status: 'enviando',
+						status_label: 'Enviando'
+					}));
+				}
+			}
 		}
 		$.post(url_base + CAMPANHAS_URL, { acao: acao, id: id }, function(res){
 			if(ehIniciar){
 				if(!res || !res.success){
 					fecharModalProgressoCampanha();
 					Swal.fire('Erro', (res && res.message) ? res.message : 'Falha na operação.', 'error');
+					carregarCampanhas();
 					return;
 				}
-				carregarCampanhas();
-				if(res.campanha){
-					atualizarModalProgressoCampanha(res.campanha);
-					if(!res.campanha.eh_grupos && !campanhaEnvioConcluido(res.campanha) && res.campanha.status === 'enviando'){
-						iniciarPollingProgressoCampanha(res.campanha.id);
-					}
-				} else {
-					fecharModalProgressoCampanha();
-					Swal.fire('OK', res.message, 'success');
-				}
+				concluirInicioCampanha(res);
 				return;
 			}
 			if((acao === 'pausar' || acao === 'cancelar') && campanhaProgressoId === id){
@@ -931,7 +990,7 @@ function abrirDetalhes(id){
 			footer += '<button type="button" class="btn btn-outline-primary btn-editar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-edit"></i> Editar mensagem/mídia</button>';
 		}
 		if(c.status === 'rascunho' || c.status === 'pausada'){
-			footer += '<button type="button" class="btn btn-success btn-iniciar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+' envio</button>';
+			footer += '<button type="button" class="btn btn-success btn-iniciar" data-id="'+c.id+'"'+(c.status === 'pausada' ? ' data-retomar="1"' : '')+' data-bs-dismiss="modal"><i class="fas fa-'+(c.status === 'pausada' ? 'play' : 'paper-plane')+'"></i> '+(c.status === 'pausada' ? 'Retomar' : 'Iniciar')+' envio</button>';
 			footer += '<button type="button" class="btn btn-outline-primary btn-editar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-edit"></i> Editar</button>';
 		}
 		if(c.status !== 'concluida' && c.status !== 'cancelada'){
@@ -1062,7 +1121,7 @@ $(function(){
 	});
 
 	$(document).on('click', '.btn-iniciar', function(){
-		acaoCampanha('iniciar', $(this).data('id'), true);
+		acaoCampanha('iniciar', $(this).data('id'), true, !!$(this).data('retomar'));
 	});
 	$(document).on('click', '.btn-pausar', function(){
 		acaoCampanha('pausar', $(this).data('id'), false);
@@ -1081,5 +1140,6 @@ $(function(){
 	$('#modalCampanhaProgresso').on('hidden.bs.modal', function(){
 		pararPollingProgressoCampanha();
 		campanhaProgressoId = null;
+		campanhaProgressoAguardando = false;
 	});
 });

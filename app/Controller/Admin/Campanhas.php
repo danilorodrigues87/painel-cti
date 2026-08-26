@@ -39,6 +39,12 @@ class Campanhas extends Page {
 			]);
 		}
 
+		// Libera lock da sessão PHP para listar/processar em paralelo com iniciar/retomar
+		TenantHelper::getIdAdmin();
+		if (session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close();
+		}
+
 		$postVars = $request->getPostVars();
 		$acao = $postVars['acao'] ?? '';
 
@@ -86,9 +92,7 @@ class Campanhas extends Page {
 			$where .= ' AND canal = "'.addslashes($canal).'"';
 		}
 
-		// Avança a fila se o intervalo de grupos já liberou (não depende só do botão/cron)
-		self::tickFilaLeve($idAdmin);
-
+		// Fila avança via poll/cron na página — não bloquear o listar com envio WhatsApp
 		$page = max(1, (int)($postVars['page'] ?? 1));
 		$limit = 20;
 		$rowCount = EntityCampanhas::get($where, null, null, 'COUNT(*) as q')->fetch(\PDO::FETCH_ASSOC);
@@ -157,11 +161,11 @@ class Campanhas extends Page {
 		}
 	}
 
-	private static function formatarCampanha(EntityCampanhas $c): array {
+	private static function formatarCampanha(EntityCampanhas $c, bool $contagensAoVivo = false): array {
 		$id = (int)$c->id;
 		$idAdmin = (int)$c->id_admin;
 		$canal = ($c->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
-		$aoVivo = in_array((string)$c->status, ['enviando', 'pausada'], true);
+		$aoVivo = $contagensAoVivo || (string)$c->status === 'enviando';
 
 		if ($aoVivo) {
 			$total = CampanhaFila::contarPorCampanha($id, $idAdmin);
@@ -350,7 +354,7 @@ class Campanhas extends Page {
 		return json_encode([
 			'success'  => true,
 			'message'  => !$editavelCompleto ? 'Mensagem/mídia atualizadas. Valem para os próximos envios.' : 'Campanha salva.',
-			'campanha' => self::formatarCampanha($ob),
+			'campanha' => self::formatarCampanha($ob, true),
 		]);
 	}
 
@@ -401,24 +405,18 @@ class Campanhas extends Page {
 			$isGrupo = $ob->ehCampanhaGrupos();
 			if ($isGrupo) {
 				CampanhaWorker::reabastecerFilaGrupos($ob);
-			}
-			// Web: não bloquear a requisição com sleep de pacing; cron/poll enviam depois
-			$aplicarDelay = false;
-			$resumo = CampanhaWorker::processar($idAdmin, 1, $aplicarDelay);
-			$ob = EntityCampanhas::getById($id, $idAdmin);
-			$ob->recalcularTotais();
-			$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
-			if ($isGrupo) {
 				CampanhaWorker::agendarContinuacaoGrupos($idAdmin, $id);
 			}
+			$ob = EntityCampanhas::getById($id, $idAdmin);
+			$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
 			$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
 			return json_encode([
 				'success'  => true,
+				'retomada' => true,
 				'message'  => $isGrupo
-					? 'Campanha retomada. Reenvio recorrente ativo (~'.$pacing['delay_minutos'].' min). Enviados nesta rodada: '.((int)($resumo['enviados'] ?? 0)).'.'
-					: 'Campanha retomada. Enviados nesta rodada: '.((int)($resumo['enviados'] ?? 0)).'. Pendentes: '.$pend,
-				'campanha' => self::formatarCampanha($ob),
-				'worker'   => $resumo,
+					? 'Campanha retomada. Reenvio recorrente ativo (~'.$pacing['delay_minutos'].' min).'
+					: 'Campanha retomada.'.($pend > 0 ? ' '.$pend.' mensagem(ns) na fila.' : ' Nenhuma pendência na fila.'),
+				'campanha' => self::formatarCampanha($ob, true),
 				'pacing'   => $pacing,
 			]);
 		}
@@ -478,7 +476,7 @@ class Campanhas extends Page {
 		return json_encode([
 			'success'  => true,
 			'message'  => $msg,
-			'campanha' => self::formatarCampanha($ob),
+			'campanha' => self::formatarCampanha($ob, true),
 			'worker'   => $resumo,
 			'pacing'   => $pacing,
 		]);
@@ -556,7 +554,7 @@ class Campanhas extends Page {
 
 		return json_encode([
 			'success'  => true,
-			'campanha' => self::formatarCampanha($ob),
+			'campanha' => self::formatarCampanha($ob, true),
 			'erros'    => $erros,
 			'mensagem' => $ob->mensagem,
 			'assunto'  => $ob->assunto,
