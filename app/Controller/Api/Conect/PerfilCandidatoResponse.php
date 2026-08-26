@@ -36,7 +36,7 @@ trait PerfilCandidatoResponse {
 
 		return [
 			'user'      => ConectApiMapper::userCandidato($user, (object)$row),
-			'candidato' => ConectApiMapper::candidatoPerfil($row, $habilidades, $formacao, $temSelo),
+			'candidato' => ConectApiMapper::candidatoPerfil($row, $habilidades, $formacao, $temSelo, true),
 		];
 	}
 }

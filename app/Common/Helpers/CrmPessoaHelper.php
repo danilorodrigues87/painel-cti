@@ -89,6 +89,12 @@ class CrmPessoaHelper {
 			if (!empty($dados['funil_id']) && (int)$dados['funil_id'] > 0) {
 				$exist->funil_id = (int)$dados['funil_id'];
 			}
+			if (isset($dados['idade']) && (int)$dados['idade'] > 0) {
+				$exist->idade = (int)$dados['idade'];
+			}
+			if (!empty($dados['responsavel_nome'])) {
+				$exist->responsavel_nome = mb_substr(trim((string)$dados['responsavel_nome']), 0, 191);
+			}
 			$exist->atualizarDados();
 			if (!empty($dados['historico_obs'])) {
 				self::registrarHistorico((int)$exist->id, $usuarioOperador, 'lead_atualizado', (string)$dados['historico_obs']);
@@ -116,6 +122,12 @@ class CrmPessoaHelper {
 		}
 		if (isset($dados['valor_estimado']) && (float)$dados['valor_estimado'] > 0) {
 			$lead->valor_estimado = (float)$dados['valor_estimado'];
+		}
+		if (isset($dados['idade']) && (int)$dados['idade'] > 0) {
+			$lead->idade = (int)$dados['idade'];
+		}
+		if (!empty($dados['responsavel_nome'])) {
+			$lead->responsavel_nome = mb_substr(trim((string)$dados['responsavel_nome']), 0, 191);
 		}
 		$lead->status = 'novo';
 		$lead->status_wa = 'pendente';

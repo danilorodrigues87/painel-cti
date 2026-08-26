@@ -69,7 +69,7 @@ class CjCandidatura {
 		$sql = 'SELECT c.*, v.id_empresa, v.titulo AS vaga_titulo, v.slug AS vaga_slug, v.tipo_vaga, '
 			.'v.status AS vaga_status, e.nome_fantasia AS empresa_nome, '
 			.'cd.nome AS candidato_nome, cd.email AS candidato_email, cd.whatsapp AS candidato_whatsapp, '
-			.'cd.resumo AS candidato_resumo, cd.disponibilidade AS candidato_disponibilidade, '
+			.'cd.nascimento AS candidato_nascimento, cd.resumo AS candidato_resumo, cd.disponibilidade AS candidato_disponibilidade, '
 			.'cd.tipo AS candidato_tipo '
 			.'FROM cj_candidaturas c '
 			.'INNER JOIN cj_vagas v ON v.id = c.id_vaga '

@@ -4,6 +4,7 @@ namespace App\Controller\Api\Conect;
 
 use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectCandidatoAuthHelper;
+use App\Common\Helpers\ConectIdadeHelper;
 use App\Common\Helpers\ConectJovemCrmHelper;
 use App\Common\Helpers\ConectJovemLeadRouter;
 use App\Model\Entity\CjCandidato;
@@ -82,6 +83,11 @@ class Auth {
 			return self::respond(['message' => 'E-mail já cadastrado.'], 409);
 		}
 
+		$nascVal = ConectIdadeHelper::extrairValidarNascimento($post, true);
+		if (!$nascVal['ok']) {
+			return self::respond(['message' => $nascVal['erro'] ?? 'Data de nascimento inválida.'], 400);
+		}
+
 		$idAdmin = ConectJovemLeadRouter::resolverIdAdmin(['cidade_id' => $cidadeId]);
 
 		$user = new User();
@@ -104,10 +110,12 @@ class Auth {
 			$email,
 			(string)($post['cursoInteresse'] ?? 'Empregabilidade'),
 			$cidadeId > 0 ? $cidadeId : null,
-			$bairro !== '' ? $bairro : null
+			$bairro !== '' ? $bairro : null,
+			$nascVal['dados']['nascimento'] ?? null,
+			$nascVal['dados']['responsavel_nome'] ?? null
 		);
 
-		$candidatoId = CjCandidato::inserir([
+		$candidatoInsert = [
 			'id_usuario'  => (int)$user->id,
 			'id_admin'    => $idAdmin,
 			'tipo'        => 'externo',
@@ -120,7 +128,12 @@ class Auth {
 			'resumo'      => trim((string)($post['resumo'] ?? '')),
 			'crm_lead_id' => $leadId,
 			'status'      => 'ativo',
-		]);
+		];
+		if (!empty($nascVal['dados'])) {
+			$candidatoInsert = array_merge($candidatoInsert, $nascVal['dados']);
+		}
+
+		$candidatoId = CjCandidato::inserir($candidatoInsert);
 
 		if (!$candidatoId) {
 			return self::respond(['message' => 'Usuário criado, mas perfil de candidato falhou.'], 500);

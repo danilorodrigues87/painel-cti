@@ -17,14 +17,17 @@ class ConectJovemCrmHelper {
 		?string $email = null,
 		?string $cursoInteresse = null,
 		?int $cidadeId = null,
-		?string $bairro = null
+		?string $bairro = null,
+		?string $nascimento = null,
+		?string $responsavelNome = null
 	): ?int {
 		if ($idAdmin <= 0 || trim($nome) === '') {
 			return null;
 		}
 
 		$funilId = self::funilConectaJovem($idAdmin);
-		$res = CrmPessoaHelper::criarOuAtualizarLead($idAdmin, [
+		$idade = ConectIdadeHelper::calcularIdade($nascimento);
+		$dadosLead = [
 			'nome' => $nome,
 			'whatsapp' => $whatsapp,
 			'email' => $email,
@@ -34,7 +37,14 @@ class ConectJovemCrmHelper {
 			'bairro' => $bairro,
 			'cidade' => $cidadeId !== null && $cidadeId > 0 ? (string)$cidadeId : null,
 			'historico_obs' => 'Lead via Conecta Jovem (cadastro externo).',
-		], 0);
+		];
+		if ($idade !== null && $idade > 0) {
+			$dadosLead['idade'] = $idade;
+		}
+		if ($responsavelNome !== null && trim($responsavelNome) !== '') {
+			$dadosLead['responsavel_nome'] = trim($responsavelNome);
+		}
+		$res = CrmPessoaHelper::criarOuAtualizarLead($idAdmin, $dadosLead, 0);
 
 		$lead = $res['lead'] ?? null;
 		return ($lead instanceof EntityCrmLeads && (int)$lead->id > 0) ? (int)$lead->id : null;

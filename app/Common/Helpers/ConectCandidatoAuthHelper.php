@@ -61,7 +61,7 @@ class ConectCandidatoAuthHelper {
 		}
 
 		$idAdmin = ConectJovemLeadRouter::resolverIdAdmin(['id_usuario' => (int)$user->id]);
-		$candidatoId = CjCandidato::inserir([
+		$insert = [
 			'id_usuario' => (int)$user->id,
 			'id_admin'   => $idAdmin,
 			'tipo'       => 'aluno',
@@ -69,7 +69,17 @@ class ConectCandidatoAuthHelper {
 			'email'      => $email,
 			'whatsapp'   => preg_replace('/\D+/', '', (string)($user->whatsapp ?? '')),
 			'status'     => 'ativo',
-		]);
+		];
+		if (!empty($user->nascimento)) {
+			$nascVal = ConectIdadeHelper::validarElegibilidade((string)$user->nascimento);
+			if ($nascVal['ok']) {
+				$nasc = ConectIdadeHelper::normalizarNascimento((string)$user->nascimento);
+				if ($nasc !== null) {
+					$insert['nascimento'] = $nasc;
+				}
+			}
+		}
+		$candidatoId = CjCandidato::inserir($insert);
 
 		return $candidatoId ? CjCandidato::getById($candidatoId) : null;
 	}

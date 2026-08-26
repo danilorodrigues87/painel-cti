@@ -4,6 +4,7 @@ namespace App\Controller\Api\Conect;
 
 use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectEnderecoHelper;
+use App\Common\Helpers\ConectIdadeHelper;
 use App\Common\Helpers\ConectRedesSociaisHelper;
 use App\Common\Helpers\ConectSchemaHelper;
 use App\Model\Db\Database;
@@ -101,6 +102,19 @@ class Perfil {
 			$dados['redes_sociais_json'] = ConectRedesSociaisHelper::encode(
 				ConectRedesSociaisHelper::sanitizar($post['redesSociais'])
 			);
+		}
+
+		if (array_key_exists('nascimento', $post)
+			|| array_key_exists('dataNascimento', $post)
+			|| array_key_exists('responsavelNome', $post)
+			|| array_key_exists('responsavelConsentimento', $post)) {
+			$nascVal = ConectIdadeHelper::extrairValidarNascimento($post, true);
+			if (!$nascVal['ok']) {
+				return self::respond(['message' => $nascVal['erro'] ?? 'Data de nascimento inválida.'], 400);
+			}
+			if (!empty($nascVal['dados'])) {
+				$dados = array_merge($dados, $nascVal['dados']);
+			}
 		}
 
 		if ($dados !== []) {

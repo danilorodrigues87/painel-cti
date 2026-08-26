@@ -29,7 +29,7 @@ class ConectApiMapper {
 	 * @param list<string> $habilidades
 	 * @param list<array<string,mixed>> $formacao
 	 */
-	public static function candidatoPerfil($candidato, array $habilidades = [], array $formacao = [], bool $temSelo = false): array {
+	public static function candidatoPerfil($candidato, array $habilidades = [], array $formacao = [], bool $temSelo = false, bool $privado = false): array {
 		$c = is_array($candidato) ? $candidato : (array)$candidato;
 		if (!empty($c['cidade_id']) && empty($c['cidade_nome'])) {
 			$loc = ConectEnderecoHelper::localPorCidadeId((int)$c['cidade_id']);
@@ -49,12 +49,16 @@ class ConectApiMapper {
 		$formacaoAcad = ConectEnderecoHelper::decodeListaJson($c['formacao_academica_json'] ?? null);
 		$experiencias = ConectEnderecoHelper::decodeListaJson($c['experiencias_json'] ?? null);
 		$redes = ConectRedesSociaisHelper::decode($c['redes_sociais_json'] ?? null);
-		return [
+		$idadePub = ConectIdadeHelper::payloadPublico($c['nascimento'] ?? null);
+		$payload = [
 			'id'              => (int)($c['id'] ?? 0),
 			'nome'            => (string)($c['nome'] ?? ''),
 			'email'           => (string)($c['email'] ?? ''),
 			'whatsapp'        => (string)($c['whatsapp'] ?? ''),
 			'resumo'          => (string)($c['resumo'] ?? ''),
+			'idade'           => $idadePub['idade'],
+			'isMenor'         => $idadePub['isMenor'],
+			'temNascimento'   => !empty($c['nascimento']),
 			'cidadeId'        => isset($c['cidade_id']) && (int)$c['cidade_id'] > 0 ? (int)$c['cidade_id'] : null,
 			'cidadeNome'      => (string)($c['cidade_nome'] ?? ''),
 			'estadoId'        => isset($c['estado_id']) && (int)$c['estado_id'] > 0 ? (int)$c['estado_id'] : null,
@@ -73,6 +77,12 @@ class ConectApiMapper {
 			'temSeloCertificado' => $temSelo,
 			'redesSociais'    => $redes,
 		];
+		if ($privado) {
+			$payload['nascimento'] = !empty($c['nascimento']) ? (string)$c['nascimento'] : null;
+			$payload['responsavelNome'] = !empty($c['responsavel_nome']) ? (string)$c['responsavel_nome'] : null;
+			$payload['responsavelConsentimento'] = !empty($c['responsavel_consentimento_em']);
+		}
+		return $payload;
 	}
 
 	/**
@@ -124,6 +134,7 @@ class ConectApiMapper {
 	public static function candidaturaEmpresa($row): array {
 		$r = is_array($row) ? $row : (array)$row;
 		$base = self::candidatura($row);
+		$idadePub = ConectIdadeHelper::payloadPublico($r['candidato_nascimento'] ?? null);
 		return array_merge($base, [
 			'candidatoId'             => (int)($r['id_candidato'] ?? 0),
 			'candidatoNome'           => (string)($r['candidato_nome'] ?? ''),
@@ -132,6 +143,8 @@ class ConectApiMapper {
 			'candidatoResumo'         => (string)($r['candidato_resumo'] ?? ''),
 			'candidatoDisponibilidade'=> (string)($r['candidato_disponibilidade'] ?? ''),
 			'candidatoTipo'           => (string)($r['candidato_tipo'] ?? ''),
+			'candidatoIdade'          => $idadePub['idade'],
+			'candidatoIsMenor'        => $idadePub['isMenor'],
 			'mensagemEmpresa'         => (string)($r['mensagem_empresa'] ?? ''),
 		]);
 	}

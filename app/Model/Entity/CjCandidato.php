@@ -15,6 +15,9 @@ class CjCandidato {
 	public $nome;
 	public $email;
 	public $whatsapp;
+	public $nascimento;
+	public $responsavel_nome;
+	public $responsavel_consentimento_em;
 	public $cidade_id;
 	public $bairro;
 	public $uf;

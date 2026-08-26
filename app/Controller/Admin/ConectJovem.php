@@ -2,6 +2,7 @@
 
 namespace App\Controller\Admin;
 
+use App\Common\Helpers\ConectIdadeHelper;
 use App\Common\Helpers\TenantHelper;
 use App\Model\Entity\CjCandidato;
 use App\Model\Entity\User;
@@ -84,7 +85,13 @@ class ConectJovem extends Page {
 			exit;
 		}
 
-		$candidatoId = CjCandidato::inserir([
+		$nascVal = ConectIdadeHelper::extrairValidarNascimento($post, true);
+		if (!$nascVal['ok']) {
+			header('Location: '.URL.'/painel/conect/candidatos/novo?erro=nascimento');
+			exit;
+		}
+
+		$insert = [
 			'id_admin'                 => $idAdmin,
 			'tipo'                     => 'escola_cadastro',
 			'cadastrado_por_usuario_id'=> $userId > 0 ? $userId : null,
@@ -93,7 +100,12 @@ class ConectJovem extends Page {
 			'whatsapp'                 => $whatsapp,
 			'resumo'                   => $resumo,
 			'status'                   => 'ativo',
-		]);
+		];
+		if (!empty($nascVal['dados'])) {
+			$insert = array_merge($insert, $nascVal['dados']);
+		}
+
+		$candidatoId = CjCandidato::inserir($insert);
 
 		if ($email !== '' && $candidatoId && !User::getUserByEmail($email)) {
 			$senhaTemp = bin2hex(random_bytes(4));
