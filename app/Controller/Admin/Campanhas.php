@@ -160,6 +160,13 @@ class Campanhas extends Page {
 	private static function formatarCampanha(EntityCampanhas $c): array {
 		$pendentes = CampanhaFila::contarPorCampanha((int)$c->id, (int)$c->id_admin, 'pendente');
 		$canal = ($c->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
+		$total = (int)$c->total;
+		$enviados = (int)$c->enviados;
+		$erros = (int)$c->erros;
+		$processados = $enviados + $erros;
+		$progressoPct = ($total > 0 && !$c->ehCampanhaGrupos())
+			? min(100, (int)round(($processados / $total) * 100))
+			: null;
 
 		return [
 			'id'          => (int)$c->id,
@@ -169,10 +176,11 @@ class Campanhas extends Page {
 			'canal_label' => $canal === 'whatsapp' ? 'WhatsApp' : 'E-mail',
 			'status'      => $c->status,
 			'status_label'=> self::$statusLabels[$c->status] ?? $c->status,
-			'total'       => (int)$c->total,
-			'enviados'    => (int)$c->enviados,
-			'erros'       => (int)$c->erros,
+			'total'       => $total,
+			'enviados'    => $enviados,
+			'erros'       => $erros,
 			'pendentes'   => $pendentes,
+			'progresso_pct' => $progressoPct,
 			'eh_grupos'   => $c->ehCampanhaGrupos() ? 1 : 0,
 			'criada_em'   => $c->criada_em ? date('d/m/Y H:i', strtotime($c->criada_em)) : '',
 			'segmento'    => json_decode($c->segmento ?? '{}', true) ?: [],
@@ -383,8 +391,8 @@ class Campanhas extends Page {
 			if ($isGrupo) {
 				CampanhaWorker::reabastecerFilaGrupos($ob);
 			}
-			// WhatsApp 1:1: aplicar delay (anti-rajada); grupos usam pacing próprio
-			$aplicarDelay = ($canal === 'whatsapp' && !$isGrupo);
+			// Web: não bloquear a requisição com sleep de pacing; cron/poll enviam depois
+			$aplicarDelay = false;
 			$resumo = CampanhaWorker::processar($idAdmin, 1, $aplicarDelay);
 			$ob = EntityCampanhas::getById($id, $idAdmin);
 			$ob->recalcularTotais();
@@ -439,8 +447,8 @@ class Campanhas extends Page {
 		$ob->agendada_para = null;
 		$ob->atualizar();
 
-		// Grupos: 1ª mensagem agora; 1:1 WhatsApp com delay (anti-rajada)
-		$aplicarDelay = ($canal === 'whatsapp' && !$isGrupo);
+		// Web: 1ª mensagem sem sleep; fila/cron respeitam pacing depois
+		$aplicarDelay = false;
 		$resumo = CampanhaWorker::processar($idAdmin, 1, $aplicarDelay);
 
 		$ob = EntityCampanhas::getById($id, $idAdmin);

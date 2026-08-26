@@ -9,6 +9,8 @@ let campanhaProcessandoFila = false;
 let campanhaPagina = 1;
 let campanhaBibModal = null;
 let campanhaBibFormato = 'feed';
+let campanhaProgressoPoll = null;
+let campanhaProgressoId = null;
 
 function renderPaginacaoAjax($el, pag, onPage){
 	pag = pag || {};
@@ -530,6 +532,9 @@ function processarFilaSilencioso(){
 		}
 		const enviados = res.resumo && res.resumo.enviados ? res.resumo.enviados : 0;
 		carregarCampanhas({ silencioso: true });
+		if(campanhaProgressoId){
+			pollDetalhesProgressoCampanha();
+		}
 		if(enviados > 0){
 			document.title = '('+enviados+' enviados) Campanhas';
 			setTimeout(function(){ document.title = 'Campanhas'; }, 4000);
@@ -670,16 +675,179 @@ function previewPublico(){
 	}, 'json');
 }
 
+function pararPollingProgressoCampanha(){
+	if(campanhaProgressoPoll){
+		clearInterval(campanhaProgressoPoll);
+		campanhaProgressoPoll = null;
+	}
+}
+
+function fecharModalProgressoCampanha(){
+	pararPollingProgressoCampanha();
+	campanhaProgressoId = null;
+	$('#modalCampanhaProgresso').modal('hide');
+}
+
+function abrirModalProgressoPreparando(titulo){
+	pararPollingProgressoCampanha();
+	campanhaProgressoId = null;
+	$('#campanha-progresso-titulo').text(titulo || 'Iniciando campanha');
+	$('#campanha-progresso-texto').text('Montando lista de destinatários…');
+	$('#campanha-progresso-detalhe').text('Aguarde, isso pode levar alguns instantes em listas grandes.');
+	$('#campanha-progresso-stats').text('');
+	const $bar = $('#campanha-progresso-bar');
+	$bar.addClass('progress-bar-striped progress-bar-animated').removeClass('bg-success');
+	$bar.css('width', '100%').attr('aria-valuenow', 0).text('');
+	$('#campanha-progresso-footer').addClass('d-none');
+	$('#modalCampanhaProgresso').modal({ backdrop: 'static', keyboard: false });
+	$('#modalCampanhaProgresso').modal('show');
+}
+
+function pctProgressoCampanha(c){
+	if(!c || c.eh_grupos) return null;
+	if(c.progresso_pct != null) return Math.min(100, parseInt(c.progresso_pct, 10) || 0);
+	const total = parseInt(c.total, 10) || 0;
+	if(total <= 0) return 0;
+	const proc = (parseInt(c.enviados, 10) || 0) + (parseInt(c.erros, 10) || 0);
+	return Math.min(100, Math.round((proc / total) * 100));
+}
+
+function campanhaEnvioConcluido(c){
+	if(!c || c.eh_grupos) return false;
+	if(c.status === 'concluida') return true;
+	const pendentes = parseInt(c.pendentes, 10) || 0;
+	const total = parseInt(c.total, 10) || 0;
+	const proc = (parseInt(c.enviados, 10) || 0) + (parseInt(c.erros, 10) || 0);
+	return pendentes <= 0 && total > 0 && proc >= total;
+}
+
+function finalizarProgressoCampanha(c, mensagem){
+	pararPollingProgressoCampanha();
+	const concluida = campanhaEnvioConcluido(c) || (c && c.status === 'concluida');
+	if(concluida){
+		$('#campanha-progresso-titulo').text('Campanha concluída');
+		$('#campanha-progresso-texto').text(mensagem || 'Todos os destinatários foram processados.');
+		$('#campanha-progresso-bar').removeClass('progress-bar-striped progress-bar-animated').addClass('bg-success');
+		$('#campanha-progresso-bar').css('width', '100%').attr('aria-valuenow', 100).text('100%');
+		$('#campanha-progresso-footer').removeClass('d-none');
+		setTimeout(function(){
+			fecharModalProgressoCampanha();
+			Swal.fire({
+				toast: true,
+				position: 'top-end',
+				icon: 'success',
+				title: mensagem || 'Campanha concluída',
+				showConfirmButton: false,
+				timer: 3500
+			});
+		}, 1500);
+		return;
+	}
+	if(c && (c.status === 'pausada' || c.status === 'cancelada')){
+		$('#campanha-progresso-titulo').text(c.status === 'pausada' ? 'Campanha pausada' : 'Campanha encerrada');
+		$('#campanha-progresso-texto').text(mensagem || '');
+		$('#campanha-progresso-footer').removeClass('d-none');
+	}
+}
+
+function atualizarModalProgressoCampanha(c){
+	if(!c) return;
+	campanhaProgressoId = c.id;
+	const $bar = $('#campanha-progresso-bar');
+
+	if(c.eh_grupos){
+		$('#campanha-progresso-titulo').text('Campanha recorrente ativa');
+		$('#campanha-progresso-texto').text('Reenvios periódicos nos grupos selecionados.');
+		$('#campanha-progresso-detalhe').text('Você pode fechar esta janela; o envio continua em segundo plano.');
+		$bar.removeClass('progress-bar-striped progress-bar-animated').addClass('bg-success');
+		$bar.css('width', '100%').attr('aria-valuenow', 100).text('Ativa');
+		$('#campanha-progresso-stats').text((c.enviados || 0)+' reenvio(s) realizados');
+		$('#campanha-progresso-footer').removeClass('d-none');
+		pararPollingProgressoCampanha();
+		return;
+	}
+
+	const total = parseInt(c.total, 10) || 0;
+	const enviados = parseInt(c.enviados, 10) || 0;
+	const erros = parseInt(c.erros, 10) || 0;
+	const pendentes = parseInt(c.pendentes, 10) || 0;
+	const pct = pctProgressoCampanha(c);
+
+	$('#campanha-progresso-titulo').text('Enviando campanha');
+	$('#campanha-progresso-texto').text(pct >= 100 ? 'Envio concluído!' : 'Enviando mensagens…');
+	$('#campanha-progresso-detalhe').text('O progresso é atualizado automaticamente. Você pode navegar no painel; o envio continua.');
+	$bar.removeClass('progress-bar-striped progress-bar-animated');
+	$bar.toggleClass('bg-success', pct >= 100);
+	$bar.css('width', pct+'%').attr('aria-valuenow', pct).text(pct+'%');
+	$('#campanha-progresso-stats').text(enviados+' enviados · '+erros+' erros · '+pendentes+' pendentes de '+total);
+
+	if(campanhaEnvioConcluido(c) || c.status === 'concluida'){
+		finalizarProgressoCampanha(c);
+		return;
+	}
+	if(c.status === 'pausada' || c.status === 'cancelada'){
+		finalizarProgressoCampanha(c);
+	}
+}
+
+function pollDetalhesProgressoCampanha(){
+	if(!campanhaProgressoId) return;
+	$.post(url_base + CAMPANHAS_URL, { acao: 'detalhes', id: campanhaProgressoId }, function(res){
+		if(!res || !res.success || !res.campanha) return;
+		atualizarModalProgressoCampanha(res.campanha);
+	}, 'json');
+}
+
+function iniciarPollingProgressoCampanha(id){
+	pararPollingProgressoCampanha();
+	campanhaProgressoId = id;
+	pollDetalhesProgressoCampanha();
+	campanhaProgressoPoll = setInterval(pollDetalhesProgressoCampanha, 3000);
+}
+
 function acaoCampanha(acao, id, confirmar){
 	const executar = function(){
+		const ehIniciar = acao === 'iniciar';
+		if(ehIniciar){
+			abrirModalProgressoPreparando('Iniciando campanha');
+		}
 		$.post(url_base + CAMPANHAS_URL, { acao: acao, id: id }, function(res){
+			if(ehIniciar){
+				if(!res || !res.success){
+					fecharModalProgressoCampanha();
+					Swal.fire('Erro', (res && res.message) ? res.message : 'Falha na operação.', 'error');
+					return;
+				}
+				carregarCampanhas();
+				if(res.campanha){
+					if(res.campanha.eh_grupos){
+						atualizarModalProgressoCampanha(res.campanha);
+					} else if(res.campanha.status === 'enviando' && (res.campanha.pendentes || 0) > 0){
+						atualizarModalProgressoCampanha(res.campanha);
+						iniciarPollingProgressoCampanha(res.campanha.id);
+					} else {
+						atualizarModalProgressoCampanha(res.campanha);
+						finalizarProgressoCampanha(res.campanha, res.message);
+					}
+				} else {
+					fecharModalProgressoCampanha();
+					Swal.fire('OK', res.message, 'success');
+				}
+				return;
+			}
+			if((acao === 'pausar' || acao === 'cancelar') && campanhaProgressoId === id){
+				fecharModalProgressoCampanha();
+			}
 			if(!res || !res.success){
 				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha na operação.', 'error');
 				return;
 			}
 			Swal.fire('OK', res.message, 'success');
 			carregarCampanhas();
-		}, 'json');
+		}, 'json').fail(function(){
+			if(ehIniciar) fecharModalProgressoCampanha();
+			Swal.fire('Erro', 'Falha na comunicação com o servidor.', 'error');
+		});
 	};
 
 	if(confirmar){
@@ -897,5 +1065,11 @@ $(function(){
 	});
 	$(document).on('click', '.btn-editar', function(){
 		editarCampanha($(this).data('id'));
+	});
+
+	$('#btn-fechar-progresso-campanha').on('click', fecharModalProgressoCampanha);
+	$('#modalCampanhaProgresso').on('hidden.bs.modal', function(){
+		pararPollingProgressoCampanha();
+		campanhaProgressoId = null;
 	});
 });
