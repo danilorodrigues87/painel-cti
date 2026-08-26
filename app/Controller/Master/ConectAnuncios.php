@@ -3,12 +3,14 @@
 namespace App\Controller\Master;
 
 use App\Common\Helpers\BrandingHelper;
+use App\Common\Helpers\ConectAnuncioAssinaturaService;
 use App\Common\Helpers\ConectAnuncioHelper;
 use App\Common\Helpers\ConectEnderecoHelper;
 use App\Model\Entity\CjAnuncio;
 use App\Model\Entity\CjAnuncioAssinatura;
 use App\Model\Entity\CjAnuncioConfig;
 use App\Model\Entity\CjAnuncioEvento;
+use App\Model\Entity\CjAnuncioFatura;
 use App\Model\Entity\CjAnuncioPlano;
 use App\Model\Entity\EstadoCidades;
 use App\Session\User\Login as SessionUser;
@@ -48,6 +50,7 @@ class ConectAnuncios extends Page {
 			'slots_opts'       => $slotsOpts,
 			'planos_rows'      => self::renderPlanosRows(),
 			'assinaturas_rows' => self::renderAssinaturasRows(),
+			'faturas_rows'     => self::renderFaturasRows(),
 			'planos_sql_aviso' => CjAnuncioPlano::tabelaExiste() ? '' : '<div class="alert alert-warning small">Execute <code>database/cj_anuncio_assinatura.sql</code> para habilitar planos e cobrança PIX.</div>',
 		]);
 		return parent::getPanel('Conecta Jovem — Anúncios', $content, 'conect-anuncios');
@@ -282,6 +285,36 @@ class ConectAnuncios extends Page {
 		return json_encode(['success' => (bool)$ok, 'message' => $ok ? 'Plano salvo.' : 'Falha ao salvar.']);
 	}
 
+	public static function marcarFaturaPaga($request): string {
+		$post = $request->getPostVars() ?: [];
+		$id = (int)($post['id'] ?? 0);
+		if ($id <= 0) {
+			return json_encode(['success' => false, 'message' => 'Fatura inválida.']);
+		}
+		$res = ConectAnuncioAssinaturaService::marcarPagaMaster($id);
+		return json_encode(['success' => !empty($res['ok']), 'message' => $res['message'] ?? '']);
+	}
+
+	private static function dataBr($valor, bool $hora = false): string {
+		$s = trim((string)($valor ?? ''));
+		if ($s === '' || str_starts_with($s, '0000-00-00')) {
+			return '—';
+		}
+		$ts = strtotime($s);
+		if ($ts === false) {
+			return $s;
+		}
+		return $hora ? date('d/m/Y H:i', $ts) : date('d/m/Y', $ts);
+	}
+
+	private static function competenciaBr(string $comp): string {
+		if (!preg_match('/^(\d{4})-(\d{2})$/', $comp, $m)) {
+			return $comp;
+		}
+		$meses = ['01'=>'Jan','02'=>'Fev','03'=>'Mar','04'=>'Abr','05'=>'Mai','06'=>'Jun','07'=>'Jul','08'=>'Ago','09'=>'Set','10'=>'Out','11'=>'Nov','12'=>'Dez'];
+		return ($meses[$m[2]] ?? $m[2]).'/'.$m[1];
+	}
+
 	private static function renderPlanosRows(): string {
 		if (!CjAnuncioPlano::tabelaExiste()) {
 			return '<tr><td colspan="6" class="text-muted">Tabela de planos não instalada.</td></tr>';
@@ -316,14 +349,17 @@ class ConectAnuncios extends Page {
 
 	private static function renderAssinaturasRows(): string {
 		if (!CjAnuncioAssinatura::tabelaExiste()) {
-			return '<tr><td colspan="5" class="text-muted">Tabela de assinaturas não instalada.</td></tr>';
+			return '<tr><td colspan="7" class="text-muted">Tabela de assinaturas não instalada.</td></tr>';
 		}
 		$rows = CjAnuncioAssinatura::listarMaster(100);
 		if ($rows === []) {
-			return '<tr><td colspan="5" class="text-muted">Nenhuma assinatura ainda.</td></tr>';
+			return '<tr><td colspan="7" class="text-muted">Nenhuma assinatura ainda.</td></tr>';
 		}
 		$html = '';
 		foreach ($rows as $row) {
+			$idEmpresa = (int)($row['id_empresa'] ?? 0);
+			$usados = CjAnuncio::contarOcupandoPlano($idEmpresa);
+			$max = (int)($row['max_anuncios'] ?? 0);
 			$badge = match ((string)($row['status'] ?? '')) {
 				'ativa'     => 'success',
 				'pendente'  => 'warning text-dark',
@@ -331,12 +367,60 @@ class ConectAnuncios extends Page {
 				'expirada'  => 'danger',
 				default     => 'light text-dark',
 			};
+			$uso = $max > 0 ? $usados.'/'.$max : (string)$usados;
+			if ($max > 0 && $usados > $max) {
+				$uso = '<span class="text-danger fw-semibold">'.$uso.'</span>';
+			}
 			$html .= '<tr>'
-				.'<td>'.htmlspecialchars((string)($row['empresa_nome'] ?? 'Empresa #'.($row['id_empresa'] ?? ''))).'</td>'
-				.'<td>'.htmlspecialchars((string)($row['plano_nome'] ?? '')).'</td>'
+				.'<td><strong>'.htmlspecialchars((string)($row['empresa_nome'] ?? 'Empresa #'.$idEmpresa)).'</strong><br>'
+				.'<small class="text-muted">ID empresa '.$idEmpresa.'</small></td>'
+				.'<td>'.htmlspecialchars((string)($row['plano_nome'] ?? '')).'<br>'
+				.'<small class="text-muted">R$ '.number_format((float)($row['valor_mensal'] ?? 0), 2, ',', '.').'/mês</small></td>'
 				.'<td><span class="badge bg-'.$badge.'">'.htmlspecialchars((string)($row['status'] ?? '')).'</span></td>'
-				.'<td class="small">'.htmlspecialchars((string)($row['proximo_vencimento'] ?? '—')).'</td>'
-				.'<td class="small">'.htmlspecialchars(substr((string)($row['created_at'] ?? ''), 0, 16)).'</td>'
+				.'<td class="small">'.$uso.'</td>'
+				.'<td class="small">'.htmlspecialchars(self::dataBr($row['proximo_vencimento'] ?? '')).'</td>'
+				.'<td class="small">'.htmlspecialchars(self::dataBr($row['inicio_em'] ?? '', true)).'</td>'
+				.'<td class="small">'.htmlspecialchars(self::dataBr($row['created_at'] ?? '', true)).'</td>'
+				.'</tr>';
+		}
+		return $html;
+	}
+
+	private static function renderFaturasRows(): string {
+		if (!CjAnuncioFatura::tabelaExiste()) {
+			return '<tr><td colspan="8" class="text-muted">Tabela de faturas não instalada.</td></tr>';
+		}
+		$rows = CjAnuncioFatura::listarMaster(150);
+		if ($rows === []) {
+			return '<tr><td colspan="8" class="text-muted">Nenhuma fatura ainda.</td></tr>';
+		}
+		$html = '';
+		foreach ($rows as $row) {
+			$id = (int)($row['id'] ?? 0);
+			$status = (string)($row['status'] ?? '');
+			$badge = match ($status) {
+				'pago'      => 'success',
+				'aberta'    => 'warning text-dark',
+				'cancelada' => 'secondary',
+				default     => 'light text-dark',
+			};
+			$valor = number_format((float)($row['valor'] ?? 0), 2, ',', '.');
+			$acoes = '';
+			if ($status === 'aberta') {
+				$acoes = '<button type="button" class="btn btn-sm btn-outline-success btn-marcar-fatura" data-id="'.$id.'">Marcar paga</button>';
+			} elseif ($status === 'pago') {
+				$acoes = '<span class="text-muted small">'.htmlspecialchars(self::dataBr($row['pago_em'] ?? '', true)).'</span>';
+			}
+			$html .= '<tr>'
+				.'<td class="small">#'. $id .'</td>'
+				.'<td><strong>'.htmlspecialchars((string)($row['empresa_nome'] ?? 'Empresa')).'</strong><br>'
+				.'<small class="text-muted">'.htmlspecialchars((string)($row['empresa_email'] ?? '')).'</small></td>'
+				.'<td class="small">'.htmlspecialchars((string)($row['plano_nome'] ?? '')).'</td>'
+				.'<td class="small">'.htmlspecialchars(self::competenciaBr((string)($row['competencia'] ?? ''))).'</td>'
+				.'<td>R$ '.$valor.'</td>'
+				.'<td class="small">'.htmlspecialchars(self::dataBr($row['vencimento'] ?? '')).'</td>'
+				.'<td><span class="badge bg-'.$badge.'">'.htmlspecialchars($status).'</span></td>'
+				.'<td class="text-nowrap">'.$acoes.'</td>'
 				.'</tr>';
 		}
 		return $html;

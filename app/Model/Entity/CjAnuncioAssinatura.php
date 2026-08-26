@@ -38,12 +38,24 @@ class CjAnuncioAssinatura {
 		return $row instanceof self ? $row : null;
 	}
 
-	public static function getAtivaPorEmpresa(int $idEmpresa): ?self {
+	public static function getVigentePorEmpresa(int $idEmpresa): ?self {
 		if (!self::tabelaExiste() || $idEmpresa <= 0) {
 			return null;
 		}
 		$row = (new Database('cj_anuncio_assinaturas'))->select(
 			'id_empresa = '.(int)$idEmpresa.' AND status IN ("pendente","ativa")',
+			'(status = "ativa") DESC, id DESC',
+			'1'
+		)->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
+	public static function getAtivaPorEmpresa(int $idEmpresa): ?self {
+		if (!self::tabelaExiste() || $idEmpresa <= 0) {
+			return null;
+		}
+		$row = (new Database('cj_anuncio_assinaturas'))->select(
+			'id_empresa = '.(int)$idEmpresa.' AND status = "ativa"',
 			'id DESC',
 			'1'
 		)->fetchObject(self::class);

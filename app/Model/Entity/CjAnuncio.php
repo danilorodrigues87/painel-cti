@@ -142,4 +142,18 @@ class CjAnuncio {
 		)->fetch(PDO::FETCH_ASSOC);
 		return (int)($row['q'] ?? 0);
 	}
+
+	/** Vagas do plano: apenas anúncios ativos ou aguardando aprovação (pausado libera vaga). */
+	public static function contarOcupandoPlano(int $idEmpresa): int {
+		if (!self::tabelaExiste() || $idEmpresa <= 0) {
+			return 0;
+		}
+		$row = (new Database('cj_anuncios'))->select(
+			'id_empresa = '.(int)$idEmpresa.' AND status IN ("pendente","ativo")',
+			null,
+			null,
+			'COUNT(*) AS q'
+		)->fetch(PDO::FETCH_ASSOC);
+		return (int)($row['q'] ?? 0);
+	}
 }

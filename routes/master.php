@@ -342,6 +342,13 @@ $obRouter->post('/master/conect-anuncios/planos/salvar', [
 	}
 ]);
 
+$obRouter->post('/master/conect-anuncios/faturas/marcar-paga', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectAnuncios::marcarFaturaPaga($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/conect-relatorios', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {

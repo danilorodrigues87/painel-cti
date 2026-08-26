@@ -106,4 +106,18 @@ class CjAnuncioFatura {
 			'pago_em'        => $this->pago_em ?: null,
 		]);
 	}
+
+	/** @return array<int,array<string,mixed>> */
+	public static function listarMaster(int $limit = 200): array {
+		if (!self::tabelaExiste()) {
+			return [];
+		}
+		$sql = 'SELECT f.*, p.nome AS plano_nome, e.nome_fantasia AS empresa_nome, e.email AS empresa_email '
+			.'FROM cj_anuncio_faturas f '
+			.'LEFT JOIN cj_anuncio_planos p ON p.id = f.plan_id '
+			.'LEFT JOIN cj_empresas e ON e.id = f.id_empresa '
+			.'ORDER BY f.id DESC LIMIT '.max(1, min(500, $limit));
+		$stmt = (new Database())->execute($sql);
+		return $stmt ? $stmt->fetchAll(\PDO::FETCH_ASSOC) : [];
+	}
 }

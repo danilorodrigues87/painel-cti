@@ -61,12 +61,24 @@
 </div>
 
 <div class="card shadow-sm mb-4">
-	<div class="card-header py-2"><strong>Assinaturas de empresas</strong></div>
+	<div class="card-header py-2"><strong>Assinaturas de empresas</strong> <span class="text-muted small">clientes ativos e pendentes</span></div>
 	<div class="card-body p-0">
 		<div class="table-responsive">
 			<table class="table table-sm table-hover align-middle mb-0">
-				<thead><tr><th>Empresa</th><th>Plano</th><th>Status</th><th>Próx. vencimento</th><th>Desde</th></tr></thead>
+				<thead><tr><th>Empresa</th><th>Plano</th><th>Status</th><th>Anúncios</th><th>Próx. vencimento</th><th>Início</th><th>Desde</th></tr></thead>
 				<tbody>{{assinaturas_rows}}</tbody>
+			</table>
+		</div>
+	</div>
+</div>
+
+<div class="card shadow-sm mb-4">
+	<div class="card-header py-2"><strong>Faturas e pagamentos</strong> <span class="text-muted small">PIX Conecta Jovem</span></div>
+	<div class="card-body p-0">
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle mb-0">
+				<thead><tr><th>#</th><th>Empresa</th><th>Plano</th><th>Competência</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr></thead>
+				<tbody>{{faturas_rows}}</tbody>
 			</table>
 		</div>
 	</div>
@@ -152,4 +164,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/master-conect-anuncios.js?v=3"></script>
+<script src="{{URL}}/resources/js/master-conect-anuncios.js?v=4"></script>

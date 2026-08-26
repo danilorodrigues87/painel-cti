@@ -40,13 +40,10 @@ class ConectAnuncioAssinaturaService {
 		if (!$ass instanceof CjAnuncioAssinatura) {
 			return false;
 		}
-		if (($ass->status ?? '') === 'ativa') {
-			if (!empty($ass->fim_em) && strtotime((string)$ass->fim_em) < time()) {
-				return false;
-			}
-			return true;
+		if (!empty($ass->fim_em) && strtotime((string)$ass->fim_em) < time()) {
+			return false;
 		}
-		return false;
+		return true;
 	}
 
 	public static function limiteAnuncios(int $idEmpresa): int {
@@ -55,16 +52,22 @@ class ConectAnuncioAssinaturaService {
 			return max(1, (int)($config['max_anuncios_por_empresa'] ?? 3));
 		}
 		$ass = CjAnuncioAssinatura::getAtivaPorEmpresa($idEmpresa);
-		if (!$ass instanceof CjAnuncioAssinatura || ($ass->status ?? '') !== 'ativa') {
+		if (!$ass instanceof CjAnuncioAssinatura) {
 			return 0;
 		}
 		$plano = CjAnuncioPlano::getById((int)$ass->plan_id);
 		return $plano instanceof CjAnuncioPlano ? max(1, (int)$plano->max_anuncios) : 0;
 	}
 
+	public static function contarAnunciosPlano(int $idEmpresa): int {
+		return CjAnuncio::contarOcupandoPlano($idEmpresa);
+	}
+
 	public static function podeCriarAnuncio(int $idEmpresa): bool {
 		if (!self::moduloAtivo()) {
-			return true;
+			$config = CjAnuncioConfig::get();
+			$max = max(1, (int)($config['max_anuncios_por_empresa'] ?? 3));
+			return CjAnuncio::contarOcupandoPlano($idEmpresa) < $max;
 		}
 		if (!self::temAssinaturaAtiva($idEmpresa)) {
 			return false;
@@ -73,7 +76,7 @@ class ConectAnuncioAssinaturaService {
 		if ($limite <= 0) {
 			return false;
 		}
-		return CjAnuncio::contarPorEmpresa($idEmpresa) < $limite;
+		return self::contarAnunciosPlano($idEmpresa) < $limite;
 	}
 
 	/** @return array<string,mixed> */
@@ -84,12 +87,12 @@ class ConectAnuncioAssinaturaService {
 				'temAssinatura'    => false,
 				'assinaturaAtiva'  => false,
 				'limiteAnuncios'   => self::limiteAnuncios($idEmpresa),
-				'usados'           => CjAnuncio::contarPorEmpresa($idEmpresa),
+				'usados'           => CjAnuncio::contarOcupandoPlano($idEmpresa),
 				'podeCriar'        => self::podeCriarAnuncio($idEmpresa),
 			];
 		}
 
-		$ass = CjAnuncioAssinatura::getAtivaPorEmpresa($idEmpresa);
+		$ass = CjAnuncioAssinatura::getVigentePorEmpresa($idEmpresa);
 		$plano = null;
 		$faturaAberta = null;
 		if ($ass instanceof CjAnuncioAssinatura) {
@@ -97,21 +100,27 @@ class ConectAnuncioAssinaturaService {
 			if ($p instanceof CjAnuncioPlano) {
 				$plano = $p->toArray();
 			}
-			$fat = CjAnuncioFatura::getAbertaPorAssinatura((int)$ass->id);
-			if ($fat instanceof CjAnuncioFatura) {
-				$faturaAberta = self::formatarFatura($fat);
+			if (($ass->status ?? '') === 'pendente') {
+				$fat = CjAnuncioFatura::getAbertaPorAssinatura((int)$ass->id);
+				if ($fat instanceof CjAnuncioFatura) {
+					$faturaAberta = self::formatarFatura($fat);
+				}
 			}
 		}
 
 		$ativa = self::temAssinaturaAtiva($idEmpresa);
+		$limite = self::limiteAnuncios($idEmpresa);
+		$usadosPlano = self::contarAnunciosPlano($idEmpresa);
 		return [
 			'moduloAtivo'         => true,
 			'temAssinatura'       => $ass instanceof CjAnuncioAssinatura,
 			'assinaturaAtiva'     => $ativa,
 			'assinatura'          => $ass ? self::formatarAssinatura($ass, $plano) : null,
 			'faturaAberta'        => $faturaAberta,
-			'limiteAnuncios'      => self::limiteAnuncios($idEmpresa),
-			'usados'              => CjAnuncio::contarPorEmpresa($idEmpresa),
+			'limiteAnuncios'      => $limite,
+			'usados'              => $usadosPlano,
+			'usadosTotal'         => CjAnuncio::contarPorEmpresa($idEmpresa),
+			'limiteExcedido'      => $ativa && $limite > 0 && $usadosPlano > $limite,
 			'podeCriar'           => self::podeCriarAnuncio($idEmpresa),
 			'mpConfigurado'       => MercadoPagoCtiHelper::configurado(),
 		];
@@ -131,7 +140,7 @@ class ConectAnuncioAssinaturaService {
 			return ['ok' => false, 'message' => 'Plano inválido ou indisponível.'];
 		}
 
-		$existente = CjAnuncioAssinatura::getAtivaPorEmpresa($idEmpresa);
+		$existente = CjAnuncioAssinatura::getVigentePorEmpresa($idEmpresa);
 		if ($existente instanceof CjAnuncioAssinatura) {
 			if (($existente->status ?? '') === 'ativa') {
 				return ['ok' => false, 'message' => 'Você já possui assinatura ativa. Cancele ou aguarde o fim do período para trocar de plano.'];
@@ -190,7 +199,7 @@ class ConectAnuncioAssinaturaService {
 		if (!self::moduloAtivo()) {
 			return ['ok' => false, 'message' => 'Módulo não instalado.'];
 		}
-		$ass = CjAnuncioAssinatura::getAtivaPorEmpresa($idEmpresa);
+		$ass = CjAnuncioAssinatura::getVigentePorEmpresa($idEmpresa);
 		if (!$ass instanceof CjAnuncioAssinatura || !in_array($ass->status ?? '', ['ativa', 'pendente'], true)) {
 			return ['ok' => false, 'message' => 'Nenhuma assinatura ativa para cancelar.'];
 		}
@@ -218,7 +227,13 @@ class ConectAnuncioAssinaturaService {
 			return ['ok' => false, 'message' => 'Fatura não encontrada.'];
 		}
 		if (($fat->status ?? '') === 'pago') {
-			return ['ok' => true, 'pago' => true, 'message' => 'Pagamento confirmado.', 'fatura' => self::formatarFatura($fat)];
+			return [
+				'ok'     => true,
+				'pago'   => true,
+				'message'=> 'Pagamento confirmado.',
+				'fatura' => self::formatarFatura($fat),
+				'resumo' => self::resumoEmpresa($idEmpresa),
+			];
 		}
 
 		$pix = MercadoPagoCtiHelper::pix();
@@ -232,10 +247,16 @@ class ConectAnuncioAssinaturaService {
 				? (new \DateTimeImmutable((string)$pagamento['date_approved']))->format('Y-m-d H:i:s')
 				: null);
 			$fat = CjAnuncioFatura::getById((int)$fat->id);
-			return ['ok' => true, 'pago' => true, 'message' => 'Pagamento confirmado!', 'fatura' => self::formatarFatura($fat)];
+			return [
+				'ok'     => true,
+				'pago'   => true,
+				'message'=> 'Pagamento confirmado!',
+				'fatura' => self::formatarFatura($fat),
+				'resumo' => self::resumoEmpresa($idEmpresa),
+			];
 		}
 
-		return ['ok' => true, 'pago' => false, 'message' => 'Pagamento ainda não identificado.'];
+		return ['ok' => true, 'pago' => false, 'message' => 'Pagamento ainda não identificado.', 'resumo' => self::resumoEmpresa($idEmpresa)];
 	}
 
 	public static function marcarPaga(CjAnuncioFatura $fat, ?string $pagoEm = null): bool {
@@ -359,29 +380,77 @@ class ConectAnuncioAssinaturaService {
 		return $resumo;
 	}
 
+	/** @return array{ok:bool,message?:string} */
+	public static function marcarPagaMaster(int $faturaId): array {
+		if (!self::moduloAtivo()) {
+			return ['ok' => false, 'message' => 'Módulo não instalado.'];
+		}
+		$fat = CjAnuncioFatura::getById($faturaId);
+		if (!$fat instanceof CjAnuncioFatura) {
+			return ['ok' => false, 'message' => 'Fatura não encontrada.'];
+		}
+		if (($fat->status ?? '') === 'pago') {
+			return ['ok' => true, 'message' => 'Fatura já estava paga.'];
+		}
+		self::marcarPaga($fat);
+		return ['ok' => true, 'message' => 'Pagamento registrado manualmente.'];
+	}
+
 	/** @param array<string,mixed>|null $plano */
 	private static function formatarAssinatura(CjAnuncioAssinatura $ass, ?array $plano = null): array {
 		return [
-			'id'                 => (int)$ass->id,
-			'status'             => (string)($ass->status ?? ''),
-			'inicioEm'           => $ass->inicio_em,
-			'fimEm'              => $ass->fim_em,
-			'proximoVencimento'  => $ass->proximo_vencimento,
-			'canceladaEm'        => $ass->cancelada_em,
-			'plano'              => $plano,
+			'id'                    => (int)$ass->id,
+			'status'                => (string)($ass->status ?? ''),
+			'inicioEm'              => $ass->inicio_em,
+			'inicioEmBr'            => self::formatarDataBr($ass->inicio_em, true),
+			'fimEm'                 => $ass->fim_em,
+			'fimEmBr'               => self::formatarDataBr($ass->fim_em, true),
+			'proximoVencimento'     => $ass->proximo_vencimento,
+			'proximoVencimentoBr'   => self::formatarDataBr($ass->proximo_vencimento),
+			'canceladaEm'           => $ass->cancelada_em,
+			'canceladaEmBr'         => self::formatarDataBr($ass->cancelada_em, true),
+			'plano'                 => $plano,
 		];
 	}
 
 	private static function formatarFatura(CjAnuncioFatura $fat): array {
 		return [
-			'id'           => (int)$fat->id,
-			'competencia'  => (string)$fat->competencia,
-			'valor'        => round((float)$fat->valor, 2),
-			'vencimento'   => (string)$fat->vencimento,
-			'status'       => (string)$fat->status,
-			'pixCopiaCola' => (string)($fat->pix_copia_cola ?? ''),
-			'pixQrBase64'  => (string)($fat->pix_qr_base64 ?? ''),
-			'pagoEm'       => $fat->pago_em,
+			'id'              => (int)$fat->id,
+			'competencia'     => (string)$fat->competencia,
+			'competenciaBr'   => self::formatarCompetenciaBr((string)$fat->competencia),
+			'valor'           => round((float)$fat->valor, 2),
+			'vencimento'      => (string)$fat->vencimento,
+			'vencimentoBr'    => self::formatarDataBr($fat->vencimento),
+			'status'          => (string)$fat->status,
+			'pixCopiaCola'    => (string)($fat->pix_copia_cola ?? ''),
+			'pixQrBase64'     => (string)($fat->pix_qr_base64 ?? ''),
+			'pagoEm'          => $fat->pago_em,
+			'pagoEmBr'        => self::formatarDataBr($fat->pago_em, true),
 		];
+	}
+
+	private static function formatarDataBr($data, bool $comHora = false): ?string {
+		$s = trim((string)($data ?? ''));
+		if ($s === '' || str_starts_with($s, '0000-00-00')) {
+			return null;
+		}
+		$ts = strtotime($s);
+		if ($ts === false) {
+			return $s;
+		}
+		return $comHora ? date('d/m/Y H:i', $ts) : date('d/m/Y', $ts);
+	}
+
+	private static function formatarCompetenciaBr(string $competencia): string {
+		if (!preg_match('/^(\d{4})-(\d{2})$/', $competencia, $m)) {
+			return $competencia;
+		}
+		$meses = [
+			'01' => 'janeiro', '02' => 'fevereiro', '03' => 'março', '04' => 'abril',
+			'05' => 'maio', '06' => 'junho', '07' => 'julho', '08' => 'agosto',
+			'09' => 'setembro', '10' => 'outubro', '11' => 'novembro', '12' => 'dezembro',
+		];
+		$mes = $meses[$m[2]] ?? $m[2];
+		return ucfirst($mes).' de '.$m[1];
 	}
 }

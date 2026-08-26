@@ -40,13 +40,17 @@ class Anuncios {
 			}
 		}
 		$assinatura = ConectAnuncioAssinaturaService::resumoEmpresa((int)$empresa->id);
-		$limite = (int)($assinatura['limiteAnuncios'] ?? ($config['max_anuncios_por_empresa'] ?? 3));
+		if (ConectAnuncioAssinaturaService::moduloAtivo()) {
+			$limite = (int)($assinatura['limiteAnuncios'] ?? 0);
+		} else {
+			$limite = (int)($config['max_anuncios_por_empresa'] ?? 3);
+		}
 		return self::respond([
 			'precoMinimoMensal'     => (float)($config['preco_minimo_mensal'] ?? 99),
 			'maxAnunciosPorEmpresa' => $limite,
 			'slots'                 => $slots,
 			'slotDimensoes'         => ConectAnuncioHelper::SLOT_DIMENSOES,
-			'usados'                => CjAnuncio::contarPorEmpresa((int)$empresa->id),
+			'usados'                => (int)($assinatura['usados'] ?? CjAnuncio::contarOcupandoPlano((int)$empresa->id)),
 			'assinatura'            => $assinatura,
 			'requerAprovacaoMaster' => !empty($config['requer_aprovacao_master']),
 		]);
@@ -84,19 +88,21 @@ class Anuncios {
 		}
 
 		$config = CjAnuncioConfig::get();
-		if (ConectAnuncioAssinaturaService::moduloAtivo()) {
-			if (!ConectAnuncioAssinaturaService::temAssinaturaAtiva((int)$empresa->id)) {
+		if (!ConectAnuncioAssinaturaService::podeCriarAnuncio((int)$empresa->id)) {
+			if (ConectAnuncioAssinaturaService::moduloAtivo() && !ConectAnuncioAssinaturaService::temAssinaturaAtiva((int)$empresa->id)) {
 				return self::respond([
 					'message' => 'Assine um plano de anúncios para publicar.',
 					'code'    => 'assinatura_requerida',
 				], 402);
 			}
 			$max = ConectAnuncioAssinaturaService::limiteAnuncios((int)$empresa->id);
-		} else {
-			$max = (int)($config['max_anuncios_por_empresa'] ?? 3);
-		}
-		if (CjAnuncio::contarPorEmpresa((int)$empresa->id) >= $max) {
-			return self::respond(['message' => 'Limite de '.$max.' anúncio(s) ativos/pendentes atingido.'], 400);
+			if ($max <= 0 && !ConectAnuncioAssinaturaService::moduloAtivo()) {
+				$max = (int)($config['max_anuncios_por_empresa'] ?? 3);
+			}
+			return self::respond([
+				'message' => 'Limite de '.$max.' anúncio(s) ativo(s)/pendente(s) atingido no seu plano.',
+				'code'    => 'limite_anuncios',
+			], 400);
 		}
 
 		$post = $request->getPostVars() ?: [];
@@ -159,6 +165,13 @@ class Anuncios {
 			]);
 		}
 		if ($acao === 'retomar' && ($row['status'] ?? '') === 'pausado') {
+			$limite = ConectAnuncioAssinaturaService::limiteAnuncios((int)$empresa->id);
+			if ($limite > 0 && ConectAnuncioAssinaturaService::contarAnunciosPlano((int)$empresa->id) >= $limite) {
+				return self::respond([
+					'message' => 'Limite de '.$limite.' anúncio(s) ativo(s)/pendente(s) atingido. Pause ou exclua outro anúncio.',
+					'code'    => 'limite_anuncios',
+				], 400);
+			}
 			CjAnuncio::atualizar($id, ['status' => ConectAnuncioHelper::statusInicialEmpresa()]);
 			$atual = CjAnuncio::getById($id);
 			return self::respond([

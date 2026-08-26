@@ -91,4 +91,16 @@ $(function(){
 			}
 		}, 'json');
 	});
+
+	$(document).on('click', '.btn-marcar-fatura', function(){
+		const id = $(this).data('id');
+		if(!confirm('Confirmar pagamento manual desta fatura?')) return;
+		$.post(url_base + 'master/conect-anuncios/faturas/marcar-paga', { id: id }, function(res){
+			if(res && res.success){
+				location.reload();
+			} else {
+				Swal.fire('Erro', (res && res.message) ? res.message : 'Falha.', 'error');
+			}
+		}, 'json');
+	});
 });
