@@ -337,6 +337,66 @@ function preencherModalDetalhes(result){
 	$('#btn-whatsapp-lead').off('click').on('click', function(){
 		iniciarAtendimentoWa(lead.whatsapp, lead.nome);
 	});
+
+	const $btnConv = $('#btn-converter-aluno');
+	const $btnMat = $('#btn-ir-matricula');
+	$btnConv.addClass('d-none').off('click');
+	$btnMat.addClass('d-none').off('click');
+
+	if (lead.pode_matricular !== false && lead.status !== 'matriculado') {
+		if (lead.tem_aluno && lead.id_usuario > 0) {
+			$btnMat.removeClass('d-none').on('click', function(){
+				window.location.href = url_base + 'painel/matriculas?aluno=' + lead.id_usuario + '&lead=' + lead.id;
+			});
+		} else {
+			$btnConv.removeClass('d-none').on('click', function(){
+				converterLeadEmAluno(lead.id);
+			});
+		}
+	}
+}
+
+function converterLeadEmAluno(id){
+	Swal.fire({
+		title: 'Converter em aluno?',
+		text: 'Será criado ou vinculado um cadastro comercial (Cliente) a partir deste lead.',
+		icon: 'question',
+		showCancelButton: true,
+		confirmButtonText: 'Sim, converter',
+		cancelButtonText: 'Cancelar'
+	}).then(function(confirmacao){
+		if(!confirmacao.isConfirmed) return;
+
+		$.ajax({
+			url: url_base + converterAlunoLead,
+			method: 'post',
+			data: { id },
+			dataType: 'json',
+			success: function(result){
+				if(result.erro){
+					Swal.fire({ title: 'Ops...', text: result.erro, icon: 'error' });
+					return;
+				}
+				Swal.fire({
+					title: 'Pronto!',
+					text: result.message || 'Aluno disponível para matrícula.',
+					icon: 'success',
+					showCancelButton: true,
+					confirmButtonText: 'Ir para matrícula',
+					cancelButtonText: 'Fechar'
+				}).then(function(r){
+					if(r.isConfirmed && result.url_matricula){
+						window.location.href = result.url_matricula;
+					} else {
+						abrirDetalhesLead(id);
+					}
+				});
+			},
+			error: function(){
+				Swal.fire({ title: 'Erro', text: 'Falha ao converter o lead.', icon: 'error' });
+			}
+		});
+	});
 }
 
 function abrirDetalhesLead(id){

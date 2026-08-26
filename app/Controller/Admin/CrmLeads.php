@@ -13,6 +13,7 @@ use \App\Common\Helpers\PlanilhaHelper;
 use \App\Common\Helpers\EmailValidator;
 use \App\Common\Communication\WhatsappEscolaService;
 use \App\Common\Helpers\CrmAutomacaoTemplateHelper;
+use \App\Common\Helpers\CrmPessoaHelper;
 use \App\Common\Helpers\ModuleGateHelper;
 use \App\Model\Db\Database;
 use \App\Model\Db\Pagination;
@@ -333,45 +334,94 @@ class CrmLeads extends Page{
 			return json_encode($resposta);
 		}
 
-		$obLead = new EntityCrmLeads;
-		$obLead->id_admin        = $id_admin;
-		$obLead->usuario_id      = $id_usuario;
-		$obLead->visibilidade    = $visibilidade;
-		$obLead->funil_id        = $funilId;
-		$obLead->nome            = $nome;
-		$obLead->whatsapp        = $whatsapp;
-		$obLead->curso_interesse = $curso;
-		$obLead->valor_estimado  = $valorEstimado > 0 ? $valorEstimado : null;
-		$obLead->origem          = $dadosCadastrais['origem'];
-		$obLead->email           = $dadosCadastrais['email'];
-		$obLead->bairro          = $dadosCadastrais['bairro'];
-		$obLead->cidade          = $dadosCadastrais['cidade'];
-		$obLead->idade           = $dadosCadastrais['idade'];
-		$obLead->responsavel_nome = $dadosCadastrais['responsavel_nome'];
-		$obLead->status          = 'novo';
-		$obLead->status_wa       = 'pendente';
-		$obLead->cadastrar();
-
-		$msgHistorico = 'Lead cadastrado no CRM com status "'.self::$labelsStatus['novo'].'".';
-		if($valorEstimado > 0){
-			$msgHistorico .= ' Valor estimado: R$ '.NumeroHelper::moedaBr($valorEstimado).'.';
-		}
-		if(!empty($dadosCadastrais['origem'])){
-			$msgHistorico .= ' Origem: '.$dadosCadastrais['origem'].'.';
-		}
-		$msgHistorico .= ' Visibilidade: '.($visibilidade === 'privado' ? 'Privado' : 'Público').'.';
-
 		$nomeFunil = self::getNomeFunil($funilId);
-		if($nomeFunil !== ''){
-			$msgHistorico .= ' Funil: '.$nomeFunil.'.';
+
+		$msgNovo = 'Lead cadastrado no CRM com status "'.self::$labelsStatus['novo'].'".';
+		if ($valorEstimado > 0) {
+			$msgNovo .= ' Valor estimado: R$ '.NumeroHelper::moedaBr($valorEstimado).'.';
+		}
+		if (!empty($dadosCadastrais['origem'])) {
+			$msgNovo .= ' Origem: '.$dadosCadastrais['origem'].'.';
+		}
+		$msgNovo .= ' Visibilidade: '.($visibilidade === 'privado' ? 'Privado' : 'Público').'.';
+		if ($nomeFunil !== '') {
+			$msgNovo .= ' Funil: '.$nomeFunil.'.';
 		}
 
-		self::registrarHistorico($obLead->id, $id_usuario, 'lead_cadastrado', $msgHistorico);
+		$dup = CrmPessoaHelper::buscarLeadDuplicado((int)$id_admin, $whatsapp, $dadosCadastrais['email'] ?? '');
 
-		self::dispararMensagemWhatsApp($obLead, null, 'novo');
+		$resLead = CrmPessoaHelper::criarOuAtualizarLead((int)$id_admin, [
+			'nome' => $nome,
+			'whatsapp' => $whatsapp,
+			'email' => $dadosCadastrais['email'],
+			'curso_interesse' => $curso,
+			'valor_estimado' => $valorEstimado > 0 ? $valorEstimado : null,
+			'origem' => $dadosCadastrais['origem'],
+			'bairro' => $dadosCadastrais['bairro'],
+			'cidade' => $dadosCadastrais['cidade'],
+			'funil_id' => $funilId,
+			'visibilidade' => $visibilidade,
+			'historico_obs' => $dup instanceof EntityCrmLeads
+				? 'Lead atualizado (já existia com mesmo WhatsApp/e-mail).'
+				: $msgNovo,
+		], (int)$id_usuario);
+
+		$obLead = $resLead['lead'];
+		if (!($obLead instanceof EntityCrmLeads) || (int)$obLead->id <= 0) {
+			$resposta['erro'] = 'Não foi possível salvar o lead.';
+			return json_encode($resposta);
+		}
+		if (!empty($dadosCadastrais['idade']) || !empty($dadosCadastrais['responsavel_nome'])) {
+			$obLead->idade = $dadosCadastrais['idade'];
+			$obLead->responsavel_nome = $dadosCadastrais['responsavel_nome'];
+			$obLead->atualizarDados();
+		}
+
+		if (!empty($resLead['criado'])) {
+			self::dispararMensagemWhatsApp($obLead, null, 'novo');
+		}
 
 		$resposta['sucesso'] = true;
+		$resposta['atualizado'] = !empty($resLead['atualizado']);
 		return json_encode($resposta);
+	}
+
+	public static function converterEmAluno($request){
+		$postVars = $request->getPostVars();
+		$id = (int)($postVars['id'] ?? 0);
+		if ($id <= 0) {
+			return json_encode(['erro' => 'Lead inválido.']);
+		}
+		$dadosUser = parent::getIdAdmin();
+		$id_admin = (int)$dadosUser['usuario']['id_admin'];
+		$id_usuario = (int)$dadosUser['usuario']['id'];
+
+		$obLead = EntityCrmLeads::getLeads(
+			'id = '.$id.' AND id_admin = '.(int)$id_admin
+		)->fetchObject(EntityCrmLeads::class);
+		if (!$obLead instanceof EntityCrmLeads) {
+			return json_encode(['erro' => 'Lead não encontrado.']);
+		}
+		if (!self::podeAcessarLead($obLead, $dadosUser)) {
+			return json_encode(['erro' => 'Sem permissão para este lead.']);
+		}
+
+		$conv = CrmPessoaHelper::converterLeadEmCliente($id_admin, $id, $id_usuario);
+		if (empty($conv['ok'])) {
+			return json_encode(['erro' => $conv['message'] ?? 'Falha ao converter.']);
+		}
+
+		return json_encode([
+			'sucesso' => true,
+			'message' => $conv['message'] ?? 'Aluno pronto.',
+			'id_usuario' => (int)($conv['id_usuario'] ?? 0),
+			'url_matricula' => rtrim((string)URL, '/').'/painel/matriculas?aluno='.(int)($conv['id_usuario'] ?? 0).'&lead='.$id,
+		]);
+	}
+
+	/** Disparo WA automático (uso por CrmPessoaHelper após matrícula). */
+	public static function dispararAutomacaoStatusPublico($lead, $statusAnterior, $statusNovo, int $usuarioId = 0): void {
+		self::dispararMensagemWhatsApp($lead, $statusAnterior, $statusNovo, $usuarioId);
 	}
 
 	public static function importar($request){
@@ -443,6 +493,7 @@ class CrmLeads extends Page{
 		}
 
 		$importados = 0;
+		$atualizados = 0;
 		$ignorados   = 0;
 		$erros       = [];
 
@@ -457,32 +508,32 @@ class CrmLeads extends Page{
 				continue;
 			}
 
-			$obLead = new EntityCrmLeads;
-			$obLead->id_admin         = $id_admin;
-			$obLead->usuario_id       = $id_usuario;
-			$obLead->visibilidade     = $visibilidade;
-			$obLead->funil_id         = $funilId;
-			$obLead->nome             = $dadosLinha['nome'];
-			$obLead->whatsapp         = $dadosLinha['whatsapp'];
-			$obLead->email            = $dadosLinha['email'];
-			$obLead->curso_interesse  = $dadosLinha['curso_interesse'];
-			$obLead->bairro           = $dadosLinha['bairro'];
-			$obLead->cidade           = $dadosLinha['cidade'];
-			$obLead->status           = 'novo';
-			$obLead->status_wa        = 'pendente';
-			$obLead->cadastrar();
+			$resLead = CrmPessoaHelper::criarOuAtualizarLead((int)$id_admin, [
+				'nome' => $dadosLinha['nome'],
+				'whatsapp' => $dadosLinha['whatsapp'],
+				'email' => $dadosLinha['email'],
+				'curso_interesse' => $dadosLinha['curso_interesse'],
+				'bairro' => $dadosLinha['bairro'],
+				'cidade' => $dadosLinha['cidade'],
+				'funil_id' => $funilId,
+				'visibilidade' => $visibilidade,
+				'origem' => 'Importação planilha',
+				'historico_obs' => 'Lead importado via planilha no funil "'.$nomeFunil.'".',
+			], (int)$id_usuario);
 
-			self::registrarHistorico(
-				$obLead->id,
-				$id_usuario,
-				'lead_importado',
-				'Lead importado via planilha com visibilidade "'.($visibilidade === 'privado' ? 'Privado' : 'Público').'" no funil "'.$nomeFunil.'".'
-			);
+			if (empty($resLead['lead']) || (int)$resLead['lead']->id <= 0) {
+				$ignorados++;
+				continue;
+			}
 
-			$importados++;
+			if (!empty($resLead['atualizado'])) {
+				$atualizados++;
+			} else {
+				$importados++;
+			}
 		}
 
-		if($importados === 0){
+		if($importados === 0 && $atualizados === 0){
 			$resposta['erro'] = 'Nenhum lead foi importado. Verifique o formato das linhas.';
 			if(count($erros) > 0){
 				$resposta['detalhes'] = array_slice($erros, 0, 5);
@@ -492,6 +543,7 @@ class CrmLeads extends Page{
 
 		$resposta['sucesso']    = true;
 		$resposta['importados'] = $importados;
+		$resposta['atualizados'] = $atualizados;
 		$resposta['ignorados']  = $ignorados;
 
 		if(count($erros) > 0){
@@ -793,6 +845,13 @@ class CrmLeads extends Page{
 	private static function formatarLeadDetalhes($obLead){
 
 		$valorEstimado = (float)($obLead->valor_estimado ?? 0);
+		$idUsuario = (CrmLeads::colunaIdUsuarioExiste() && !empty($obLead->id_usuario))
+			? (int)$obLead->id_usuario : 0;
+		$temAluno = false;
+		if ($idUsuario > 0) {
+			$u = EntityUser::getUserById($idUsuario);
+			$temAluno = $u instanceof EntityUser && (string)($u->nivel ?? '') === 'Cliente';
+		}
 
 		return [
 			'id'               => $obLead->id,
@@ -815,7 +874,10 @@ class CrmLeads extends Page{
 			'funil_id'         => (int)($obLead->funil_id ?? 0),
 			'funil_nome'       => self::getNomeFunil((int)($obLead->funil_id ?? 0)),
 			'data_cadastro'    => DateTimeHelper::databr($obLead->data_cadastro),
-			'status_wa'        => $obLead->status_wa
+			'status_wa'        => $obLead->status_wa,
+			'id_usuario'       => $idUsuario,
+			'tem_aluno'        => $temAluno,
+			'pode_matricular'  => $obLead->status !== 'matriculado',
 		];
 	}
 

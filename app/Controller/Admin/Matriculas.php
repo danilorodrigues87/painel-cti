@@ -17,6 +17,7 @@ use \App\Common\Helpers\ModuleGateHelper;
 use \App\Common\Helpers\BrandingHelper;
 use \App\Common\Helpers\ContratoTemplateHelper;
 use \App\Common\Helpers\MatriculaStatusHelper;
+use \App\Common\Helpers\CrmPessoaHelper;
 use \App\Model\Entity\EscolasAssinantes;
 
 
@@ -206,7 +207,17 @@ return json_encode($dadosRes);
 private static function getForm($request) {
 
 	$postVars = $request->getPostVars();
+	$queryVars = $request->getQueryParams();
 	$dados = [];
+
+	$idAlunoPre = (int)($postVars['id_aluno'] ?? $postVars['aluno'] ?? 0);
+	if ($idAlunoPre <= 0) {
+		$idAlunoPre = (int)($queryVars['aluno'] ?? 0);
+	}
+	$idLeadPre = (int)($postVars['id_lead'] ?? $postVars['lead'] ?? 0);
+	if ($idLeadPre <= 0) {
+		$idLeadPre = (int)($queryVars['lead'] ?? 0);
+	}
 
 	if (($postVars['funcao'] ?? '') === 'editar') {
 		$id = (int)($postVars['id'] ?? 0);
@@ -227,7 +238,12 @@ $optSlqUsers = '<select class="form-control" onchange="selectAluno(this.value)" 
                     <option value="0">Selecione um aluno</option> ';
 
 while ($obAlunos = $resultsUser->fetchObject(EntityUser::class)) {
-  $userSelected = (isset($dados['id_aluno']) && $dados['id_aluno'] == $obAlunos->id) ? 'selected' : '';
+  $userSelected = '';
+  if (isset($dados['id_aluno']) && $dados['id_aluno'] == $obAlunos->id) {
+    $userSelected = 'selected';
+  } elseif ($idAlunoPre > 0 && $idAlunoPre == (int)$obAlunos->id) {
+    $userSelected = 'selected';
+  }
   $optSlqUsers .= '
   <option ' . $userSelected . ' value="'.(int)$obAlunos->id.'">' . htmlspecialchars((string)$obAlunos->nome, ENT_QUOTES, 'UTF-8') . '</option>
   ';
@@ -413,6 +429,7 @@ $form = '<form id="form" method="post">
 </div>
 <div class="modal-footer">
 <input value="' . (isset($dados['id']) ? $dados['id'] : '') . '" type="hidden" name="id">
+<input value="' . ($idLeadPre > 0 ? $idLeadPre : '') . '" type="hidden" name="id_lead">
 <button type="button" id="btn-fechar" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
 <button type="submit" class="btn btn-primary">Salvar</button>
 </div>
@@ -420,6 +437,7 @@ $form = '<form id="form" method="post">
 <script>
 if (typeof syncDescontoComTipoParcelamento === "function") { syncDescontoComTipoParcelamento(); }
 if (typeof syncBolsistaMatricula === "function") { syncBolsistaMatricula(); }
+' . ($idAlunoPre > 0 ? 'if (typeof selectAluno === "function") { selectAluno(' . (int)$idAlunoPre . '); }' : '') . '
 </script>
 
 ';
@@ -570,6 +588,16 @@ if (!empty($postVars['id'])) {
   $obMatricula->matricular();
 }
 
+$idLeadSync = (int)($postVars['id_lead'] ?? 0);
+$idUsuarioOp = (int)(parent::getIdAdmin()['usuario']['id'] ?? 0);
+if ($obMatricula && (int)$id_aluno > 0) {
+  CrmPessoaHelper::sincronizarLeadMatriculado(
+    (int)$id_admin,
+    (int)$id_aluno,
+    $idUsuarioOp,
+    $idLeadSync > 0 ? $idLeadSync : null
+  );
+}
 
 if(!$obMatricula){
         $resposta ["erro"] = 'Erro ao matricular';

@@ -2,6 +2,7 @@
 
 namespace App\Controller\Api\Student;
 
+use App\Common\Helpers\CrmPessoaHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Environment;
 use PDO;
@@ -76,28 +77,18 @@ class Referral {
 		$obs = 'Indicação via portal EAD. Indicado por: '.$indicador.' (ID '.$idAluno.').';
 
 		try {
-			$pdo = self::pdo();
-			$stmt = $pdo->prepare(
-				'INSERT INTO crm_leads
-				(id_admin, usuario_id, visibilidade, funil_id, nome, whatsapp, curso_interesse, origem, email, status, status_wa, data_cadastro)
-				VALUES
-				(:id_admin, :usuario_id, :visibilidade, :funil_id, :nome, :whatsapp, :curso_interesse, :origem, :email, :status, :status_wa, :data_cadastro)'
-			);
-			$stmt->execute([
-				':id_admin' => $idAdmin,
-				':usuario_id' => $idAluno,
-				':visibilidade' => 'publico',
-				':funil_id' => $funilId,
-				':nome' => $nome,
-				':whatsapp' => $whatsapp,
-				':curso_interesse' => $curso !== '' ? $curso : null,
-				':origem' => 'Indicação portal',
-				':email' => $email !== '' ? $email : null,
-				':status' => 'novo',
-				':status_wa' => 'pendente',
-				':data_cadastro' => date('Y-m-d H:i:s'),
-			]);
-			$leadId = (int)$pdo->lastInsertId();
+			$res = CrmPessoaHelper::criarOuAtualizarLead($idAdmin, [
+				'nome' => $nome,
+				'whatsapp' => $whatsapp,
+				'email' => $email !== '' ? $email : null,
+				'curso_interesse' => $curso !== '' ? $curso : null,
+				'origem' => 'Indicação portal',
+				'funil_id' => $funilId,
+				'visibilidade' => 'publico',
+				'historico_obs' => $obs,
+			], $idAluno);
+			$lead = $res['lead'] ?? null;
+			$leadId = ($lead && !empty($lead->id)) ? (int)$lead->id : 0;
 		} catch (Throwable $e) {
 			return self::err('Falha ao gravar indicação: '.$e->getMessage(), 500);
 		}
@@ -107,18 +98,7 @@ class Referral {
 		}
 
 		try {
-			$pdo = self::pdo();
-			$h = $pdo->prepare(
-				'INSERT INTO crm_historico (lead_id, usuario_id, acao, observacao, data_registro)
-				VALUES (:lead_id, :usuario_id, :acao, :observacao, :data_registro)'
-			);
-			$h->execute([
-				':lead_id' => $leadId,
-				':usuario_id' => $idAluno,
-				':acao' => 'Indicação portal',
-				':observacao' => $obs,
-				':data_registro' => date('Y-m-d H:i:s'),
-			]);
+			CrmPessoaHelper::registrarHistorico($leadId, $idAluno, 'Indicação portal', $obs);
 		} catch (Throwable $e) {
 			/* histórico opcional */
 		}

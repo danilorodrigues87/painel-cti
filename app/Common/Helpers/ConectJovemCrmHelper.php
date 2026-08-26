@@ -3,7 +3,6 @@
 namespace App\Common\Helpers;
 
 use App\Model\Entity\CrmFunis;
-use App\Model\Entity\CrmHistorico;
 use App\Model\Entity\CrmLeads as EntityCrmLeads;
 
 /**
@@ -25,36 +24,20 @@ class ConectJovemCrmHelper {
 		}
 
 		$funilId = self::funilConectaJovem($idAdmin);
-		$lead = new EntityCrmLeads();
-		$lead->id_admin = $idAdmin;
-		$lead->usuario_id = 0;
-		$lead->visibilidade = 'publico';
-		$lead->funil_id = $funilId;
-		$lead->nome = mb_substr(trim($nome), 0, 191);
-		$lead->whatsapp = preg_replace('/\D+/', '', $whatsapp) ?: '';
-		$lead->email = $email ? mb_substr(trim($email), 0, 191) : null;
-		$lead->curso_interesse = $cursoInteresse
-			? mb_substr(trim($cursoInteresse), 0, 191)
-			: 'Empregabilidade';
-		$lead->origem = 'Conecta Jovem';
-		$lead->cidade = $cidadeId !== null && $cidadeId > 0 ? (string)$cidadeId : null;
-		$lead->bairro = $bairro ? mb_substr(trim($bairro), 0, 120) : null;
-		$lead->status = 'novo';
-		$lead->status_wa = 'pendente';
-		$lead->cadastrar();
+		$res = CrmPessoaHelper::criarOuAtualizarLead($idAdmin, [
+			'nome' => $nome,
+			'whatsapp' => $whatsapp,
+			'email' => $email,
+			'curso_interesse' => $cursoInteresse ?: 'Empregabilidade',
+			'origem' => 'Conecta Jovem',
+			'funil_id' => $funilId,
+			'bairro' => $bairro,
+			'cidade' => $cidadeId !== null && $cidadeId > 0 ? (string)$cidadeId : null,
+			'historico_obs' => 'Lead via Conecta Jovem (cadastro externo).',
+		], 0);
 
-		if ((int)$lead->id <= 0) {
-			return null;
-		}
-
-		$hist = new CrmHistorico();
-		$hist->lead_id = (int)$lead->id;
-		$hist->usuario_id = 0;
-		$hist->acao = 'lead_cadastrado';
-		$hist->observacao = 'Lead criado via Conecta Jovem.';
-		$hist->cadastrar();
-
-		return (int)$lead->id;
+		$lead = $res['lead'] ?? null;
+		return ($lead instanceof EntityCrmLeads && (int)$lead->id > 0) ? (int)$lead->id : null;
 	}
 
 	private static function funilConectaJovem(int $idAdmin): ?int {

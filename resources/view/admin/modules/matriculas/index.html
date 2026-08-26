@@ -55,3 +55,34 @@
 	let buscaResponsavel = 'painel/busca-responsavel';
 </script>
 <script src="{{URL}}/resources/js/ajax.js?v=20260728g"></script>
+<script>
+(function(){
+	var params = new URLSearchParams(window.location.search);
+	var aluno = parseInt(params.get('aluno') || '0', 10);
+	var lead = parseInt(params.get('lead') || '0', 10);
+	if (aluno > 0 && typeof list_itens === 'function') {
+		$.ajax({
+			url: url_base + formulario,
+			method: 'post',
+			data: { funcao: 'novo', id_aluno: aluno, id_lead: lead > 0 ? lead : '' },
+			dataType: 'json',
+			success: function(result) {
+				if (result && result.form) {
+					$('#listar-dados').html(result.form);
+					if (typeof selectAluno === 'function') {
+						selectAluno(aluno);
+					}
+					if (typeof showFormModal === 'function') {
+						showFormModal();
+					} else {
+						$('#formModal').modal('show');
+					}
+				}
+			}
+		});
+		if (window.history && window.history.replaceState) {
+			window.history.replaceState({}, document.title, window.location.pathname);
+		}
+	}
+})();
+</script>

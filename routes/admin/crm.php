@@ -83,6 +83,16 @@ $obRouter->post('/painel/crm/atualizar',[
 	}
 ]);
 
+//ROTA CONVERTER LEAD EM ALUNO (Cliente)
+$obRouter->post('/painel/crm/converter-aluno',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\CrmLeads::converterEmAluno($request));
+	}
+]);
+
 //ROTA LISTAR FUNIS
 $obRouter->post('/painel/crm/funis',[
 	'middlewares' => [
