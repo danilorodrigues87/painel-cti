@@ -168,10 +168,11 @@ class Campanhas extends Page {
 		$aoVivo = $contagensAoVivo || (string)$c->status === 'enviando';
 
 		if ($aoVivo) {
-			$total = CampanhaFila::contarPorCampanha($id, $idAdmin);
-			$enviados = CampanhaFila::contarPorCampanha($id, $idAdmin, 'enviado');
-			$erros = CampanhaFila::contarPorCampanha($id, $idAdmin, 'erro');
-			$pendentes = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
+			$resumo = CampanhaFila::resumoPorCampanha($id, $idAdmin);
+			$total = $resumo['total'];
+			$enviados = $resumo['enviados'];
+			$erros = $resumo['erros'];
+			$pendentes = $resumo['pendentes'];
 		} else {
 			$total = (int)$c->total;
 			$enviados = (int)$c->enviados;
@@ -404,7 +405,6 @@ class Campanhas extends Page {
 			$ob->atualizar();
 			$isGrupo = $ob->ehCampanhaGrupos();
 			if ($isGrupo) {
-				CampanhaWorker::reabastecerFilaGrupos($ob);
 				CampanhaWorker::agendarContinuacaoGrupos($idAdmin, $id);
 			}
 			$ob = EntityCampanhas::getById($id, $idAdmin);
@@ -456,28 +456,21 @@ class Campanhas extends Page {
 		$ob->agendada_para = null;
 		$ob->atualizar();
 
-		// Web: 1ª mensagem sem sleep; fila/cron respeitam pacing depois
-		$aplicarDelay = false;
-		$resumo = CampanhaWorker::processar($idAdmin, 1, $aplicarDelay);
-
-		$ob = EntityCampanhas::getById($id, $idAdmin);
-		$ob->recalcularTotais();
-
 		if ($isGrupo) {
 			CampanhaWorker::agendarContinuacaoGrupos($idAdmin, $id);
 		}
 
-		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
+		$ob = EntityCampanhas::getById($id, $idAdmin);
 		$pend = CampanhaFila::contarPorCampanha($id, $idAdmin, 'pendente');
+		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
 		$msg = $isGrupo
-			? 'Campanha iniciada (recorrente). 1ª mensagem enviada. A mesma mensagem será reenviada aos grupos selecionados a cada ~'.$pacing['delay_minutos'].' min até você Encerrar.'
-			: 'Campanha iniciada. '.$ob->enviados.' enviados, '.$ob->erros.' erros. Pendentes: '.$pend;
+			? 'Campanha iniciada (recorrente). Envio em segundo plano (~'.$pacing['delay_minutos'].' min entre rodadas).'
+			: 'Campanha iniciada. '.$pend.' mensagem(ns) na fila. O envio continua em segundo plano.';
 
 		return json_encode([
 			'success'  => true,
 			'message'  => $msg,
 			'campanha' => self::formatarCampanha($ob, true),
-			'worker'   => $resumo,
 			'pacing'   => $pacing,
 		]);
 	}

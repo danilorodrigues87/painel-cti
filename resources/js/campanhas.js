@@ -863,7 +863,9 @@ function concluirInicioCampanha(res){
 	aplicarCampanhaNaLista(res.campanha);
 	atualizarModalProgressoCampanha(res.campanha);
 	if(res.campanha.eh_grupos){
+		processarFilaSilencioso();
 		$('#campanha-progresso-footer').removeClass('d-none');
+		carregarCampanhas({ silencioso: true });
 		return;
 	}
 	if(!campanhaEnvioConcluido(res.campanha) && res.campanha.status === 'enviando'){
@@ -871,6 +873,37 @@ function concluirInicioCampanha(res){
 		processarFilaSilencioso();
 	}
 	carregarCampanhas({ silencioso: true });
+}
+
+function verificarCampanhaAposFalhaInicio(id, retomar){
+	campanhaProgressoAguardando = false;
+	$('#campanha-progresso-texto').text('Resposta demorou — verificando status…');
+	$('#campanha-progresso-detalhe').text('A campanha pode já ter sido iniciada no servidor.');
+	$.post(url_base + CAMPANHAS_URL, { acao: 'detalhes', id: id }, function(res){
+		if(res && res.success && res.campanha && (res.campanha.status === 'enviando' || res.campanha.status === 'concluida')){
+			concluirInicioCampanha({
+				success: true,
+				message: retomar ? 'Campanha retomada.' : 'Campanha iniciada.',
+				campanha: res.campanha
+			});
+			return;
+		}
+		fecharModalProgressoCampanha();
+		Swal.fire(
+			'Atenção',
+			'A resposta demorou demais. Verifique a lista — a campanha pode ter sido iniciada mesmo assim.',
+			'warning'
+		);
+		carregarCampanhas();
+	}, 'json').fail(function(){
+		fecharModalProgressoCampanha();
+		Swal.fire(
+			'Atenção',
+			'Não foi possível confirmar o status. Recarregue a página para ver se a campanha está enviando.',
+			'warning'
+		);
+		carregarCampanhas();
+	});
 }
 
 function acaoCampanha(acao, id, confirmar, retomar){
@@ -913,8 +946,15 @@ function acaoCampanha(acao, id, confirmar, retomar){
 			}
 			Swal.fire('OK', res.message, 'success');
 			carregarCampanhas();
-		}, 'json').fail(function(){
-			if(ehIniciar) fecharModalProgressoCampanha();
+		}, 'json').fail(function(xhr, textStatus){
+			if(ehIniciar){
+				// Timeout/rede: servidor pode ter concluído — consulta status antes de erro
+				if(textStatus === 'timeout' || textStatus === 'error' || textStatus === 'parsererror' || xhr.status === 0 || xhr.status >= 500){
+					verificarCampanhaAposFalhaInicio(id, retomar);
+					return;
+				}
+				fecharModalProgressoCampanha();
+			}
 			Swal.fire('Erro', 'Falha na comunicação com o servidor.', 'error');
 		});
 	};

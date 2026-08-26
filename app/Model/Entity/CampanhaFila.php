@@ -37,6 +37,27 @@ class CampanhaFila {
 		return (int)($row['qtd'] ?? 0);
 	}
 
+	/** Uma query para total/enviados/erros/pendentes (evita 4 COUNT na resposta web). */
+	public static function resumoPorCampanha(int $campanhaId, int $idAdmin): array {
+		$where = 'campanha_id = '.(int)$campanhaId.' AND id_admin = '.(int)$idAdmin;
+		$row = self::get(
+			$where,
+			null,
+			null,
+			'COUNT(*) AS total,'
+			.' SUM(CASE WHEN status = "enviado" THEN 1 ELSE 0 END) AS enviados,'
+			.' SUM(CASE WHEN status = "erro" THEN 1 ELSE 0 END) AS erros,'
+			.' SUM(CASE WHEN status = "pendente" THEN 1 ELSE 0 END) AS pendentes'
+		)->fetch(\PDO::FETCH_ASSOC);
+
+		return [
+			'total'     => (int)($row['total'] ?? 0),
+			'enviados'  => (int)($row['enviados'] ?? 0),
+			'erros'     => (int)($row['erros'] ?? 0),
+			'pendentes' => (int)($row['pendentes'] ?? 0),
+		];
+	}
+
 	public static function limparCampanha(int $campanhaId, int $idAdmin): void {
 		(new Database('campanha_fila'))->delete(
 			'campanha_id = '.(int)$campanhaId.' AND id_admin = '.(int)$idAdmin
