@@ -845,7 +845,7 @@ class CrmLeads extends Page{
 	private static function formatarLeadDetalhes($obLead){
 
 		$valorEstimado = (float)($obLead->valor_estimado ?? 0);
-		$idUsuario = (CrmLeads::colunaIdUsuarioExiste() && !empty($obLead->id_usuario))
+		$idUsuario = (EntityCrmLeads::colunaIdUsuarioExiste() && !empty($obLead->id_usuario))
 			? (int)$obLead->id_usuario : 0;
 		$temAluno = false;
 		if ($idUsuario > 0) {

@@ -412,6 +412,10 @@ function abrirDetalhesLead(id){
 			}
 			preencherModalDetalhes(result);
 			$('#modalDetalhesLead').modal('show');
+		},
+		error: function(xhr){
+			console.error('detalhes lead:', xhr.status, xhr.responseText);
+			Swal.fire({ title: 'Erro', text: 'Não foi possível abrir os detalhes do lead.', icon: 'error' });
 		}
 	});
 }
