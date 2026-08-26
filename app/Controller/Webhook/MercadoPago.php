@@ -5,9 +5,11 @@ namespace App\Controller\Webhook;
 use App\Common\Helpers\MercadoPagoEscolaHelper;
 use App\Common\Helpers\MercadoPagoCtiHelper;
 use App\Common\Helpers\SaasAssinaturaService;
+use App\Common\Helpers\ConectAnuncioAssinaturaService;
 use App\Common\Helpers\FinanceiroAlunoHelper;
 use App\Common\Gateways\MercadoPago\Pix;
 use App\Model\Entity\Caixa;
+use App\Model\Entity\CjAnuncioFatura;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\SaasFatura;
 
@@ -57,6 +59,9 @@ class MercadoPago {
 		}
 
 		$ok = self::baixarFaturaSaas($pagamento);
+		if (!$ok) {
+			$ok = self::baixarFaturaCjAnuncio($pagamento);
+		}
 		return json_encode(['success' => true, 'baixado' => $ok]);
 	}
 
@@ -96,6 +101,44 @@ class MercadoPago {
 			$fat->mp_payment_id = $paymentId;
 		}
 		return SaasAssinaturaService::marcarPaga($fat, $pagoEm);
+	}
+
+	/** @param array{id:string,status:string,transaction_amount:float,external_reference:string,date_approved:?string} $pagamento */
+	private static function baixarFaturaCjAnuncio(array $pagamento): bool {
+		if (!CjAnuncioFatura::tabelaExiste()) {
+			return false;
+		}
+
+		$paymentId = preg_replace('/\D/', '', (string)$pagamento['id']);
+		$fat = $paymentId !== '' ? CjAnuncioFatura::getPorMpPaymentId($paymentId) : null;
+
+		if (!$fat instanceof CjAnuncioFatura) {
+			$ref = (string)($pagamento['external_reference'] ?? '');
+			if (preg_match('/^cj_anuncio:(\d+)$/', $ref, $m)) {
+				$fat = CjAnuncioFatura::getById((int)$m[1]);
+			}
+		}
+
+		if (!$fat instanceof CjAnuncioFatura) {
+			return false;
+		}
+		if (($fat->status ?? '') === 'pago') {
+			return true;
+		}
+
+		$pagoEm = date('Y-m-d H:i:s');
+		if (!empty($pagamento['date_approved'])) {
+			try {
+				$pagoEm = (new \DateTimeImmutable((string)$pagamento['date_approved']))->format('Y-m-d H:i:s');
+			} catch (\Throwable $e) {
+				// keep now
+			}
+		}
+
+		if ($paymentId !== '') {
+			$fat->mp_payment_id = $paymentId;
+		}
+		return ConectAnuncioAssinaturaService::marcarPaga($fat, $pagoEm);
 	}
 
 	public static function pingSaas($token): string {

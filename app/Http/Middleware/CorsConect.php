@@ -51,6 +51,13 @@ class CorsConect {
 			return false;
 		}
 		$host = strtolower($host);
-		return in_array($host, ['localhost', '127.0.0.1', '::1'], true) || str_ends_with($host, '.local');
+		if (in_array($host, ['localhost', '127.0.0.1', '::1'], true) || str_ends_with($host, '.local')) {
+			return true;
+		}
+		// Rede local (celular/tablet testando via 192.168.x.x)
+		if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+			return preg_match('/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/', $host) === 1;
+		}
+		return false;
 	}
 }

@@ -85,6 +85,27 @@ $obRouter->post('/api/v1/conect/public/analytics/event', [
 	}
 ]);
 
+$obRouter->get('/api/v1/conect/public/anuncios', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Anuncios::listar($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect/public/anuncios/config', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Anuncios::configPublico($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/public/anuncios/{id}/evento', [
+	'middlewares' => $conectMw,
+	function ($request, $id) use ($respond) {
+		return $respond(Conect\Anuncios::evento($request, (int)$id));
+	}
+]);
+
 $obRouter->get('/api/v1/conect/public/blog/categorias', [
 	'middlewares' => $conectMw,
 	function ($request) use ($respond) {
@@ -287,5 +308,75 @@ $obRouter->get('/api/v1/conect-empresa/talentos', [
 	'middlewares' => $empresaAuth,
 	function ($request) use ($respond) {
 		return $respond(ConectEmpresa\Talentos::buscar($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/anuncios/config', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Anuncios::config($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/anuncios', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Anuncios::listar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Anuncios::criar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/{id}', [
+	'middlewares' => $empresaAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(ConectEmpresa\Anuncios::atualizar($request, (int)$id));
+	}
+]);
+
+$obRouter->delete('/api/v1/conect-empresa/anuncios/{id}', [
+	'middlewares' => $empresaAuth,
+	function ($request, $id) use ($respond) {
+		return $respond(ConectEmpresa\Anuncios::excluir($request, (int)$id));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/anuncios/planos', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::planos($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/anuncios/assinatura', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::resumo($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::assinar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura/cancelar', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::cancelar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura/verificar', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::verificar($request));
 	}
 ]);

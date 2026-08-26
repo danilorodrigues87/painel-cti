@@ -50,6 +50,7 @@ class MasterMenuHelper {
 					['id' => 'conect-blog', 'label' => 'Blog', 'url' => '/master/conect-blog', 'icon' => 'fas fa-newspaper'],
 					['id' => 'conect-depoimentos', 'label' => 'Depoimentos', 'url' => '/master/conect-depoimentos', 'icon' => 'fas fa-quote-left'],
 					['id' => 'conect-relatorios', 'label' => 'Relatórios', 'url' => '/master/conect-relatorios', 'icon' => 'fas fa-chart-bar'],
+					['id' => 'conect-anuncios', 'label' => 'Anúncios', 'url' => '/master/conect-anuncios', 'icon' => 'fas fa-ad'],
 				],
 			],
 			[

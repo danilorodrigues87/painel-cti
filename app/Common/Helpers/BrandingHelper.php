@@ -20,6 +20,7 @@ class BrandingHelper {
 	public const DIR_CONECT_EMPRESAS = '/img/conect/empresas/';
 	public const DIR_CONECT_BLOG = '/img/conect/blog/';
 	public const DIR_CONECT_DEPOIMENTOS = '/img/conect/depoimentos/';
+	public const DIR_CONECT_ANUNCIOS = '/img/conect/anuncios/';
 	public const MODELO_CERT_PADRAO = 'uploads/img/certificado/modelo_cert.png';
 
 	public static function urlBase(): string {
@@ -229,6 +230,91 @@ class BrandingHelper {
 		return self::urlUploadArquivo($arquivo, self::DIR_CONECT_DEPOIMENTOS);
 	}
 
+	public static function processarUploadConectAnuncio(?array $file, ?string $atual = null): ?string {
+		$res = self::processarUploadImagemDetalhe($file, self::DIR_CONECT_ANUNCIOS, $atual, 3 * 1024 * 1024);
+		return $res['filename'];
+	}
+
+	/** @return array{filename:?string,error:?string} */
+	public static function processarUploadConectAnuncioDetalhe(?array $file, ?string $atual = null): array {
+		return self::processarUploadImagemDetalhe($file, self::DIR_CONECT_ANUNCIOS, $atual, 3 * 1024 * 1024);
+	}
+
+	private static function arquivoImagemValido(array $file): bool {
+		$ext = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
+		if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+			return true;
+		}
+		$type = strtolower((string)($file['type'] ?? ''));
+		if ($type !== '' && strpos($type, 'image/') === 0) {
+			return true;
+		}
+		$tmp = (string)($file['tmp_name'] ?? '');
+		if ($tmp !== '' && is_file($tmp) && function_exists('finfo_open')) {
+			$fi = finfo_open(FILEINFO_MIME_TYPE);
+			if ($fi) {
+				$detected = finfo_file($fi, $tmp);
+				finfo_close($fi);
+				if (is_string($detected) && strpos($detected, 'image/') === 0) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** @return array{filename:?string,error:?string} */
+	private static function processarUploadImagemDetalhe(?array $file, string $dirRelativo, ?string $atual, int $maxBytes): array {
+		$atual = trim((string)$atual);
+		if ($atual === '') {
+			$atual = null;
+		}
+
+		if (!is_array($file) || empty($file['name'])) {
+			return ['filename' => $atual, 'error' => null];
+		}
+
+		$err = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+		if ($err === UPLOAD_ERR_NO_FILE) {
+			return ['filename' => $atual, 'error' => null];
+		}
+		if ($err !== UPLOAD_ERR_OK) {
+			$maxMb = round($maxBytes / 1024 / 1024, 1);
+			$msg = in_array($err, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+				? 'Imagem muito grande. Máximo '.$maxMb.' MB.'
+				: 'Falha no envio da imagem (código '.$err.').';
+			return ['filename' => $atual, 'error' => $msg];
+		}
+
+		if (!self::arquivoImagemValido($file)) {
+			return ['filename' => $atual, 'error' => 'Formato inválido. Use JPG, PNG ou WebP.'];
+		}
+
+		$size = (int)($file['size'] ?? 0);
+		if ($size <= 0 || $size > $maxBytes) {
+			$maxMb = round($maxBytes / 1024 / 1024, 1);
+			return ['filename' => $atual, 'error' => 'Imagem muito grande. Máximo '.$maxMb.' MB.'];
+		}
+
+		$obUpload = new Upload($file);
+		$obUpload->generateNewName();
+		$ok = $obUpload->upload($dirRelativo, false, $atual);
+		if (!$ok) {
+			return ['filename' => $atual, 'error' => 'Não foi possível salvar a imagem. Verifique permissões da pasta uploads.'];
+		}
+
+		return ['filename' => $obUpload->getBasename(), 'error' => null];
+	}
+
+	private static function processarUploadImagem(?array $file, string $dirRelativo, ?string $atual, int $maxBytes): ?string {
+		$res = self::processarUploadImagemDetalhe($file, $dirRelativo, $atual, $maxBytes);
+		return $res['filename'];
+	}
+
+	public static function urlConectAnuncioImagem(?string $arquivo): ?string {
+		return self::urlUploadArquivo($arquivo, self::DIR_CONECT_ANUNCIOS);
+	}
+
 	private static function urlUploadArquivo(?string $arquivo, string $dirRelativo): ?string {
 		$arquivo = trim((string)$arquivo);
 		if ($arquivo === '' || strpos($arquivo, '..') !== false || strpos($arquivo, '/') !== false || strpos($arquivo, '\\') !== false) {
@@ -243,36 +329,6 @@ class BrandingHelper {
 			return null;
 		}
 		return self::urlBase().'/uploads'.$dirRelativo.$arquivo;
-	}
-
-	private static function processarUploadImagem(?array $file, string $dirRelativo, ?string $atual, int $maxBytes): ?string {
-		$atual = trim((string)$atual);
-		if ($atual === '') {
-			$atual = null;
-		}
-
-		if (!is_array($file) || empty($file['name']) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-			return $atual;
-		}
-
-		$type = strtolower((string)($file['type'] ?? ''));
-		if (strpos($type, 'image/') !== 0) {
-			return $atual;
-		}
-
-		$size = (int)($file['size'] ?? 0);
-		if ($size <= 0 || $size > $maxBytes) {
-			return $atual;
-		}
-
-		$obUpload = new Upload($file);
-		$obUpload->generateNewName();
-		$ok = $obUpload->upload($dirRelativo, false, $atual);
-		if (!$ok) {
-			return $atual;
-		}
-
-		return $obUpload->getBasename();
 	}
 
 	/** HTML do rodapé padrão (CTI + XDTEC). */

@@ -277,6 +277,71 @@ $obRouter->post('/master/conect-depoimentos/{id}/excluir', [
 	}
 ]);
 
+$obRouter->get('/master/conect-anuncios', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectAnuncios::index($request));
+	}
+]);
+
+$obRouter->get('/master/conect-anuncios/editar/{id}', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		return new Response(200, Master\ConectAnuncios::editar($request, (int)$id));
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/cidades', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectAnuncios::cidades($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/salvar', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectAnuncios::salvar($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/config', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectAnuncios::salvarConfig($request), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/{id}/aprovar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectAnuncios::aprovar($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/{id}/reprovar', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		return new Response(200, Master\ConectAnuncios::reprovar($request, (int)$id), 'application/json');
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/{id}/excluir', [
+	'middlewares' => ['required-master-login'],
+	function ($request, $id) {
+		Master\ConectAnuncios::excluir($request, (int)$id);
+		return new Response(302, '', 'text/html');
+	}
+]);
+
+$obRouter->post('/master/conect-anuncios/planos/salvar', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ConectAnuncios::salvarPlano($request), 'application/json');
+	}
+]);
+
 $obRouter->get('/master/conect-relatorios', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {
