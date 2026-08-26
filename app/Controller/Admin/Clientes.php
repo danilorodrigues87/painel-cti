@@ -12,6 +12,7 @@ use \App\Common\Helpers\EmailValidator;
 use \App\Common\Helpers\UserFotoHelper;
 use \App\Common\Helpers\ModuleGateHelper;
 use \App\Common\Helpers\MatriculaStatusHelper;
+use \App\Common\Helpers\ConectIdadeHelper;
 use \App\Model\Entity\AlunoObservacao;
 use \App\Session\User\Login as SessionUser;
 
@@ -88,6 +89,15 @@ $results = EntityUser::getUser($where, 'nome ASC', $obPagination->getLimit());
 			$badgeAtivo = (($obUsers->ativo ?? '') === 's')
 				? '<span class="badge bg-success">Ativo</span>'
 				: '<span class="badge bg-secondary">Inativo</span>';
+			$idade = ConectIdadeHelper::calcularIdade($obUsers->nascimento ?? null);
+			if ($idade !== null) {
+				$idadeHtml = (int)$idade.' anos';
+				if (ConectIdadeHelper::isMenor($idade)) {
+					$idadeHtml .= ' <span class="badge bg-warning text-dark ms-1">Menor</span>';
+				}
+			} else {
+				$idadeHtml = '<span class="text-muted">—</span>';
+			}
 			$linkProgressoEad = $podeProgressoEad
 				? '<li>
 			<a class="dropdown-item" href="'.URL.'/painel/ead/aluno/'.$obUsers->id.'"><i class="fa-solid fa-graduation-cap fa-lg"></i> Progresso EAD</a>
@@ -98,6 +108,7 @@ $results = EntityUser::getUser($where, 'nome ASC', $obPagination->getLimit());
 			</li>';
 			$itens .= '<tr>
 			<td>'.htmlspecialchars((string)$obUsers->nome, ENT_QUOTES, 'UTF-8').'<div class="small mt-1">'.$badgeAtivo.'</div></td>
+			<td>'.$idadeHtml.'</td>
 			<td>'.htmlspecialchars((string)$obUsers->email, ENT_QUOTES, 'UTF-8').'</td>
 			<td class="mascara-celular">'.htmlspecialchars((string)$obUsers->whatsapp, ENT_QUOTES, 'UTF-8').'</td>
 			<td>
@@ -131,7 +142,7 @@ $results = EntityUser::getUser($where, 'nome ASC', $obPagination->getLimit());
 		}
 
 		if ($itens === '') {
-			$itens = '<tr><td colspan="4" class="text-center text-muted py-4">Nenhum aluno encontrado com esses filtros.</td></tr>';
+			$itens = '<tr><td colspan="5" class="text-center text-muted py-4">Nenhum aluno encontrado com esses filtros.</td></tr>';
 		}
 
 		$table = '<div class="card-body">
@@ -140,6 +151,7 @@ $results = EntityUser::getUser($where, 'nome ASC', $obPagination->getLimit());
 		<thead>
 		<tr>
 		<th>Nome</th>
+		<th>Idade</th>
 		<th>Email</th>
 		<th>Whatsapp</th>
 		<th>Ações</th>
