@@ -318,6 +318,41 @@ $obRouter->get('/api/v1/conect-empresa/anuncios/config', [
 	}
 ]);
 
+$obRouter->get('/api/v1/conect-empresa/anuncios/planos', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::planos($request));
+	}
+]);
+
+$obRouter->get('/api/v1/conect-empresa/anuncios/assinatura', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::resumo($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura/cancelar', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::cancelar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura/verificar', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::verificar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\AnunciosAssinatura::assinar($request));
+	}
+]);
+
 $obRouter->get('/api/v1/conect-empresa/anuncios', [
 	'middlewares' => $empresaAuth,
 	function ($request) use ($respond) {
@@ -343,40 +378,5 @@ $obRouter->delete('/api/v1/conect-empresa/anuncios/{id}', [
 	'middlewares' => $empresaAuth,
 	function ($request, $id) use ($respond) {
 		return $respond(ConectEmpresa\Anuncios::excluir($request, (int)$id));
-	}
-]);
-
-$obRouter->get('/api/v1/conect-empresa/anuncios/planos', [
-	'middlewares' => $empresaAuth,
-	function ($request) use ($respond) {
-		return $respond(ConectEmpresa\AnunciosAssinatura::planos($request));
-	}
-]);
-
-$obRouter->get('/api/v1/conect-empresa/anuncios/assinatura', [
-	'middlewares' => $empresaAuth,
-	function ($request) use ($respond) {
-		return $respond(ConectEmpresa\AnunciosAssinatura::resumo($request));
-	}
-]);
-
-$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura', [
-	'middlewares' => $empresaAuth,
-	function ($request) use ($respond) {
-		return $respond(ConectEmpresa\AnunciosAssinatura::assinar($request));
-	}
-]);
-
-$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura/cancelar', [
-	'middlewares' => $empresaAuth,
-	function ($request) use ($respond) {
-		return $respond(ConectEmpresa\AnunciosAssinatura::cancelar($request));
-	}
-]);
-
-$obRouter->post('/api/v1/conect-empresa/anuncios/assinatura/verificar', [
-	'middlewares' => $empresaAuth,
-	function ($request) use ($respond) {
-		return $respond(ConectEmpresa\AnunciosAssinatura::verificar($request));
 	}
 ]);
