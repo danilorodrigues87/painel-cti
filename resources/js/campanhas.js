@@ -259,6 +259,9 @@ function renderizarLista(campanhas){
 
 		let itensMenu = '';
 		itensMenu += '<li><button type="button" class="dropdown-item btn-detalhes" data-id="'+c.id+'"><i class="fas fa-eye me-1"></i> Detalhes</button></li>';
+		if((parseInt(c.enviados, 10) + parseInt(c.erros, 10)) > 0 || c.status !== 'rascunho'){
+			itensMenu += '<li><button type="button" class="dropdown-item btn-relatorio" data-id="'+c.id+'"><i class="fas fa-list me-1"></i> Relatório de envios</button></li>';
+		}
 
 		if(c.status === 'rascunho'){
 			itensMenu += '<li><button type="button" class="dropdown-item text-success btn-iniciar" data-id="'+c.id+'"><i class="fas fa-paper-plane me-1"></i> Iniciar envio</button></li>';
@@ -729,6 +732,11 @@ function fecharModalProgressoCampanha(){
 	$('#modalCampanhaProgresso').modal('hide');
 }
 
+function mostrarFecharProgressoCampanha(mostrar){
+	$('#campanha-progresso-footer').toggleClass('d-none', !mostrar);
+	$('#btn-fechar-progresso-campanha-x').toggleClass('d-none', !mostrar);
+}
+
 function abrirModalProgressoPreparando(titulo, id, opts){
 	opts = opts || {};
 	pararPollingProgressoCampanha();
@@ -743,7 +751,7 @@ function abrirModalProgressoPreparando(titulo, id, opts){
 	const $bar = $('#campanha-progresso-bar');
 	$bar.addClass('progress-bar-striped progress-bar-animated').removeClass('bg-success');
 	$bar.css('width', '100%').attr('aria-valuenow', 0).text('');
-	$('#campanha-progresso-footer').addClass('d-none');
+	mostrarFecharProgressoCampanha(false);
 	$('#modalCampanhaProgresso').modal({ backdrop: 'static', keyboard: false });
 	$('#modalCampanhaProgresso').modal('show');
 }
@@ -773,7 +781,7 @@ function finalizarProgressoCampanha(c, mensagem){
 		$('#campanha-progresso-texto').text(mensagem || 'Todos os destinatários foram processados.');
 		$('#campanha-progresso-bar').removeClass('progress-bar-striped progress-bar-animated').addClass('bg-success');
 		$('#campanha-progresso-bar').css('width', '100%').attr('aria-valuenow', 100).text('100%');
-		$('#campanha-progresso-footer').removeClass('d-none');
+		mostrarFecharProgressoCampanha(true);
 		setTimeout(function(){
 			fecharModalProgressoCampanha();
 			Swal.fire({
@@ -790,7 +798,7 @@ function finalizarProgressoCampanha(c, mensagem){
 	if(c && (c.status === 'pausada' || c.status === 'cancelada')){
 		$('#campanha-progresso-titulo').text(c.status === 'pausada' ? 'Campanha pausada' : 'Campanha encerrada');
 		$('#campanha-progresso-texto').text(mensagem || '');
-		$('#campanha-progresso-footer').removeClass('d-none');
+		mostrarFecharProgressoCampanha(true);
 	}
 }
 
@@ -814,7 +822,7 @@ function atualizarModalProgressoCampanha(c){
 		$bar.removeClass('progress-bar-striped progress-bar-animated').addClass('bg-success');
 		$bar.css('width', '100%').attr('aria-valuenow', 100).text('Ativa');
 		$('#campanha-progresso-stats').text((c.enviados || 0)+' reenvio(s) realizados');
-		$('#campanha-progresso-footer').removeClass('d-none');
+		mostrarFecharProgressoCampanha(true);
 		pararPollingProgressoCampanha();
 		return;
 	}
@@ -827,11 +835,14 @@ function atualizarModalProgressoCampanha(c){
 
 	$('#campanha-progresso-titulo').text('Enviando campanha');
 	$('#campanha-progresso-texto').text(pct >= 100 ? 'Envio concluído!' : 'Enviando mensagens…');
-	$('#campanha-progresso-detalhe').text('O progresso é atualizado automaticamente. Você pode navegar no painel; o envio continua.');
+	$('#campanha-progresso-detalhe').text('O envio continua em segundo plano. Você pode fechar esta janela.');
 	$bar.removeClass('progress-bar-striped progress-bar-animated');
 	$bar.toggleClass('bg-success', pct >= 100);
 	$bar.css('width', pct+'%').attr('aria-valuenow', pct).text(pct+'%');
 	$('#campanha-progresso-stats').text(enviados+' enviados · '+erros+' erros · '+pendentes+' pendentes de '+total);
+	if(c.status === 'enviando'){
+		mostrarFecharProgressoCampanha(true);
+	}
 
 	if(campanhaEnvioConcluido(c) || c.status === 'concluida'){
 		finalizarProgressoCampanha(c);
@@ -871,13 +882,14 @@ function concluirInicioCampanha(res){
 	atualizarModalProgressoCampanha(res.campanha);
 	if(res.campanha.eh_grupos){
 		processarFilaSilencioso();
-		$('#campanha-progresso-footer').removeClass('d-none');
+		mostrarFecharProgressoCampanha(true);
 		carregarCampanhas({ silencioso: true });
 		return;
 	}
 	if(!campanhaEnvioConcluido(res.campanha) && res.campanha.status === 'enviando'){
 		iniciarPollingProgressoCampanha(res.campanha.id);
 		processarFilaSilencioso();
+		mostrarFecharProgressoCampanha(true);
 	}
 	carregarCampanhas({ silencioso: true });
 }
@@ -984,6 +996,149 @@ function acaoCampanha(acao, id, confirmar, retomar){
 	executar();
 }
 
+function badgeStatusRelatorio(status){
+	const mapa = {
+		enviado: 'success',
+		erro: 'danger',
+		pendente: 'warning',
+		cancelado: 'secondary'
+	};
+	return mapa[status] || 'secondary';
+}
+
+let relatorioCampanhaId = null;
+let relatorioCampanhaStatus = '';
+let relatorioCampanhaPage = 1;
+let relatorioCampanhaBuscaTimer = null;
+
+function abrirRelatorioCampanha(id){
+	relatorioCampanhaId = parseInt(id, 10) || null;
+	relatorioCampanhaStatus = '';
+	relatorioCampanhaPage = 1;
+	$('#relatorio-busca').val('');
+	$('#relatorio-filtro-status .btn').removeClass('active');
+	$('#relatorio-filtro-status .btn[data-status=""]').addClass('active');
+	$('#modalRelatorioCampanha').modal('show');
+	carregarRelatorioCampanha(1);
+}
+
+function carregarRelatorioCampanha(page){
+	if(!relatorioCampanhaId) return;
+	relatorioCampanhaPage = page || 1;
+	$('#relatorio-campanha-corpo').html('<tr><td colspan="7" class="text-center text-muted py-4">Carregando...</td></tr>');
+	$.post(url_base + CAMPANHAS_URL, {
+		acao: 'relatorio',
+		id: relatorioCampanhaId,
+		status: relatorioCampanhaStatus,
+		busca: ($('#relatorio-busca').val() || '').trim(),
+		page: relatorioCampanhaPage,
+		limit: 25
+	}, function(res){
+		if(!res || !res.success){
+			$('#relatorio-campanha-corpo').html('<tr><td colspan="7" class="text-center text-danger py-4">'+escHtml((res && res.message) ? res.message : 'Falha ao carregar relatório.')+'</td></tr>');
+			return;
+		}
+		renderRelatorioCampanha(res);
+	}, 'json');
+}
+
+function renderRelatorioCampanha(res){
+	const c = res.campanha || {};
+	const r = res.resumo || {};
+	$('#relatorio-campanha-subtitulo').text((c.titulo || 'Campanha')+' · '+(c.canal_label || c.canal || ''));
+	$('#relatorio-resumo').html(
+		'<strong>'+((r.enviados || 0)+' enviados · '+(r.erros || 0)+' erros · '+(r.pendentes || 0)+' pendentes')+'</strong>'
+		+(r.cancelados ? ' · '+(r.cancelados)+' cancelados' : '')
+		+'<span class="d-block mt-1 text-muted">Em erros, a coluna <em>Alternativa</em> sugere e-mail ou WhatsApp cadastrado para nova tentativa.</span>'
+	);
+
+	const $tbody = $('#relatorio-campanha-corpo');
+	$tbody.empty();
+	if(!res.itens || !res.itens.length){
+		$tbody.append('<tr><td colspan="7" class="text-center text-muted py-4">Nenhum registro neste filtro.</td></tr>');
+	}else{
+		res.itens.forEach(function(item){
+			let altHtml = '—';
+			if(item.status === 'erro' && item.contato_alternativo){
+				const rotulo = item.canal_alternativo === 'email' ? 'E-mail' : 'WhatsApp';
+				altHtml = '<span class="badge bg-info text-dark">'+escHtml(rotulo)+'</span> '+escHtml(item.contato_alternativo);
+			}else if(item.status === 'erro'){
+				altHtml = '<span class="text-muted small">Sem alternativa</span>';
+			}
+			const contatoUsado = item.contato
+				? escHtml(item.contato)+(item.canal_usado === 'whatsapp' ? ' <span class="text-muted small">(WA)</span>' : ' <span class="text-muted small">(e-mail)</span>')
+				: '—';
+			$tbody.append(`
+				<tr>
+					<td>
+						<strong>${escHtml(item.nome || '—')}</strong>
+						${item.erro ? '<div class="small text-danger">'+escHtml(item.erro)+'</div>' : ''}
+						${item.curso ? '<div class="small text-muted">'+escHtml(item.curso)+'</div>' : ''}
+					</td>
+					<td class="small">${contatoUsado}</td>
+					<td class="small">${escHtml(item.email || '—')}</td>
+					<td class="small">${escHtml(item.whatsapp || '—')}</td>
+					<td><span class="badge bg-${badgeStatusRelatorio(item.status)}">${escHtml(item.status_label || item.status)}</span></td>
+					<td class="small">${altHtml}</td>
+					<td class="small text-nowrap">${escHtml(item.enviado_em || '—')}</td>
+				</tr>
+			`);
+		});
+	}
+	renderPaginacaoAjax($('#relatorio-campanha-paginacao'), res.pagination || {}, carregarRelatorioCampanha);
+}
+
+function exportarRelatorioCampanha(){
+	if(!relatorioCampanhaId) return;
+	$('#btn-exportar-relatorio-campanha').prop('disabled', true);
+	$.post(url_base + CAMPANHAS_URL, {
+		acao: 'exportar_relatorio',
+		id: relatorioCampanhaId,
+		status: relatorioCampanhaStatus
+	}, function(res){
+		$('#btn-exportar-relatorio-campanha').prop('disabled', false);
+		if(!res || !res.success || !res.itens){
+			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha ao exportar.', 'error');
+			return;
+		}
+		const linhas = [
+			['Nome', 'Tipo', 'Contato usado', 'Canal usado', 'E-mail cadastrado', 'WhatsApp cadastrado', 'Status', 'Erro', 'Canal alternativo', 'Contato alternativo', 'Enviado em', 'Curso']
+		];
+		res.itens.forEach(function(item){
+			linhas.push([
+				item.nome || '',
+				item.destinatario_tipo || '',
+				item.contato || '',
+				item.canal_usado || '',
+				item.email || '',
+				item.whatsapp || '',
+				item.status_label || item.status || '',
+				item.erro || '',
+				item.canal_alternativo || '',
+				item.contato_alternativo || '',
+				item.enviado_em || '',
+				item.curso || ''
+			]);
+		});
+		const csv = linhas.map(function(row){
+			return row.map(function(c){
+				const s = String(c == null ? '' : c);
+				return '"'+s.replace(/"/g, '""')+'"';
+			}).join(';');
+		}).join('\r\n');
+		const blob = new Blob(['\ufeff'+csv], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		const nome = (res.titulo || 'campanha').replace(/[^\w\-]+/g, '_').substring(0, 40);
+		a.href = url;
+		a.download = 'relatorio_'+nome+'_'+new Date().toISOString().slice(0,10)+'.csv';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+	}, 'json');
+}
+
 function abrirDetalhes(id){
 	$.post(url_base + CAMPANHAS_URL, { acao: 'detalhes', id: id }, function(res){
 		if(!res || !res.success){
@@ -992,8 +1147,16 @@ function abrirDetalhes(id){
 		}
 		const c = res.campanha;
 		let errosHtml = '';
+		const resumoRel = res.resumo_relatorio || null;
+		if(resumoRel && (resumoRel.total || 0) > 0){
+			errosHtml = '<hr><div class="d-flex flex-wrap justify-content-between align-items-center gap-2">'
+				+'<div><h6 class="mb-1">Histórico de envios</h6>'
+				+'<p class="small text-muted mb-0">'+resumoRel.enviados+' enviados · '+resumoRel.erros+' erros · '+resumoRel.pendentes+' pendentes</p></div>'
+				+'<button type="button" class="btn btn-sm btn-outline-primary btn-relatorio" data-id="'+c.id+'"><i class="fas fa-list"></i> Ver relatório completo</button>'
+				+'</div>';
+		}
 		if(res.erros && res.erros.length){
-			errosHtml = '<hr><h6>Últimos erros</h6><ul class="small">';
+			errosHtml += '<h6 class="mt-3">Últimos erros</h6><ul class="small mb-0">';
 			res.erros.forEach(function(e){
 				errosHtml += '<li><strong>'+escHtml(e.nome)+'</strong> ('+escHtml(e.contato)+'): '+escHtml(e.erro)+'</li>';
 			});
@@ -1032,6 +1195,9 @@ function abrirDetalhes(id){
 		`);
 
 		let footer = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>';
+		if((c.enviados + c.erros) > 0 || c.status !== 'rascunho'){
+			footer += '<button type="button" class="btn btn-outline-primary btn-relatorio" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-list"></i> Relatório</button>';
+		}
 		if(c.status === 'enviando'){
 			footer += '<button type="button" class="btn btn-warning btn-pausar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-pause"></i> Pausar envio</button>';
 			footer += '<button type="button" class="btn btn-outline-primary btn-editar" data-id="'+c.id+'" data-bs-dismiss="modal"><i class="fas fa-edit"></i> Editar mensagem/mídia</button>';
@@ -1179,11 +1345,27 @@ $(function(){
 	$(document).on('click', '.btn-detalhes', function(){
 		abrirDetalhes($(this).data('id'));
 	});
+	$(document).on('click', '.btn-relatorio', function(){
+		abrirRelatorioCampanha($(this).data('id'));
+	});
+	$('#relatorio-filtro-status .btn').on('click', function(){
+		relatorioCampanhaStatus = String($(this).data('status') || '');
+		$('#relatorio-filtro-status .btn').removeClass('active');
+		$(this).addClass('active');
+		carregarRelatorioCampanha(1);
+	});
+	$('#relatorio-busca').on('input', function(){
+		clearTimeout(relatorioCampanhaBuscaTimer);
+		relatorioCampanhaBuscaTimer = setTimeout(function(){
+			carregarRelatorioCampanha(1);
+		}, 350);
+	});
+	$('#btn-exportar-relatorio-campanha').on('click', exportarRelatorioCampanha);
 	$(document).on('click', '.btn-editar', function(){
 		editarCampanha($(this).data('id'));
 	});
 
-	$('#btn-fechar-progresso-campanha').on('click', fecharModalProgressoCampanha);
+	$('#btn-fechar-progresso-campanha, #btn-fechar-progresso-campanha-x').on('click', fecharModalProgressoCampanha);
 	$('#modalCampanhaProgresso').on('hidden.bs.modal', function(){
 		pararPollingProgressoCampanha();
 		campanhaProgressoId = null;

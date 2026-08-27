@@ -64,6 +64,80 @@ class CampanhaFila {
 		);
 	}
 
+	/** Remove só pendentes/cancelados — mantém enviados e erros como histórico. */
+	public static function limparPendentesCampanha(int $campanhaId, int $idAdmin): void {
+		(new Database('campanha_fila'))->delete(
+			'campanha_id = '.(int)$campanhaId
+			.' AND id_admin = '.(int)$idAdmin
+			.' AND status IN ("pendente", "cancelado")'
+		);
+	}
+
+	public static function resumoRelatorio(int $campanhaId, int $idAdmin): array {
+		$where = 'campanha_id = '.(int)$campanhaId.' AND id_admin = '.(int)$idAdmin;
+		$row = self::get(
+			$where,
+			null,
+			null,
+			'COUNT(*) AS total,'
+			.' SUM(CASE WHEN status = "enviado" THEN 1 ELSE 0 END) AS enviados,'
+			.' SUM(CASE WHEN status = "erro" THEN 1 ELSE 0 END) AS erros,'
+			.' SUM(CASE WHEN status = "pendente" THEN 1 ELSE 0 END) AS pendentes,'
+			.' SUM(CASE WHEN status = "cancelado" THEN 1 ELSE 0 END) AS cancelados'
+		)->fetch(\PDO::FETCH_ASSOC);
+
+		return [
+			'total'      => (int)($row['total'] ?? 0),
+			'enviados'   => (int)($row['enviados'] ?? 0),
+			'erros'      => (int)($row['erros'] ?? 0),
+			'pendentes'  => (int)($row['pendentes'] ?? 0),
+			'cancelados' => (int)($row['cancelados'] ?? 0),
+		];
+	}
+
+	/**
+	 * @return array{itens:array,pagination:array}
+	 */
+	public static function listarRelatorio(int $campanhaId, int $idAdmin, array $opts = []): array {
+		$where = 'campanha_id = '.(int)$campanhaId.' AND id_admin = '.(int)$idAdmin;
+		$status = trim((string)($opts['status'] ?? ''));
+		if ($status !== '' && in_array($status, ['enviado', 'erro', 'pendente', 'cancelado'], true)) {
+			$where .= ' AND status = "'.addslashes($status).'"';
+		}
+		$busca = trim((string)($opts['busca'] ?? ''));
+		if ($busca !== '') {
+			$like = '%'.addslashes($busca).'%';
+			$where .= ' AND (nome LIKE "'.$like.'" OR contato LIKE "'.$like.'" OR erro_msg LIKE "'.$like.'")';
+		}
+
+		$page = max(1, (int)($opts['page'] ?? 1));
+		$limit = min(100, max(10, (int)($opts['limit'] ?? 25)));
+		$rowCount = self::get($where, null, null, 'COUNT(*) AS q')->fetch(\PDO::FETCH_ASSOC);
+		$total = (int)($rowCount['q'] ?? 0);
+		$pages = max(1, (int)ceil($total / $limit));
+		if ($page > $pages) {
+			$page = $pages;
+		}
+		$offset = ($page - 1) * $limit;
+		$order = 'FIELD(status, "erro", "pendente", "enviado", "cancelado"), id DESC';
+		$results = self::get($where, $order, $offset.','.$limit);
+
+		$itens = [];
+		while ($row = $results->fetchObject(self::class)) {
+			$itens[] = $row;
+		}
+
+		return [
+			'itens' => $itens,
+			'pagination' => [
+				'page' => $page,
+				'pages' => $pages,
+				'total' => $total,
+				'limit' => $limit,
+			],
+		];
+	}
+
 	public static function temColunaCurso(): bool {
 		static $cache = null;
 		if ($cache !== null) {

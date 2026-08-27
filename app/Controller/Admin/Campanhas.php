@@ -5,6 +5,7 @@ namespace App\Controller\Admin;
 use App\Utils\View;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
+use App\Common\Helpers\EmailValidator;
 use App\Common\Communication\CampanhaWorker;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Communication\WhatsappMediaStorage;
@@ -12,7 +13,9 @@ use App\Common\Helpers\SocialMediaStorage;
 use App\Model\Entity\Campanhas as EntityCampanhas;
 use App\Model\Entity\CampanhaFila;
 use App\Model\Entity\CampanhaWorkerRun;
+use App\Model\Entity\CrmLeads;
 use App\Model\Entity\SocialBiblioteca;
+use App\Model\Entity\User as EntityUser;
 use App\Common\Communication\EvolutionApiService;
 
 class Campanhas extends Page {
@@ -63,6 +66,10 @@ class Campanhas extends Page {
 				return self::cancelar($postVars);
 			case 'detalhes':
 				return self::detalhes($postVars);
+			case 'relatorio':
+				return self::relatorio($postVars);
+			case 'exportar_relatorio':
+				return self::exportarRelatorio($postVars);
 			case 'processar':
 				return self::processarFila($postVars);
 			case 'listar_grupos_wa':
@@ -440,7 +447,7 @@ class Campanhas extends Page {
 			return json_encode(['success' => false, 'message' => $msg]);
 		}
 
-		CampanhaFila::limparCampanha($id, $idAdmin);
+		CampanhaFila::limparPendentesCampanha($id, $idAdmin);
 
 		$itens = [];
 		foreach ($destinatarios as $dest) {
@@ -458,11 +465,9 @@ class Campanhas extends Page {
 		CampanhaFila::inserirLote($itens);
 
 		$ob->status = 'enviando';
-		$ob->total = count($itens);
-		$ob->enviados = 0;
-		$ob->erros = 0;
 		$ob->agendada_para = null;
 		$ob->atualizar();
+		$ob->recalcularTotais();
 
 		if ($isGrupo) {
 			CampanhaWorker::agendarContinuacaoGrupos($idAdmin, $id);
@@ -559,7 +564,147 @@ class Campanhas extends Page {
 			'erros'    => $erros,
 			'mensagem' => $ob->mensagem,
 			'assunto'  => $ob->assunto,
+			'resumo_relatorio' => CampanhaFila::resumoRelatorio($id, $idAdmin),
 		]);
+	}
+
+	private static function relatorio(array $postVars): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$id = (int)($postVars['id'] ?? 0);
+		$ob = EntityCampanhas::getById($id, $idAdmin);
+
+		if (!$ob instanceof EntityCampanhas) {
+			return json_encode(['success' => false, 'message' => 'Campanha não encontrada.']);
+		}
+
+		$canal = ($ob->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
+		$dados = CampanhaFila::listarRelatorio($id, $idAdmin, [
+			'status' => $postVars['status'] ?? '',
+			'busca'  => $postVars['busca'] ?? '',
+			'page'   => (int)($postVars['page'] ?? 1),
+			'limit'  => (int)($postVars['limit'] ?? 25),
+		]);
+
+		$itens = [];
+		foreach ($dados['itens'] as $row) {
+			$itens[] = self::formatarItemRelatorio($row, $canal);
+		}
+
+		return json_encode([
+			'success'    => true,
+			'campanha'   => self::formatarCampanha($ob, true),
+			'itens'      => $itens,
+			'resumo'     => CampanhaFila::resumoRelatorio($id, $idAdmin),
+			'pagination' => $dados['pagination'],
+			'canal'      => $canal,
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function exportarRelatorio(array $postVars): string {
+		$idAdmin = TenantHelper::getIdAdmin();
+		$id = (int)($postVars['id'] ?? 0);
+		$ob = EntityCampanhas::getById($id, $idAdmin);
+
+		if (!$ob instanceof EntityCampanhas) {
+			return json_encode(['success' => false, 'message' => 'Campanha não encontrada.']);
+		}
+
+		$canal = ($ob->canal ?? 'email') === 'whatsapp' ? 'whatsapp' : 'email';
+		$status = trim((string)($postVars['status'] ?? ''));
+		$where = 'campanha_id = '.(int)$id.' AND id_admin = '.(int)$idAdmin;
+		if ($status !== '' && in_array($status, ['enviado', 'erro', 'pendente', 'cancelado'], true)) {
+			$where .= ' AND status = "'.addslashes($status).'"';
+		}
+		$order = 'FIELD(status, "erro", "pendente", "enviado", "cancelado"), id DESC';
+		$results = CampanhaFila::get($where, $order, '5000');
+
+		$linhas = [];
+		while ($row = $results->fetchObject(CampanhaFila::class)) {
+			$linhas[] = self::formatarItemRelatorio($row, $canal);
+		}
+
+		return json_encode([
+			'success'  => true,
+			'titulo'   => $ob->titulo,
+			'canal'    => $canal,
+			'itens'    => $linhas,
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function formatarItemRelatorio(CampanhaFila $row, string $canalCampanha): array {
+		$contatos = self::contatosAlternativosDestinatario(
+			(string)($row->destinatario_tipo ?? ''),
+			(int)($row->destinatario_id ?? 0)
+		);
+		$contatoUsado = trim((string)($row->contato ?? ''));
+		$canalAlt = '';
+		$contatoAlt = '';
+		if ($row->status === 'erro') {
+			if ($canalCampanha === 'whatsapp' && $contatos['email'] !== '') {
+				$canalAlt = 'email';
+				$contatoAlt = $contatos['email'];
+			} elseif ($canalCampanha === 'email' && $contatos['whatsapp'] !== '') {
+				$canalAlt = 'whatsapp';
+				$contatoAlt = $contatos['whatsapp'];
+			}
+		}
+
+		$statusLabels = [
+			'pendente'  => 'Pendente',
+			'enviado'   => 'Enviado',
+			'erro'      => 'Erro',
+			'cancelado' => 'Cancelado',
+		];
+
+		return [
+			'id'                => (int)$row->id,
+			'nome'              => (string)($row->nome ?? ''),
+			'destinatario_tipo' => (string)($row->destinatario_tipo ?? ''),
+			'destinatario_id'   => (int)($row->destinatario_id ?? 0),
+			'contato'           => $contatoUsado,
+			'email'             => $contatos['email'],
+			'whatsapp'          => $contatos['whatsapp'],
+			'status'            => (string)$row->status,
+			'status_label'      => $statusLabels[$row->status] ?? (string)$row->status,
+			'erro'              => (string)($row->erro_msg ?? ''),
+			'enviado_em'        => $row->enviado_em ? date('d/m/Y H:i', strtotime($row->enviado_em)) : '',
+			'curso'             => (string)($row->curso ?? ''),
+			'canal_usado'       => $canalCampanha,
+			'canal_alternativo' => $canalAlt,
+			'contato_alternativo' => $contatoAlt,
+		];
+	}
+
+	/** @return array{email:string,whatsapp:string} */
+	private static function contatosAlternativosDestinatario(string $tipo, int $id): array {
+		$vazio = ['email' => '', 'whatsapp' => ''];
+		if ($id <= 0) {
+			return $vazio;
+		}
+
+		if ($tipo === 'aluno') {
+			$user = EntityUser::getUserById($id);
+			if (!$user instanceof EntityUser) {
+				return $vazio;
+			}
+			return [
+				'email'    => EmailValidator::normalizar($user->email ?? ''),
+				'whatsapp' => EvolutionApiService::normalizarTelefone((string)($user->whatsapp ?? '')),
+			];
+		}
+
+		if ($tipo === 'lead') {
+			$lead = CrmLeads::getLeadById($id);
+			if (!$lead instanceof CrmLeads) {
+				return $vazio;
+			}
+			return [
+				'email'    => EmailValidator::normalizar($lead->email ?? ''),
+				'whatsapp' => EvolutionApiService::normalizarTelefone((string)($lead->whatsapp ?? '')),
+			];
+		}
+
+		return $vazio;
 	}
 
 	private static function processarFila(array $postVars): string {
