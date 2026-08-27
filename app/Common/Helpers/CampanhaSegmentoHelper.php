@@ -10,6 +10,8 @@ class CampanhaSegmentoHelper {
 	public static function getTipos(): array {
 		return [
 			'alunos_matriculados'    => 'Alunos matriculados (ativos)',
+			'alunos_menores_18'      => 'Alunos matriculados menores de 18 anos',
+			'alunos_maiores_18'      => 'Alunos matriculados com 18 anos ou mais',
 			'ex_alunos'              => 'Ex-alunos (sem matrícula ativa)',
 			'emails_invalidos_alunos'=> 'Alunos com e-mail inválido (ativos e inativos)',
 			'aniversariantes_mes'    => 'Aniversariantes do mês',
@@ -50,6 +52,12 @@ class CampanhaSegmentoHelper {
 				break;
 			case 'inadimplentes':
 				$lista = self::inadimplentes($idAdmin, $segmento, $canal);
+				break;
+			case 'alunos_menores_18':
+				$lista = self::alunosMatriculadosPorIdade($idAdmin, $canal, true);
+				break;
+			case 'alunos_maiores_18':
+				$lista = self::alunosMatriculadosPorIdade($idAdmin, $canal, false);
 				break;
 			case 'emails_invalidos_alunos':
 				$lista = self::emailsInvalidosAlunos($idAdmin, $canal);
@@ -187,6 +195,35 @@ class CampanhaSegmentoHelper {
 			  AND u.nivel = "Cliente"
 			  AND m.status = 0
 			  AND (m.fim IS NULL OR m.fim >= :hoje)
+			  AND '.$campo.' IS NOT NULL
+			  AND '.$campo.' != ""
+		';
+
+		$stmt = self::pdo()->prepare($sql);
+		$stmt->execute(['id_admin' => $idAdmin, 'hoje' => $hoje]);
+
+		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
+	}
+
+	/** Alunos matriculados ativos filtrados por idade (com data de nascimento cadastrada). */
+	private static function alunosMatriculadosPorIdade(int $idAdmin, string $canal, bool $menorDe18): array {
+		$hoje = date('Y-m-d');
+		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
+		$condIdade = $menorDe18
+			? 'u.nascimento > DATE_SUB(CURDATE(), INTERVAL 18 YEAR)'
+			: 'u.nascimento <= DATE_SUB(CURDATE(), INTERVAL 18 YEAR)';
+		$sql = '
+			SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, t.nome AS curso
+			FROM usuarios u
+			INNER JOIN matriculas m ON m.id_aluno = u.id AND m.id_admin = u.id_admin
+			LEFT JOIN trilhas t ON t.id = m.id_trilha
+			WHERE u.id_admin = :id_admin
+			  AND u.nivel = "Cliente"
+			  AND m.status = 0
+			  AND (m.fim IS NULL OR m.fim >= :hoje)
+			  AND u.nascimento IS NOT NULL
+			  AND u.nascimento != "0000-00-00"
+			  AND '.$condIdade.'
 			  AND '.$campo.' IS NOT NULL
 			  AND '.$campo.' != ""
 		';
