@@ -60,15 +60,19 @@ function badgeCanal(canal){
 	return canal === 'whatsapp' ? 'success' : 'secondary';
 }
 
+function textoHintMensagemCampanha(wa){
+	return wa
+		? 'Texto e/ou mídia. Variáveis: {nome}, {email}, {whatsapp}, {curso}, {escola}. Em áudio, o texto vai como mensagem separada.'
+		: 'No e-mail pode usar HTML simples. Variáveis: {nome}, {email}, {whatsapp}, {curso}, {escola}.';
+}
+
 function atualizarUiCanal(){
 	const wa = $('#campanha_canal').val() === 'whatsapp';
 	$('#wrap-assunto').toggle(!wa);
 	$('#wrap-emoji-campanha').toggleClass('d-none', !wa);
 	$('#wrap-midia-campanha').toggleClass('d-none', !wa);
 	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp' : 'Mensagem (HTML simples) *');
-	$('#hint-mensagem').text(wa
-		? 'Texto e/ou mídia. Variáveis: {nome}, {email}, {whatsapp}, {curso}, {escola}. Em áudio, o texto vai como mensagem separada.'
-		: 'No e-mail pode usar HTML simples. Variáveis: {nome}, {email}, {whatsapp}, {curso}, {escola}.');
+	$('#hint-mensagem').text(textoHintMensagemCampanha(wa));
 	$('#campanha_assunto').prop('required', !wa);
 	if(!wa){
 		limparMidiaSelecionada(false);
@@ -95,6 +99,7 @@ function atualizarUiCanalSemSegmento(){
 	$('#wrap-emoji-campanha').toggleClass('d-none', !wa);
 	$('#wrap-midia-campanha').toggleClass('d-none', !wa);
 	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp' : 'Mensagem (HTML simples) *');
+	$('#hint-mensagem').text(textoHintMensagemCampanha(wa));
 	$('#campanha_assunto').prop('required', !wa);
 }
 
