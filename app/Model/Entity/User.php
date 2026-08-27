@@ -49,6 +49,32 @@ class User{
 		return (new Database('usuarios'))->select('email = "'.$email.'"')->fetchObject(self::class);
 	}
 
+	//RETORNA UM USUÁRIO PELO E-MAIL (case-insensitive)
+	public static function getUserByEmailNormalized(string $email): ?self {
+		$email = strtolower(trim($email));
+		if ($email === '') {
+			return null;
+		}
+		$row = (new Database('usuarios'))->select('LOWER(email) = "'.addslashes($email).'"')->fetchObject(self::class);
+		return $row instanceof self ? $row : null;
+	}
+
+	public static function temColunaRecCode(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$row = (new Database('usuarios'))->execute(
+				"SHOW COLUMNS FROM usuarios LIKE 'recCode'"
+			)->fetch(\PDO::FETCH_ASSOC);
+			$cache = !empty($row);
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
 	//RETORNA UM USUÁRIO COM BASE NO CÓDIGO DE RECUPERAÇÃO DE SENHA
 	public static function getUserByCode($recCode){
 		return (new Database('usuarios'))->select('recCode = "'.$recCode.'"')->fetchObject(self::class);
