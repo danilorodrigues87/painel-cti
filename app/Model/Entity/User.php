@@ -9,8 +9,15 @@ class User{
 	$nome,
 	$email,
 	$senha,
+	$nivel,
+	$id_admin,
+	$ativo,
+	$whatsapp,
 	$id_responsavel=0,
-	$foto;
+	$foto,
+	$code,
+	$recCode,
+	$acesso;
 
 	public static function temColunaFoto(): bool {
 		static $cache = null;
