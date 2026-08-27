@@ -9,13 +9,14 @@ class CampanhaSegmentoHelper {
 
 	public static function getTipos(): array {
 		return [
-			'alunos_matriculados' => 'Alunos matriculados (ativos)',
-			'ex_alunos'           => 'Ex-alunos (sem matrícula ativa)',
-			'aniversariantes_mes' => 'Aniversariantes do mês',
-			'aniversariantes_dia' => 'Aniversariantes de hoje',
-			'leads'               => 'Leads do CRM',
-			'inadimplentes'       => 'Inadimplentes (mensalidades em atraso)',
-			'whatsapp_grupos'     => 'Grupos e listas de transmissão (WhatsApp)',
+			'alunos_matriculados'    => 'Alunos matriculados (ativos)',
+			'ex_alunos'              => 'Ex-alunos (sem matrícula ativa)',
+			'emails_invalidos_alunos'=> 'Alunos com e-mail inválido (ativos e inativos)',
+			'aniversariantes_mes'    => 'Aniversariantes do mês',
+			'aniversariantes_dia'    => 'Aniversariantes de hoje',
+			'leads'                  => 'Leads do CRM',
+			'inadimplentes'          => 'Inadimplentes (mensalidades em atraso)',
+			'whatsapp_grupos'        => 'Grupos e listas de transmissão (WhatsApp)',
 		];
 	}
 
@@ -50,6 +51,12 @@ class CampanhaSegmentoHelper {
 			case 'inadimplentes':
 				$lista = self::inadimplentes($idAdmin, $segmento, $canal);
 				break;
+			case 'emails_invalidos_alunos':
+				$lista = self::emailsInvalidosAlunos($idAdmin, $canal);
+				if ($canal === 'whatsapp') {
+					return self::filtrarComWhatsapp($lista);
+				}
+				return [];
 			case 'alunos_matriculados':
 			default:
 				$lista = self::alunosMatriculados($idAdmin, $canal);
@@ -94,9 +101,9 @@ class CampanhaSegmentoHelper {
 	public static function aplicarVariaveis(string $texto, array $vars): string {
 		$mapa = [
 			'{nome}'     => $vars['nome'] ?? '',
-			'{email}'    => $vars['contato'] ?? '',
-			'{whatsapp}' => $vars['contato'] ?? '',
-			'{telefone}' => $vars['contato'] ?? '',
+			'{email}'    => $vars['email'] ?? $vars['contato'] ?? '',
+			'{whatsapp}' => $vars['whatsapp'] ?? $vars['contato'] ?? '',
+			'{telefone}' => $vars['whatsapp'] ?? $vars['contato'] ?? '',
 			'{curso}'    => $vars['curso'] ?? '',
 			'{escola}'   => $vars['escola'] ?? '',
 		];
@@ -188,6 +195,42 @@ class CampanhaSegmentoHelper {
 		$stmt->execute(['id_admin' => $idAdmin, 'hoje' => $hoje]);
 
 		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
+	}
+
+	/** Alunos (matriculados ou não) com e-mail preenchido e inválido — WhatsApp usa o número cadastrado. */
+	private static function emailsInvalidosAlunos(int $idAdmin, string $canal): array {
+		$sql = '
+			SELECT u.id, u.nome, u.email, u.whatsapp
+			FROM usuarios u
+			WHERE u.id_admin = :id_admin
+			  AND u.nivel = "Cliente"
+			  AND u.email IS NOT NULL
+			  AND u.email != ""
+		';
+
+		$stmt = self::pdo()->prepare($sql);
+		$stmt->execute(['id_admin' => $idAdmin]);
+
+		$lista = [];
+		foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+			$email = EmailValidator::normalizar($row['email'] ?? '');
+			if ($email === '' || EmailValidator::isValido($email)) {
+				continue;
+			}
+			$contato = $canal === 'whatsapp'
+				? trim((string)($row['whatsapp'] ?? ''))
+				: $email;
+			$lista[] = [
+				'destinatario_tipo' => 'aluno',
+				'destinatario_id'   => (int)($row['id'] ?? 0),
+				'nome'              => $row['nome'] ?? '',
+				'contato'           => $contato,
+				'email_cadastro'    => $email,
+				'curso'             => '',
+			];
+		}
+
+		return $lista;
 	}
 
 	private static function exAlunos(int $idAdmin, string $canal): array {

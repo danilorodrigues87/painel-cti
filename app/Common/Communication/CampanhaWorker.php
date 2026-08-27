@@ -3,6 +3,7 @@
 namespace App\Common\Communication;
 
 use App\Common\Helpers\CampanhaSegmentoHelper;
+use App\Common\Helpers\EmailValidator;
 use App\Common\Helpers\WhatsappPacingHelper;
 use App\Common\Helpers\WhatsappTextoVariacaoHelper;
 use App\Model\Entity\Campanhas;
@@ -10,6 +11,7 @@ use App\Model\Entity\CampanhaFila;
 use App\Model\Entity\CrmLeads;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\EscolasAssinantes;
+use App\Model\Entity\User as EntityUser;
 
 class CampanhaWorker {
 
@@ -388,10 +390,12 @@ class CampanhaWorker {
 			}
 
 			$vars = [
-				'nome'    => $item->nome ?? '',
-				'contato' => $item->contato,
-				'curso'   => self::resolverCursoItem($item),
-				'escola'  => $nomeEscola,
+				'nome'     => $item->nome ?? '',
+				'contato'  => $item->contato,
+				'email'    => self::resolverEmailItem($item, $canal),
+				'whatsapp' => self::resolverWhatsappItem($item, $canal),
+				'curso'    => self::resolverCursoItem($item),
+				'escola'   => $nomeEscola,
 			];
 
 			$ok = false;
@@ -581,6 +585,66 @@ class CampanhaWorker {
 
 		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
 		return (int)($row['qtd'] ?? 0);
+	}
+
+	/** E-mail cadastrado do destinatário (para {email} em campanhas WhatsApp). */
+	private static function resolverEmailItem(CampanhaFila $item, string $canal): string {
+		if ($canal === 'email') {
+			return EmailValidator::normalizar((string)($item->contato ?? ''));
+		}
+
+		$tipo = (string)($item->destinatario_tipo ?? '');
+		$id = (int)($item->destinatario_id ?? 0);
+		if ($id <= 0) {
+			return '';
+		}
+
+		if ($tipo === 'aluno') {
+			$user = EntityUser::getUserById($id);
+			if ($user instanceof EntityUser) {
+				return EmailValidator::normalizar($user->email ?? '');
+			}
+			return '';
+		}
+
+		if ($tipo === 'lead') {
+			$lead = CrmLeads::getLeadById($id);
+			if ($lead instanceof CrmLeads) {
+				return EmailValidator::normalizar($lead->email ?? '');
+			}
+		}
+
+		return '';
+	}
+
+	/** WhatsApp cadastrado do destinatário (para {whatsapp} em campanhas e-mail). */
+	private static function resolverWhatsappItem(CampanhaFila $item, string $canal): string {
+		if ($canal === 'whatsapp') {
+			return trim((string)($item->contato ?? ''));
+		}
+
+		$tipo = (string)($item->destinatario_tipo ?? '');
+		$id = (int)($item->destinatario_id ?? 0);
+		if ($id <= 0) {
+			return '';
+		}
+
+		if ($tipo === 'aluno') {
+			$user = EntityUser::getUserById($id);
+			if ($user instanceof EntityUser) {
+				return EvolutionApiService::normalizarTelefone((string)($user->whatsapp ?? ''));
+			}
+			return '';
+		}
+
+		if ($tipo === 'lead') {
+			$lead = CrmLeads::getLeadById($id);
+			if ($lead instanceof CrmLeads) {
+				return EvolutionApiService::normalizarTelefone((string)($lead->whatsapp ?? ''));
+			}
+		}
+
+		return '';
 	}
 
 	/** Resolve {curso}: valor da fila (se existir) ou busca no lead/aluno. */

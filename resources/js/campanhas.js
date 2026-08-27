@@ -67,8 +67,8 @@ function atualizarUiCanal(){
 	$('#wrap-midia-campanha').toggleClass('d-none', !wa);
 	$('#label-mensagem').text(wa ? 'Mensagem WhatsApp' : 'Mensagem (HTML simples) *');
 	$('#hint-mensagem').text(wa
-		? 'Texto e/ou mídia. Variáveis: {nome}, {whatsapp}, {curso}, {escola}. Em áudio, o texto vai como mensagem separada.'
-		: 'No e-mail pode usar HTML simples. Variáveis: {nome}, {email}, {curso}, {escola}.');
+		? 'Texto e/ou mídia. Variáveis: {nome}, {email}, {whatsapp}, {curso}, {escola}. Em áudio, o texto vai como mensagem separada.'
+		: 'No e-mail pode usar HTML simples. Variáveis: {nome}, {email}, {whatsapp}, {curso}, {escola}.');
 	$('#campanha_assunto').prop('required', !wa);
 	if(!wa){
 		limparMidiaSelecionada(false);
@@ -79,10 +79,11 @@ function atualizarUiCanal(){
 function atualizarUiSegmento(){
 	const tipo = $('#segmento_tipo').val();
 	const grupos = tipo === 'whatsapp_grupos';
+	const emailsInvalidos = tipo === 'emails_invalidos_alunos';
 	$('#wrap-status-lead').toggle(tipo === 'leads');
 	$('#wrap-inadimplentes').toggle(tipo === 'inadimplentes');
 	$('#wrap-grupos-wa').toggleClass('d-none', !grupos);
-	if(grupos){
+	if(grupos || emailsInvalidos){
 		$('#campanha_canal').val('whatsapp');
 		atualizarUiCanalSemSegmento();
 	}
@@ -701,7 +702,8 @@ function previewPublico(){
 		let txt = res.total + ' destinatário(s) com '+rotulo+'.';
 		if(res.amostra && res.amostra.length){
 			txt += ' Ex.: ' + res.amostra.map(function(a){
-				return a.nome + (a.contato ? ' ('+a.contato+')' : '');
+				const extra = a.email_cadastro ? ' — e-mail: '+a.email_cadastro : '';
+				return a.nome + (a.contato ? ' ('+a.contato+')' : '') + extra;
 			}).join(', ');
 		}
 		$('#preview-resultado').text(txt);

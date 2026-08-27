@@ -20,7 +20,8 @@
 </div>
 
 <div class="alert alert-info small mb-3">
-	<strong>Variáveis:</strong> <code>{nome}</code>, <code>{email}</code>/<code>{whatsapp}</code>, <code>{curso}</code>, <code>{escola}</code>.
+	<strong>Variáveis:</strong> <code>{nome}</code>, <code>{email}</code>, <code>{whatsapp}</code>, <code>{curso}</code>, <code>{escola}</code>.
+	Em WhatsApp, <code>{email}</code> usa o e-mail cadastrado do aluno/lead (não o número).
 	Limites em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.
 	<span class="badge bg-success">Iniciar</span> · <span class="badge bg-warning text-dark">Pausar</span> · <span class="badge bg-primary">Editar</span> · <span class="badge bg-danger">Encerrar</span>
 </div>
@@ -94,6 +95,7 @@
 							<select class="form-control" id="segmento_tipo">
 								<option value="alunos_matriculados">Alunos matriculados (ativos)</option>
 								<option value="ex_alunos">Ex-alunos</option>
+								<option value="emails_invalidos_alunos">Alunos com e-mail inválido (ativos e inativos)</option>
 								<option value="aniversariantes_mes">Aniversariantes do mês</option>
 								<option value="aniversariantes_dia">Aniversariantes de hoje</option>
 								<option value="leads">Leads do CRM</option>

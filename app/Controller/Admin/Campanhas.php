@@ -267,6 +267,9 @@ class Campanhas extends Page {
 			if ($tipoSegmento === 'whatsapp_grupos' && $canal !== 'whatsapp') {
 				return json_encode(['success' => false, 'message' => 'Grupos/listas só podem ser usados no canal WhatsApp.']);
 			}
+			if ($tipoSegmento === 'emails_invalidos_alunos' && $canal !== 'whatsapp') {
+				return json_encode(['success' => false, 'message' => 'Alunos com e-mail inválido só podem ser contatados pelo WhatsApp.']);
+			}
 
 			$segmento = [
 				'tipo'        => $tipoSegmento,
@@ -426,9 +429,14 @@ class Campanhas extends Page {
 		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, $canal);
 
 		if (empty($destinatarios)) {
-			$msg = $canal === 'whatsapp'
-				? 'Nenhum destinatário com WhatsApp válido neste segmento.'
-				: 'Nenhum destinatário com e-mail válido para este segmento.';
+			$tipoSeg = $segmento['tipo'] ?? '';
+			if ($tipoSeg === 'emails_invalidos_alunos') {
+				$msg = 'Nenhum aluno com e-mail inválido e WhatsApp válido neste segmento.';
+			} elseif ($canal === 'whatsapp') {
+				$msg = 'Nenhum destinatário com WhatsApp válido neste segmento.';
+			} else {
+				$msg = 'Nenhum destinatário com e-mail válido para este segmento.';
+			}
 			return json_encode(['success' => false, 'message' => $msg]);
 		}
 
