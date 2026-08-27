@@ -38,9 +38,6 @@ class ConectSenhaRecuperacaoHelper {
 		if (!self::elegivelRecuperacao($user)) {
 			return ['ok' => false, 'message' => 'Este e-mail não está cadastrado no Conecta Jovem.', 'code' => 400];
 		}
-		if (isset($user->ativo) && (int)$user->ativo !== 1) {
-			return ['ok' => false, 'message' => 'Conta inativa. Entre em contato com o suporte.', 'code' => 403];
-		}
 
 		$code = self::generateCode();
 		$obRec = new User();
