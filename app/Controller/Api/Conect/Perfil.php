@@ -7,6 +7,7 @@ use App\Common\Helpers\ConectEnderecoHelper;
 use App\Common\Helpers\ConectIdadeHelper;
 use App\Common\Helpers\ConectRedesSociaisHelper;
 use App\Common\Helpers\ConectSchemaHelper;
+use App\Common\Helpers\ConectSenhaHelper;
 use App\Model\Db\Database;
 use App\Model\Entity\CjCandidato;
 use App\Model\Entity\CjCandidatoHabilidade;
@@ -148,5 +149,20 @@ class Perfil {
 		}
 
 		return self::respond($body);
+	}
+
+	public static function alterarSenha($request): array {
+		$user = $request->user ?? null;
+		if (!$user instanceof User) {
+			return self::respond(['message' => 'Não autenticado.'], 401);
+		}
+
+		$post = $request->getPostVars() ?: [];
+		$result = ConectSenhaHelper::alterar($user, $post, 6);
+		if (!$result['ok']) {
+			return self::respond(['message' => $result['message']], $result['code'] ?? 400);
+		}
+
+		return self::respond(['message' => $result['message']]);
 	}
 }

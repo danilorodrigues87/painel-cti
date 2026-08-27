@@ -7,6 +7,7 @@ use App\Common\Helpers\ConectCandidatoAuthHelper;
 use App\Common\Helpers\ConectIdadeHelper;
 use App\Common\Helpers\ConectJovemCrmHelper;
 use App\Common\Helpers\ConectJovemLeadRouter;
+use App\Common\Helpers\ConectSenhaRecuperacaoHelper;
 use App\Model\Entity\CjCandidato;
 use App\Model\Entity\User;
 use Firebase\JWT\JWT;
@@ -164,5 +165,21 @@ class Auth {
 			return self::respond(['message' => 'Não autenticado.'], 401);
 		}
 		return self::respond(self::perfilResponse($user, $candidato));
+	}
+
+	public static function forgotPassword($request): array {
+		$post = $request->getPostVars() ?: [];
+		$email = (string)($post['email'] ?? '');
+		$res = ConectSenhaRecuperacaoHelper::solicitar($email, 'candidato');
+		return self::respond(['message' => $res['message']], $res['code'] ?? ($res['ok'] ? 200 : 400));
+	}
+
+	public static function resetPassword($request): array {
+		$post = $request->getPostVars() ?: [];
+		$codigo = (string)($post['code'] ?? $post['codigo'] ?? '');
+		$nova = (string)($post['newPassword'] ?? $post['senha'] ?? $post['password'] ?? '');
+		$confirma = (string)($post['confirmPassword'] ?? $post['senha_confirma'] ?? $nova);
+		$res = ConectSenhaRecuperacaoHelper::redefinir($codigo, $nova, $confirma, 'candidato');
+		return self::respond(['message' => $res['message']], $res['code'] ?? ($res['ok'] ? 200 : 400));
 	}
 }

@@ -201,4 +201,10 @@ class User{
 
 	}
 
+	public function clearRecCode(){
+		return (new Database('usuarios'))->update('id = '.$this->id, [
+			'recCode' => null,
+		]);
+	}
+
 }

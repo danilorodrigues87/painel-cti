@@ -6,6 +6,7 @@ use App\Common\Helpers\ConectApiMapper;
 use App\Common\Helpers\ConectCandidatoAuthHelper;
 use App\Common\Helpers\ConectCnpjHelper;
 use App\Common\Helpers\ConectEnderecoHelper;
+use App\Common\Helpers\ConectSenhaRecuperacaoHelper;
 use App\Model\Entity\CjEmpresa;
 use App\Model\Entity\User;
 use Firebase\JWT\JWT;
@@ -144,5 +145,21 @@ class Auth {
 			'user'    => ConectApiMapper::userEmpresa($user, $empresaRow),
 			'empresa' => ConectApiMapper::empresaPerfil($empresaRow),
 		]);
+	}
+
+	public static function forgotPassword($request): array {
+		$post = $request->getPostVars() ?: [];
+		$email = (string)($post['email'] ?? '');
+		$res = ConectSenhaRecuperacaoHelper::solicitar($email, 'empresa');
+		return self::respond(['message' => $res['message']], $res['code'] ?? ($res['ok'] ? 200 : 400));
+	}
+
+	public static function resetPassword($request): array {
+		$post = $request->getPostVars() ?: [];
+		$codigo = (string)($post['code'] ?? $post['codigo'] ?? '');
+		$nova = (string)($post['newPassword'] ?? $post['senha'] ?? $post['password'] ?? '');
+		$confirma = (string)($post['confirmPassword'] ?? $post['senha_confirma'] ?? $nova);
+		$res = ConectSenhaRecuperacaoHelper::redefinir($codigo, $nova, $confirma, 'empresa');
+		return self::respond(['message' => $res['message']], $res['code'] ?? ($res['ok'] ? 200 : 400));
 	}
 }

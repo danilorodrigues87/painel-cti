@@ -163,6 +163,20 @@ $obRouter->post('/api/v1/conect/auth/register', [
 	}
 ]);
 
+$obRouter->post('/api/v1/conect/auth/forgot-password', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Auth::forgotPassword($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/auth/reset-password', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(Conect\Auth::resetPassword($request));
+	}
+]);
+
 $obRouter->get('/api/v1/conect/me', [
 	'middlewares' => $conectAuth,
 	function ($request) use ($respond) {
@@ -174,6 +188,13 @@ $obRouter->put('/api/v1/conect/me', [
 	'middlewares' => $conectAuth,
 	function ($request) use ($respond) {
 		return $respond(Conect\Perfil::atualizar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect/me/password', [
+	'middlewares' => $conectAuth,
+	function ($request) use ($respond) {
+		return $respond(Conect\Perfil::alterarSenha($request));
 	}
 ]);
 
@@ -234,6 +255,20 @@ $obRouter->post('/api/v1/conect-empresa/auth/register', [
 	}
 ]);
 
+$obRouter->post('/api/v1/conect-empresa/auth/forgot-password', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Auth::forgotPassword($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/auth/reset-password', [
+	'middlewares' => $conectMw,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Auth::resetPassword($request));
+	}
+]);
+
 $obRouter->get('/api/v1/conect-empresa/me', [
 	'middlewares' => $empresaAuth,
 	function ($request) use ($respond) {
@@ -245,6 +280,13 @@ $obRouter->put('/api/v1/conect-empresa/me', [
 	'middlewares' => $empresaAuth,
 	function ($request) use ($respond) {
 		return $respond(ConectEmpresa\Perfil::atualizar($request));
+	}
+]);
+
+$obRouter->post('/api/v1/conect-empresa/me/password', [
+	'middlewares' => $empresaAuth,
+	function ($request) use ($respond) {
+		return $respond(ConectEmpresa\Perfil::alterarSenha($request));
 	}
 ]);
 
