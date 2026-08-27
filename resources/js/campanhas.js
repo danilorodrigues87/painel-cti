@@ -408,27 +408,6 @@ function selecionarMidiaBibliotecaCampanha(item){
 	if(campanhaBibModal) campanhaBibModal.hide();
 }
 
-function atualizarAlertaCron(cron){
-	const $alert = $('#alert-cron-campanhas');
-	if(!cron){
-		$alert.addClass('d-none');
-		return;
-	}
-	$alert.removeClass('d-none');
-	let txt = cron.hint || '';
-	if(cron.ultima && cron.ultima.created_at){
-		const quando = String(cron.ultima.created_at).slice(0, 16).replace('T', ' ');
-		txt += ' Última execução: '+quando+' ('+(cron.ultima.origem || 'cron')+').';
-	} else if(cron.token_configurado){
-		txt += ' Nenhuma execução registrada ainda — configure o cron no cPanel.';
-	}
-	$('#cron-campanhas-texto').text(txt);
-	$('#cron-campanhas-url').text(cron.url_cron || '');
-	if(!cron.tabela_ok){
-		$('#cron-campanhas-texto').append(' Execute database/campanha_worker_runs.sql para ver o histórico.');
-	}
-}
-
 function limparFormulario(){
 	$('#campanha_id').val('');
 	$('#campanha_canal').val('email');
@@ -636,7 +615,6 @@ function carregarCampanhas(opts){
 		else atualizarTextoPacing(campanhaPacing);
 		if(res.pacing_1a1) atualizarTextoPacing1a1(res.pacing_1a1);
 		else if(campanhaPacing1a1) atualizarTextoPacing1a1(campanhaPacing1a1);
-		atualizarAlertaCron(res.cron);
 		if(campanhaTemPendentes){
 			iniciarAutoFila();
 			if(res.pacing) agendarProximoEnvioGrupo();

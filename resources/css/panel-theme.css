@@ -268,6 +268,82 @@ html[data-bs-theme="dark"] .btn-close {
   opacity: 0.75;
 }
 
+/* SweetAlert2 — mesmo contraste dos modals Bootstrap */
+html[data-bs-theme="dark"] .swal2-popup {
+  background-color: var(--painel-surface);
+  color: var(--painel-text);
+  border: 1px solid var(--bs-border-color);
+}
+
+html[data-bs-theme="dark"] .swal2-title {
+  color: var(--bs-heading-color);
+}
+
+html[data-bs-theme="dark"] .swal2-html-container,
+html[data-bs-theme="dark"] .swal2-content {
+  color: var(--painel-text);
+}
+
+html[data-bs-theme="dark"] .swal2-popup .form-label,
+html[data-bs-theme="dark"] .swal2-popup label:not(.form-check-label) {
+  color: var(--painel-text);
+}
+
+html[data-bs-theme="dark"] .swal2-popup .form-control,
+html[data-bs-theme="dark"] .swal2-popup .form-select,
+html[data-bs-theme="dark"] .swal2-popup textarea.form-control,
+html[data-bs-theme="dark"] .swal2-input,
+html[data-bs-theme="dark"] .swal2-textarea,
+html[data-bs-theme="dark"] .swal2-select {
+  background-color: var(--painel-surface-2);
+  color: var(--painel-text);
+  border-color: #4a5568;
+}
+
+html[data-bs-theme="dark"] .swal2-popup .form-control:focus,
+html[data-bs-theme="dark"] .swal2-popup .form-select:focus,
+html[data-bs-theme="dark"] .swal2-input:focus,
+html[data-bs-theme="dark"] .swal2-textarea:focus,
+html[data-bs-theme="dark"] .swal2-select:focus {
+  background-color: var(--painel-surface-2);
+  color: var(--painel-text);
+  border-color: #6ea8fe;
+  box-shadow: 0 0 0 0.2rem rgba(110, 168, 254, 0.25);
+}
+
+html[data-bs-theme="dark"] .swal2-popup .form-control::placeholder,
+html[data-bs-theme="dark"] .swal2-input::placeholder,
+html[data-bs-theme="dark"] .swal2-textarea::placeholder {
+  color: #8b95a5;
+}
+
+html[data-bs-theme="dark"] .swal2-popup .text-muted,
+html[data-bs-theme="dark"] .swal2-popup .text-secondary {
+  color: var(--painel-text-muted) !important;
+}
+
+html[data-bs-theme="dark"] .swal2-popup strong {
+  color: var(--bs-heading-color);
+}
+
+html[data-bs-theme="dark"] .swal2-validation-message {
+  background-color: #3d2020;
+  color: #f8d7da;
+}
+
+html[data-bs-theme="dark"] .swal2-close {
+  color: var(--painel-text-muted);
+}
+
+html[data-bs-theme="dark"] .swal2-close:hover {
+  color: var(--painel-text);
+}
+
+html[data-bs-theme="dark"] .swal2-footer {
+  border-top-color: var(--bs-border-color);
+  color: var(--painel-text-muted);
+}
+
 html[data-bs-theme="dark"] .dropdown-menu {
   background-color: var(--painel-surface);
   border-color: var(--bs-border-color);
