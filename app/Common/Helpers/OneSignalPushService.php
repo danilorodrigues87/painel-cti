@@ -76,7 +76,13 @@ class OneSignalPushService {
 			CURLOPT_TIMEOUT        => 8,
 			CURLOPT_CONNECTTIMEOUT => 5,
 		]);
-		curl_exec($ch);
+		$body = curl_exec($ch);
+		$httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		$curlErr = curl_error($ch);
 		curl_close($ch);
+
+		if ($curlErr !== '' || ($httpCode !== 200 && $httpCode !== 201)) {
+			error_log('[OneSignalPush] HTTP '.$httpCode.' err='.($curlErr ?: 'none').' body='.mb_substr((string)$body, 0, 500));
+		}
 	}
 }

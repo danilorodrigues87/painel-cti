@@ -25,26 +25,30 @@ class OneSignalHelper {
 		return self::appId() !== '';
 	}
 
-	/** Caminho relativo ao deploy (ex.: /app/OneSignalSDKWorker.js). */
+	/** Caminho relativo ao deploy, sem barra inicial (ex.: app/push/onesignal/OneSignalSDKWorker.js). */
 	public static function serviceWorkerPath(): string {
-		$base = rtrim((string)(defined('URL') ? URL : ''), '/');
-		$path = parse_url($base, PHP_URL_PATH);
-		if (!is_string($path) || $path === '') {
-			$path = '/';
-		}
-		$path = rtrim($path, '/');
-		return ($path !== '' ? $path : '').'/OneSignalSDKWorker.js';
+		$prefix = self::urlPathPrefix();
+		return ($prefix !== '' ? $prefix.'/' : '').'push/onesignal/OneSignalSDKWorker.js';
 	}
 
-	/** Escopo do service worker (ex.: /app/). */
+	public static function serviceWorkerUpdaterPath(): string {
+		$prefix = self::urlPathPrefix();
+		return ($prefix !== '' ? $prefix.'/' : '').'push/onesignal/OneSignalSDKUpdaterWorker.js';
+	}
+
+	/** Escopo dedicado ao push — evita conflito com o SW do PWA (sw.js). */
 	public static function serviceWorkerScope(): string {
+		$prefix = self::urlPathPrefix();
+		return '/'.($prefix !== '' ? $prefix.'/' : '').'push/onesignal/';
+	}
+
+	private static function urlPathPrefix(): string {
 		$base = rtrim((string)(defined('URL') ? URL : ''), '/');
 		$path = parse_url($base, PHP_URL_PATH);
-		if (!is_string($path) || $path === '') {
-			return '/';
+		if (!is_string($path) || $path === '' || $path === '/') {
+			return '';
 		}
-		$path = rtrim($path, '/');
-		return ($path !== '' ? $path : '').'/';
+		return trim($path, '/');
 	}
 
 	/**
@@ -68,9 +72,11 @@ class OneSignalHelper {
 		}
 		$appId = htmlspecialchars(self::appId(), ENT_QUOTES, 'UTF-8');
 		$swPath = htmlspecialchars(self::serviceWorkerPath(), ENT_QUOTES, 'UTF-8');
+		$swUpdater = htmlspecialchars(self::serviceWorkerUpdaterPath(), ENT_QUOTES, 'UTF-8');
 		$swScope = htmlspecialchars(self::serviceWorkerScope(), ENT_QUOTES, 'UTF-8');
 		return '<meta name="onesignal-app-id" content="'.$appId.'">'
 			.'<meta name="onesignal-sw-path" content="'.$swPath.'">'
+			.'<meta name="onesignal-sw-updater-path" content="'.$swUpdater.'">'
 			.'<meta name="onesignal-sw-scope" content="'.$swScope.'">'
 			.'<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>';
 	}

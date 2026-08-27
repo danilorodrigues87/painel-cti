@@ -6,6 +6,16 @@
 		return el ? String(el.getAttribute('content') || '').trim() : '';
 	}
 
+	function swPathRelativo() {
+		var p = meta('onesignal-sw-path') || 'push/onesignal/OneSignalSDKWorker.js';
+		return p.replace(/^\/+/, '');
+	}
+
+	function swUpdaterRelativo() {
+		var p = meta('onesignal-sw-updater-path') || 'push/onesignal/OneSignalSDKUpdaterWorker.js';
+		return p.replace(/^\/+/, '');
+	}
+
 	function baseUrl() {
 		if (typeof url_base !== 'undefined' && url_base) {
 			return String(url_base).replace(/\/?$/, '');
@@ -59,11 +69,18 @@
 					registrarSubscription(String(id));
 				});
 			}
-		}).catch(function () { /* silencioso */ });
+		}).catch(function (err) {
+			console.warn('[OneSignal] syncUsuario', err);
+		});
 	}
 
 	function pedirPermissao(OneSignal) {
 		try {
+			if (typeof Notification !== 'undefined') {
+				if (Notification.permission === 'granted' || Notification.permission === 'denied') {
+					return;
+				}
+			}
 			var key = 'painel-cti-push-asked';
 			if (localStorage.getItem(key) === '1') return;
 			localStorage.setItem(key, '1');
@@ -77,8 +94,9 @@
 		var appId = meta('onesignal-app-id');
 		if (!appId) return;
 
-		var swPath = meta('onesignal-sw-path') || '/OneSignalSDKWorker.js';
-		var swScope = meta('onesignal-sw-scope') || '/';
+		var swPath = swPathRelativo();
+		var swUpdater = swUpdaterRelativo();
+		var swScope = meta('onesignal-sw-scope') || '/push/onesignal/';
 
 		window.OneSignalDeferred = window.OneSignalDeferred || [];
 		OneSignalDeferred.push(function (OneSignal) {
@@ -86,6 +104,7 @@
 				appId: appId,
 				notifyButton: { enable: false },
 				serviceWorkerPath: swPath,
+				serviceWorkerUpdaterPath: swUpdater,
 				serviceWorkerParam: { scope: swScope },
 			};
 			if (/^localhost$|^127\.0\.0\.1$/i.test(window.location.hostname)) {
@@ -105,6 +124,8 @@
 						pedirPermissao(OneSignal);
 					}
 				});
+			}).catch(function (err) {
+				console.warn('[OneSignal] init', err);
 			});
 		});
 	}

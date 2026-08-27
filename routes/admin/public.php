@@ -85,7 +85,6 @@ $obRouter->get('/sw.js', [
 $obRouter->get('/OneSignalSDKWorker.js', [
 	function ($request) {
 		$response = new Response(200, PublicPages\Pwa::oneSignalWorker($request), 'application/javascript');
-		$response->addHeader('Service-Worker-Allowed', \App\Common\Helpers\PwaHelper::serviceWorkerAllowedHeader());
 		$response->addHeader('Cache-Control', 'no-cache');
 		return $response;
 	}
@@ -94,7 +93,22 @@ $obRouter->get('/OneSignalSDKWorker.js', [
 $obRouter->get('/OneSignalSDKUpdaterWorker.js', [
 	function ($request) {
 		$response = new Response(200, PublicPages\Pwa::oneSignalUpdaterWorker($request), 'application/javascript');
-		$response->addHeader('Service-Worker-Allowed', \App\Common\Helpers\PwaHelper::serviceWorkerAllowedHeader());
+		$response->addHeader('Cache-Control', 'no-cache');
+		return $response;
+	}
+]);
+
+$obRouter->get('/push/onesignal/OneSignalSDKWorker.js', [
+	function ($request) {
+		$response = new Response(200, PublicPages\Pwa::oneSignalWorker($request), 'application/javascript');
+		$response->addHeader('Cache-Control', 'no-cache');
+		return $response;
+	}
+]);
+
+$obRouter->get('/push/onesignal/OneSignalSDKUpdaterWorker.js', [
+	function ($request) {
+		$response = new Response(200, PublicPages\Pwa::oneSignalUpdaterWorker($request), 'application/javascript');
 		$response->addHeader('Cache-Control', 'no-cache');
 		return $response;
 	}
