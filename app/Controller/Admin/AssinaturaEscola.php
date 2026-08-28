@@ -6,8 +6,11 @@ use App\Utils\View;
 use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\SaasAssinaturaService;
+use App\Common\Helpers\SaasContratoTemplateHelper;
+use App\Common\Helpers\SaasContratoVariaveisBuilder;
 use App\Common\Helpers\MercadoPagoCtiHelper;
 use App\Common\Helpers\DateTimeHelper;
+use App\Model\Entity\SaasContratoModelo;
 use App\Common\Gateways\MercadoPago\Pix;
 use App\Model\Entity\EscolasAssinantes;
 use App\Model\Entity\PlanosAssinatura;
@@ -45,11 +48,36 @@ class AssinaturaEscola extends Page {
 		}
 		$user = SessionUser::getUserLogedData();
 		$isDiretor = (($user['usuario']['nivel'] ?? '') === 'Diretor');
+		$contratoLink = '';
+		if (SaasContratoModelo::tabelaExiste()) {
+			$contratoLink = '<a href="'.URL.'/painel/assinatura/contrato" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">'
+				.'<i class="fas fa-file-contract"></i> Ver contrato de licença</a>';
+		}
 		$content = View::render('admin/modules/assinatura/index', [
 			'grace_dias' => (string)SaasAssinaturaService::GRACE_DIAS,
 			'so_leitura' => $isDiretor ? '0' : '1',
+			'contrato_link' => $contratoLink,
 		]);
 		return parent::getPanel('Assinatura', $content, 'Financeiro', $request);
+	}
+
+	public static function verContrato($request) {
+		if (!self::assertAcessoTela($request)) {
+			return '';
+		}
+		if (!SaasContratoModelo::tabelaExiste()) {
+			return 'Contrato de licença ainda não disponível. Contate o suporte CTI.';
+		}
+		$idAdmin = TenantHelper::getIdAdmin();
+		if ($idAdmin <= 0) {
+			return 'Escola não identificada.';
+		}
+		$escola = EscolasAssinantes::getEscolaById($idAdmin);
+		if (!$escola instanceof EscolasAssinantes) {
+			return 'Escola não encontrada.';
+		}
+		$vars = SaasContratoVariaveisBuilder::montarFromEscola($escola);
+		return SaasContratoTemplateHelper::render($vars);
 	}
 
 	public static function getInfo($request) {
@@ -159,9 +187,15 @@ class AssinaturaEscola extends Page {
 			? ($escola->assinatura_proximo_vencimento ?? null)
 			: null;
 
+		$contratoPendencias = [];
+		if ($escola instanceof EscolasAssinantes && SaasContratoModelo::tabelaExiste()) {
+			$contratoPendencias = SaasContratoVariaveisBuilder::listarPendencias($escola);
+		}
+
 		return json_encode([
 			'success'   => true,
 			'tabela_ok' => true,
+			'contrato_pendencias' => $contratoPendencias,
 			'resumo'    => [
 				'plano_nome'                   => $planoNome,
 				'valor_mensal'                 => $valorMensal,

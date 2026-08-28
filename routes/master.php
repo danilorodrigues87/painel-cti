@@ -73,6 +73,34 @@ $obRouter->get('/master/assinaturas', [
 	}
 ]);
 
+$obRouter->get('/master/contrato-saas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ContratoSaas::index($request));
+	}
+]);
+
+$obRouter->post('/master/contrato-saas', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\ContratoSaas::getInfo($request), 'application/json');
+	}
+]);
+
+$obRouter->get('/master/dados-cti', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\DadosCti::index($request));
+	}
+]);
+
+$obRouter->post('/master/dados-cti', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\DadosCti::getInfo($request), 'application/json');
+	}
+]);
+
 $obRouter->post('/master/assinaturas', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {
@@ -423,6 +451,20 @@ $obRouter->post('/master/documentacao', [
 	'middlewares' => ['required-master-login'],
 	function ($request) {
 		return new Response(200, Master\Documentacao::salvar($request), 'application/json');
+	}
+]);
+
+$obRouter->get('/master/usuarios', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Usuarios::index($request));
+	}
+]);
+
+$obRouter->post('/master/usuarios', [
+	'middlewares' => ['required-master-login'],
+	function ($request) {
+		return new Response(200, Master\Usuarios::getInfo($request), 'application/json');
 	}
 ]);
 

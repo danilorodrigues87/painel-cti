@@ -5,13 +5,70 @@ use \App\Utils\View;
 use \App\Model\Entity\CategoryCourses as Category_Courses;
 use \App\Model\Db\Pagination;
 use \App\Common\Helpers\TenantHelper;
+use \App\Common\Helpers\ModuleGateHelper;
+use \App\Common\Helpers\ContratoClausulaHelper;
+use \App\Common\Helpers\ContratoTemplateHelper;
+use \App\Common\Helpers\ContratoVariaveisBuilder;
+use \App\Model\Entity\EscolasAssinantes;
+use \App\Session\User\Login as SessionUser;
 
 class CategoryCourses extends Page{
 
+	private static function redirectPainel($request, string $route): void {
+		if ($request instanceof \App\Http\Request) {
+			$router = $request->getRouter();
+			if ($router) {
+				$router->redirect($route);
+			}
+		}
+		header('Location: '.URL.'/'.ltrim($route, '/'));
+		exit;
+	}
+
+	private static function extrairIdCategoriaContrato($request): int {
+		if (!$request instanceof \App\Http\Request) {
+			return 0;
+		}
+		$uri = (string)$request->getUri();
+		if (preg_match('#/painel/categoria/cursos/contrato/(\d+)#', $uri, $m)) {
+			return (int)$m[1];
+		}
+		return 0;
+	}
+
+	private static function assertContratoAcesso($request, bool $api = false): bool {
+		$user = SessionUser::getUserLogedData();
+		if (($user['usuario']['nivel'] ?? '') !== 'Diretor') {
+			if (!$api) {
+				self::redirectPainel($request, '/painel');
+			}
+			return false;
+		}
+		$idAdmin = (int)($user['usuario']['id_admin'] ?? 0);
+		if (!in_array('contratos', ModuleGateHelper::getSlugsEscola($idAdmin), true)) {
+			if (!$api) {
+				self::redirectPainel($request, '/painel');
+			}
+			return false;
+		}
+		return true;
+	}
+
+	private static function podeEditarContratoCategoria(): bool {
+		$user = SessionUser::getUserLogedData();
+		if (($user['usuario']['nivel'] ?? '') !== 'Diretor') {
+			return false;
+		}
+		$idAdmin = (int)($user['usuario']['id_admin'] ?? 0);
+		return in_array('contratos', ModuleGateHelper::getSlugsEscola($idAdmin), true);
+	}
+
 	//RETORNA O FORMULARIO
 	public static function index($request){
-		//CONTEÚDO DE FORMULÁRIO
-		$content = View::render('admin/modules/categoria_cursos/index',[]);
+		$content = View::render('admin/modules/categoria_cursos/index', [
+			'mostrar_contrato' => self::podeEditarContratoCategoria(),
+			'coluna_contrato_ok' => Category_Courses::temColunaContrato(),
+		]);
 
 		//RETORNA A PÁGINA COMPLETA
 		/**
@@ -49,14 +106,36 @@ class CategoryCourses extends Page{
 		//RESULTADOS DA PAGINA
 		$results = Category_Courses::getCategory('id_admin = ' . (int)$id_admin, 'nome ASC', $obPagination->getLimit());
 
+		$podeContrato = self::podeEditarContratoCategoria();
+		$colContratoOk = Category_Courses::temColunaContrato();
+
 		//REDERIZA O ITEM
 		while ($obUsers = $results->fetchObject(Category_Courses::class)) {
+
+			$badgeContrato = '—';
+			if ($podeContrato && $colContratoOk) {
+				$ok = Category_Courses::contratoEstaCompleto($obUsers);
+				$badgeContrato = $ok
+					? '<span class="badge bg-success">Contrato OK</span>'
+					: '<span class="badge bg-warning text-dark">Incompleto</span>';
+			} elseif ($podeContrato) {
+				$badgeContrato = '<span class="badge bg-secondary">Aguardando SQL</span>';
+			}
+
+			$linkContrato = $podeContrato
+				? '<li><a class="dropdown-item" href="'.URL.'/painel/categoria/cursos/contrato/'.$obUsers->id.'"><i class="fas fa-file-contract"></i> Editar contrato</a></li>'
+				: '';
+
+			$btnContrato = $podeContrato
+				? ' <a class="btn btn-sm btn-outline-primary ms-1" href="'.URL.'/painel/categoria/cursos/contrato/'.$obUsers->id.'" title="Editar contrato"><i class="fas fa-file-contract"></i></a>'
+				: '';
 
 			$itens .= '<tr>
 			<td>'.$obUsers->nome.'</td>
 			<td>'.$obUsers->descricao.'</td>
+			<td>'.$badgeContrato.'</td>
 			<td>
-			<div class="dropdown">
+			<div class="dropdown d-inline-block">
 			<button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
 			<i class="far fa-edit fa-lg"></i>
 			</button>
@@ -64,11 +143,12 @@ class CategoryCourses extends Page{
 			<li>
 			<a class="dropdown-item" href="#" onclick="list_itens('.$obUsers->id.', \'editar\')"><i class="far fa-edit fa-lg"></i> Editar</a>
 			</li>
+			'.$linkContrato.'
 			<li>
 			<a class="dropdown-item" href="#" onclick="excluir('.$obUsers->id.')" ><i class="far fa-trash-alt fa-lg"></i> Excluir</a>
 			</li>
 			</ul>
-			</div>
+			</div>'.$btnContrato.'
 			</td>
 			</tr>';
 
@@ -82,6 +162,7 @@ class CategoryCourses extends Page{
 		<tr>
 		<th>Nome</th>
 		<th>Descricão</th>
+		<th>Contrato</th>
 		<th>Ações</th>
 		</tr>
 		</thead>
@@ -89,6 +170,13 @@ class CategoryCourses extends Page{
 		</table>
 		</div>
 		</div>';
+
+		if ($podeContrato && !$colContratoOk) {
+			$table = '<div class="alert alert-warning small mx-3 mt-3">'
+				.'Para editar cláusulas por categoria, execute o SQL '
+				.'<code>database/categorias_contrato.sql</code> no phpMyAdmin. '
+				.'O link <strong>Editar contrato</strong> já está disponível abaixo.</div>'.$table;
+		}
 
 		//RETORNA
 		return $table;
@@ -225,6 +313,147 @@ class CategoryCourses extends Page{
 			return 'Erro ao excluir essa categoria';
 		}
 		
+	}
+
+	public static function contratoIndex($request) {
+		if (!self::assertContratoAcesso($request)) {
+			return '';
+		}
+		$id = self::extrairIdCategoriaContrato($request);
+		$idAdmin = parent::getIdAdminInt();
+		if ($id <= 0 || !TenantHelper::pertence('categorias_curso', $id, $idAdmin)) {
+			self::redirectPainel($request, '/painel/categoria/cursos');
+			return '';
+		}
+		$cat = Category_Courses::getCategoryById($id);
+		if (!$cat instanceof Category_Courses) {
+			self::redirectPainel($request, '/painel/categoria/cursos');
+			return '';
+		}
+		$content = View::render('admin/modules/categoria_cursos/contrato', [
+			'id_categoria' => $id,
+			'nome_categoria' => (string)$cat->nome,
+		]);
+		return parent::getPanel('Categorias', $content, 'pedagogico', $request);
+	}
+
+	public static function contratoApi($request) {
+		if (!self::assertContratoAcesso($request, true)) {
+			return json_encode(['success' => false, 'message' => 'Acesso negado.']);
+		}
+		$id = self::extrairIdCategoriaContrato($request);
+		$idAdmin = parent::getIdAdminInt();
+		if ($id <= 0 || !TenantHelper::pertence('categorias_curso', $id, $idAdmin)) {
+			return json_encode(['success' => false, 'message' => 'Categoria não encontrada.']);
+		}
+
+		if (!$request instanceof \App\Http\Request) {
+			return json_encode(['success' => false, 'message' => 'Requisição inválida.']);
+		}
+
+		$postVars = $request->getPostVars();
+		$acao = $postVars['acao'] ?? '';
+
+		if ($acao === 'carregar') {
+			return self::contratoCarregar($id);
+		}
+		if ($acao === 'salvar') {
+			return self::contratoSalvar($id, $postVars);
+		}
+		if ($acao === 'preview') {
+			return self::contratoPreview($id, $postVars);
+		}
+		if ($acao === 'modelos') {
+			return json_encode([
+				'success' => true,
+				'modelos' => ContratoClausulaHelper::modelosSugeridos(),
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
+	}
+
+	private static function contratoCarregar(int $id): string {
+		$cat = Category_Courses::getCategoryById($id);
+		if (!$cat instanceof Category_Courses) {
+			return json_encode(['success' => false, 'message' => 'Categoria não encontrada.']);
+		}
+		$row = Category_Courses::rowToContratoArray($cat);
+		$tokens = [];
+		foreach (ContratoClausulaHelper::catalogoTokens() as $k => $desc) {
+			$tokens[] = ['chave' => $k, 'descricao' => $desc];
+		}
+		return json_encode([
+			'success'           => true,
+			'coluna_ok'         => Category_Courses::temColunaContrato(),
+			'nome'              => (string)$cat->nome,
+			'clausulas'         => $row,
+			'contrato_completo' => Category_Courses::contratoEstaCompleto($cat),
+			'tokens'            => $tokens,
+		], JSON_UNESCAPED_UNICODE);
+	}
+
+	private static function contratoSalvar(int $id, array $postVars): string {
+		if (!Category_Courses::temColunaContrato()) {
+			return json_encode([
+				'success' => false,
+				'message' => 'Execute o SQL database/categorias_contrato.sql no phpMyAdmin.',
+			]);
+		}
+		$dados = [
+			'contrato_clausula_1'          => (string)($postVars['contrato_clausula_1'] ?? ''),
+			'contrato_clausula_2'          => (string)($postVars['contrato_clausula_2'] ?? ''),
+			'contrato_clausula_3'          => (string)($postVars['contrato_clausula_3'] ?? ''),
+			'contrato_clausula_extra'      => (string)($postVars['contrato_clausula_extra'] ?? ''),
+			'contrato_pagamento_parcelado' => (string)($postVars['contrato_pagamento_parcelado'] ?? ''),
+			'contrato_pagamento_vista'     => (string)($postVars['contrato_pagamento_vista'] ?? ''),
+			'contrato_pagamento_bolsista'  => (string)($postVars['contrato_pagamento_bolsista'] ?? ''),
+			'contrato_obs_pontualidade'    => (string)($postVars['contrato_obs_pontualidade'] ?? ''),
+		];
+		if (!Category_Courses::salvarContratoClausulas($id, $dados)) {
+			return json_encode(['success' => false, 'message' => 'Falha ao salvar.']);
+		}
+		return json_encode([
+			'success' => true,
+			'message' => 'Cláusulas da categoria salvas.',
+		]);
+	}
+
+	private static function contratoPreview(int $id, array $postVars): string {
+		$user = SessionUser::getUserLogedData();
+		$escolaSession = $user['escola'] ?? [];
+		if (!is_array($escolaSession)) {
+			$escolaSession = [];
+		}
+
+		$idAdmin = TenantHelper::getIdAdmin();
+		$escola = EscolasAssinantes::getEscolaById($idAdmin);
+		$html = ContratoTemplateHelper::resolverModelo($escola instanceof EscolasAssinantes ? $escola : null);
+
+		$override = [
+			'contrato_clausula_1'          => (string)($postVars['contrato_clausula_1'] ?? ''),
+			'contrato_clausula_2'          => (string)($postVars['contrato_clausula_2'] ?? ''),
+			'contrato_clausula_3'          => (string)($postVars['contrato_clausula_3'] ?? ''),
+			'contrato_clausula_extra'      => (string)($postVars['contrato_clausula_extra'] ?? ''),
+			'contrato_pagamento_parcelado' => (string)($postVars['contrato_pagamento_parcelado'] ?? ''),
+			'contrato_pagamento_vista'     => (string)($postVars['contrato_pagamento_vista'] ?? ''),
+			'contrato_pagamento_bolsista'  => (string)($postVars['contrato_pagamento_bolsista'] ?? ''),
+			'contrato_obs_pontualidade'    => (string)($postVars['contrato_obs_pontualidade'] ?? ''),
+		];
+
+		$opts = [
+			'id_categoria'        => $id,
+			'menor'               => !empty($postVars['menor']),
+			'pagamento'           => (string)($postVars['pagamento'] ?? 'parcelado'),
+			'clausulas_override'  => $override,
+		];
+		$vars = ContratoVariaveisBuilder::dadosExemplo($escolaSession, $opts);
+		$render = ContratoTemplateHelper::aplicar($html, $vars);
+
+		return json_encode([
+			'success' => true,
+			'preview' => $render,
+		], JSON_UNESCAPED_UNICODE);
 	}
 
 }

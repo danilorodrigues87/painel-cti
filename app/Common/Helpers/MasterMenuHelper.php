@@ -25,6 +25,8 @@ class MasterMenuHelper {
 					['id' => 'escolas', 'label' => 'Escolas', 'url' => '/master/escolas', 'icon' => 'fas fa-school'],
 					['id' => 'planos', 'label' => 'Planos', 'url' => '/master/planos', 'icon' => 'fas fa-box-open'],
 					['id' => 'assinaturas', 'label' => 'Assinaturas', 'url' => '/master/assinaturas', 'icon' => 'fas fa-file-invoice-dollar'],
+					['id' => 'contrato_saas', 'label' => 'Contrato SaaS', 'url' => '/master/contrato-saas', 'icon' => 'fas fa-file-contract'],
+					['id' => 'dados_cti', 'label' => 'Dados jurídicos CTI', 'url' => '/master/dados-cti', 'icon' => 'fas fa-building'],
 					['id' => 'chamados', 'label' => 'Chamados', 'url' => '/master/chamados', 'icon' => 'fas fa-headset'],
 				],
 			],
@@ -74,6 +76,7 @@ class MasterMenuHelper {
 				'label' => 'Conta',
 				'icon'  => 'fas fa-user-cog',
 				'items' => [
+					['id' => 'usuarios', 'label' => 'Usuários Master', 'url' => '/master/usuarios', 'icon' => 'fas fa-users-cog'],
 					['id' => 'perfil', 'label' => 'Meu perfil', 'url' => '/master/perfil', 'icon' => 'fas fa-user-cog'],
 				],
 			],

@@ -9,14 +9,19 @@ use App\Model\Entity\User;
 class EditorAuthHelper {
 
 	/**
-	 * Quem pode editar cursos no tenant catálogo CTI (Master hoje; RBAC futuro via permissão).
-	 * Ponto único — expandir aqui quando existir /master/usuarios (não espalhar isMasterEmail).
+	 * Quem pode editar cursos no tenant catálogo CTI (Master hoje; RBAC via permissão).
 	 */
 	public static function canEditCatalogCti(User $user, int $idAdminToken): bool {
 		if (!CtiCatalog::isEscolaCatalogo($idAdminToken)) {
 			return false;
 		}
-		return MasterGateHelper::isMasterEmail($user->email ?? '');
+		if (MasterGateHelper::isMasterEmail($user->email ?? '')) {
+			return true;
+		}
+		if ((int)($user->id_admin ?? -1) === 0) {
+			return MasterGateHelper::podeAcessarModulo('ead_cursos');
+		}
+		return false;
 	}
 
 	/** Alias semântico — preferir canEditCatalogCti em código novo. */

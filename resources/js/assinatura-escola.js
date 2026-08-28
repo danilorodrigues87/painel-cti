@@ -121,6 +121,16 @@ function carregar(page){
 			$('#alert-assinatura').addClass('d-none');
 		}
 
+		const pend = res.contrato_pendencias || [];
+		if (pend.length) {
+			$('#alert-contrato-pendencias').removeClass('d-none').html(
+				'<strong>Contrato de licença incompleto:</strong> ' + esc(pend.join(', '))
+				+ '. O Diretor deve completar o <a href="' + url_base + 'painel/perfil">Perfil</a> (CPF).'
+			);
+		} else {
+			$('#alert-contrato-pendencias').addClass('d-none');
+		}
+
 		const soLeitura = !!r.so_leitura;
 		$('#btn-atualizar-pix, #btn-verificar-pag, #btn-copiar-pix-escola').toggleClass('d-none', soLeitura);
 		if(soLeitura){

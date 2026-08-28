@@ -48,7 +48,7 @@
 <div class="card shadow-sm mb-4">
 	<div class="card-header py-2 d-flex justify-content-between align-items-center">
 		<strong>Planos de assinatura (empresas)</strong>
-		<button type="button" class="btn btn-sm btn-outline-primary" id="btn-novo-plano">+ Plano</button>
+		<button type="button" class="btn btn-sm btn-outline-primary" id="btn-conect-novo-plano">+ Plano</button>
 	</div>
 	<div class="card-body p-0">
 		<div class="table-responsive">
@@ -106,35 +106,35 @@
 			<div class="modal-header"><h5 class="modal-title">Plano de anúncios</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 			<form id="form-plano">
 				<div class="modal-body row g-2">
-					<input type="hidden" name="id" id="plano_id" value="0">
+					<input type="hidden" name="id" id="conect_plano_id" value="0">
 					<div class="col-md-6">
 						<label class="form-label small">Slug (novo plano)</label>
-						<input class="form-control form-control-sm" name="slug" id="plano_slug" placeholder="ex: presenca">
+						<input class="form-control form-control-sm" name="slug" id="conect_plano_slug" placeholder="ex: presenca">
 					</div>
 					<div class="col-md-6">
 						<label class="form-label small">Ordem</label>
-						<input type="number" class="form-control form-control-sm" name="ordem" id="plano_ordem" value="0">
+						<input type="number" class="form-control form-control-sm" name="ordem" id="conect_plano_ordem" value="0">
 					</div>
 					<div class="col-12">
 						<label class="form-label small">Nome *</label>
-						<input class="form-control form-control-sm" name="nome" id="plano_nome" required>
+						<input class="form-control form-control-sm" name="nome" id="conect_plano_nome" required>
 					</div>
 					<div class="col-12">
 						<label class="form-label small">Descrição</label>
-						<textarea class="form-control form-control-sm" name="descricao" id="plano_desc" rows="2"></textarea>
+						<textarea class="form-control form-control-sm" name="descricao" id="conect_plano_desc" rows="2"></textarea>
 					</div>
 					<div class="col-md-4">
 						<label class="form-label small">Máx. anúncios</label>
-						<input type="number" class="form-control form-control-sm" name="max_anuncios" id="plano_max" min="1" value="1">
+						<input type="number" class="form-control form-control-sm" name="max_anuncios" id="conect_plano_max" min="1" value="1">
 					</div>
 					<div class="col-md-4">
 						<label class="form-label small">Preço mensal (R$)</label>
-						<input class="form-control form-control-sm" name="valor_mensal" id="plano_valor">
+						<input class="form-control form-control-sm" name="valor_mensal" id="conect_plano_valor">
 					</div>
 					<div class="col-md-4 d-flex align-items-end">
 						<div class="form-check">
-							<input class="form-check-input" type="checkbox" name="ativo" id="plano_ativo" value="1" checked>
-							<label class="form-check-label small" for="plano_ativo">Ativo</label>
+							<input class="form-check-input" type="checkbox" name="ativo" id="conect_plano_ativo" value="1" checked>
+							<label class="form-check-label small" for="conect_plano_ativo">Ativo</label>
 						</div>
 					</div>
 				</div>
@@ -164,4 +164,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/master-conect-anuncios.js?v=4"></script>
+<script src="{{URL}}/resources/js/master-conect-anuncios.js?v=5"></script>

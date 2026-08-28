@@ -63,3 +63,21 @@ $obRouter->post('/painel/categoria/cursos/excluir',[
 		return new Response(200,Admin\CategoryCourses::deleteCategory($request));
 	}
 ]);
+
+$obRouter->get('/painel/categoria/cursos/contrato/{id}',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\CategoryCourses::contratoIndex($request));
+	}
+]);
+
+$obRouter->post('/painel/categoria/cursos/contrato/{id}',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200, Admin\CategoryCourses::contratoApi($request));
+	}
+]);

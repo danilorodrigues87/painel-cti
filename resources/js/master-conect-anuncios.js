@@ -40,19 +40,19 @@ $(function(){
 
 	let planoModal = null;
 	function abrirModalPlano(data){
-		$('#plano_id').val(data.id || 0);
-		$('#plano_slug').val(data.slug || '').prop('disabled', !!(data.id && data.id > 0));
-		$('#plano_nome').val(data.nome || '');
-		$('#plano_desc').val(data.desc || '');
-		$('#plano_max').val(data.max || 1);
-		$('#plano_valor').val(data.valor || '');
-		$('#plano_ordem').val(data.ordem || 0);
-		$('#plano_ativo').prop('checked', data.ativo !== '0');
+		$('#conect_plano_id').val(data.id || 0);
+		$('#conect_plano_slug').val(data.slug || '').prop('disabled', !!(data.id && data.id > 0));
+		$('#conect_plano_nome').val(data.nome || '');
+		$('#conect_plano_desc').val(data.desc || '');
+		$('#conect_plano_max').val(data.max || 1);
+		$('#conect_plano_valor').val(data.valor || '');
+		$('#conect_plano_ordem').val(data.ordem || 0);
+		$('#conect_plano_ativo').prop('checked', data.ativo !== '0');
 		planoModal = new bootstrap.Modal(document.getElementById('modalPlano'));
 		planoModal.show();
 	}
 
-	$('#btn-novo-plano').on('click', function(){
+	$('#btn-conect-novo-plano').on('click', function(){
 		abrirModalPlano({});
 	});
 
@@ -73,14 +73,14 @@ $(function(){
 	$('#form-plano').on('submit', function(e){
 		e.preventDefault();
 		const data = {
-			id: $('#plano_id').val(),
-			slug: $('#plano_slug').val(),
-			nome: $('#plano_nome').val(),
-			descricao: $('#plano_desc').val(),
-			max_anuncios: $('#plano_max').val(),
-			valor_mensal: $('#plano_valor').val(),
-			ordem: $('#plano_ordem').val(),
-			ativo: $('#plano_ativo').is(':checked') ? 1 : 0
+			id: $('#conect_plano_id').val(),
+			slug: $('#conect_plano_slug').val(),
+			nome: $('#conect_plano_nome').val(),
+			descricao: $('#conect_plano_desc').val(),
+			max_anuncios: $('#conect_plano_max').val(),
+			valor_mensal: $('#conect_plano_valor').val(),
+			ordem: $('#conect_plano_ordem').val(),
+			ativo: $('#conect_plano_ativo').is(':checked') ? 1 : 0
 		};
 		$.post(url_base + 'master/conect-anuncios/planos/salvar', data, function(res){
 			if(res && res.success){

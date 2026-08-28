@@ -17,8 +17,12 @@ class ContratoTemplateHelper {
 			'contratada'     => 'Bloco CONTRATADA (logo, escola, CNPJ, contato)',
 			'contratante'    => 'Bloco CONTRATANTE/ALUNO (+ responsável se menor)',
 			'curso'          => 'Formação, módulos, carga, datas, pagamento',
-			'parte1'         => 'Cláusulas 1ª–3ª conforme tipo de curso',
-			'clausulaExtra'  => 'Cláusula extra (ex.: judô) ou vazio',
+			'clausula_1'     => 'Cláusula 1ª (editada na categoria)',
+			'clausula_2'     => 'Cláusula 2ª (editada na categoria)',
+			'clausula_3'     => 'Cláusula 3ª (editada na categoria)',
+			'parte1'         => 'Cláusulas 1ª–3ª juntas (retrocompatível)',
+			'clausula_extra' => 'Cláusula extra da categoria (ex.: riscos)',
+			'clausulaExtra'  => 'Alias de clausula_extra',
 			'data_contrato'  => 'Cidade/UF e data por extenso',
 		];
 	}
@@ -80,10 +84,12 @@ class ContratoTemplateHelper {
     {{curso}}
     <hr><br>
     <p>Por este instrumento particular de prestação de serviços, fica estabelecido entre o aluno ou seu responsável acima doravante denominada simplesmente <b>CONTRATANTE/ALUNO</b> e escola como prestadora de serviços denominada como <b> CONTRATADA</b> estabelece o presente contrato com os termos abaixo descritos:</p>
-    {{parte1}}
-    <p><b>4ª REPOSIÇÃO DE AULAS</b> - O <b>CONTRATANTE/ALUNO</b> terá direito a reposição de aulas gratuitas somente com a apresentação de atestado médico ou outro documento que ateste a necessidade da falta. Caso falte por motivos alheios, deverá pagar separadamente as horas/aula, em ambos os casos agendar antecipadamente na secretaria da escola.</p>
-    <p><b>14ª FORO</b> - Fica eleito o Foro da Cidade de Capão Bonito/SP, para dirimir quaisquer dúvidas, renunciando a qualquer outro por mais especial que seja.</p>
-    {{clausulaExtra}}
+    {{clausula_1}}
+    {{clausula_2}}
+    {{clausula_3}}
+    <p><b>4ª REPOSIÇÃO DE AULAS</b> - O <b>CONTRATANTE/ALUNO</b> terá direito a reposição de aulas gratuitas somente com a apresentação de atestado médico ou outro documento que ateste a necessidade da falta.</p>
+    <p><b>14ª FORO</b> - Fica eleito o Foro da Cidade, para dirimir quaisquer dúvidas, renunciando a qualquer outro por mais especial que seja.</p>
+    {{clausula_extra}}
     <p>E por estarem de pleno acordo, firmam o presente contrato em duas vias de igual forma e teor, destinando-se uma via para cada uma das partes.</p><br>
     {{data_contrato}}
   </div>

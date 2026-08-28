@@ -1,6 +1,11 @@
 const MASTER_PLANOS_URL = 'master/planos';
 const MASTER_EAD_CTI_URL = 'master/ead-cursos';
 
+/** @type {number|null} */
+let editingPlanoId = null;
+
+const $modalPlano = () => $('#modalPlanoMaster');
+
 function esc(s){
 	return $('<div>').text(s == null ? '' : String(s)).html();
 }
@@ -99,7 +104,7 @@ function renderChecks(selecionados, todos){
 }
 
 function aplicarTodos(){
-	const todos = $('#plano_todos_modulos').is(':checked');
+	const todos = $modalPlano().find('#plano_assinatura_todos_modulos').is(':checked');
 	$('.chk-mod-plano').prop('disabled', todos);
 	if(todos) $('.chk-mod-plano').prop('checked', true);
 }
@@ -111,12 +116,15 @@ function coletarSlugs(){
 }
 
 function limpar(){
-	$('#plano_id').val('');
-	$('#plano_nome, #plano_descricao, #plano_valor_mensal').val('');
-	$('#plano_ordem').val('0');
-	$('#plano_ativo').val('1');
-	$('#plano_todos_modulos').prop('checked', false);
+	editingPlanoId = null;
+	const $m = $modalPlano();
+	$m.find('#plano_assinatura_id').val('');
+	$m.find('#plano_assinatura_nome, #plano_assinatura_descricao, #plano_assinatura_descricao_detalhada, #plano_assinatura_valor_mensal').val('');
+	$m.find('#plano_assinatura_ordem').val('0');
+	$m.find('#plano_assinatura_ativo').val('1');
+	$m.find('#plano_assinatura_todos_modulos').prop('checked', false);
 	$('#titulo-modal-plano').text('Novo plano');
+	$('#badge-editando-plano').addClass('d-none').text('');
 	renderChecks([], false);
 	renderCursosChecks([]);
 }
@@ -132,10 +140,14 @@ function renderLista(planos){
 		const mods = p.todos_modulos ? 'Todos' : ((p.modulos_qtd||0)+' módulos');
 		const cti = (p.cursos_qtd || 0) > 0 ? (' · ' + p.cursos_qtd + ' curso(s) CTI') : '';
 		const valor = (p.valor_br != null) ? ('R$ '+p.valor_br) : '—';
+		const det = (p.descricao_detalhada || '').trim();
+		const detBadge = det
+			? ' <span class="badge bg-info text-dark" title="'+esc(det.substring(0, 200))+'">contrato</span>'
+			: '';
 		$tb.append(
 			'<tr>'
 			+'<td>'+esc(p.ordem)+'</td>'
-			+'<td><strong>'+esc(p.nome)+'</strong><br><small class="text-muted">'+esc(p.descricao||'')+'</small></td>'
+			+'<td><strong>'+esc(p.nome)+'</strong>'+detBadge+'<br><small class="text-muted">'+esc(p.descricao||'')+'</small></td>'
 			+'<td>'+esc(valor)+'</td>'
 			+'<td>'+esc(mods)+esc(cti)+'</td>'
 			+'<td>'+badge+'</td>'
@@ -158,36 +170,58 @@ function carregar(){
 }
 
 function abrir(id){
-	$.post(url_base + MASTER_PLANOS_URL, { acao: 'detalhes', id: id }, function(res){
+	const planoId = parseInt(id, 10);
+	if (!planoId) return;
+
+	limpar();
+	editingPlanoId = planoId;
+
+	$.post(url_base + MASTER_PLANOS_URL, { acao: 'detalhes', id: planoId }, function(res){
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
 			return;
 		}
 		const p = res.plano;
-		$('#plano_id').val(p.id);
-		$('#plano_nome').val(p.nome || '');
-		$('#plano_descricao').val(p.descricao || '');
-		$('#plano_valor_mensal').val(p.valor_br || '0,00');
-		$('#plano_ordem').val(p.ordem || 0);
-		$('#plano_ativo').val(p.ativo ? '1' : '0');
-		$('#plano_todos_modulos').prop('checked', !!p.todos_modulos);
+		const $m = $modalPlano();
+		editingPlanoId = parseInt(p.id, 10) || planoId;
+		$m.find('#plano_assinatura_id').val(editingPlanoId);
+		$m.find('#plano_assinatura_nome').val(p.nome || '');
+		$m.find('#plano_assinatura_descricao').val(p.descricao || '');
+		$m.find('#plano_assinatura_descricao_detalhada').val(p.descricao_detalhada || '');
+		$m.find('#plano_assinatura_valor_mensal').val(p.valor_br || '0,00');
+		$m.find('#plano_assinatura_ordem').val(p.ordem || 0);
+		$m.find('#plano_assinatura_ativo').val(p.ativo ? '1' : '0');
+		$m.find('#plano_assinatura_todos_modulos').prop('checked', !!p.todos_modulos);
 		$('#titulo-modal-plano').text('Editar plano');
+		$('#badge-editando-plano').removeClass('d-none').text('#' + editingPlanoId);
 		renderChecks(p.modulos || [], !!p.todos_modulos);
 		renderCursosChecks(p.cursos_ids || []);
-		$('#modalPlanoMaster').modal('show');
+		$m.modal('show');
 	}, 'json');
 }
 
 function salvar(){
+	const $m = $modalPlano();
+	const idFromField = parseInt($m.find('#plano_assinatura_id').val(), 10) || 0;
+	const id = editingPlanoId || idFromField;
+	const isEdit = editingPlanoId !== null && editingPlanoId > 0;
+
+	if (isEdit && id <= 0) {
+		Swal.fire('Erro', 'ID do plano inválido. Feche o modal e tente editar novamente.', 'error');
+		return;
+	}
+
 	const dados = {
 		acao: 'salvar',
-		id: $('#plano_id').val(),
-		nome: $('#plano_nome').val(),
-		descricao: $('#plano_descricao').val(),
-		valor_mensal: $('#plano_valor_mensal').val(),
-		ordem: $('#plano_ordem').val(),
-		ativo: $('#plano_ativo').val(),
-		todos_modulos: $('#plano_todos_modulos').is(':checked') ? 1 : 0,
+		modo: isEdit ? 'editar' : 'criar',
+		id: id,
+		nome: $m.find('#plano_assinatura_nome').val(),
+		descricao: $m.find('#plano_assinatura_descricao').val(),
+		descricao_detalhada: $m.find('#plano_assinatura_descricao_detalhada').val(),
+		valor_mensal: $m.find('#plano_assinatura_valor_mensal').val(),
+		ordem: $m.find('#plano_assinatura_ordem').val(),
+		ativo: $m.find('#plano_assinatura_ativo').val(),
+		todos_modulos: $m.find('#plano_assinatura_todos_modulos').is(':checked') ? 1 : 0,
 		modulos_json: JSON.stringify(coletarSlugs()),
 		cursos_json: JSON.stringify(coletarCursosIds())
 	};
@@ -200,7 +234,7 @@ function salvar(){
 			Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
 			return;
 		}
-		$('#modalPlanoMaster').modal('hide');
+		$m.modal('hide');
 		Swal.fire('OK', res.message, 'success');
 		carregar();
 	}, 'json');
@@ -212,12 +246,12 @@ $(function(){
 		renderCursosChecks([]);
 	});
 	carregar();
-	$('#btn-novo-plano').on('click', function(){
+	$('#btn-novo-plano-assinatura').on('click', function(){
 		limpar();
-		$('#modalPlanoMaster').modal('show');
+		$modalPlano().modal('show');
 	});
-	$('#btn-salvar-plano').on('click', salvar);
-	$('#plano_todos_modulos').on('change', aplicarTodos);
+	$('#btn-salvar-plano-assinatura').on('click', salvar);
+	$modalPlano().find('#plano_assinatura_todos_modulos').on('change', aplicarTodos);
 	$(document).on('click', '.btn-editar-plano', function(){ abrir($(this).data('id')); });
 	$(document).on('click', '.btn-excluir-plano', function(){
 		const id = $(this).data('id');
@@ -243,5 +277,5 @@ $(function(){
 		const $next = $row.next('.curso-plano-row');
 		if ($next.length) $row.insertAfter($next);
 	});
-	$('#modalPlanoMaster').on('hidden.bs.modal', limpar);
+	$modalPlano().on('hidden.bs.modal', limpar);
 });

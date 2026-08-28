@@ -1,0 +1,99 @@
+<h1 class="mt-4">Dados jurídicos CTI</h1>
+<ol class="breadcrumb mb-4">
+	<li class="breadcrumb-item active">Licenciante no contrato SaaS (CNPJ, endereço, representante legal)</li>
+</ol>
+
+<div id="alert-dados-incompletos" class="alert alert-warning d-none"></div>
+
+<div class="card shadow-sm mb-4">
+	<div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+		<span>Empresa licenciante <span id="badge-dados-cti" class="badge bg-secondary">—</span></span>
+		<button type="button" class="btn btn-sm btn-primary" id="btn-salvar-dados-cti">
+			<i class="fas fa-save"></i> Salvar
+		</button>
+	</div>
+	<div class="card-body">
+		<form id="form-dados-cti" onsubmit="return false;">
+			<h6 class="text-muted mb-3">Dados da empresa</h6>
+			<div class="row g-3 mb-4">
+				<div class="col-md-8">
+					<label class="form-label" for="cti_razao">Razão social *</label>
+					<input type="text" class="form-control" id="cti_razao" maxlength="255" required>
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_fantasia">Nome fantasia *</label>
+					<input type="text" class="form-control" id="cti_fantasia" maxlength="120" required>
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_cnpj">CNPJ *</label>
+					<input type="text" class="form-control mascara-cnpj" id="cti_cnpj" placeholder="00.000.000/0000-00">
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_email">E-mail</label>
+					<input type="email" class="form-control" id="cti_email">
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_telefone">Telefone</label>
+					<input type="text" class="form-control" id="cti_telefone">
+				</div>
+				<div class="col-md-6">
+					<label class="form-label" for="cti_site">Site</label>
+					<input type="url" class="form-control" id="cti_site" placeholder="https://ctieducacional.com.br">
+				</div>
+				<div class="col-md-3">
+					<label class="form-label" for="cti_cep">CEP</label>
+					<input type="text" class="form-control mascara-cep" id="cti_cep">
+				</div>
+				<div class="col-md-6">
+					<label class="form-label" for="cti_endereco">Endereço</label>
+					<input type="text" class="form-control" id="cti_endereco">
+				</div>
+				<div class="col-md-2">
+					<label class="form-label" for="cti_numero">Nº</label>
+					<input type="text" class="form-control" id="cti_numero">
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_bairro">Bairro</label>
+					<input type="text" class="form-control" id="cti_bairro">
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_estado">Estado</label>
+					<select class="form-select" id="cti_estado"><option value="">—</option></select>
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="cti_cidade">Cidade</label>
+					<select class="form-select" id="cti_cidade"><option value="">—</option></select>
+				</div>
+				<div class="col-md-8">
+					<label class="form-label" for="cti_foro">Foro / comarca (Cláusula 13ª)</label>
+					<input type="text" class="form-control" id="cti_foro" placeholder="Ex.: Capão Bonito/SP">
+					<div class="form-text">Se vazio, usa cidade/UF do endereço acima.</div>
+				</div>
+			</div>
+
+			<h6 class="text-muted mb-3">Representante legal da CTI</h6>
+			<div class="row g-3">
+				<div class="col-md-6">
+					<label class="form-label" for="cti_rep_usuario">Usuário Master (representante legal) *</label>
+					<select class="form-select" id="cti_rep_usuario">
+						<option value="">— Selecione —</option>
+					</select>
+					<div class="form-text">Nome, CPF e RG vêm do cadastro do usuário — <a href="{{URL}}/master/usuarios">Gerenciar usuários Master</a></div>
+				</div>
+				<div class="col-md-3">
+					<label class="form-label" for="cti_rep_cargo">Cargo no contrato</label>
+					<input type="text" class="form-control" id="cti_rep_cargo" value="Administrador">
+				</div>
+				<div class="col-md-3">
+					<label class="form-label">Dados do representante</label>
+					<div id="cti_rep_preview" class="form-control bg-light small text-muted" style="height:auto;min-height:38px">—</div>
+				</div>
+			</div>
+		</form>
+	</div>
+</div>
+
+<script>
+window.CTI_ESTADOS = {{estados_json}};
+</script>
+<script src="{{URL}}/resources/js/master-dados-cti.js?v=20260828c"></script>

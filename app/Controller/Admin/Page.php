@@ -316,7 +316,11 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 	} else {
 
-		$request->getRouter()->redirect('/painel/termos-de-uso');
+		if ($request instanceof \App\Http\Request && $request->getRouter()) {
+			$request->getRouter()->redirect('/painel/termos-de-uso');
+		}
+		header('Location: '.URL.'/painel/termos-de-uso');
+		exit;
 	}
 
 

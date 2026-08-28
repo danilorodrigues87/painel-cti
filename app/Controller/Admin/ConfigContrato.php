@@ -7,7 +7,9 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\ContratoTemplateHelper;
+use App\Common\Helpers\ContratoVariaveisBuilder;
 use App\Model\Entity\EscolasAssinantes;
+use App\Model\Entity\CategoryCourses;
 
 class ConfigContrato extends Page {
 
@@ -57,6 +59,9 @@ class ConfigContrato extends Page {
 		if ($acao === 'salvar_certificado') {
 			return self::salvarCertificado($postVars);
 		}
+		if ($acao === 'preview') {
+			return self::preview($postVars);
+		}
 
 		return json_encode(['success' => false, 'message' => 'Ação inválida.']);
 	}
@@ -93,6 +98,8 @@ class ConfigContrato extends Page {
 			$vars[] = ['chave' => $k, 'descricao' => $desc];
 		}
 
+		$categorias = CategoryCourses::listarResumoEscola($idAdmin);
+
 		return json_encode([
 			'success'         => true,
 			'coluna_ok'       => $colOk,
@@ -101,6 +108,8 @@ class ConfigContrato extends Page {
 			'html'            => $htmlEditor,
 			'html_padrao'     => ContratoTemplateHelper::modeloPadrao(),
 			'variaveis'       => $vars,
+			'categorias'      => $categorias,
+			'contrato_categoria_coluna_ok' => CategoryCourses::temColunaContrato(),
 			'certificado'     => [
 				'frase_conclusao' => $frase,
 				'usando_padrao'   => !$fraseCustom,
@@ -185,5 +194,42 @@ class ConfigContrato extends Page {
 				? 'Frase do certificado restaurada ao padrão.'
 				: 'Frase do certificado salva.',
 		]);
+	}
+
+	private static function preview(array $postVars): string {
+		$user = SessionUser::getUserLogedData();
+		$escolaSession = $user['escola'] ?? [];
+		if (!is_array($escolaSession)) {
+			$escolaSession = [];
+		}
+
+		$html = (string)($postVars['html'] ?? '');
+		if (trim($html) === '') {
+			$idAdmin = TenantHelper::getIdAdmin();
+			$escola = EscolasAssinantes::getEscolaById($idAdmin);
+			$html = ContratoTemplateHelper::resolverModelo($escola instanceof EscolasAssinantes ? $escola : null);
+		}
+
+		$opts = [
+			'id_categoria' => (int)($postVars['id_categoria'] ?? 0),
+			'menor'          => !empty($postVars['menor']),
+			'pagamento'      => (string)($postVars['pagamento'] ?? 'parcelado'),
+		];
+		$vars = ContratoVariaveisBuilder::dadosExemplo($escolaSession, $opts);
+		$render = ContratoTemplateHelper::aplicar($html, $vars);
+
+		$idCat = (int)($postVars['id_categoria'] ?? 0);
+		$catIncompleta = false;
+		if ($idCat > 0 && CategoryCourses::temColunaContrato()) {
+			$cat = CategoryCourses::getCategoryById($idCat);
+			$catIncompleta = !CategoryCourses::contratoEstaCompleto($cat);
+		}
+
+		return json_encode([
+			'success'          => true,
+			'preview'          => $render,
+			'categoria_incompleta' => $catIncompleta,
+			'categoria_id'     => $idCat,
+		], JSON_UNESCAPED_UNICODE);
 	}
 }

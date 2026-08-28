@@ -95,8 +95,13 @@ class Planos extends Page {
 
 	private static function salvar(array $post): string {
 		$id = (int)($post['id'] ?? 0);
+		$modo = trim((string)($post['modo'] ?? ''));
+		if ($modo === 'editar' && $id <= 0) {
+			return json_encode(['success' => false, 'message' => 'ID do plano inválido. Recarregue a página e tente novamente.']);
+		}
 		$nome = trim((string)($post['nome'] ?? ''));
 		$descricao = trim((string)($post['descricao'] ?? ''));
+		$descricaoDetalhada = trim((string)($post['descricao_detalhada'] ?? ''));
 		$ordem = (int)($post['ordem'] ?? 0);
 		$ativo = !empty($post['ativo']) ? 1 : 0;
 		$todos = !empty($post['todos_modulos']);
@@ -126,6 +131,9 @@ class Planos extends Page {
 
 		$ob->nome = $nome;
 		$ob->descricao = $descricao !== '' ? $descricao : null;
+		if (PlanosAssinatura::temColunaDescricaoDetalhada()) {
+			$ob->descricao_detalhada = $descricaoDetalhada !== '' ? $descricaoDetalhada : null;
+		}
 		$ob->modulos = $modulosJson;
 		$ob->ativo = $ativo;
 		$ob->ordem = $ordem;
@@ -137,12 +145,12 @@ class Planos extends Page {
 			$ob->atualizar();
 			self::salvarCursosPlano((int)$ob->id, $post);
 			self::reescreverEscolasDoPlano($ob);
-			return json_encode(['success' => true, 'message' => 'Plano atualizado. Escolas vinculadas foram sincronizadas.', 'plano' => self::formatar($ob)]);
+			return json_encode(['success' => true, 'message' => 'Plano atualizado. Escolas vinculadas foram sincronizadas.', 'plano_id' => (int)$ob->id, 'plano' => self::formatar($ob)]);
 		}
 
 		$ob->cadastrar();
 		self::salvarCursosPlano((int)$ob->id, $post);
-		return json_encode(['success' => true, 'message' => 'Plano criado.', 'plano' => self::formatar($ob)]);
+		return json_encode(['success' => true, 'message' => 'Plano criado.', 'plano_id' => (int)$ob->id, 'plano' => self::formatar($ob)]);
 	}
 
 	private static function excluir(array $post): string {
@@ -208,6 +216,9 @@ class Planos extends Page {
 			'id'            => (int)$p->id,
 			'nome'          => $p->nome,
 			'descricao'     => $p->descricao,
+			'descricao_detalhada' => PlanosAssinatura::temColunaDescricaoDetalhada()
+				? ($p->descricao_detalhada ?? null)
+				: null,
 			'valor_mensal'  => $valor,
 			'valor_br'      => number_format($valor, 2, ',', '.'),
 			'ativo'         => (int)$p->ativo ? 1 : 0,

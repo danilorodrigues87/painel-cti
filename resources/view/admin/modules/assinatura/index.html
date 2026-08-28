@@ -4,6 +4,7 @@
 </ol>
 
 <div id="alert-assinatura" class="alert alert-info d-none"></div>
+<div id="alert-contrato-pendencias" class="alert alert-warning d-none"></div>
 <div id="alert-somente-diretor" class="alert alert-secondary d-none">Apenas o <strong>Diretor</strong> pode gerar/verificar o PIX. Peça a ele para regularizar a assinatura.</div>
 
 <div class="row g-3 mb-4">
@@ -13,7 +14,8 @@
 			<div class="card-body">
 				<p class="mb-1"><strong id="ass-plano-nome">—</strong></p>
 				<p class="mb-1 text-muted small">Valor mensal: <span id="ass-valor-mensal">—</span></p>
-				<p class="mb-0 text-muted small">Vencimento todo dia <span id="ass-dia-venc">—</span></p>
+				<p class="mb-2 text-muted small">Vencimento todo dia <span id="ass-dia-venc">—</span></p>
+				{{contrato_link}}
 			</div>
 		</div>
 	</div>
