@@ -538,6 +538,15 @@ class StudentApiMapper {
 				if (!is_array($interacao)) {
 					$interacao = [];
 				}
+				if (!empty($interacao['object']) && is_string($interacao['object'])) {
+					$obj = trim($interacao['object']);
+					if ($obj !== '' && preg_match('#^https?://#i', $obj)) {
+						$objClient = \App\Common\Helpers\BunnyStorageHelper::clientMediaUrl($obj, 'image');
+						if ($objClient !== null && $objClient !== '') {
+							$interacao['object'] = $objClient;
+						}
+					}
+				}
 				$src = (string)$cena->media_url;
 				$bunnyVid = trim((string)($cena->media_bunny_video_id ?? ''));
 				if ($bunnyVid !== '') {
@@ -545,8 +554,12 @@ class StudentApiMapper {
 					if (!empty($play['playbackUrl'])) {
 						$src = (string)$play['playbackUrl'];
 					}
-				} elseif ($src !== '' && (string)($cena->media_kind ?: 'image') !== 'video') {
-					$src = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($src);
+				} elseif ($src !== '') {
+					$kind = (string)($cena->media_kind ?: 'image');
+					$client = \App\Common\Helpers\BunnyStorageHelper::clientMediaUrl($src, $kind);
+					if ($client !== null && $client !== '') {
+						$src = $client;
+					}
 				}
 				$item = [
 					'id' => (string)$cena->id,
@@ -571,7 +584,8 @@ class StudentApiMapper {
 				}
 				if (!empty($cena->narracao_url)) {
 					$narr = (string)$cena->narracao_url;
-					$item['narrationUrl'] = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($narr);
+					$client = \App\Common\Helpers\BunnyStorageHelper::clientMediaUrl($narr, 'audio');
+					$item['narrationUrl'] = ($client !== null && $client !== '') ? $client : $narr;
 				}
 				if ($bunnyVid !== '') {
 					$item['mediaBunnyVideoId'] = $bunnyVid;

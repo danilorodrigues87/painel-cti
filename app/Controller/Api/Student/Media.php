@@ -6,18 +6,27 @@ use App\Http\Response;
 use App\Common\Helpers\BunnyStorageHelper;
 
 /**
- * Proxy de arquivos Bunny Storage (áudio/imagem) com token assinado.
- * Permite <audio src> sem CORS/Token Auth da CDN.
+ * Legado: proxy Bunny Storage com token assinado.
+ * Preferir CDN direta (clientMediaUrl na API). Este endpoint redireciona para CDN quando possível.
  */
 class Media {
 
 	public static function bunnyFile($request) {
 		$get = $request->getQueryParams() ?: [];
 		$token = (string)($get['t'] ?? $get['token'] ?? '');
-		$path = BunnyStorageHelper::verifyFileToken($token);
+		$path = BunnyStorageHelper::pathFromFileToken($token, true);
 		if ($path === null) {
 			return new Response(403, 'Token inválido ou expirado.', 'text/plain; charset=utf-8');
 		}
+
+		$cdn = BunnyStorageHelper::publicUrl($path);
+		if ($cdn !== '') {
+			$resp = new Response(302, '');
+			$resp->addHeader('Location', $cdn);
+			$resp->addHeader('Cache-Control', 'private, max-age=300');
+			return $resp;
+		}
+
 		$res = BunnyStorageHelper::fetch($path);
 		if (empty($res['ok']) || !isset($res['body'])) {
 			return new Response(502, $res['message'] ?? 'Falha ao buscar mídia.', 'text/plain; charset=utf-8');

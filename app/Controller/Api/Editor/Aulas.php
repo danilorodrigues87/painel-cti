@@ -145,6 +145,15 @@ class Aulas {
 			if (!is_array($interacao)) {
 				$interacao = [];
 			}
+			if (!empty($interacao['object']) && is_string($interacao['object'])) {
+				$obj = trim($interacao['object']);
+				if ($obj !== '' && preg_match('#^https?://#i', $obj)) {
+					$objClient = \App\Common\Helpers\BunnyStorageHelper::clientMediaUrl($obj, 'image');
+					if ($objClient !== null && $objClient !== '') {
+						$interacao['object'] = $objClient;
+					}
+				}
+			}
 			$src = (string)$cena->media_url;
 			$bunnyVid = trim((string)($cena->media_bunny_video_id ?? ''));
 			if ($bunnyVid !== '') {
@@ -152,8 +161,12 @@ class Aulas {
 				if (!empty($play['playbackUrl'])) {
 					$src = (string)$play['playbackUrl'];
 				}
-			} elseif ($src !== '' && (string)($cena->media_kind ?: 'image') !== 'video') {
-				$src = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($src);
+			} elseif ($src !== '') {
+				$kind = (string)($cena->media_kind ?: 'image');
+				$client = \App\Common\Helpers\BunnyStorageHelper::clientMediaUrl($src, $kind);
+				if ($client !== null && $client !== '') {
+					$src = $client;
+				}
 			}
 			$item = [
 				'id' => (string)$cena->id,
@@ -178,7 +191,8 @@ class Aulas {
 			}
 			if (!empty($cena->narracao_url)) {
 				$narr = (string)$cena->narracao_url;
-				$item['narrationUrl'] = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPublicUrl($narr);
+				$client = \App\Common\Helpers\BunnyStorageHelper::clientMediaUrl($narr, 'audio');
+				$item['narrationUrl'] = ($client !== null && $client !== '') ? $client : $narr;
 			}
 			if ($bunnyVid !== '') {
 				$item['mediaBunnyVideoId'] = $bunnyVid;
@@ -280,10 +294,25 @@ class Aulas {
 				$media = [];
 			}
 			$kind = (string)($media['kind'] ?? $sc['media_kind'] ?? 'image');
-			$src = (string)($media['src'] ?? $sc['media_url'] ?? '');
+			$src = trim((string)($media['src'] ?? $sc['media_url'] ?? ''));
+			if ($src !== '' && $kind !== 'video') {
+				$canonical = \App\Common\Helpers\BunnyStorageHelper::canonicalPublicUrl($src);
+				if ($canonical !== null && $canonical !== '') {
+					$src = $canonical;
+				}
+			}
 			$interacao = $sc['interaction'] ?? $sc['interacao'] ?? [];
 			if (!is_array($interacao)) {
 				$interacao = [];
+			}
+			if (!empty($interacao['object']) && is_string($interacao['object'])) {
+				$obj = trim($interacao['object']);
+				if ($obj !== '' && preg_match('#^https?://#i', $obj)) {
+					$objCanon = \App\Common\Helpers\BunnyStorageHelper::canonicalPublicUrl($obj);
+					if ($objCanon !== null && $objCanon !== '') {
+						$interacao['object'] = $objCanon;
+					}
+				}
 			}
 			$narracao = $sc['narrationUrl'] ?? $sc['narracaoUrl'] ?? $sc['narracao_url'] ?? null;
 			if (is_string($narracao)) {
@@ -532,7 +561,7 @@ class Aulas {
 
 		return self::ok([
 			'url' => (string)$up['url'],
-			'playUrl' => \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPath($remote),
+			'playUrl' => (string)$up['url'],
 			'kind' => $isAudio ? 'audio' : 'image',
 			'path' => (string)($up['path'] ?? $remote),
 		]);

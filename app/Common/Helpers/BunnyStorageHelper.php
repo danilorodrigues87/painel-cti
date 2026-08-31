@@ -88,6 +88,23 @@ class BunnyStorageHelper {
 		return 'https://'.$host.'/'.implode('/', $parts);
 	}
 
+	/** Remove prefixo da Storage Zone do path (Pull Zone pode expor zone/path). */
+	public static function normalizeStoragePath(string $path): string {
+		$path = ltrim(str_replace('\\', '/', $path), '/');
+		if ($path === '') {
+			return '';
+		}
+		$zone = trim((string)(self::cfg()->storage_zone ?? ''));
+		if ($zone !== '' && str_starts_with($path, $zone.'/')) {
+			$path = substr($path, strlen($zone) + 1);
+		}
+		return ltrim($path, '/');
+	}
+
+	private static function isInterativaPath(string $path): bool {
+		return str_starts_with(self::normalizeStoragePath($path), 'interativa/');
+	}
+
 	/** Extrai path remoto de uma URL pública do nosso CDN Storage (ou null). */
 	public static function pathFromPublicUrl(string $url): ?string {
 		$url = trim($url);
@@ -107,16 +124,16 @@ class BunnyStorageHelper {
 			return null;
 		}
 		$segments = array_map('rawurldecode', explode('/', $path));
-		$remote = implode('/', $segments);
+		$remote = self::normalizeStoragePath(implode('/', $segments));
+		if ($remote === '' || !self::isInterativaPath($remote)) {
+			return null;
+		}
 		$urlHost = strtolower((string)$parts['host']);
 		if ($host !== '' && $urlHost === $host) {
 			return $remote;
 		}
-		// Fallback: path do L-Editor em qualquer host b-cdn / CDN
-		if (strpos($remote, 'interativa/') === 0) {
-			return $remote;
-		}
-		return null;
+		// Fallback: path interativa/ em qualquer host b-cdn
+		return $remote;
 	}
 
 	/** @return array{ok:bool,message?:string} */
@@ -151,7 +168,10 @@ class BunnyStorageHelper {
 	 * Token assinado para <audio>/<img> sem JWT no header.
 	 */
 	public static function signFileToken(string $remotePath, int $ttlSec = 14400): string {
-		$remotePath = ltrim(str_replace('\\', '/', $remotePath), '/');
+		$remotePath = self::normalizeStoragePath($remotePath);
+		if (!self::isInterativaPath($remotePath)) {
+			$remotePath = ltrim(str_replace('\\', '/', $remotePath), '/');
+		}
 		$payload = json_encode([
 			'p' => $remotePath,
 			'e' => time() + max(300, min(86400, $ttlSec)),
@@ -162,6 +182,11 @@ class BunnyStorageHelper {
 	}
 
 	public static function verifyFileToken(string $token): ?string {
+		return self::pathFromFileToken($token, false);
+	}
+
+	/** Extrai path do token; opcionalmente ignora expiração (migração / redirect legado → CDN pública). */
+	public static function pathFromFileToken(string $token, bool $ignoreExpiry = false): ?string {
 		$token = trim($token);
 		if ($token === '' || strpos($token, '.') === false) {
 			return null;
@@ -187,14 +212,14 @@ class BunnyStorageHelper {
 		if (!is_array($data) || empty($data['p']) || empty($data['e'])) {
 			return null;
 		}
-		if ((int)$data['e'] < time()) {
+		if (!$ignoreExpiry && (int)$data['e'] < time()) {
 			return null;
 		}
-		$path = ltrim(str_replace('\\', '/', (string)$data['p']), '/');
+		$path = self::normalizeStoragePath((string)$data['p']);
 		if ($path === '' || strpos($path, '..') !== false) {
 			return null;
 		}
-		if (strpos($path, 'interativa/') !== 0) {
+		if (!self::isInterativaPath($path)) {
 			return null;
 		}
 		return $path;
@@ -208,10 +233,10 @@ class BunnyStorageHelper {
 		if ($url === '') {
 			return null;
 		}
-		// Token do proxy → path → CDN
+		// Token do proxy → path → CDN (aceita token expirado: destino é CDN pública)
 		if (preg_match('#[?&]t=([^&]+)#', $url, $m)) {
 			$token = rawurldecode($m[1]);
-			$path = self::verifyFileToken($token);
+			$path = self::pathFromFileToken($token, true);
 			if ($path !== null) {
 				$cdn = self::publicUrl($path);
 				return $cdn !== '' ? $cdn : null;
@@ -226,13 +251,48 @@ class BunnyStorageHelper {
 	}
 
 	/** URL pública do proxy (funciona em <audio src>). */
+	/**
+	 * URL para o cliente (React): CDN direta quando possível.
+	 * Imagens e áudios do Storage não passam mais pelo proxy PHP na API.
+	 */
+	public static function clientMediaUrl(?string $url, string $mediaKind = 'image'): ?string {
+		$url = trim((string)$url);
+		if ($url === '') {
+			return null;
+		}
+		if (preg_match('#^https?://#i', $url) && str_contains($url, 'video.bunnycdn.com')) {
+			return $url;
+		}
+		if (str_contains($url, '/playlist.m3u8')) {
+			return $url;
+		}
+		$canonical = self::canonicalPublicUrl($url);
+		if ($canonical !== null && $canonical !== '') {
+			return $canonical;
+		}
+		$path = self::pathFromPublicUrl($url);
+		if ($path !== null) {
+			$cdn = self::publicUrl($path);
+			if ($cdn !== '') {
+				return $cdn;
+			}
+		}
+		// Legado: proxy com token ainda válido — tentar renovar
+		if (str_contains($url, 'bunny-file')) {
+			$refreshed = self::proxyUrlForPublicUrl($url);
+			if ($refreshed !== $url) {
+				return self::canonicalPublicUrl($refreshed) ?? ($mediaKind === 'audio' ? $refreshed : null);
+			}
+		}
+		return preg_match('#^https?://#i', $url) ? $url : null;
+	}
+
 	public static function proxyUrlForPublicUrl(string $publicUrl, int $ttlSec = 14400): string {
 		$canonical = self::canonicalPublicUrl($publicUrl) ?? $publicUrl;
 		$path = self::pathFromPublicUrl($canonical);
 		if ($path === null) {
-			// path direto interativa/...
-			$trim = ltrim(str_replace('\\', '/', $canonical), '/');
-			if (strpos($trim, 'interativa/') === 0) {
+			$trim = self::normalizeStoragePath($canonical);
+			if (self::isInterativaPath($trim)) {
 				$path = $trim;
 			}
 		}
@@ -261,7 +321,7 @@ class BunnyStorageHelper {
 		$endpoint = trim((string)($cfg->storage_endpoint ?: 'storage.bunnycdn.com'));
 		$endpoint = preg_replace('#^https?://#i', '', $endpoint);
 		$endpoint = rtrim((string)$endpoint, '/');
-		$remotePath = ltrim(str_replace('\\', '/', $remotePath), '/');
+		$remotePath = self::normalizeStoragePath($remotePath);
 		if ($zone === '' || !$key || $remotePath === '') {
 			return ['ok' => false, 'message' => 'Dados Storage incompletos.'];
 		}
