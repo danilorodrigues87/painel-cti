@@ -9,6 +9,24 @@ use App\Model\Entity\PlataformaBunny;
  */
 class BunnyStorageHelper {
 
+	// #region agent log
+	private static function agentDebugLog(string $location, string $message, array $data, string $hypothesisId): void {
+		$payload = json_encode([
+			'sessionId' => '6b4d05',
+			'timestamp' => (int) round(microtime(true) * 1000),
+			'location' => $location,
+			'message' => $message,
+			'data' => $data,
+			'hypothesisId' => $hypothesisId,
+			'runId' => 'pre-fix',
+		], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		if ($payload === false) {
+			return;
+		}
+		@file_put_contents(dirname(__DIR__, 3).'/debug-6b4d05.log', $payload."\n", FILE_APPEND | LOCK_EX);
+	}
+	// #endregion
+
 	public static function cfg(): PlataformaBunny {
 		return PlataformaBunny::get();
 	}
@@ -85,7 +103,16 @@ class BunnyStorageHelper {
 			return '';
 		}
 		$parts = array_map('rawurlencode', explode('/', $remotePath));
-		return 'https://'.$host.'/'.implode('/', $parts);
+		$url = 'https://'.$host.'/'.implode('/', $parts);
+		// #region agent log
+		self::agentDebugLog('BunnyStorageHelper.php:publicUrl', 'CDN URL built', [
+			'remotePath' => $remotePath,
+			'host' => $host,
+			'storageZone' => trim((string)(self::cfg()->storage_zone ?? '')),
+			'publicUrl' => $url,
+		], 'H1');
+		// #endregion
+		return $url;
 	}
 
 	/** Remove prefixo da Storage Zone do path (Pull Zone pode expor zone/path). */
@@ -260,31 +287,43 @@ class BunnyStorageHelper {
 		if ($url === '') {
 			return null;
 		}
+		$in = $url;
+		$out = null;
 		if (preg_match('#^https?://#i', $url) && str_contains($url, 'video.bunnycdn.com')) {
-			return $url;
-		}
-		if (str_contains($url, '/playlist.m3u8')) {
-			return $url;
-		}
-		$canonical = self::canonicalPublicUrl($url);
-		if ($canonical !== null && $canonical !== '') {
-			return $canonical;
-		}
-		$path = self::pathFromPublicUrl($url);
-		if ($path !== null) {
-			$cdn = self::publicUrl($path);
-			if ($cdn !== '') {
-				return $cdn;
+			$out = $url;
+		} elseif (str_contains($url, '/playlist.m3u8')) {
+			$out = $url;
+		} else {
+			$canonical = self::canonicalPublicUrl($url);
+			if ($canonical !== null && $canonical !== '') {
+				$out = $canonical;
+			} else {
+				$path = self::pathFromPublicUrl($url);
+				if ($path !== null) {
+					$cdn = self::publicUrl($path);
+					if ($cdn !== '') {
+						$out = $cdn;
+					}
+				}
+				if ($out === null && str_contains($url, 'bunny-file')) {
+					$refreshed = self::proxyUrlForPublicUrl($url);
+					if ($refreshed !== $url) {
+						$out = self::canonicalPublicUrl($refreshed) ?? ($mediaKind === 'audio' ? $refreshed : null);
+					}
+				}
+				if ($out === null) {
+					$out = preg_match('#^https?://#i', $url) ? $url : null;
+				}
 			}
 		}
-		// Legado: proxy com token ainda válido — tentar renovar
-		if (str_contains($url, 'bunny-file')) {
-			$refreshed = self::proxyUrlForPublicUrl($url);
-			if ($refreshed !== $url) {
-				return self::canonicalPublicUrl($refreshed) ?? ($mediaKind === 'audio' ? $refreshed : null);
-			}
-		}
-		return preg_match('#^https?://#i', $url) ? $url : null;
+		// #region agent log
+		self::agentDebugLog('BunnyStorageHelper.php:clientMediaUrl', 'client URL resolved', [
+			'in' => $in,
+			'out' => $out,
+			'mediaKind' => $mediaKind,
+		], 'H4');
+		// #endregion
+		return $out;
 	}
 
 	public static function proxyUrlForPublicUrl(string $publicUrl, int $ttlSec = 14400): string {

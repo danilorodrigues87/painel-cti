@@ -559,9 +559,29 @@ class Aulas {
 			return self::err($up['message'] ?? 'Falha no upload Storage.', 502);
 		}
 
+		$respUrl = (string)$up['url'];
+		// #region agent log
+		$logPayload = json_encode([
+			'sessionId' => '6b4d05',
+			'timestamp' => (int) round(microtime(true) * 1000),
+			'location' => 'Aulas.php:upload',
+			'message' => 'upload storage response',
+			'data' => [
+				'kind' => $isAudio ? 'audio' : 'image',
+				'remote' => $remote,
+				'url' => $respUrl,
+				'path' => (string)($up['path'] ?? $remote),
+			],
+			'hypothesisId' => 'H1',
+			'runId' => 'pre-fix',
+		], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		if ($logPayload !== false) {
+			@file_put_contents(dirname(__DIR__, 4).'/debug-6b4d05.log', $logPayload."\n", FILE_APPEND | LOCK_EX);
+		}
+		// #endregion
 		return self::ok([
-			'url' => (string)$up['url'],
-			'playUrl' => (string)$up['url'],
+			'url' => $respUrl,
+			'playUrl' => $respUrl,
 			'kind' => $isAudio ? 'audio' : 'image',
 			'path' => (string)($up['path'] ?? $remote),
 		]);
