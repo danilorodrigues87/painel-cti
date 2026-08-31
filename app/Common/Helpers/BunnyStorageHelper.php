@@ -9,24 +9,6 @@ use App\Model\Entity\PlataformaBunny;
  */
 class BunnyStorageHelper {
 
-	// #region agent log
-	private static function agentDebugLog(string $location, string $message, array $data, string $hypothesisId): void {
-		$payload = json_encode([
-			'sessionId' => '6b4d05',
-			'timestamp' => (int) round(microtime(true) * 1000),
-			'location' => $location,
-			'message' => $message,
-			'data' => $data,
-			'hypothesisId' => $hypothesisId,
-			'runId' => 'pre-fix',
-		], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		if ($payload === false) {
-			return;
-		}
-		@file_put_contents(dirname(__DIR__, 3).'/debug-6b4d05.log', $payload."\n", FILE_APPEND | LOCK_EX);
-	}
-	// #endregion
-
 	public static function cfg(): PlataformaBunny {
 		return PlataformaBunny::get();
 	}
@@ -103,17 +85,7 @@ class BunnyStorageHelper {
 			return '';
 		}
 		$parts = array_map('rawurlencode', explode('/', $remotePath));
-		$url = 'https://'.$host.'/'.implode('/', $parts);
-		// #region agent log
-		self::agentDebugLog('BunnyStorageHelper.php:publicUrl', 'CDN URL built', [
-			'remotePath' => $remotePath,
-			'host' => $host,
-			'storageZone' => trim((string)(self::cfg()->storage_zone ?? '')),
-			'publicUrl' => $url,
-			'hasCdnTokenKey' => (bool) self::cfg()->getStorageTokenKey(),
-		], 'H1');
-		// #endregion
-		return $url;
+		return 'https://'.$host.'/'.implode('/', $parts);
 	}
 
 	/** Path público na Pull Zone (inclui nome da zone quando o hostname CDN é diferente). */
@@ -162,16 +134,7 @@ class BunnyStorageHelper {
 		$token = strtr($token, '+/', '-_');
 		$token = str_replace('=', '', $token);
 		$scheme = (string)($parts['scheme'] ?? 'https');
-		$signed = $scheme.'://'.$parts['host'].$path.'?token='.rawurlencode($token).'&expires='.$expires;
-		// #region agent log
-		self::agentDebugLog('BunnyStorageHelper.php:signCdnPublicUrl', 'CDN URL signed', [
-			'in' => $publicUrl,
-			'out' => $signed,
-			'path' => $path,
-			'expires' => $expires,
-		], 'H3');
-		// #endregion
-		return $signed;
+		return $scheme.'://'.$parts['host'].$path.'?token='.rawurlencode($token).'&expires='.$expires;
 	}
 
 	/** Remove prefixo da Storage Zone do path (Pull Zone pode expor zone/path). */
@@ -350,65 +313,26 @@ class BunnyStorageHelper {
 		return $url;
 	}
 
-	/** URL pública do proxy (funciona em <audio src>). */
 	/**
-	 * URL para o cliente (React): CDN direta quando possível.
-	 * Imagens e áudios do Storage não passam mais pelo proxy PHP na API.
+	 * URL para o cliente (React): proxy PHP com token (funciona com Token Auth na CDN).
+	 * Gravação no banco continua via canonicalPublicUrl (CDN estável).
 	 */
 	public static function clientMediaUrl(?string $url, string $mediaKind = 'image'): ?string {
 		$url = trim((string)$url);
 		if ($url === '') {
 			return null;
 		}
-		$in = $url;
-		$out = null;
 		if (preg_match('#^https?://#i', $url) && str_contains($url, 'video.bunnycdn.com')) {
-			$out = $url;
-		} elseif (str_contains($url, '/playlist.m3u8')) {
-			$out = $url;
-		} else {
-			$canonical = self::canonicalPublicUrl($url);
-			if ($canonical !== null && $canonical !== '') {
-				$out = $canonical;
-			} else {
-				$path = self::pathFromPublicUrl($url);
-				if ($path !== null) {
-					$cdn = self::publicUrl($path);
-					if ($cdn !== '') {
-						$out = $cdn;
-					}
-				}
-				if ($out === null && str_contains($url, 'bunny-file')) {
-					$refreshed = self::proxyUrlForPublicUrl($url);
-					if ($refreshed !== $url) {
-						$out = self::canonicalPublicUrl($refreshed) ?? ($mediaKind === 'audio' ? $refreshed : null);
-					}
-				}
-				if ($out === null) {
-					$out = preg_match('#^https?://#i', $url) ? $url : null;
-				}
-			}
+			return $url;
 		}
-		if ($out !== null && $out !== '' && preg_match('#^https?://#i', $out) && !str_contains($out, 'bunny-file')) {
-			$tokenKey = self::cfg()->getStorageTokenKey();
-			if ($tokenKey && trim($tokenKey) !== '') {
-				$out = self::signCdnPublicUrl($out);
-			} else {
-				$path = self::pathFromPublicUrl($out);
-				if ($path !== null) {
-					$out = self::proxyUrlForPath($path);
-				}
-			}
+		if (str_contains($url, '/playlist.m3u8')) {
+			return $url;
 		}
-		// #region agent log
-		self::agentDebugLog('BunnyStorageHelper.php:clientMediaUrl', 'client URL resolved', [
-			'in' => $in,
-			'out' => $out,
-			'mediaKind' => $mediaKind,
-			'hasCdnTokenKey' => (bool) self::cfg()->getStorageTokenKey(),
-		], 'H4');
-		// #endregion
-		return $out;
+		if (str_contains($url, 'bunny-file')) {
+			return self::proxyUrlForPublicUrl($url);
+		}
+		$proxy = self::proxyUrlForPublicUrl($url);
+		return $proxy !== $url ? $proxy : (preg_match('#^https?://#i', $url) ? $url : null);
 	}
 
 	public static function proxyUrlForPublicUrl(string $publicUrl, int $ttlSec = 14400): string {

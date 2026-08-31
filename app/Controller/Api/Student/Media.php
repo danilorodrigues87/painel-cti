@@ -6,25 +6,20 @@ use App\Http\Response;
 use App\Common\Helpers\BunnyStorageHelper;
 
 /**
- * Legado: proxy Bunny Storage com token assinado.
- * Preferir CDN direta (clientMediaUrl na API). Este endpoint redireciona para CDN quando possível.
+ * Proxy Bunny Storage para <img>/<audio> (token assinado, sem JWT).
+ * Baixa via Storage API — não depende de Token Auth da Pull Zone CDN.
  */
 class Media {
 
 	public static function bunnyFile($request) {
 		$get = $request->getQueryParams() ?: [];
 		$token = (string)($get['t'] ?? $get['token'] ?? '');
-		$path = BunnyStorageHelper::pathFromFileToken($token, true);
+		$path = BunnyStorageHelper::verifyFileToken($token);
+		if ($path === null) {
+			$path = BunnyStorageHelper::pathFromFileToken($token, true);
+		}
 		if ($path === null) {
 			return new Response(403, 'Token inválido ou expirado.', 'text/plain; charset=utf-8');
-		}
-
-		$cdn = BunnyStorageHelper::signCdnPublicUrl(BunnyStorageHelper::publicUrl($path));
-		if ($cdn !== '') {
-			$resp = new Response(302, '');
-			$resp->addHeader('Location', $cdn);
-			$resp->addHeader('Cache-Control', 'private, max-age=300');
-			return $resp;
 		}
 
 		$res = BunnyStorageHelper::fetch($path);

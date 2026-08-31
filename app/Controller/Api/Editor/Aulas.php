@@ -559,35 +559,9 @@ class Aulas {
 			return self::err($up['message'] ?? 'Falha no upload Storage.', 502);
 		}
 
-		$rawUrl = (string)$up['url'];
-		$tokenKey = \App\Common\Helpers\BunnyStorageHelper::cfg()->getStorageTokenKey();
-		if ($tokenKey && trim($tokenKey) !== '') {
-			$respUrl = \App\Common\Helpers\BunnyStorageHelper::signCdnPublicUrl($rawUrl);
-		} else {
-			$respUrl = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPath($remote);
-		}
-		// #region agent log
-		$logPayload = json_encode([
-			'sessionId' => '6b4d05',
-			'timestamp' => (int) round(microtime(true) * 1000),
-			'location' => 'Aulas.php:upload',
-			'message' => 'upload storage response',
-			'data' => [
-				'kind' => $isAudio ? 'audio' : 'image',
-				'remote' => $remote,
-				'url' => $respUrl,
-				'path' => (string)($up['path'] ?? $remote),
-			],
-			'hypothesisId' => 'H1',
-			'runId' => 'pre-fix',
-		], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		if ($logPayload !== false) {
-			@file_put_contents(dirname(__DIR__, 4).'/debug-6b4d05.log', $logPayload."\n", FILE_APPEND | LOCK_EX);
-		}
-		// #endregion
 		return self::ok([
-			'url' => $respUrl,
-			'playUrl' => $respUrl,
+			'url' => (string)$up['url'],
+			'playUrl' => \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPath($remote),
 			'kind' => $isAudio ? 'audio' : 'image',
 			'path' => (string)($up['path'] ?? $remote),
 		]);
