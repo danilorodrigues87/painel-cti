@@ -19,7 +19,7 @@ class Media {
 			return new Response(403, 'Token inválido ou expirado.', 'text/plain; charset=utf-8');
 		}
 
-		$cdn = BunnyStorageHelper::publicUrl($path);
+		$cdn = BunnyStorageHelper::signCdnPublicUrl(BunnyStorageHelper::publicUrl($path));
 		if ($cdn !== '') {
 			$resp = new Response(302, '');
 			$resp->addHeader('Location', $cdn);

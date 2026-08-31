@@ -98,7 +98,7 @@ class BunnyStorageHelper {
 		$host = trim((string)($cfg->storage_cdn_hostname ?? ''));
 		$host = preg_replace('#^https?://#i', '', $host);
 		$host = rtrim((string)$host, '/');
-		$remotePath = ltrim(str_replace('\\', '/', $remotePath), '/');
+		$remotePath = self::cdnPublicPath($remotePath);
 		if ($host === '' || $remotePath === '') {
 			return '';
 		}
@@ -110,9 +110,68 @@ class BunnyStorageHelper {
 			'host' => $host,
 			'storageZone' => trim((string)(self::cfg()->storage_zone ?? '')),
 			'publicUrl' => $url,
+			'hasCdnTokenKey' => (bool) self::cfg()->getStorageTokenKey(),
 		], 'H1');
 		// #endregion
 		return $url;
+	}
+
+	/** Path público na Pull Zone (inclui nome da zone quando o hostname CDN é diferente). */
+	private static function cdnPublicPath(string $remotePath): string {
+		$remotePath = ltrim(self::normalizeStoragePath($remotePath), '/');
+		if ($remotePath === '') {
+			return '';
+		}
+		$zone = trim((string)(self::cfg()->storage_zone ?? ''));
+		$host = trim((string)(self::cfg()->storage_cdn_hostname ?? ''));
+		$host = preg_replace('#^https?://#i', '', $host);
+		$host = strtolower(rtrim((string)$host, '/'));
+		if ($zone !== '' && $host !== '' && !str_starts_with($host, strtolower($zone).'.')) {
+			return $zone.'/'.$remotePath;
+		}
+		return $remotePath;
+	}
+
+	/**
+	 * Assina URL da Pull Zone (Token Auth Basic MD5 do Bunny).
+	 * Sem storage_token_key configurada, retorna a URL intacta.
+	 */
+	public static function signCdnPublicUrl(string $publicUrl, int $ttlSec = 14400): string {
+		$publicUrl = trim($publicUrl);
+		if ($publicUrl === '') {
+			return '';
+		}
+		$key = self::cfg()->getStorageTokenKey();
+		if (!$key || trim($key) === '') {
+			return $publicUrl;
+		}
+		if (preg_match('#[?&]token=#', $publicUrl)) {
+			return $publicUrl;
+		}
+		$parts = parse_url($publicUrl);
+		if (!is_array($parts) || empty($parts['host'])) {
+			return $publicUrl;
+		}
+		$path = (string)($parts['path'] ?? '/');
+		if ($path === '' || $path[0] !== '/') {
+			$path = '/'.$path;
+		}
+		$expires = time() + max(300, min(86400, $ttlSec));
+		$hashable = $key.$path.$expires;
+		$token = base64_encode(md5($hashable, true));
+		$token = strtr($token, '+/', '-_');
+		$token = str_replace('=', '', $token);
+		$scheme = (string)($parts['scheme'] ?? 'https');
+		$signed = $scheme.'://'.$parts['host'].$path.'?token='.rawurlencode($token).'&expires='.$expires;
+		// #region agent log
+		self::agentDebugLog('BunnyStorageHelper.php:signCdnPublicUrl', 'CDN URL signed', [
+			'in' => $publicUrl,
+			'out' => $signed,
+			'path' => $path,
+			'expires' => $expires,
+		], 'H3');
+		// #endregion
+		return $signed;
 	}
 
 	/** Remove prefixo da Storage Zone do path (Pull Zone pode expor zone/path). */
@@ -260,6 +319,20 @@ class BunnyStorageHelper {
 		if ($url === '') {
 			return null;
 		}
+		// Remove tokens CDN/proxy da query (não persistir URLs assinadas)
+		if (preg_match('#^https?://#i', $url)) {
+			$parts = parse_url($url);
+			if (is_array($parts) && !empty($parts['scheme']) && !empty($parts['host'])) {
+				$path = (string)($parts['path'] ?? '');
+				$query = (string)($parts['query'] ?? '');
+				if ($query !== '') {
+					parse_str($query, $q);
+					unset($q['token'], $q['expires'], $q['t'], $q['token_path'], $q['limit']);
+					$query = http_build_query($q);
+				}
+				$url = $parts['scheme'].'://'.$parts['host'].$path.($query !== '' ? '?'.$query : '');
+			}
+		}
 		// Token do proxy → path → CDN (aceita token expirado: destino é CDN pública)
 		if (preg_match('#[?&]t=([^&]+)#', $url, $m)) {
 			$token = rawurldecode($m[1]);
@@ -316,11 +389,23 @@ class BunnyStorageHelper {
 				}
 			}
 		}
+		if ($out !== null && $out !== '' && preg_match('#^https?://#i', $out) && !str_contains($out, 'bunny-file')) {
+			$tokenKey = self::cfg()->getStorageTokenKey();
+			if ($tokenKey && trim($tokenKey) !== '') {
+				$out = self::signCdnPublicUrl($out);
+			} else {
+				$path = self::pathFromPublicUrl($out);
+				if ($path !== null) {
+					$out = self::proxyUrlForPath($path);
+				}
+			}
+		}
 		// #region agent log
 		self::agentDebugLog('BunnyStorageHelper.php:clientMediaUrl', 'client URL resolved', [
 			'in' => $in,
 			'out' => $out,
 			'mediaKind' => $mediaKind,
+			'hasCdnTokenKey' => (bool) self::cfg()->getStorageTokenKey(),
 		], 'H4');
 		// #endregion
 		return $out;

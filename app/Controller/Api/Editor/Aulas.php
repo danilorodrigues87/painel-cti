@@ -559,7 +559,13 @@ class Aulas {
 			return self::err($up['message'] ?? 'Falha no upload Storage.', 502);
 		}
 
-		$respUrl = (string)$up['url'];
+		$rawUrl = (string)$up['url'];
+		$tokenKey = \App\Common\Helpers\BunnyStorageHelper::cfg()->getStorageTokenKey();
+		if ($tokenKey && trim($tokenKey) !== '') {
+			$respUrl = \App\Common\Helpers\BunnyStorageHelper::signCdnPublicUrl($rawUrl);
+		} else {
+			$respUrl = \App\Common\Helpers\BunnyStorageHelper::proxyUrlForPath($remote);
+		}
 		// #region agent log
 		$logPayload = json_encode([
 			'sessionId' => '6b4d05',
