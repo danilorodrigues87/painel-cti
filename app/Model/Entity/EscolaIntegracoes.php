@@ -66,6 +66,8 @@ class EscolaIntegracoes {
 	public $whatsapp_menu_rodape;
 	public $whatsapp_menu_msg_invalida;
 	public $whatsapp_menu_palavras;
+	public $diario_wa_lembrete_mensagem;
+	public $diario_wa_faltas_mensagem;
 	/** Quando true, o salvar() também grava campos Evolution/WhatsApp. */
 	public $touchEvolution = false;
 	public $mp_ativo = 0;
@@ -132,6 +134,43 @@ class EscolaIntegracoes {
 			$cache = false;
 		}
 		return $cache;
+	}
+
+	public static function temColunasDiarioWhatsapp(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'diario_wa_lembrete_mensagem'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public function salvarDiarioWhatsapp(): bool {
+		if (!self::temColunasDiarioWhatsapp()) {
+			return false;
+		}
+		$dados = [
+			'diario_wa_lembrete_mensagem' => $this->diario_wa_lembrete_mensagem,
+			'diario_wa_faltas_mensagem'   => $this->diario_wa_faltas_mensagem,
+		];
+		$existente = self::getByIdAdmin((int)$this->id_admin);
+		$db = new Database('escola_integracoes');
+		if ($existente instanceof self) {
+			return (bool)$db->update('id_admin = '.(int)$this->id_admin, $dados);
+		}
+		$dados['id_admin'] = (int)$this->id_admin;
+		return (bool)$db->insert($dados);
 	}
 
 	public static function temColunasHorarioWhatsapp(): bool {

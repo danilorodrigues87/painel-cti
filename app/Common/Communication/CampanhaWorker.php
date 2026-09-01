@@ -397,6 +397,15 @@ class CampanhaWorker {
 				'curso'    => self::resolverCursoItem($item),
 				'escola'   => $nomeEscola,
 			];
+			$segmento = json_decode($campanha->segmento ?? '{}', true) ?: [];
+			$mapVars = $segmento['vars_por_destinatario'] ?? [];
+			$did = (string)(int)($item->destinatario_id ?? 0);
+			if ($did !== '0' && isset($mapVars[$did]) && is_array($mapVars[$did])) {
+				$vars = array_merge($vars, $mapVars[$did]);
+			}
+			if (empty($vars['data']) && !empty($segmento['data'])) {
+				$vars['data'] = \App\Common\Helpers\DiarioWhatsappHelper::dataBr((string)$segmento['data']);
+			}
 
 			$ok = false;
 			$erroMsg = 'Falha no envio.';
@@ -408,7 +417,6 @@ class CampanhaWorker {
 				if (WhatsappTextoVariacaoHelper::escolaQuerVariar($escolaId)) {
 					$texto = WhatsappTextoVariacaoHelper::variar($escolaId, $texto);
 				}
-				$segmento = json_decode($campanha->segmento ?? '{}', true) ?: [];
 				$midia = is_array($segmento['midia'] ?? null) ? $segmento['midia'] : null;
 				$envio = WhatsappEscolaService::enviarCampanha(
 					$escolaId,

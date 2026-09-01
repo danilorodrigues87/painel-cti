@@ -195,6 +195,27 @@ html[data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * {
   color: var(--painel-text) !important;
 }
 
+/* Diário de classe — aula em andamento, presença aguardando */
+.table-striped > tbody > tr.diario-row-pendente > * {
+  --bs-table-bg: rgba(255, 193, 7, 0.16);
+  --bs-table-color: inherit;
+  box-shadow: inset 3px 0 0 #ffc107;
+}
+
+html[data-bs-theme="dark"] .table-striped > tbody > tr.diario-row-pendente > * {
+  --bs-table-bg: rgba(230, 168, 0, 0.12);
+  --bs-table-color: var(--painel-text);
+  color: var(--painel-text) !important;
+  box-shadow: inset 3px 0 0 #c99200;
+}
+
+html[data-bs-theme="dark"] .table-striped > tbody > tr.diario-row-pendente .form-select,
+html[data-bs-theme="dark"] .table-striped > tbody > tr.diario-row-pendente .form-control {
+  background-color: var(--painel-surface-2);
+  color: var(--painel-text);
+  border-color: var(--bs-border-color);
+}
+
 html[data-bs-theme="dark"] .list-group-item {
   background-color: var(--painel-surface);
   border-color: var(--bs-border-color);

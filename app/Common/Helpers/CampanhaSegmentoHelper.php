@@ -114,9 +114,23 @@ class CampanhaSegmentoHelper {
 			'{telefone}' => $vars['whatsapp'] ?? $vars['contato'] ?? '',
 			'{curso}'    => $vars['curso'] ?? '',
 			'{escola}'   => $vars['escola'] ?? '',
+			'{horario}'  => $vars['horario'] ?? '',
+			'{data}'     => self::formatarDataVariavel($vars['data'] ?? ''),
 		];
 
 		return str_replace(array_keys($mapa), array_values($mapa), $texto);
+	}
+
+	/** Exibe data em dd/mm/aaaa para o usuário (aceita Y-m-d ou já formatada). */
+	private static function formatarDataVariavel(string $data): string {
+		$data = trim($data);
+		if ($data === '') {
+			return '';
+		}
+		if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $data)) {
+			return DiarioWhatsappHelper::dataBr($data);
+		}
+		return $data;
 	}
 
 	/** Converte HTML de campanha/e-mail em texto para WhatsApp. */

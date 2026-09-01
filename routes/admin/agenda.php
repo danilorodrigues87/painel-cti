@@ -181,3 +181,10 @@ $obRouter->post('/painel/agenda/diario/salvar',[
 		return new Response(200, Admin\AgendaDiario::salvar($request));
 	}
 ]);
+
+$obRouter->post('/painel/agenda/diario/whatsapp',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaDiario::whatsapp($request));
+	}
+]);
