@@ -296,7 +296,7 @@ class Aulas {
 			$kind = (string)($media['kind'] ?? $sc['media_kind'] ?? 'image');
 			$src = trim((string)($media['src'] ?? $sc['media_url'] ?? ''));
 			if ($src !== '' && $kind !== 'video') {
-				$src = self::urlParaBanco($src, (string)($sc['id'] ?? ''), 'media_url');
+				$src = self::urlParaBanco($src);
 			}
 			$interacao = $sc['interaction'] ?? $sc['interacao'] ?? [];
 			if (!is_array($interacao)) {
@@ -305,7 +305,7 @@ class Aulas {
 			if (!empty($interacao['object']) && is_string($interacao['object'])) {
 				$obj = trim($interacao['object']);
 				if ($obj !== '' && preg_match('#^https?://#i', $obj)) {
-					$interacao['object'] = self::urlParaBanco($obj, (string)($sc['id'] ?? ''), 'object');
+					$interacao['object'] = self::urlParaBanco($obj);
 				}
 			}
 			$narracao = $sc['narrationUrl'] ?? $sc['narracaoUrl'] ?? $sc['narracao_url'] ?? null;
@@ -315,7 +315,7 @@ class Aulas {
 			if ($narracao === '' || $narracao === null) {
 				$narracao = null;
 			} else {
-				$narracao = self::urlParaBanco((string)$narracao, (string)($sc['id'] ?? ''), 'narracao_url');
+				$narracao = self::urlParaBanco((string)$narracao);
 			}
 			$bunnyVid = $sc['mediaBunnyVideoId'] ?? $sc['media_bunny_video_id'] ?? null;
 			if (is_string($bunnyVid)) {
@@ -373,7 +373,7 @@ class Aulas {
 	 * URL de mídia Storage para gravar no banco: sempre CDN canônica.
 	 * Nunca grava URL de proxy (o token expira e a mídia fica irrecuperável).
 	 */
-	private static function urlParaBanco(string $url, string $cenaId, string $campo): string {
+	private static function urlParaBanco(string $url): string {
 		$helper = \App\Common\Helpers\BunnyStorageHelper::class;
 		$path = $helper::resolveInterativaPath($url);
 		$out = $url;
@@ -484,20 +484,6 @@ class Aulas {
 			if ($path === null || isset($emUso[$path])) {
 				continue;
 			}
-			// #region agent log
-			$payload = json_encode([
-				'sessionId' => '6b4d05',
-				'timestamp' => (int) round(microtime(true) * 1000),
-				'location' => 'Aulas.php:purgeOrphanAssets',
-				'message' => 'deleting orphan',
-				'data' => ['path' => $path, 'emUso' => count($emUso)],
-				'hypothesisId' => 'S3',
-				'runId' => 'post-fix',
-			], JSON_UNESCAPED_SLASHES);
-			if ($payload !== false) {
-				@file_put_contents(dirname(__DIR__, 4).'/debug-6b4d05.log', $payload."\n", FILE_APPEND | LOCK_EX);
-			}
-			// #endregion
 			try {
 				$helper::delete($path);
 			} catch (\Throwable $e) {

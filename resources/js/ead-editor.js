@@ -821,20 +821,17 @@ $(function () {
 
 	$('#btn-abrir-editor-ascend').on('click', function () {
 		var idA = idAula();
-		if (!idA || idA <= 0) {
-			toastErr('Selecione uma aula na lista à esquerda antes de abrir o editor interativo.');
-			return;
-		}
 		var $b = $(this).prop('disabled', true);
-		var payload = { acao: 'abrir_editor', id_curso: idCurso(), id_aula: idA };
+		var payload = { acao: 'abrir_editor', id_curso: idCurso() };
+		if (idA && idA > 0) payload.id_aula = idA;
 		postEad(payload).done(function (res) {
 			if (!res || !res.success || !res.url) {
-				toastErr((res && res.message) || 'Não foi possível abrir o editor interativo.');
+				toastErr((res && res.message) || 'Não foi possível abrir o L-Editor.');
 				return;
 			}
 			window.open(res.url, '_blank');
 		}).fail(function () {
-			toastErr('Falha de rede ao abrir o editor interativo.');
+			toastErr('Falha de rede ao abrir o L-Editor.');
 		}).always(function () {
 			$b.prop('disabled', false);
 		});
