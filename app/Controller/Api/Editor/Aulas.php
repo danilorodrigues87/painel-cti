@@ -296,10 +296,7 @@ class Aulas {
 			$kind = (string)($media['kind'] ?? $sc['media_kind'] ?? 'image');
 			$src = trim((string)($media['src'] ?? $sc['media_url'] ?? ''));
 			if ($src !== '' && $kind !== 'video') {
-				$canonical = \App\Common\Helpers\BunnyStorageHelper::canonicalPublicUrl($src);
-				if ($canonical !== null && $canonical !== '') {
-					$src = $canonical;
-				}
+				$src = self::urlParaBanco($src, (string)($sc['id'] ?? ''), 'media_url');
 			}
 			$interacao = $sc['interaction'] ?? $sc['interacao'] ?? [];
 			if (!is_array($interacao)) {
@@ -308,10 +305,7 @@ class Aulas {
 			if (!empty($interacao['object']) && is_string($interacao['object'])) {
 				$obj = trim($interacao['object']);
 				if ($obj !== '' && preg_match('#^https?://#i', $obj)) {
-					$objCanon = \App\Common\Helpers\BunnyStorageHelper::canonicalPublicUrl($obj);
-					if ($objCanon !== null && $objCanon !== '') {
-						$interacao['object'] = $objCanon;
-					}
+					$interacao['object'] = self::urlParaBanco($obj, (string)($sc['id'] ?? ''), 'object');
 				}
 			}
 			$narracao = $sc['narrationUrl'] ?? $sc['narracaoUrl'] ?? $sc['narracao_url'] ?? null;
@@ -321,7 +315,7 @@ class Aulas {
 			if ($narracao === '' || $narracao === null) {
 				$narracao = null;
 			} else {
-				$narracao = \App\Common\Helpers\BunnyStorageHelper::canonicalPublicUrl((string)$narracao);
+				$narracao = self::urlParaBanco((string)$narracao, (string)($sc['id'] ?? ''), 'narracao_url');
 			}
 			$bunnyVid = $sc['mediaBunnyVideoId'] ?? $sc['media_bunny_video_id'] ?? null;
 			if (is_string($bunnyVid)) {
@@ -373,6 +367,26 @@ class Aulas {
 		self::purgeOrphanAssets($idAdmin, $oldAssets, $newAssets);
 
 		return self::getAula($request, $id);
+	}
+
+	/**
+	 * URL de mídia Storage para gravar no banco: sempre CDN canônica.
+	 * Nunca grava URL de proxy (o token expira e a mídia fica irrecuperável).
+	 */
+	private static function urlParaBanco(string $url, string $cenaId, string $campo): string {
+		$helper = \App\Common\Helpers\BunnyStorageHelper::class;
+		$path = $helper::resolveInterativaPath($url);
+		$out = $url;
+		if ($path !== null) {
+			$cdn = $helper::publicUrl($path);
+			if ($cdn !== '') {
+				$out = $cdn;
+			}
+		} elseif (str_contains($url, '/bunny-file')) {
+			// Proxy sem token resolvível: URL morta, não persistir
+			$out = '';
+		}
+		return $out;
 	}
 
 	/**
@@ -455,12 +469,37 @@ class Aulas {
 	 * @param array{urls:array<string,true>,videos:array<string,true>} $new
 	 */
 	private static function purgeOrphanAssets(int $idAdmin, array $old, array $new): void {
+		$helper = \App\Common\Helpers\BunnyStorageHelper::class;
+		// Compara por path do Storage: URL de proxy e URL de CDN apontam para o mesmo arquivo
+		$emUso = [];
+		foreach (array_keys($new['urls']) as $url) {
+			$p = $helper::resolveInterativaPath((string)$url);
+			if ($p !== null) {
+				$emUso[$p] = true;
+			}
+		}
 		foreach (array_keys($old['urls']) as $url) {
-			if (isset($new['urls'][$url])) {
+			$path = $helper::resolveInterativaPath((string)$url);
+			// Não resolveu o path: nunca apagar às cegas
+			if ($path === null || isset($emUso[$path])) {
 				continue;
 			}
+			// #region agent log
+			$payload = json_encode([
+				'sessionId' => '6b4d05',
+				'timestamp' => (int) round(microtime(true) * 1000),
+				'location' => 'Aulas.php:purgeOrphanAssets',
+				'message' => 'deleting orphan',
+				'data' => ['path' => $path, 'emUso' => count($emUso)],
+				'hypothesisId' => 'S3',
+				'runId' => 'post-fix',
+			], JSON_UNESCAPED_SLASHES);
+			if ($payload !== false) {
+				@file_put_contents(dirname(__DIR__, 4).'/debug-6b4d05.log', $payload."\n", FILE_APPEND | LOCK_EX);
+			}
+			// #endregion
 			try {
-				\App\Common\Helpers\BunnyStorageHelper::deleteByPublicUrl((string)$url);
+				$helper::delete($path);
 			} catch (\Throwable $e) {
 				/* best-effort */
 			}

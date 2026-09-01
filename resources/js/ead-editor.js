@@ -820,8 +820,14 @@ $(function () {
 	carregarGeral();
 
 	$('#btn-abrir-editor-ascend').on('click', function () {
+		var idA = idAula();
+		if (!idA || idA <= 0) {
+			toastErr('Selecione uma aula na lista à esquerda antes de abrir o editor interativo.');
+			return;
+		}
 		var $b = $(this).prop('disabled', true);
-		postEad({ acao: 'abrir_editor', id_curso: idCurso() }).done(function (res) {
+		var payload = { acao: 'abrir_editor', id_curso: idCurso(), id_aula: idA };
+		postEad(payload).done(function (res) {
 			if (!res || !res.success || !res.url) {
 				toastErr((res && res.message) || 'Não foi possível abrir o editor interativo.');
 				return;

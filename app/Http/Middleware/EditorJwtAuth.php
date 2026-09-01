@@ -53,6 +53,7 @@ class EditorJwtAuth {
 
 		$request->user = $obUser;
 		$request->editorIdAdmin = $idAdmin;
+		$request->editorIdCurso = !empty($decode['id_curso']) ? (int)$decode['id_curso'] : null;
 		$request->jwtClaims = $decode;
 		return $next($request);
 	}

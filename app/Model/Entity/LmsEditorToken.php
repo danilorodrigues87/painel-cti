@@ -90,13 +90,8 @@ class LmsEditorToken {
 			return null;
 		}
 
-		// Já usado há mais de 2 min → inválido
+		// Token válido e não expirado: permite reutilizar até expirar (Strict Mode / reabrir aba)
 		if (!empty($row->usado_em)) {
-			$usadoTs = strtotime((string)$row->usado_em);
-			if ($usadoTs !== false && (time() - $usadoTs) > 120) {
-				return null;
-			}
-			// retry recente: libera de novo
 			return $row;
 		}
 

@@ -886,6 +886,20 @@ class EadCursos extends Page {
 			$idCurso = null;
 		}
 
+		$idAula = !empty($post['id_aula']) ? (int)$post['id_aula'] : 0;
+		if ($idAula > 0) {
+			$aula = LmsAula::getByIdAdmin($idAula, $idAdmin);
+			if (!$aula instanceof LmsAula) {
+				return self::json(['success' => false, 'message' => 'Aula não encontrada.']);
+			}
+			if ($idCurso !== null && $idCurso > 0) {
+				$mod = LmsModulo::getByIdAdmin((int)$aula->id_modulo, $idAdmin);
+				if (!$mod || (int)$mod->id_curso !== $idCurso) {
+					return self::json(['success' => false, 'message' => 'Aula não pertence a este curso.']);
+				}
+			}
+		}
+
 		try {
 			$plain = LmsEditorToken::criar($idAdmin, $idUsuario, $idCurso);
 		} catch (\Throwable $e) {
@@ -901,9 +915,15 @@ class EadCursos extends Page {
 			?: 'http://localhost:8080'
 		), '/');
 
+		$url = $base.'/editor/auth?token='.rawurlencode($plain);
+		if ($idAula > 0) {
+			$url .= '&aulaId='.(int)$idAula;
+		}
+
 		return self::json([
 			'success' => true,
-			'url' => $base.'/editor/auth?token='.rawurlencode($plain),
+			'url' => $url,
+			'id_aula' => $idAula > 0 ? $idAula : null,
 		]);
 	}
 }

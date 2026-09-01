@@ -80,61 +80,12 @@ class BunnyStorageHelper {
 		$host = trim((string)($cfg->storage_cdn_hostname ?? ''));
 		$host = preg_replace('#^https?://#i', '', $host);
 		$host = rtrim((string)$host, '/');
-		$remotePath = self::cdnPublicPath($remotePath);
+		$remotePath = ltrim(self::normalizeStoragePath($remotePath), '/');
 		if ($host === '' || $remotePath === '') {
 			return '';
 		}
 		$parts = array_map('rawurlencode', explode('/', $remotePath));
 		return 'https://'.$host.'/'.implode('/', $parts);
-	}
-
-	/** Path público na Pull Zone (inclui nome da zone quando o hostname CDN é diferente). */
-	private static function cdnPublicPath(string $remotePath): string {
-		$remotePath = ltrim(self::normalizeStoragePath($remotePath), '/');
-		if ($remotePath === '') {
-			return '';
-		}
-		$zone = trim((string)(self::cfg()->storage_zone ?? ''));
-		$host = trim((string)(self::cfg()->storage_cdn_hostname ?? ''));
-		$host = preg_replace('#^https?://#i', '', $host);
-		$host = strtolower(rtrim((string)$host, '/'));
-		if ($zone !== '' && $host !== '' && !str_starts_with($host, strtolower($zone).'.')) {
-			return $zone.'/'.$remotePath;
-		}
-		return $remotePath;
-	}
-
-	/**
-	 * Assina URL da Pull Zone (Token Auth Basic MD5 do Bunny).
-	 * Sem storage_token_key configurada, retorna a URL intacta.
-	 */
-	public static function signCdnPublicUrl(string $publicUrl, int $ttlSec = 14400): string {
-		$publicUrl = trim($publicUrl);
-		if ($publicUrl === '') {
-			return '';
-		}
-		$key = self::cfg()->getStorageTokenKey();
-		if (!$key || trim($key) === '') {
-			return $publicUrl;
-		}
-		if (preg_match('#[?&]token=#', $publicUrl)) {
-			return $publicUrl;
-		}
-		$parts = parse_url($publicUrl);
-		if (!is_array($parts) || empty($parts['host'])) {
-			return $publicUrl;
-		}
-		$path = (string)($parts['path'] ?? '/');
-		if ($path === '' || $path[0] !== '/') {
-			$path = '/'.$path;
-		}
-		$expires = time() + max(300, min(86400, $ttlSec));
-		$hashable = $key.$path.$expires;
-		$token = base64_encode(md5($hashable, true));
-		$token = strtr($token, '+/', '-_');
-		$token = str_replace('=', '', $token);
-		$scheme = (string)($parts['scheme'] ?? 'https');
-		return $scheme.'://'.$parts['host'].$path.'?token='.rawurlencode($token).'&expires='.$expires;
 	}
 
 	/** Remove prefixo da Storage Zone do path (Pull Zone pode expor zone/path). */
@@ -216,7 +167,7 @@ class BunnyStorageHelper {
 	/**
 	 * Token assinado para <audio>/<img> sem JWT no header.
 	 */
-	public static function signFileToken(string $remotePath, int $ttlSec = 14400): string {
+	public static function signFileToken(string $remotePath, int $ttlSec = 86400): string {
 		$remotePath = self::normalizeStoragePath($remotePath);
 		if (!self::isInterativaPath($remotePath)) {
 			$remotePath = ltrim(str_replace('\\', '/', $remotePath), '/');
@@ -282,20 +233,6 @@ class BunnyStorageHelper {
 		if ($url === '') {
 			return null;
 		}
-		// Remove tokens CDN/proxy da query (não persistir URLs assinadas)
-		if (preg_match('#^https?://#i', $url)) {
-			$parts = parse_url($url);
-			if (is_array($parts) && !empty($parts['scheme']) && !empty($parts['host'])) {
-				$path = (string)($parts['path'] ?? '');
-				$query = (string)($parts['query'] ?? '');
-				if ($query !== '') {
-					parse_str($query, $q);
-					unset($q['token'], $q['expires'], $q['t'], $q['token_path'], $q['limit']);
-					$query = http_build_query($q);
-				}
-				$url = $parts['scheme'].'://'.$parts['host'].$path.($query !== '' ? '?'.$query : '');
-			}
-		}
 		// Token do proxy → path → CDN (aceita token expirado: destino é CDN pública)
 		if (preg_match('#[?&]t=([^&]+)#', $url, $m)) {
 			$token = rawurldecode($m[1]);
@@ -304,6 +241,10 @@ class BunnyStorageHelper {
 				$cdn = self::publicUrl($path);
 				return $cdn !== '' ? $cdn : null;
 			}
+		}
+		// Proxy sem token utilizável: não há como recuperar o arquivo
+		if (str_contains($url, '/bunny-file')) {
+			return null;
 		}
 		$path = self::pathFromPublicUrl($url);
 		if ($path !== null) {
@@ -328,14 +269,44 @@ class BunnyStorageHelper {
 		if (str_contains($url, '/playlist.m3u8')) {
 			return $url;
 		}
+		$path = self::resolveInterativaPath($url);
+		if ($path !== null) {
+			return self::proxyUrlForPath($path);
+		}
 		if (str_contains($url, 'bunny-file')) {
 			return self::proxyUrlForPublicUrl($url);
 		}
-		$proxy = self::proxyUrlForPublicUrl($url);
-		return $proxy !== $url ? $proxy : (preg_match('#^https?://#i', $url) ? $url : null);
+		return preg_match('#^https?://#i', $url) ? $url : null;
 	}
 
-	public static function proxyUrlForPublicUrl(string $publicUrl, int $ttlSec = 14400): string {
+	/** Resolve path Storage interativa/ a partir de CDN, proxy ou path bruto. */
+	public static function resolveInterativaPath(string $url): ?string {
+		$url = trim($url);
+		if ($url === '') {
+			return null;
+		}
+		if (preg_match('#[?&]t=([^&]+)#', $url, $m)) {
+			$p = self::pathFromFileToken(rawurldecode($m[1]), true);
+			if ($p !== null) {
+				return $p;
+			}
+		}
+		$canonical = self::canonicalPublicUrl($url);
+		if ($canonical !== null && $canonical !== '') {
+			$url = $canonical;
+		}
+		$path = self::pathFromPublicUrl($url);
+		if ($path !== null) {
+			return $path;
+		}
+		$trim = self::normalizeStoragePath($url);
+		if (self::isInterativaPath($trim)) {
+			return $trim;
+		}
+		return null;
+	}
+
+	public static function proxyUrlForPublicUrl(string $publicUrl, int $ttlSec = 86400): string {
 		$canonical = self::canonicalPublicUrl($publicUrl) ?? $publicUrl;
 		$path = self::pathFromPublicUrl($canonical);
 		if ($path === null) {
@@ -350,7 +321,7 @@ class BunnyStorageHelper {
 		return self::proxyUrlForPath($path, $ttlSec);
 	}
 
-	public static function proxyUrlForPath(string $remotePath, int $ttlSec = 14400): string {
+	public static function proxyUrlForPath(string $remotePath, int $ttlSec = 86400): string {
 		$token = self::signFileToken($remotePath, $ttlSec);
 		return rtrim((string)URL, '/').'/api/v1/student/bunny-file?t='.rawurlencode($token);
 	}
