@@ -25,6 +25,9 @@
 	Limites em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.
 	<span class="badge bg-success">Iniciar</span> · <span class="badge bg-warning text-dark">Pausar</span> · <span class="badge bg-primary">Editar</span> · <span class="badge bg-danger">Encerrar</span>
 </div>
+<div class="alert alert-warning small mb-3 d-none" id="alert-expediente-campanhas">
+	<strong>Expediente:</strong> <span id="expediente-campanhas-texto">—</span>
+</div>
 <div class="alert alert-secondary small mb-3" id="alert-pacing-grupos">
 	<strong>Grupos (recorrente):</strong> a mesma mensagem é reenviada aos grupos selecionados no intervalo configurado, até você <em>Encerrar</em>.
 	<span id="pacing-grupos-texto" class="d-block mt-1">Carregando intervalo...</span>
@@ -133,6 +136,39 @@
 								<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>
 							</div>
 							<small class="text-muted">Listas de transmissão aparecem se a Evolution as retornar (@broadcast). Grupos usam @g.us.</small>
+						</div>
+						<div class="col-12" id="wrap-pacing-campanha">
+							<div class="border rounded p-3 bg-light">
+								<div class="form-check form-switch mb-2">
+									<input class="form-check-input" type="checkbox" id="pacing_personalizado" value="1">
+									<label class="form-check-label" for="pacing_personalizado">Intervalos personalizados (sobrescreve Comunicação)</label>
+								</div>
+								<div class="form-text mb-2">Padrão: limites em <a href="{{URL}}/painel/config/comunicacao">Configurações → Comunicação</a>.</div>
+								<div id="wrap-pacing-wa" class="row g-2 d-none">
+									<div class="col-6">
+										<label class="form-label" for="pacing_delay_1a1">Intervalo 1:1 (seg)</label>
+										<input type="number" class="form-control" id="pacing_delay_1a1" value="60" min="30" max="300">
+									</div>
+									<div class="col-6">
+										<label class="form-label" for="pacing_grupo_minutos">Intervalo grupos (min)</label>
+										<input type="number" class="form-control" id="pacing_grupo_minutos" value="10" min="1" max="1440">
+									</div>
+									<div class="col-6">
+										<label class="form-label" for="pacing_max_hora_wa">Máx. envios/hora</label>
+										<input type="number" class="form-control" id="pacing_max_hora_wa" value="20" min="1" max="100">
+									</div>
+								</div>
+								<div id="wrap-pacing-email" class="row g-2 d-none">
+									<div class="col-6">
+										<label class="form-label" for="pacing_email_delay">Intervalo entre e-mails (seg)</label>
+										<input type="number" class="form-control" id="pacing_email_delay" value="3" min="1" max="60">
+									</div>
+									<div class="col-6">
+										<label class="form-label" for="pacing_max_hora_email">Máx. envios/hora</label>
+										<input type="number" class="form-control" id="pacing_max_hora_email" value="80" min="1" max="500">
+									</div>
+								</div>
+							</div>
 						</div>
 						<div class="col-12">
 							<label class="form-label" for="campanha_mensagem" id="label-mensagem">Mensagem *</label>
@@ -301,4 +337,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260827d"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260901f"></script>

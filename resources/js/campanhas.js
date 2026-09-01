@@ -4,6 +4,7 @@ let campanhaPollTick = null;
 let campanhaPacingTimer = null;
 let campanhaPacing = null;
 let campanhaPacing1a1 = null;
+let campanhaExpediente = null;
 let campanhaTemPendentes = false;
 let campanhaProcessandoFila = false;
 let campanhaPagina = 1;
@@ -78,6 +79,46 @@ function atualizarUiCanal(){
 		limparMidiaSelecionada(false);
 	}
 	atualizarUiSegmento();
+	atualizarUiPacingCampanha();
+}
+
+function atualizarUiPacingCampanha(){
+	const wa = $('#campanha_canal').val() === 'whatsapp';
+	const personalizado = $('#pacing_personalizado').is(':checked');
+	$('#wrap-pacing-wa').toggleClass('d-none', !wa || !personalizado);
+	$('#wrap-pacing-email').toggleClass('d-none', wa || !personalizado);
+}
+
+function preencherPacingCampanha(seg){
+	seg = seg || {};
+	const pacing = seg.pacing || {};
+	const personalizado = !!pacing.personalizado;
+	$('#pacing_personalizado').prop('checked', personalizado);
+	if(personalizado){
+		if($('#campanha_canal').val() === 'whatsapp'){
+			$('#pacing_delay_1a1').val(pacing.delay_1a1_segundos || 60);
+			const minGrupo = pacing.grupo_delay_segundos
+				? Math.max(1, Math.round(parseInt(pacing.grupo_delay_segundos, 10) / 60))
+				: 10;
+			$('#pacing_grupo_minutos').val(minGrupo);
+			$('#pacing_max_hora_wa').val(pacing.max_hora || 20);
+		} else {
+			$('#pacing_email_delay').val(pacing.email_delay_segundos || 3);
+			$('#pacing_max_hora_email').val(pacing.max_hora || 80);
+		}
+	}
+	atualizarUiPacingCampanha();
+}
+
+function limparPacingCampanha(){
+	$('#pacing_personalizado').prop('checked', false);
+	$('#pacing_delay_1a1').val(60);
+	$('#pacing_grupo_minutos').val(10);
+	$('#pacing_max_hora_wa').val(20);
+	$('#pacing_email_delay').val(3);
+	$('#pacing_max_hora_email').val(80);
+	$('#pacing_personalizado, #pacing_delay_1a1, #pacing_grupo_minutos, #pacing_max_hora_wa, #pacing_email_delay, #pacing_max_hora_email').prop('disabled', false);
+	atualizarUiPacingCampanha();
 }
 
 function atualizarUiSegmento(){
@@ -297,9 +338,12 @@ function renderizarLista(campanhas){
 			+'</div>';
 
 		const sub = c.canal === 'whatsapp' ? (c.titulo || '') : (c.assunto || '');
+		const pacingHint = (c.pacing_resumo && c.pacing_resumo.personalizado)
+			? '<br><small class="text-info">'+escHtml(c.pacing_resumo.label || 'Intervalos personalizados')+'</small>'
+			: '';
 		$tbody.append(`
 			<tr>
-				<td><strong>${escHtml(c.titulo)}</strong><br><small class="text-muted">${escHtml(sub)}</small></td>
+				<td><strong>${escHtml(c.titulo)}</strong><br><small class="text-muted">${escHtml(sub)}</small>${pacingHint}</td>
 				<td><span class="badge bg-${badgeCanal(c.canal)}">${escHtml(c.canal_label || c.canal)}</span></td>
 				<td><span class="badge bg-${badgeStatus(c.status)}">${escHtml(c.status_label)}</span></td>
 				<td>
@@ -333,6 +377,13 @@ function coletarFormulario(){
 		status_lead: $('#status_lead').val(),
 		parcelas_atraso_min: $('#parcelas_atraso_min').val() || '1',
 		destinos_json: JSON.stringify(coletarDestinosGrupos()),
+		pacing_personalizado: $('#pacing_personalizado').is(':checked') ? 1 : 0,
+		pacing_delay_1a1: $('#pacing_delay_1a1').val(),
+		pacing_grupo_minutos: $('#pacing_grupo_minutos').val(),
+		pacing_max_hora: $('#campanha_canal').val() === 'whatsapp'
+			? $('#pacing_max_hora_wa').val()
+			: $('#pacing_max_hora_email').val(),
+		pacing_email_delay: $('#pacing_email_delay').val(),
 		midia_tipo: $('#campanha_midia_tipo').val() || '',
 		midia_biblioteca_path: (window._campanhaMidiaBiblioteca && window._campanhaMidiaBiblioteca.path) ? window._campanhaMidiaBiblioteca.path : '',
 		remover_midia: $('#campanha_remover_midia').val() || '0'
@@ -425,6 +476,7 @@ function limparFormulario(){
 	$('#wrap-status-lead').hide();
 	$('#wrap-inadimplentes').hide();
 	$('#lista-grupos-wa').html('<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>');
+	limparPacingCampanha();
 	limparMidiaSelecionada(false);
 	atualizarUiCanal();
 }
@@ -477,6 +529,30 @@ function atualizarTextoPacing1a1(pacing){
 	$('#pacing-1a1-texto').html(txt);
 }
 
+function atualizarTextoExpediente(exp){
+	campanhaExpediente = exp || campanhaExpediente;
+	const e = campanhaExpediente;
+	const $alert = $('#alert-expediente-campanhas');
+	if(!e || !e.respeitar){
+		$alert.addClass('d-none');
+		return;
+	}
+	$alert.removeClass('d-none');
+	let txt = 'Campanhas WhatsApp só disparam dentro do expediente';
+	if(e.horario_inicio && e.horario_fim){
+		txt += ' ('+escHtml(e.horario_inicio)+'–'+escHtml(e.horario_fim)+')';
+	}
+	txt += '.';
+	if(e.respeitar_ok === false){
+		txt += ' <span class="text-danger">Execute database/campanha_respeitar_expediente.sql.</span>';
+	} else if(e.fora){
+		txt += ' <strong class="text-warning">Fora do expediente agora</strong> — envios pausados até o próximo horário.';
+	} else {
+		txt += ' <strong class="text-success">Dentro do expediente</strong> — envios liberados.';
+	}
+	$('#expediente-campanhas-texto').html(txt);
+}
+
 function limparPacingTimer(){
 	if(campanhaPacingTimer){
 		clearTimeout(campanhaPacingTimer);
@@ -521,6 +597,9 @@ function processarFilaSilencioso(){
 		}
 		if(res.pacing_1a1){
 			atualizarTextoPacing1a1(res.pacing_1a1);
+		}
+		if(res.expediente){
+			atualizarTextoExpediente(res.expediente);
 		}
 		const enviados = res.resumo && res.resumo.enviados ? res.resumo.enviados : 0;
 		carregarCampanhas({ silencioso: true });
@@ -615,6 +694,7 @@ function carregarCampanhas(opts){
 		else atualizarTextoPacing(campanhaPacing);
 		if(res.pacing_1a1) atualizarTextoPacing1a1(res.pacing_1a1);
 		else if(campanhaPacing1a1) atualizarTextoPacing1a1(campanhaPacing1a1);
+		if(res.expediente) atualizarTextoExpediente(res.expediente);
 		if(campanhaTemPendentes){
 			iniciarAutoFila();
 			if(res.pacing) agendarProximoEnvioGrupo();
@@ -1164,6 +1244,7 @@ function abrirDetalhes(id){
 			<p><strong>Assunto:</strong> ${escHtml(res.assunto || '—')}</p>
 			<p><strong>Status:</strong> <span class="badge bg-${badgeStatus(c.status)}">${escHtml(c.status_label)}</span></p>
 			${segExtra}
+			<p><strong>Intervalos:</strong> ${escHtml((c.pacing_resumo && c.pacing_resumo.label) ? c.pacing_resumo.label : 'Padrão da escola')}</p>
 			<p><strong>Progresso:</strong> ${c.eh_grupos
 				? (c.enviados+' reenvios realizados (recorrente até Encerrar)')
 				: (c.enviados+' enviados, '+c.erros+' erros, '+c.pendentes+' pendentes de '+c.total)}</p>
@@ -1210,6 +1291,7 @@ function editarCampanha(id){
 		$('#segmento_tipo').val(seg.tipo || 'alunos_matriculados');
 		$('#status_lead').val(seg.status_lead || '');
 		$('#parcelas_atraso_min').val(String(seg.parcelas_atraso_min || 1));
+		preencherPacingCampanha(seg);
 		$('#titulo-modal-campanha').text(emCurso
 			? 'Ajustar mensagem/mídia ('+(c.status === 'pausada' ? 'pausada' : 'em envio')+')'
 			: 'Editar campanha');
@@ -1217,6 +1299,7 @@ function editarCampanha(id){
 			? '<i class="fas fa-save"></i> Salvar mensagem/mídia'
 			: '<i class="fas fa-save"></i> Salvar rascunho');
 		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_min').prop('disabled', emCurso);
+		$('#pacing_personalizado, #pacing_delay_1a1, #pacing_grupo_minutos, #pacing_max_hora_wa, #pacing_email_delay, #pacing_max_hora_email').prop('disabled', emCurso);
 		window._campanhaArquivo = null;
 		window._campanhaMidiaExistente = c.midia || seg.midia || null;
 		window._campanhaMidiaBiblioteca = null;
@@ -1255,6 +1338,7 @@ function processarFila(){
 			return;
 		}
 		if(res.pacing) atualizarTextoPacing(res.pacing);
+		if(res.expediente) atualizarTextoExpediente(res.expediente);
 		Swal.fire('Fila', res.message, 'info');
 		carregarCampanhas();
 	}, 'json');
@@ -1268,7 +1352,11 @@ $(function(){
 	carregarCampanhas();
 	atualizarUiCanal();
 
-	$('#campanha_canal').on('change', atualizarUiCanal);
+	$('#campanha_canal').on('change', function(){
+		atualizarUiCanal();
+		atualizarUiPacingCampanha();
+	});
+	$('#pacing_personalizado').on('change', atualizarUiPacingCampanha);
 	$('#filtro-canal').on('change', function(){ campanhaPagina = 1; carregarCampanhas(); });
 	$('#segmento_tipo').on('change', atualizarUiSegmento);
 	$('#btn-sync-grupos-wa').on('click', syncGruposWa);

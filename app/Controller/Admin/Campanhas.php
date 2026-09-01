@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Utils\View;
 use App\Common\Helpers\TenantHelper;
+use App\Common\Helpers\CampanhaPacingHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Common\Helpers\EmailValidator;
 use App\Common\Communication\CampanhaWorker;
@@ -121,6 +122,7 @@ class Campanhas extends Page {
 			'campanhas' => $lista,
 			'pacing'    => CampanhaWorker::infoPacingGrupo($idAdmin),
 			'pacing_1a1' => CampanhaWorker::infoPacing1a1($idAdmin),
+			'expediente' => CampanhaPacingHelper::infoExpediente($idAdmin),
 			'cron'      => self::metaCron(),
 			'pagination' => [
 				'page' => $page,
@@ -148,6 +150,14 @@ class Campanhas extends Page {
 		}
 		if (!$temAtiva) {
 			return;
+		}
+
+		$config = \App\Model\Entity\EscolaIntegracoes::getByIdAdmin($idAdmin);
+		if (CampanhaPacingHelper::respeitarExpediente($config instanceof \App\Model\Entity\EscolaIntegracoes ? $config : null)) {
+			$exp = WhatsappEscolaService::estaForaExpediente($idAdmin);
+			if (!empty($exp['fora'])) {
+				return;
+			}
 		}
 
 		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
@@ -207,6 +217,7 @@ class Campanhas extends Page {
 			'eh_grupos'   => $c->ehCampanhaGrupos() ? 1 : 0,
 			'criada_em'   => $c->criada_em ? date('d/m/Y H:i', strtotime($c->criada_em)) : '',
 			'segmento'    => json_decode($c->segmento ?? '{}', true) ?: [],
+			'pacing_resumo' => CampanhaPacingHelper::resumoParaUi($c),
 			'mensagem'    => $c->mensagem,
 			'midia'       => self::extrairMidiaSegmento($c->segmento ?? null),
 		];
@@ -292,6 +303,7 @@ class Campanhas extends Page {
 				}
 				$segmento['destinos'] = $destinos;
 			}
+			$segmento['pacing'] = CampanhaPacingHelper::parseFromPost($postVars, $canal);
 
 			if ($id > 0) {
 				$segAntigo = json_decode($ob->segmento ?? '{}', true) ?: [];
@@ -722,14 +734,19 @@ class Campanhas extends Page {
 
 		$pacing = CampanhaWorker::infoPacingGrupo($idAdmin);
 		$pacing1a1 = CampanhaWorker::infoPacing1a1($idAdmin);
+		$expediente = CampanhaPacingHelper::infoExpediente($idAdmin);
 		$msg = 'Processados: '.$resumo['processados'].'. Enviados: '.$resumo['enviados'].'. Erros: '.$resumo['erros'].'.';
 		if ((int)$resumo['enviados'] === 0 && !empty($resumo['escolas'][$idAdmin]['whatsapp']['motivo'])) {
 			$motivo = $resumo['escolas'][$idAdmin]['whatsapp']['motivo'];
-			if ($motivo === 'pacing_grupo' && $pacing['proximo_em_segundos'] > 0) {
+			if ($motivo === 'fora_expediente') {
+				$msg .= ' Fora do expediente — envios retomam no horário configurado em Comunicação.';
+			} elseif ($motivo === 'pacing_grupo' && $pacing['proximo_em_segundos'] > 0) {
 				$min = (int)ceil($pacing['proximo_em_segundos'] / 60);
 				$msg .= ' Aguardando intervalo de grupos (~'.$min.' min).';
 			} elseif ($motivo === 'pacing_1a1' && $pacing1a1['proximo_em_segundos'] > 0) {
 				$msg .= ' Aguardando intervalo 1:1 (~'.$pacing1a1['proximo_em_segundos'].' s).';
+			} elseif ($motivo === 'limite_hora') {
+				$msg .= ' Limite por hora atingido — aguarde ou ajuste em Comunicação / campanha.';
 			}
 		}
 
@@ -739,6 +756,7 @@ class Campanhas extends Page {
 			'resumo'  => $resumo,
 			'pacing'  => $pacing,
 			'pacing_1a1' => $pacing1a1,
+			'expediente' => $expediente,
 		]);
 	}
 

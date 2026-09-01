@@ -2,6 +2,7 @@
 
 namespace App\Common\Communication;
 
+use App\Common\Helpers\CampanhaPacingHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Common\Helpers\EmailValidator;
 use App\Common\Helpers\WhatsappPacingHelper;
@@ -94,13 +95,23 @@ class CampanhaWorker {
 					break;
 				}
 
+				$config = EscolaIntegracoes::getByIdAdmin($idAdmin);
+				if (CampanhaPacingHelper::respeitarExpediente($config instanceof EscolaIntegracoes ? $config : null)) {
+					$exp = WhatsappEscolaService::estaForaExpediente($idAdmin);
+					if (!empty($exp['fora'])) {
+						sleep(60);
+						continue;
+					}
+				}
+
 				// Recorrente: quando a rodada acaba, recoloca os mesmos grupos na fila
 				self::reabastecerFilaGrupos($campanha);
 				if (CampanhaFila::contarPorCampanha($campanhaId, $idAdmin, 'pendente') <= 0) {
 					break;
 				}
 
-				$delayBase = self::delayGrupoSegundos($idAdmin);
+				$pacingCamp = CampanhaPacingHelper::resolver($campanha, $config instanceof EscolaIntegracoes ? $config : null);
+				$delayBase = $pacingCamp['grupo_delay_segundos'];
 				$espera = 0;
 				if (!empty($campanha->agendada_para)) {
 					$espera = max(0, strtotime($campanha->agendada_para) - time());
@@ -249,6 +260,13 @@ class CampanhaWorker {
 		$stats = ['enviados' => 0, 'erros' => 0, 'motivo' => null];
 
 		if ($canal === 'whatsapp') {
+			if (CampanhaPacingHelper::respeitarExpediente($config instanceof EscolaIntegracoes ? $config : null)) {
+				$exp = WhatsappEscolaService::estaForaExpediente($escolaId);
+				if (!empty($exp['fora'])) {
+					$stats['motivo'] = 'fora_expediente';
+					return $stats;
+				}
+			}
 			$delayConfig = ($config instanceof EscolaIntegracoes)
 				? (int)($config->whatsapp_delay_segundos ?? WhatsappPacingHelper::DEFAULT_DELAY_1A1)
 				: WhatsappPacingHelper::DEFAULT_DELAY_1A1;
@@ -270,12 +288,9 @@ class CampanhaWorker {
 			$api = null;
 		}
 
-		$enviadosHora = self::contarEnviadosUltimaHora($escolaId, $canal);
-		$restanteHora = max(0, $maxHora - $enviadosHora);
-		$limite = min($limitePorEscola, $restanteHora);
+		$limite = $limitePorEscola;
 
 		if ($limite <= 0) {
-			$stats['motivo'] = 'limite_hora';
 			return $stats;
 		}
 
@@ -322,6 +337,25 @@ class CampanhaWorker {
 				continue;
 			}
 
+			$pacingCamp = CampanhaPacingHelper::resolver($campanha, $config instanceof EscolaIntegracoes ? $config : null);
+			$delayCampanha = $canal === 'whatsapp'
+				? $pacingCamp['delay_1a1_segundos']
+				: $pacingCamp['email_delay_segundos'];
+			$maxHoraCampanha = $pacingCamp['max_hora'];
+			if ($pacingCamp['personalizado']) {
+				$enviadosHoraCamp = self::contarEnviadosUltimaHoraCampanha((int)$campanha->id, $escolaId, $canal);
+				if ($enviadosHoraCamp >= $maxHoraCampanha) {
+					$stats['motivo'] = $stats['motivo'] ?: 'limite_hora';
+					continue;
+				}
+			} else {
+				$enviadosHoraEscola = self::contarEnviadosUltimaHora($escolaId, $canal);
+				if ($enviadosHoraEscola >= $maxHoraCampanha) {
+					$stats['motivo'] = $stats['motivo'] ?: 'limite_hora';
+					break;
+				}
+			}
+
 			$isGrupo = $canal === 'whatsapp' && self::itemEhGrupoOuLista($item);
 			if ($isGrupo) {
 				if ($grupoEnviadoNestaRun) {
@@ -363,7 +397,7 @@ class CampanhaWorker {
 						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
 						break;
 					}
-					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delay);
+					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delayCampanha);
 					if ($espera1a1 > 0) {
 						if ($aplicarDelay && $espera1a1 <= 120) {
 							sleep($espera1a1);
@@ -380,7 +414,7 @@ class CampanhaWorker {
 						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
 						break;
 					}
-					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delay);
+					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delayCampanha);
 					if ($espera1a1 > 0) {
 						(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
 						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
@@ -441,8 +475,8 @@ class CampanhaWorker {
 				if ($isGrupo) {
 					$grupoEnviadoNestaRun = true;
 					$podeEnviarGrupo = false;
-					// Próximo envio de grupo: intervalo configurado + jitter ±20%
-					$proxGrupo = WhatsappPacingHelper::delayGrupoComJitter($delayGrupoSeg);
+					// Próximo envio de grupo: intervalo da campanha + jitter ±20%
+					$proxGrupo = WhatsappPacingHelper::delayGrupoComJitter($pacingCamp['grupo_delay_segundos']);
 					$campanha->agendada_para = date('Y-m-d H:i:s', time() + $proxGrupo);
 					$campanha->atualizar();
 				} elseif ($canal === 'whatsapp') {
@@ -463,8 +497,8 @@ class CampanhaWorker {
 			// Delay entre 1:1: sleep no cron/CLI; poll web envia só 1 por vez (pacing via DB)
 			if ($aplicarDelay && !$isGrupo) {
 				$sleepSeg = $canal === 'whatsapp'
-					? WhatsappPacingHelper::delayCampanha1a1($delay)
-					: max(1, $delay);
+					? WhatsappPacingHelper::delayCampanha1a1($delayCampanha)
+					: max(1, $delayCampanha);
 				if ($sleepSeg > 0) {
 					sleep($sleepSeg);
 				}
@@ -586,6 +620,25 @@ class CampanhaWorker {
 			FROM campanha_fila f
 			INNER JOIN campanhas c ON c.id = f.campanha_id
 			WHERE f.id_admin = '.(int)$idAdmin.'
+			  AND f.status = "enviado"
+			  AND f.enviado_em >= "'.addslashes($desde).'"
+			  AND c.canal = "'.addslashes($canal).'"
+		';
+
+		$row = (new \App\Model\Db\Database('campanha_fila'))->execute($sql)->fetch(\PDO::FETCH_ASSOC);
+		return (int)($row['qtd'] ?? 0);
+	}
+
+	private static function contarEnviadosUltimaHoraCampanha(int $campanhaId, int $idAdmin, string $canal): int {
+		$desde = date('Y-m-d H:i:s', strtotime('-1 hour'));
+		$canal = $canal === 'whatsapp' ? 'whatsapp' : 'email';
+
+		$sql = '
+			SELECT COUNT(*) AS qtd
+			FROM campanha_fila f
+			INNER JOIN campanhas c ON c.id = f.campanha_id
+			WHERE f.campanha_id = '.(int)$campanhaId.'
+			  AND f.id_admin = '.(int)$idAdmin.'
 			  AND f.status = "enviado"
 			  AND f.enviado_em >= "'.addslashes($desde).'"
 			  AND c.canal = "'.addslashes($canal).'"

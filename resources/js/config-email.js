@@ -225,6 +225,13 @@ function preencherWhatsapp(w, opts){
 		$('#whatsapp_dias').val(w.dias || '1,2,3,4,5');
 		$('#whatsapp_msg_fora').val(w.msg_fora || '');
 	}
+	if(w.campanha_respeitar_expediente_ok === false){
+		$('#campanha_respeitar_expediente').prop('disabled', true);
+		$('#wrap-campanha-respeitar-expediente .form-text').append(' Execute database/campanha_respeitar_expediente.sql.');
+	} else {
+		$('#campanha_respeitar_expediente').prop('disabled', false);
+		$('#campanha_respeitar_expediente').prop('checked', parseInt(w.campanha_respeitar_expediente, 10) === 1);
+	}
 	if(w.horario_ok === false){
 		msgs.push('Para horário de expediente, execute o SQL das colunas whatsapp_horario_* (veja checklist).');
 	}
@@ -378,6 +385,7 @@ function whatsappSalvar(){
 		whatsapp_horario_fim: $('#whatsapp_horario_fim').val(),
 		whatsapp_dias: $('#whatsapp_dias').val(),
 		whatsapp_msg_fora: $('#whatsapp_msg_fora').val(),
+		campanha_respeitar_expediente: $('#campanha_respeitar_expediente').is(':checked') ? 1 : 0,
 		whatsapp_menu_ativo: $('#whatsapp_menu_ativo').is(':checked') ? 1 : 0,
 		whatsapp_menu_manual_ativo: $('#whatsapp_menu_manual_ativo').is(':checked') ? 1 : 0,
 		whatsapp_menu_titulo: $('#whatsapp_menu_titulo').val(),

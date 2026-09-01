@@ -64,6 +64,10 @@ class WhatsappEscolaService {
 				? (string)($integracao->whatsapp_msg_fora ?? '')
 				: '',
 			'horario_ok'      => EscolaIntegracoes::temColunasHorarioWhatsapp(),
+			'campanha_respeitar_expediente' => ($integracao instanceof EscolaIntegracoes && EscolaIntegracoes::temColunaCampanhaRespeitarExpediente())
+				? (int)($integracao->campanha_respeitar_expediente ?? 0)
+				: 0,
+			'campanha_respeitar_expediente_ok' => EscolaIntegracoes::temColunaCampanhaRespeitarExpediente(),
 			'menu_ok'         => EscolaIntegracoes::temColunasMenuWhatsapp(),
 			'menu'            => self::getConfigMenu($idAdmin),
 		];
@@ -515,6 +519,9 @@ class WhatsappEscolaService {
 		$ob->whatsapp_horario_fim = trim((string)($dados['whatsapp_horario_fim'] ?? '')) ?: null;
 		$ob->whatsapp_dias = trim((string)($dados['whatsapp_dias'] ?? '1,2,3,4,5')) ?: '1,2,3,4,5';
 		$ob->whatsapp_msg_fora = trim((string)($dados['whatsapp_msg_fora'] ?? ''));
+		if (EscolaIntegracoes::temColunaCampanhaRespeitarExpediente()) {
+			$ob->campanha_respeitar_expediente = !empty($dados['campanha_respeitar_expediente']) ? 1 : 0;
+		}
 		if (EscolaIntegracoes::temColunasMenuWhatsapp()) {
 			$ob->whatsapp_menu_ativo = !empty($dados['whatsapp_menu_ativo']) ? 1 : 0;
 			$ob->whatsapp_menu_manual_ativo = !empty($dados['whatsapp_menu_manual_ativo']) ? 1 : 0;

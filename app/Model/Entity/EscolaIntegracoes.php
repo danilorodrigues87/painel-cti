@@ -60,6 +60,7 @@ class EscolaIntegracoes {
 	public $whatsapp_horario_fim;
 	public $whatsapp_dias = '1,2,3,4,5';
 	public $whatsapp_msg_fora;
+	public $campanha_respeitar_expediente = 0;
 	public $whatsapp_menu_ativo = 1;
 	public $whatsapp_menu_manual_ativo = 1;
 	public $whatsapp_menu_titulo;
@@ -321,6 +322,26 @@ class EscolaIntegracoes {
 				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
 			);
 			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'whatsapp_variar_texto'");
+			$cache = $stmt && $stmt->rowCount() > 0;
+		} catch (\Throwable $e) {
+			$cache = false;
+		}
+		return $cache;
+	}
+
+	public static function temColunaCampanhaRespeitarExpediente(): bool {
+		static $cache = null;
+		if ($cache !== null) {
+			return $cache;
+		}
+		try {
+			$pdo = new \PDO(
+				'mysql:host='.getenv('DB_HOST').';dbname='.getenv('DB_NAME').';charset=utf8mb4',
+				getenv('DB_USER'),
+				getenv('DB_PASS'),
+				[\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]
+			);
+			$stmt = $pdo->query("SHOW COLUMNS FROM escola_integracoes LIKE 'campanha_respeitar_expediente'");
 			$cache = $stmt && $stmt->rowCount() > 0;
 		} catch (\Throwable $e) {
 			$cache = false;
@@ -856,6 +877,9 @@ class EscolaIntegracoes {
 				$dados['whatsapp_horario_fim'] = $this->whatsapp_horario_fim ?: null;
 				$dados['whatsapp_dias'] = $this->whatsapp_dias ?: '1,2,3,4,5';
 				$dados['whatsapp_msg_fora'] = $this->whatsapp_msg_fora;
+			}
+			if (self::temColunaCampanhaRespeitarExpediente()) {
+				$dados['campanha_respeitar_expediente'] = !empty($this->campanha_respeitar_expediente) ? 1 : 0;
 			}
 			if (self::temColunasMenuWhatsapp()) {
 				$dados['whatsapp_menu_ativo'] = !empty($this->whatsapp_menu_ativo) ? 1 : 0;
