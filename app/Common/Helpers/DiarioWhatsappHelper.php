@@ -135,16 +135,50 @@ class DiarioWhatsappHelper {
 	}
 
 	/**
-	 * Alunos com aula nos próximos 30 min (somente data = hoje).
+	 * Horários com aulas na data (para seleção do lembrete).
+	 *
+	 * @return list<array{id:int,label:string,inicio:string}>
+	 */
+	public static function listarHorariosDia(int $idAdmin, string $data, int $labId = 0): array {
+		$sql = '
+			SELECT DISTINCT h.id, h.inicio, h.final
+			FROM agenda_aulas aa
+			INNER JOIN horarios h ON h.id = aa.id_horario
+			WHERE aa.id_admin = :id_admin AND aa.data_aula = :data
+		';
+		if ($labId > 0) {
+			$sql .= ' AND aa.laboratorio_id = '.(int)$labId;
+		}
+		$sql .= ' ORDER BY h.inicio ASC';
+
+		$stmt = self::pdo()->prepare($sql);
+		$stmt->execute(['id_admin' => $idAdmin, 'data' => $data]);
+
+		$out = [];
+		while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+			$id = (int)($row['id'] ?? 0);
+			if ($id <= 0) {
+				continue;
+			}
+			$label = self::horarioBr($row['inicio'] ?? '', $row['final'] ?? '');
+			$out[] = [
+				'id'     => $id,
+				'label'  => $label,
+				'inicio' => substr((string)($row['inicio'] ?? ''), 0, 5),
+			];
+		}
+		return $out;
+	}
+
+	/**
+	 * Alunos agendados no horário selecionado (exclui quem já está presente/reposição).
 	 *
 	 * @return list<array{destinatario_id:int,nome:string,contato:string,curso:string,horario:string,data:string}>
 	 */
-	public static function resolverLembrete30Min(int $idAdmin, string $data, int $labId = 0): array {
-		if ($data !== date('Y-m-d')) {
+	public static function resolverLembreteHorario(int $idAdmin, string $data, int $horarioId, int $labId = 0): array {
+		if ($horarioId <= 0) {
 			return [];
 		}
-		$agora = date('H:i:s');
-		$limite = date('H:i:s', time() + 30 * 60);
 
 		$sql = '
 			SELECT DISTINCT aa.id AS agenda_aula_id, aa.id_aluno, u.nome, u.whatsapp AS contato,
@@ -157,8 +191,7 @@ class DiarioWhatsappHelper {
 			LEFT JOIN presencas p ON p.agenda_aula_id = aa.id
 			WHERE aa.id_admin = :id_admin
 			  AND aa.data_aula = :data
-			  AND h.inicio >= :agora
-			  AND h.inicio <= :limite
+			  AND aa.id_horario = :horario_id
 			  AND u.whatsapp IS NOT NULL AND u.whatsapp != ""
 		';
 		if ($labId > 0) {
@@ -167,10 +200,9 @@ class DiarioWhatsappHelper {
 
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute([
-			'id_admin' => $idAdmin,
-			'data'     => $data,
-			'agora'    => $agora,
-			'limite'   => $limite,
+			'id_admin'    => $idAdmin,
+			'data'        => $data,
+			'horario_id'  => $horarioId,
 		]);
 
 		$out = [];

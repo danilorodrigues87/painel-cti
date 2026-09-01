@@ -65,6 +65,19 @@ function atualizarUiWhatsapp(result) {
 	$('#diario-wa-lembrete').val(result.mensagem_lembrete || '');
 	$('#diario-wa-faltas').val(result.mensagem_faltas || '');
 
+	var horarioAtual = $('#diario-wa-horario').val();
+	var $selHor = $('#diario-wa-horario');
+	$selHor.find('option:not(:first)').remove();
+	var horarios = result.horarios_lembrete || [];
+	horarios.forEach(function (h) {
+		$selHor.append($('<option>', { value: h.id, text: h.label }));
+	});
+	if (horarioAtual && $selHor.find('option[value="' + horarioAtual + '"]').length) {
+		$selHor.val(horarioAtual);
+	} else if (horarios.length === 1) {
+		$selHor.val(String(horarios[0].id));
+	}
+
 	var statusTxt = result.whatsapp_conectado ? 'Conectado' : (result.whatsapp_motivo || 'Desconectado');
 	var $badge = $('#diario-wa-status');
 	$badge.text(statusTxt);
@@ -77,17 +90,13 @@ function atualizarUiWhatsapp(result) {
 
 	var podeEnviar = !!result.whatsapp_conectado;
 	$('#btn-diario-wa-lembrete, #btn-diario-wa-faltas').prop('disabled', !podeEnviar);
-
-	var ehHoje = result.data === result.hoje;
-	if (!ehHoje) {
-		$('#btn-diario-wa-lembrete').prop('disabled', true);
-	}
 }
 
 function payloadDiarioWa() {
 	return {
 		data: $('#data-diario').val(),
 		laboratorio_id: $('#lab-diario').val() || 0,
+		id_horario: $('#diario-wa-horario').val() || 0,
 		mensagem_lembrete: $('#diario-wa-lembrete').val(),
 		mensagem_faltas: $('#diario-wa-faltas').val()
 	};
@@ -113,6 +122,11 @@ function salvarMensagensDiarioWa() {
 }
 
 function enviarDiarioWa(tipo) {
+	if (tipo === 'lembrete' && !$('#diario-wa-horario').val()) {
+		Swal.fire({ title: 'Selecione o horário', text: 'Escolha o horário da turma antes de enviar o lembrete.', icon: 'info' });
+		return;
+	}
+
 	var previewAcao = tipo === 'lembrete' ? 'preview_lembrete' : 'preview_faltas';
 	var enviarAcao = tipo === 'lembrete' ? 'enviar_lembrete' : 'enviar_faltas';
 	var titulo = tipo === 'lembrete' ? 'Enviar lembrete?' : 'Enviar aviso de faltas?';
@@ -129,12 +143,15 @@ function enviarDiarioWa(tipo) {
 			}
 			if (!prev.total) {
 				var msgVazio = tipo === 'lembrete'
-					? 'Nenhum aluno com aula nos próximos 30 minutos e WhatsApp válido.'
+					? 'Nenhum aluno agendado neste horário com WhatsApp válido (ou todos já estão Presente/Reposição).'
 					: 'Nenhuma falta registrada para esta data (salve o diário com status Falta).';
 				Swal.fire({ title: 'Nenhum destinatário', text: msgVazio, icon: 'info' });
 				return;
 			}
 			var html = '<p><strong>' + prev.total + '</strong> aluno(s) receberão a mensagem.</p>';
+			if (tipo === 'lembrete' && prev.horario_label) {
+				html += '<p class="small mb-2">Horário: <strong>' + $('<div>').text(prev.horario_label).html() + '</strong></p>';
+			}
 			if (prev.amostra && prev.amostra.length) {
 				html += '<ul class="text-start small mb-0">';
 				prev.amostra.forEach(function (a) {

@@ -120,6 +120,7 @@ class AgendaDiario extends Page {
 		$whatsappPlano = in_array('whatsapp', $slugs, true);
 		$waStatus = $whatsappPlano ? WhatsappEscolaService::status($id_admin) : null;
 		$mensagens = DiarioWhatsappHelper::getMensagens($id_admin);
+		$horariosLembrete = DiarioWhatsappHelper::listarHorariosDia($id_admin, $data, $labFiltro);
 
 		return json_encode([
 			'table'               => $table,
@@ -128,6 +129,7 @@ class AgendaDiario extends Page {
 			'data_br'             => DiarioWhatsappHelper::dataBr($data),
 			'hoje'                => date('Y-m-d'),
 			'total'               => $totalLinhas,
+			'horarios_lembrete'   => $horariosLembrete,
 			'whatsapp_plano'      => $whatsappPlano,
 			'whatsapp_conectado'  => !empty($waStatus['conectado']),
 			'whatsapp_motivo'     => !$whatsappPlano
@@ -218,18 +220,25 @@ class AgendaDiario extends Page {
 	private static function waPreviewLembrete(int $idAdmin, array $postVars): string {
 		$data = self::normalizarData($postVars['data'] ?? date('Y-m-d'));
 		$labId = (int)($postVars['laboratorio_id'] ?? 0);
-		if ($data !== date('Y-m-d')) {
-			return json_encode([
-				'success' => false,
-				'message' => 'O lembrete só pode ser enviado para a data de hoje ('.DiarioWhatsappHelper::dataBr(date('Y-m-d')).').',
-			]);
+		$horarioId = (int)($postVars['id_horario'] ?? 0);
+		if ($horarioId <= 0) {
+			return json_encode(['success' => false, 'message' => 'Selecione o horário da turma.']);
 		}
-		$dest = DiarioWhatsappHelper::resolverLembrete30Min($idAdmin, $data, $labId);
+		$dest = DiarioWhatsappHelper::resolverLembreteHorario($idAdmin, $data, $horarioId, $labId);
+		$horarios = DiarioWhatsappHelper::listarHorariosDia($idAdmin, $data, $labId);
+		$horarioLabel = '';
+		foreach ($horarios as $h) {
+			if ((int)($h['id'] ?? 0) === $horarioId) {
+				$horarioLabel = (string)($h['label'] ?? '');
+				break;
+			}
+		}
 		return json_encode([
-			'success' => true,
-			'total'   => count($dest),
-			'amostra' => array_slice(array_map(static function ($d) {
-				return $d['nome'].' · '.$d['horario'];
+			'success'       => true,
+			'total'         => count($dest),
+			'horario_label' => $horarioLabel,
+			'amostra'       => array_slice(array_map(static function ($d) {
+				return $d['nome'].' · '.$d['curso'];
 			}, $dest), 0, 8),
 		], JSON_UNESCAPED_UNICODE);
 	}
@@ -251,20 +260,31 @@ class AgendaDiario extends Page {
 	private static function waEnviarLembrete(int $idAdmin, int $usuarioId, array $postVars): string {
 		$data = self::normalizarData($postVars['data'] ?? date('Y-m-d'));
 		$labId = (int)($postVars['laboratorio_id'] ?? 0);
-		if ($data !== date('Y-m-d')) {
-			return json_encode([
-				'success' => false,
-				'message' => 'O lembrete só pode ser enviado para hoje ('.DiarioWhatsappHelper::dataBr(date('Y-m-d')).').',
-			]);
+		$horarioId = (int)($postVars['id_horario'] ?? 0);
+		if ($horarioId <= 0) {
+			return json_encode(['ok' => false, 'success' => false, 'message' => 'Selecione o horário da turma.']);
 		}
 		$msg = trim((string)($postVars['mensagem_lembrete'] ?? ''));
 		if ($msg === '') {
 			$msg = DiarioWhatsappHelper::getMensagens($idAdmin)['lembrete'];
 		}
-		$dest = DiarioWhatsappHelper::resolverLembrete30Min($idAdmin, $data, $labId);
+		$dest = DiarioWhatsappHelper::resolverLembreteHorario($idAdmin, $data, $horarioId, $labId);
+		$horarios = DiarioWhatsappHelper::listarHorariosDia($idAdmin, $data, $labId);
+		$horarioLabel = '';
+		foreach ($horarios as $h) {
+			if ((int)($h['id'] ?? 0) === $horarioId) {
+				$horarioLabel = (string)($h['label'] ?? '');
+				break;
+			}
+		}
+		$titulo = 'Diário — Lembrete ('.DiarioWhatsappHelper::dataBr($data);
+		if ($horarioLabel !== '') {
+			$titulo .= ' · '.$horarioLabel;
+		}
+		$titulo .= ')';
 		$res = DiarioWhatsappHelper::dispararCampanha(
 			$idAdmin,
-			'Diário — Lembrete de aula ('.DiarioWhatsappHelper::dataBr($data).')',
+			$titulo,
 			$msg,
 			$dest,
 			$usuarioId,

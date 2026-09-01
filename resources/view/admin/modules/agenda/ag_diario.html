@@ -36,12 +36,16 @@
 		</p>
 		<div class="row g-4">
 			<div class="col-lg-6">
-				<label class="form-label" for="diario-wa-lembrete">Mensagem — lembrete (próximos 30 min)</label>
+				<label class="form-label" for="diario-wa-horario">Horário da turma (lembrete)</label>
+				<select class="form-select mb-2" id="diario-wa-horario">
+					<option value="">— Selecione o horário —</option>
+				</select>
+				<label class="form-label" for="diario-wa-lembrete">Mensagem — lembrete de aula</label>
 				<textarea class="form-control font-monospace" id="diario-wa-lembrete" rows="7"></textarea>
 				<button type="button" class="btn btn-success mt-2" id="btn-diario-wa-lembrete">
 					<i class="fab fa-whatsapp"></i> Enviar lembrete
 				</button>
-				<p class="text-muted small mt-1 mb-0">Só funciona quando a data selecionada é <strong>hoje</strong>.</p>
+				<p class="text-muted small mt-1 mb-0">Envia para alunos do horário selecionado que ainda não estão marcados como Presente ou Reposição.</p>
 			</div>
 			<div class="col-lg-6">
 				<label class="form-label" for="diario-wa-faltas">Mensagem — faltas do dia</label>
@@ -63,4 +67,4 @@
 	let salvarDiario = 'painel/agenda/diario/salvar';
 	let diarioWhatsappUrl = 'painel/agenda/diario/whatsapp';
 </script>
-<script src="{{URL}}/resources/js/agenda-diario.js?v=20260901d"></script>
+<script src="{{URL}}/resources/js/agenda-diario.js?v=20260901e"></script>
