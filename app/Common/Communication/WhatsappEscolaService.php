@@ -536,6 +536,23 @@ class WhatsappEscolaService {
 			return ['ok' => false, 'message' => EscolaIntegracoes::getUltimoErro() ?: 'Falha ao salvar.'];
 		}
 
+		// #region agent log
+		$logPath = dirname(__DIR__, 3).'/debug-6b4d05.log';
+		@file_put_contents($logPath, json_encode([
+			'sessionId'    => '6b4d05',
+			'hypothesisId' => 'H1,H5',
+			'location'     => 'WhatsappEscolaService.php:salvarLimites',
+			'message'      => 'menu_config_saved',
+			'data'         => [
+				'id_admin'              => $idAdmin,
+				'whatsapp_menu_ativo'   => (int)$ob->whatsapp_menu_ativo,
+				'whatsapp_menu_manual'  => (int)$ob->whatsapp_menu_manual_ativo,
+				'colunas_menu_ok'       => EscolaIntegracoes::temColunasMenuWhatsapp(),
+			],
+			'timestamp'    => (int)round(microtime(true) * 1000),
+		], JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND);
+		// #endregion
+
 		return ['ok' => true, 'message' => 'Configurações de WhatsApp salvas.'];
 	}
 

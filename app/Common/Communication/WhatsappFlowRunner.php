@@ -21,6 +21,20 @@ class WhatsappFlowRunner {
 	private const DELAY_MAX_SEG = 3;
 	private const TIMEOUT_HORAS_PADRAO = 24;
 
+	// #region agent log
+	private static function debugLog(string $location, string $message, array $data, string $hypothesisId): void {
+		$path = dirname(__DIR__, 3).'/debug-6b4d05.log';
+		@file_put_contents($path, json_encode([
+			'sessionId'    => '6b4d05',
+			'hypothesisId' => $hypothesisId,
+			'location'     => $location,
+			'message'      => $message,
+			'data'         => $data,
+			'timestamp'    => (int)round(microtime(true) * 1000),
+		], JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND);
+	}
+	// #endregion
+
 	/** @var bool */
 	private static $dryRun = false;
 	/** @var list<array{from:string,tipo:string,texto?:string,detalhe?:string}> */
@@ -86,6 +100,18 @@ class WhatsappFlowRunner {
 		if (!$fluxo) {
 			return false;
 		}
+
+		// #region agent log
+		$tr = $fluxo->definicaoArray()['trigger'] ?? [];
+		self::debugLog('WhatsappFlowRunner.php:iniciar', 'flow_matched', [
+			'conversa_id'  => (int)$conversa->id,
+			'fluxo_id'     => (int)$fluxo->id,
+			'fluxo_nome'   => $fluxo->nome ?? '',
+			'trigger_tipo' => $tr['tipo'] ?? '',
+			'texto'        => mb_substr($texto, 0, 40),
+			'menu_auto'    => WhatsappEscolaService::menuAutomaticoAtivo($idAdmin),
+		], 'H2');
+		// #endregion
 
 		return self::iniciar($conversa, $fluxo, $texto);
 	}

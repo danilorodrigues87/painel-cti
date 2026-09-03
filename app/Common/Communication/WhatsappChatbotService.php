@@ -15,6 +15,20 @@ class WhatsappChatbotService {
 
 	private static $lastError = null;
 
+	// #region agent log
+	private static function debugLog(string $location, string $message, array $data, string $hypothesisId): void {
+		$path = dirname(__DIR__, 3).'/debug-6b4d05.log';
+		@file_put_contents($path, json_encode([
+			'sessionId'    => '6b4d05',
+			'hypothesisId' => $hypothesisId,
+			'location'     => $location,
+			'message'      => $message,
+			'data'         => $data,
+			'timestamp'    => (int)round(microtime(true) * 1000),
+		], JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND);
+	}
+	// #endregion
+
 	public static function getLastError(): ?string {
 		return self::$lastError;
 	}
@@ -34,6 +48,12 @@ class WhatsappChatbotService {
 
 		// Fluxos configuráveis (Fase A) — se tratar, não roda o menu de setores
 		if (WhatsappFlowRunner::aoReceberMensagem($conversa, $texto, $fromMe)) {
+			// #region agent log
+			self::debugLog('WhatsappChatbotService.php:flow', 'handled_by_flow_runner', [
+				'conversa_id' => (int)$conversa->id,
+				'texto'       => mb_substr($texto, 0, 40),
+			], 'H2');
+			// #endregion
 			return;
 		}
 
@@ -55,6 +75,18 @@ class WhatsappChatbotService {
 		$texto = trim((string)$texto);
 		$idAdmin = (int)$conversa->id_admin;
 		$menuCfg = WhatsappEscolaService::getConfigMenu($idAdmin);
+		// #region agent log
+		self::debugLog('WhatsappChatbotService.php:menuCfg', 'config_loaded', [
+			'conversa_id'        => (int)$conversa->id,
+			'id_admin'           => $idAdmin,
+			'estado'             => $estado,
+			'status'             => $status,
+			'menu_ativo'         => $menuCfg['menu_ativo'],
+			'menu_manual_ativo'  => $menuCfg['menu_manual_ativo'],
+			'colunas_menu_ok'    => EscolaIntegracoes::temColunasMenuWhatsapp(),
+			'texto'              => mb_substr($texto, 0, 40),
+		], 'H1,H3,H5');
+		// #endregion
 
 		// Fora do expediente: responde e não abre fila (exceto se já estava em fila)
 		if (in_array($estado, ['novo', '', 'aguardando_setor', 'encerrado'], true) || $status === 'fechada') {
@@ -99,10 +131,20 @@ class WhatsappChatbotService {
 			}
 
 			if (!$menuCfg['menu_ativo']) {
+				// #region agent log
+				self::debugLog('WhatsappChatbotService.php:novo', 'menu_auto_off_manter_silencioso', [
+					'conversa_id' => (int)$conversa->id,
+				], 'H3');
+				// #endregion
 				self::manterSilencioso($conversa, $texto, $setores, $menuCfg);
 				return;
 			}
 
+			// #region agent log
+			self::debugLog('WhatsappChatbotService.php:novo', 'enviar_menu_auto', [
+				'conversa_id' => (int)$conversa->id,
+			], 'H1');
+			// #endregion
 			self::enviarMenu($conversa, $setores, $menuCfg);
 			return;
 		}
@@ -129,6 +171,13 @@ class WhatsappChatbotService {
 		]);
 
 		if ($texto !== '' && !empty($menuCfg['menu_manual_ativo']) && self::pedeMenu($texto, $menuCfg)) {
+			// #region agent log
+			self::debugLog('WhatsappChatbotService.php:manterSilencioso', 'manual_menu_triggered', [
+				'conversa_id' => (int)$conversa->id,
+				'texto'       => mb_substr($texto, 0, 40),
+				'palavras'    => $menuCfg['palavras'],
+			], 'H3');
+			// #endregion
 			self::enviarMenu($conversa, $setores, $menuCfg);
 		}
 	}
@@ -189,6 +238,12 @@ class WhatsappChatbotService {
 	}
 
 	private static function enviarMenu(WhatsappConversa $conversa, array $setores, array $menuCfg): void {
+		// #region agent log
+		self::debugLog('WhatsappChatbotService.php:enviarMenu', 'sending_menu', [
+			'conversa_id' => (int)$conversa->id,
+			'setores'     => count($setores),
+		], 'H1,H3,H4');
+		// #endregion
 		if (!$setores) {
 			self::enviarTexto($conversa, 'Olá! No momento não há setores configurados. Aguarde um atendente.');
 			$conversa->atualizar(['chatbot_estado' => 'fila', 'status' => 'aberta']);
