@@ -86,7 +86,8 @@ class AlunoExtrato extends Page {
 				$idAluno,
 				$ids,
 				(float)str_replace(',', '.', (string)($post['valor_total'] ?? 0)),
-				(int)($post['qtd_parcelas'] ?? 1),
+				(float)str_replace(',', '.', (string)($post['valor_entrada'] ?? 0)),
+				(int)($post['qtd_parcelas_restante'] ?? $post['qtd_parcelas'] ?? 1),
 				(string)($post['primeiro_vencimento'] ?? ''),
 				(string)($post['observacao'] ?? '')
 			);

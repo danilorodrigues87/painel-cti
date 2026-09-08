@@ -10,6 +10,7 @@ class FinanceiroAcordo {
 	public $id_admin;
 	public $id_aluno;
 	public $valor_total = 0;
+	public $valor_entrada = 0;
 	public $valor_parcela = 0;
 	public $qtd_parcelas = 1;
 	public $dia_vencimento = 10;
@@ -22,6 +23,7 @@ class FinanceiroAcordo {
 
 	private static $cacheTabela = null;
 	private static $cacheColunaCaixa = null;
+	private static $cacheColunaValorEntrada = null;
 
 	public static function tabelasExistem(): bool {
 		if (self::$cacheTabela !== null) {
@@ -35,6 +37,24 @@ class FinanceiroAcordo {
 			self::$cacheTabela = false;
 		}
 		return self::$cacheTabela;
+	}
+
+	public static function temValorEntrada(): bool {
+		if (self::$cacheColunaValorEntrada !== null) {
+			return self::$cacheColunaValorEntrada;
+		}
+		if (!self::tabelasExistem()) {
+			self::$cacheColunaValorEntrada = false;
+			return false;
+		}
+		try {
+			$db = new Database();
+			$stmt = $db->execute("SHOW COLUMNS FROM financeiro_acordos LIKE 'valor_entrada'");
+			self::$cacheColunaValorEntrada = (bool)$stmt->fetch();
+		} catch (\Throwable $e) {
+			self::$cacheColunaValorEntrada = false;
+		}
+		return self::$cacheColunaValorEntrada;
 	}
 
 	public static function caixaTemIdAcordo(): bool {
@@ -76,7 +96,7 @@ class FinanceiroAcordo {
 	}
 
 	public function cadastrar(): int {
-		$this->id = (int)(new Database('financeiro_acordos'))->insert([
+		$data = [
 			'id_admin' => (int)$this->id_admin,
 			'id_aluno' => (int)$this->id_aluno,
 			'valor_total' => (float)$this->valor_total,
@@ -88,7 +108,11 @@ class FinanceiroAcordo {
 			'ids_titulos_origem' => $this->ids_titulos_origem,
 			'status' => $this->status ?: 'ativo',
 			'id_usuario' => $this->id_usuario !== null ? (int)$this->id_usuario : null,
-		]);
+		];
+		if (self::temValorEntrada()) {
+			$data['valor_entrada'] = round(max(0, (float)$this->valor_entrada), 2);
+		}
+		$this->id = (int)(new Database('financeiro_acordos'))->insert($data);
 		return (int)$this->id;
 	}
 }

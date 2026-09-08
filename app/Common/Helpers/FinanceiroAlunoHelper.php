@@ -184,6 +184,7 @@ class FinanceiroAlunoHelper {
 					'id' => (int)$ac->id,
 					'label' => $label,
 					'valor_total' => (float)$ac->valor_total,
+					'valor_entrada' => round(max(0, (float)($ac->valor_entrada ?? 0)), 2),
 					'qtd_parcelas' => (int)$ac->qtd_parcelas,
 					'status' => (string)$ac->status,
 					'observacao' => (string)($ac->observacao ?? ''),
@@ -307,6 +308,7 @@ class FinanceiroAlunoHelper {
 
 	/**
 	 * Renegocia títulos em aberto: marca como Renegociação e cria novo acordo + parcelas.
+	 * Entrada (opcional) no primeiro vencimento; saldo restante dividido em parcelas mensais.
 	 *
 	 * @param int[] $idsTitulos
 	 * @return array{ok:bool,message:string,id_acordo?:int}
@@ -316,7 +318,8 @@ class FinanceiroAlunoHelper {
 		int $idAluno,
 		array $idsTitulos,
 		float $valorTotal,
-		int $qtdParcelas,
+		float $valorEntrada,
+		int $qtdParcelasRestante,
 		string $primeiroVencimento,
 		string $observacao = ''
 	): array {
@@ -331,10 +334,28 @@ class FinanceiroAlunoHelper {
 		if (empty($idsTitulos)) {
 			return ['ok' => false, 'message' => 'Selecione ao menos um título em aberto.'];
 		}
+		$valorTotal = round(max(0, $valorTotal), 2);
 		if ($valorTotal <= 0) {
 			return ['ok' => false, 'message' => 'Informe o valor total do acordo.'];
 		}
-		$qtdParcelas = max(1, min(120, $qtdParcelas));
+		$valorEntrada = round(max(0, $valorEntrada), 2);
+		if ($valorEntrada > $valorTotal) {
+			return ['ok' => false, 'message' => 'A entrada não pode ser maior que o valor total.'];
+		}
+		$qtdParcelasRestante = max(0, min(120, $qtdParcelasRestante));
+		$valorRestante = round($valorTotal - $valorEntrada, 2);
+		if ($valorEntrada <= 0 && $qtdParcelasRestante < 1) {
+			return ['ok' => false, 'message' => 'Informe a quantidade de parcelas do restante.'];
+		}
+		if ($valorEntrada > 0 && $valorRestante > 0 && $qtdParcelasRestante < 1) {
+			return ['ok' => false, 'message' => 'Informe a quantidade de parcelas do restante.'];
+		}
+		if ($valorRestante <= 0 && $qtdParcelasRestante > 0) {
+			return ['ok' => false, 'message' => 'Não há saldo restante para parcelar.'];
+		}
+		if ($valorEntrada <= 0 && $valorRestante <= 0) {
+			return ['ok' => false, 'message' => 'Informe entrada ou parcelas do restante.'];
+		}
 		$ts = strtotime($primeiroVencimento);
 		if ($ts === false) {
 			return ['ok' => false, 'message' => 'Data do primeiro vencimento inválida.'];
@@ -370,19 +391,24 @@ class FinanceiroAlunoHelper {
 			$titulosOk[] = $c;
 		}
 
+		$valorParcRest = 0.0;
+		$ultimaParcRest = 0.0;
+		if ($valorRestante > 0 && $qtdParcelasRestante > 0) {
+			$valorParcRest = round($valorRestante / $qtdParcelasRestante, 2);
+			$somaParc = round($valorParcRest * ($qtdParcelasRestante - 1), 2);
+			$ultimaParcRest = round($valorRestante - $somaParc, 2);
+		}
+
 		$userLoged = SessionUser::getUserLogedData();
 		$idUser = (int)($userLoged['usuario']['id'] ?? 0);
-		$valorParcela = round($valorTotal / $qtdParcelas, 2);
-		// Ajuste centavos na última parcela
-		$somaParc = round($valorParcela * ($qtdParcelas - 1), 2);
-		$ultimaParc = round($valorTotal - $somaParc, 2);
 
 		$acordo = new FinanceiroAcordo();
 		$acordo->id_admin = $idAdmin;
 		$acordo->id_aluno = $idAluno;
 		$acordo->valor_total = $valorTotal;
-		$acordo->valor_parcela = $valorParcela;
-		$acordo->qtd_parcelas = $qtdParcelas;
+		$acordo->valor_entrada = $valorEntrada;
+		$acordo->valor_parcela = $qtdParcelasRestante > 0 ? $valorParcRest : $valorEntrada;
+		$acordo->qtd_parcelas = $valorEntrada > 0 ? $qtdParcelasRestante : max(1, $qtdParcelasRestante);
 		$acordo->dia_vencimento = $diaVenc;
 		$acordo->primeiro_vencimento = $primeiroVencimento;
 		$acordo->observacao = trim($observacao) !== '' ? trim($observacao) : null;
@@ -413,11 +439,42 @@ class FinanceiroAlunoHelper {
 
 		$nomeAluno = (string)$aluno->nome;
 		$venc = $primeiroVencimento;
-		for ($n = 1; $n <= $qtdParcelas; $n++) {
-			$valorN = ($n === $qtdParcelas) ? $ultimaParc : $valorParcela;
+		$qtdTitulos = 0;
+
+		if ($valorEntrada > 0) {
 			$ob = new Caixa();
 			$ob->id_admin = $idAdmin;
-			$ob->descricao = 'Acordo #'.$idAcordo.' '.$nomeAluno.' parc '.$n.'/'.$qtdParcelas;
+			$ob->descricao = 'Acordo #'.$idAcordo.' '.$nomeAluno.' entrada';
+			$ob->tipo_transacao = 'Entrada';
+			$ob->valor = $valorEntrada;
+			$ob->vencimento = $venc;
+			$ob->referencia = 'Acordo financeiro';
+			$ob->id_ref = 0;
+			$ob->id_acordo = $idAcordo;
+			$ob->status = self::STATUS_ABERTO;
+			$ob->tipo_pagamento = '';
+			$ob->valor_pago = 0;
+			$ob->data_pagamento = null;
+			$ob->txt_id = '';
+			$ob->pix_copia_cola = '';
+			$ob->nosso_numero = '';
+			$ob->lancarMovimentacao();
+			$qtdTitulos++;
+
+			$tsNext = strtotime($venc.' +1 month');
+			if ($tsNext !== false) {
+				$y = (int)date('Y', $tsNext);
+				$m = (int)date('m', $tsNext);
+				$d = min($diaVenc, (int)date('t', strtotime(sprintf('%04d-%02d-01', $y, $m))));
+				$venc = sprintf('%04d-%02d-%02d', $y, $m, $d);
+			}
+		}
+
+		for ($n = 1; $n <= $qtdParcelasRestante; $n++) {
+			$valorN = ($n === $qtdParcelasRestante) ? $ultimaParcRest : $valorParcRest;
+			$ob = new Caixa();
+			$ob->id_admin = $idAdmin;
+			$ob->descricao = 'Acordo #'.$idAcordo.' '.$nomeAluno.' parc '.$n.'/'.$qtdParcelasRestante;
 			$ob->tipo_transacao = 'Entrada';
 			$ob->valor = $valorN;
 			$ob->vencimento = $venc;
@@ -432,22 +489,30 @@ class FinanceiroAlunoHelper {
 			$ob->pix_copia_cola = '';
 			$ob->nosso_numero = '';
 			$ob->lancarMovimentacao();
+			$qtdTitulos++;
 
-			// Próximo mês, mesmo dia
 			$tsNext = strtotime($venc.' +1 month');
 			if ($tsNext === false) {
 				break;
 			}
-			// Mantém dia de vencimento desejado
 			$y = (int)date('Y', $tsNext);
 			$m = (int)date('m', $tsNext);
 			$d = min($diaVenc, (int)date('t', strtotime(sprintf('%04d-%02d-01', $y, $m))));
 			$venc = sprintf('%04d-%02d-%02d', $y, $m, $d);
 		}
 
+		$msgPartes = ['Acordo #'.$idAcordo.' criado'];
+		if ($valorEntrada > 0) {
+			$msgPartes[] = 'entrada R$ '.number_format($valorEntrada, 2, ',', '.');
+		}
+		if ($qtdParcelasRestante > 0) {
+			$msgPartes[] = $qtdParcelasRestante.' parcela(s) do restante';
+		}
+		$msgPartes[] = $qtdTitulos.' título(s) no carnê';
+
 		return [
 			'ok' => true,
-			'message' => 'Acordo #'.$idAcordo.' criado com '.$qtdParcelas.' parcela(s).',
+			'message' => implode(' · ', $msgPartes).'.',
 			'id_acordo' => $idAcordo,
 		];
 	}

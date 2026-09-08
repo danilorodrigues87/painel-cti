@@ -176,8 +176,14 @@
 					'<div><strong>' +
 					esc(a.label) +
 					'</strong> · ' +
-					a.qtd_parcelas +
-					' parcelas · total ' +
+					((a.valor_entrada || 0) > 0
+						? 'Entrada ' +
+							moeda(a.valor_entrada) +
+							(a.qtd_parcelas > 0
+								? ' + ' + a.qtd_parcelas + ' parcela' + (a.qtd_parcelas === 1 ? '' : 's') + ' do restante'
+								: '')
+						: a.qtd_parcelas + ' parcela' + (a.qtd_parcelas === 1 ? '' : 's')) +
+					' · total ' +
 					moeda(a.valor_total) +
 					(a.observacao ? '<div class="small text-muted">' + esc(a.observacao) + '</div>' : '') +
 					'</div>' +
@@ -514,6 +520,45 @@
 		return sum;
 	}
 
+	function calcResumoRenegociacao(valorTotal, valorEntrada, qtdRest) {
+		valorTotal = Number(valorTotal) || 0;
+		valorEntrada = Math.max(0, Number(valorEntrada) || 0);
+		qtdRest = parseInt(qtdRest, 10) || 0;
+		if (valorEntrada > valorTotal) {
+			return { ok: false, msg: 'A entrada não pode ser maior que o total.' };
+		}
+		var restante = Math.round((valorTotal - valorEntrada) * 100) / 100;
+		if (valorEntrada <= 0 && qtdRest < 1) {
+			return { ok: false, msg: 'Informe a quantidade de parcelas do restante.' };
+		}
+		if (valorEntrada > 0 && restante > 0 && qtdRest < 1) {
+			return { ok: false, msg: 'Informe a quantidade de parcelas do restante.' };
+		}
+		if (restante <= 0 && qtdRest > 0) {
+			return { ok: false, msg: 'Não há saldo restante para parcelar.' };
+		}
+		var parcRest = 0;
+		if (restante > 0 && qtdRest > 0) {
+			parcRest = Math.round((restante / qtdRest) * 100) / 100;
+		}
+		var partes = [];
+		if (valorEntrada > 0) {
+			partes.push('entrada ' + moeda(valorEntrada));
+		}
+		if (qtdRest > 0 && restante > 0) {
+			partes.push(qtdRest + 'x ' + moeda(parcRest) + ' (restante ' + moeda(restante) + ')');
+		} else if (valorEntrada <= 0 && qtdRest > 0) {
+			partes.push(qtdRest + 'x ' + moeda(parcRest));
+		}
+		return {
+			ok: true,
+			html:
+				partes.length > 0
+					? partes.join(' + ')
+					: 'Informe entrada ou parcelas do restante.',
+		};
+	}
+
 	function abrirRenegociar() {
 		var ids = idsSelecionados();
 		if (!ids.length) {
@@ -539,9 +584,12 @@
 				'<input id="rng-valor" type="number" step="0.01" min="0.01" class="form-control form-control-sm mb-2" value="' +
 				sugerido.toFixed(2) +
 				'">' +
-				'<label class="form-label small mb-0">Quantidade de parcelas</label>' +
-				'<input id="rng-qtd" type="number" min="1" max="120" class="form-control form-control-sm mb-2" value="3">' +
-				'<label class="form-label small mb-0">Primeiro vencimento</label>' +
+				'<label class="form-label small mb-0">Valor de entrada (R$)</label>' +
+				'<input id="rng-entrada" type="number" step="0.01" min="0" class="form-control form-control-sm mb-2" value="0">' +
+				'<label class="form-label small mb-0">Parcelas do restante</label>' +
+				'<input id="rng-qtd" type="number" min="0" max="120" class="form-control form-control-sm mb-2" value="3">' +
+				'<p id="rng-resumo" class="small text-primary mb-2"></p>' +
+				'<label class="form-label small mb-0">Primeiro vencimento (entrada ou 1ª parcela)</label>' +
 				'<input id="rng-venc" type="date" class="form-control form-control-sm mb-2" value="' +
 				yyyy +
 				'-' +
@@ -551,20 +599,41 @@
 				'">' +
 				'<label class="form-label small mb-0">Observação (opcional)</label>' +
 				'<input id="rng-obs" class="form-control form-control-sm" maxlength="500">' +
-				'<p class="small text-muted mt-2 mb-0">Os títulos antigos ficam como “Renegociação” no histórico. O novo acordo gera parcelas sem liberar curso EAD.</p>' +
+				'<p class="small text-muted mt-2 mb-0">Com entrada, ela vence na data acima; as demais parcelas começam no mês seguinte. Os títulos antigos ficam como “Renegociação” no histórico.</p>' +
 				'</div>',
 			showCancelButton: true,
 			confirmButtonText: 'Criar acordo',
+			didOpen: function () {
+				function atualizarResumo() {
+					var r = calcResumoRenegociacao(
+						parseFloat($('#rng-valor').val()),
+						parseFloat($('#rng-entrada').val()),
+						parseInt($('#rng-qtd').val(), 10)
+					);
+					var $el = $('#rng-resumo');
+					if (!r.ok) {
+						$el.removeClass('text-primary').addClass('text-danger').text(r.msg);
+						return;
+					}
+					$el.removeClass('text-danger').addClass('text-primary').text('Resumo: ' + r.html);
+				}
+				$('#rng-valor, #rng-entrada, #rng-qtd').on('input change', atualizarResumo);
+				atualizarResumo();
+			},
 			preConfirm: function () {
 				var valor = parseFloat($('#rng-valor').val());
+				var entrada = parseFloat($('#rng-entrada').val());
+				if (isNaN(entrada) || entrada < 0) entrada = 0;
 				var qtd = parseInt($('#rng-qtd').val(), 10);
+				if (isNaN(qtd) || qtd < 0) qtd = 0;
 				var venc = $('#rng-venc').val();
+				var r = calcResumoRenegociacao(valor, entrada, qtd);
 				if (!(valor > 0)) {
 					Swal.showValidationMessage('Informe o valor total.');
 					return false;
 				}
-				if (!(qtd >= 1)) {
-					Swal.showValidationMessage('Informe a quantidade de parcelas.');
+				if (!r.ok) {
+					Swal.showValidationMessage(r.msg);
 					return false;
 				}
 				if (!venc) {
@@ -573,7 +642,8 @@
 				}
 				return {
 					valor_total: valor,
-					qtd_parcelas: qtd,
+					valor_entrada: entrada,
+					qtd_parcelas_restante: qtd,
 					primeiro_vencimento: venc,
 					observacao: ($('#rng-obs').val() || '').trim(),
 				};
@@ -584,7 +654,8 @@
 				acao: 'renegociar',
 				ids_titulos: JSON.stringify(ids),
 				valor_total: r.value.valor_total,
-				qtd_parcelas: r.value.qtd_parcelas,
+				valor_entrada: r.value.valor_entrada,
+				qtd_parcelas_restante: r.value.qtd_parcelas_restante,
 				primeiro_vencimento: r.value.primeiro_vencimento,
 				observacao: r.value.observacao,
 			}).done(function (res) {
