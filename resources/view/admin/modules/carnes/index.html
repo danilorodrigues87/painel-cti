@@ -52,18 +52,6 @@
 	</div>
 </div>
 
-<div class="modal fade" id="modalDarBaixa" tabindex="-1" aria-hidden="true">
-	<div class="modal-dialog">
-		<div class="modal-content">
-			<div class="modal-header">
-				<h5 class="modal-title">Dar baixa</h5>
-				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-			</div>
-			<div class="modal-body" id="body_dar_baixa"></div>
-		</div>
-	</div>
-</div>
-
 <!-- Modal Pagamento Carrinho -->
 <div class="modal fade" id="modalCarrinhoPagamento" tabindex="-1" aria-labelledby="modalCarrinhoLabel" aria-hidden="true">
 	<div class="modal-dialog">
@@ -139,7 +127,6 @@ html[data-bs-theme="dark"] #carrinho-detalhes {
 	let listagem = 'painel/carnes';
 	let formulario = 'painel/carnes/form';
 	let edicao = 'painel/carnes/save';
-	let formBaixa = 'painel/carnes/dar-baixa';
 
 	let rotaCarrinhoResumo    = 'painel/caixa/carrinho/get';
 	let rotaCarrinhoAddTitulo = 'painel/caixa/carrinho/add-titulo';
@@ -148,6 +135,7 @@ html[data-bs-theme="dark"] #carrinho-detalhes {
 	let rotaCarrinhoForm      = 'painel/caixa/carrinho/form';
 	let rotaCarrinhoFinalizar = 'painel/caixa/carrinho/finalizar';
 </script>
-<script src="{{URL}}/resources/js/ajax.js?v=20260728f"></script>
+<script src="{{URL}}/resources/js/ajax.js?v=20260905g"></script>
 <script src="{{URL}}/resources/js/recibo-acoes.js"></script>
-<script src="{{URL}}/resources/js/carrinho.js?v=20260730b"></script>
+<script src="{{URL}}/resources/js/carrinho.js?v=20260905c"></script>
+<script src="{{URL}}/resources/js/encargos-carrinho.js?v=20260905"></script>

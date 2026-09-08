@@ -131,8 +131,8 @@ class FinanceiroAlunoHelper {
 				if ($row['status'] === 'pago') {
 					$pago += (float)$row['valor_pago'] > 0 ? (float)$row['valor_pago'] : (float)$row['valor'];
 				} elseif ($row['status'] === 'vencido') {
-					$vencido += (float)$row['valor'];
-					$aberto += (float)$row['valor'];
+					$vencido += (float)($row['total_com_encargos'] ?? $row['valor']);
+					$aberto += (float)($row['total_com_encargos'] ?? $row['valor']);
 				} elseif ($row['status'] === 'aberto') {
 					$aberto += (float)$row['valor'];
 				}
@@ -211,8 +211,9 @@ class FinanceiroAlunoHelper {
 			if ($t['status'] === 'pago') {
 				$totais['pago'] += (float)$t['valor_pago'] > 0 ? (float)$t['valor_pago'] : (float)$t['valor'];
 			} elseif ($t['status'] === 'vencido') {
-				$totais['vencido'] += (float)$t['valor'];
-				$totais['aberto'] += (float)$t['valor'];
+				$tot = (float)($t['total_com_encargos'] ?? $t['valor']);
+				$totais['vencido'] += $tot;
+				$totais['aberto'] += $tot;
 			} elseif ($t['status'] === 'aberto') {
 				$totais['aberto'] += (float)$t['valor'];
 			}
@@ -220,6 +221,15 @@ class FinanceiroAlunoHelper {
 		$totais['pago'] = round($totais['pago'], 2);
 		$totais['aberto'] = round($totais['aberto'], 2);
 		$totais['vencido'] = round($totais['vencido'], 2);
+
+		$divida = EncargosContratoHelper::calcularDividaAluno($idAdmin, $idAluno, $hoje);
+		if (!empty($divida['ok'])) {
+			$totais['divida_atualizada'] = (float)($divida['total_com_encargos'] ?? 0);
+			$totais['divida_face'] = (float)($divida['total_face'] ?? 0);
+			$totais['divida_multa'] = (float)($divida['total_multa'] ?? 0);
+			$totais['divida_juros'] = (float)($divida['total_juros'] ?? 0);
+			$totais['qtd_titulos_abertos'] = (int)($divida['qtd_abertos'] ?? 0);
+		}
 
 		return [
 			'ok' => true,
@@ -252,6 +262,26 @@ class FinanceiroAlunoHelper {
 		} elseif (!self::tituloPago($c->status)) {
 			$status = self::tituloAberto($c->status) ? 'aberto' : 'pago';
 		}
+
+		$valorFace = round((float)($c->valor ?? 0), 2);
+		$multa = 0.0;
+		$juros = 0.0;
+		$totalComEnc = $valorFace;
+		$elegivelEnc = false;
+		$refTitulo = trim((string)($c->referencia ?? ''));
+		$ehMultaRescisoria = ($refTitulo === 'Multa rescisória');
+		if (($status === 'vencido' || $status === 'aberto') && ($origem === 'matricula' || $ehMultaRescisoria)) {
+			$vals = EncargosContratoHelper::resolverValoresTituloCaixa($c, true, $hoje);
+			$valorFace = $vals['face'];
+			$totalComEnc = $vals['valor'];
+			$multa = (float)($vals['enc']['multa'] ?? 0);
+			$juros = (float)($vals['enc']['juros'] ?? 0);
+			$elegivelEnc = !empty($vals['elegivel_encargos']);
+		}
+		if ($ehMultaRescisoria) {
+			$origemLabel = 'Multa rescisória';
+		}
+
 		return [
 			'id' => (int)$c->id,
 			'origem' => $origem,
@@ -259,7 +289,12 @@ class FinanceiroAlunoHelper {
 			'origem_label' => $origemLabel,
 			'descricao' => (string)($c->descricao ?? ''),
 			'referencia' => (string)($c->referencia ?? ''),
-			'valor' => (float)($c->valor ?? 0),
+			'valor' => $valorFace,
+			'valor_face' => $valorFace,
+			'multa' => round($multa, 2),
+			'juros' => round($juros, 2),
+			'total_com_encargos' => round($totalComEnc, 2),
+			'elegivel_encargos' => $elegivelEnc,
 			'valor_pago' => (float)($c->valor_pago ?? 0),
 			'vencimento' => $venc,
 			'data_pagamento' => (string)($c->data_pagamento ?? ''),
@@ -514,8 +549,24 @@ class FinanceiroAlunoHelper {
 		if ($ts === false) {
 			return ['ok' => false, 'message' => 'Data de pagamento inválida.'];
 		}
+		$dataPagamento = date('Y-m-d', $ts);
 
-		$c->valor_pago = $valorPago;
+		$valsComEnc = EncargosContratoHelper::resolverValoresTituloCaixa($c, true, $dataPagamento);
+		$valsSemEnc = EncargosContratoHelper::resolverValoresTituloCaixa($c, false, $dataPagamento);
+		$okValor = self::valorCompativelComFace($valorPago, $valsComEnc['valor'])
+			|| self::valorCompativelComFace($valorPago, $valsSemEnc['valor']);
+		if (!$okValor) {
+			return [
+				'ok' => false,
+				'message' => 'Valor pago incompatível. Esperado face R$ '
+					.number_format($valsSemEnc['valor'], 2, ',', '.')
+					.($valsComEnc['elegivel_encargos']
+						? ' ou com encargos R$ '.number_format($valsComEnc['valor'], 2, ',', '.')
+						: ''),
+			];
+		}
+
+		$c->valor_pago = round($valorPago, 2);
 		$c->data_pagamento = date('Y-m-d', $ts);
 		$c->tipo_pagamento = $tipoPagamento;
 		$c->status = self::STATUS_PAGO;
@@ -548,7 +599,11 @@ class FinanceiroAlunoHelper {
 		$erros = [];
 		foreach ($idsTitulos as $idTitulo) {
 			$c = Caixa::getCaixaById($idTitulo);
-			$valor = $c instanceof Caixa ? (float)$c->valor : 0;
+			$valor = 0;
+			if ($c instanceof Caixa) {
+				$vals = EncargosContratoHelper::resolverValoresTituloCaixa($c, true, $dataPagamento ?: date('Y-m-d'));
+				$valor = $vals['valor'];
+			}
 			$res = self::darBaixa($idAdmin, $idAluno, $idTitulo, $valor, $tipoPagamento, $dataPagamento);
 			if (!empty($res['ok'])) {
 				$ok++;

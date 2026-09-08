@@ -32,17 +32,21 @@ class SystemModules {
 		'estoque'         => 'Estoque',
 		'vendas'          => 'PDV',
 		'pagamentos'      => 'Pagamentos',
-		'relatorios'      => 'Relatórios',
+		'relatorios'      => 'Relatório financeiro',
 		'agendamentos'    => 'Agendamentos',
 		'laboratorios'    => 'Laboratórios',
 		'horarios'        => 'Horários',
 		'diario'          => 'Diário',
+		'agenda_relatorio'=> 'Relatório de presença',
 	];
 
 	/** Labels legados aceitos na leitura de usuarios.acesso */
 	private static $labelAliases = [
 		'Laboratório' => 'Agendamentos',
 		'Contratos'   => 'Modelo de contrato',
+		'Relatórios'  => 'Relatório financeiro',
+		'Relatório'   => 'Relatório de presença',
+		'Relatório de Presença' => 'Relatório de presença',
 	];
 
 	public static function getCatalog(): array {
@@ -293,7 +297,7 @@ class SystemModules {
 						'link' => URL.'/painel/caixa/saida'
 					],
 					[
-						'label' => 'Relatórios',
+						'label' => 'Relatório financeiro',
 						'link' => URL.'/painel/caixa/relatorio'
 					]
 				]
@@ -339,6 +343,11 @@ class SystemModules {
 					[
 						'label' => 'Diário',
 						'link' => URL.'/painel/agenda/diario'
+					],
+					[
+						'label' => 'Relatório de presença',
+						'link' => URL.'/painel/agenda/relatorio',
+						'requires_label' => 'Diário',
 					]
 				]
 			]

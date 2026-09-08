@@ -8,8 +8,66 @@ use \App\Model\Entity\Matriculas as EntityMatri;
 use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\FinanceiroAlunoHelper;
+use \App\Common\Helpers\EncargosContratoHelper;
 
 class CaixaCarrinho extends Page{
+
+	/**
+	 * Valor a pagar de um título (pontualidade + multa/juros opcionais).
+	 * @return array{face:float,valor:float,enc:array}
+	 */
+	private static function resolverValoresTitulo(EntityCaixa $obCaixa, bool $cobrarEncargos): array {
+		$flagPont = 0;
+		$idRef = (int)($obCaixa->id_ref ?? 0);
+		if ($idRef > 0) {
+			$mat = EntityMatri::getMatriculaById($idRef);
+			if ($mat) {
+				$flagPont = (int)($mat->desconto_pontualidade ?? 0);
+			}
+		}
+		$pont = FinanceiroAlunoHelper::calcularPontualidade(
+			(float)$obCaixa->valor,
+			(string)($obCaixa->vencimento ?? ''),
+			$flagPont
+		);
+		$face = (float)$pont['valor_pagar'];
+		$enc = EncargosContratoHelper::calcularAtraso(
+			$face,
+			(string)($obCaixa->vencimento ?? ''),
+			$idRef > 0 ? EncargosContratoHelper::parametrosPorMatricula($idRef) : EncargosContratoHelper::defaults()
+		);
+		if ($idRef <= 0 || ($obCaixa->vencimento ?? '') === '' || ($obCaixa->vencimento ?? '') > DateTimeHelper::hoje()) {
+			$enc['elegivel_encargos'] = false;
+			$enc['total_com_encargos'] = $face;
+			$enc['total_sem_encargos'] = $face;
+		}
+		$valor = ($cobrarEncargos && !empty($enc['elegivel_encargos']))
+			? (float)$enc['total_com_encargos']
+			: $face;
+
+		return [
+			'face'  => round($face, 2),
+			'valor' => round($valor, 2),
+			'enc'   => $enc,
+		];
+	}
+
+	private static function htmlEncargosLinhaCarrinho(int $idCaixa, array $enc): string {
+		if (empty($enc['elegivel_encargos'])) {
+			return '';
+		}
+		$multa = NumeroHelper::moedaBr($enc['multa'] ?? 0);
+		$juros = NumeroHelper::moedaBr($enc['juros'] ?? 0);
+		return '
+			<div class="form-check mt-1 mb-0">
+				<input class="form-check-input cobrar-encargos-item" type="checkbox"
+					id="enc_carrinho_'.$idCaixa.'" name="cobrar_encargos['.$idCaixa.']" value="1" checked>
+				<label class="form-check-label small" for="enc_carrinho_'.$idCaixa.'">
+					Cobrar multa (R$ '.$multa.') e juros (R$ '.$juros.')
+				</label>
+			</div>
+			<p class="small text-muted mb-0 mt-1">Desmarque para perdoar multa e juros desta parcela.</p>';
+	}
 
 	//RESUMO DO CARRINHO (USADO PELO CARD FLUTUANTE)
 	public static function getResumo($request){
@@ -29,7 +87,21 @@ class CaixaCarrinho extends Page{
 
 		while ($obItem = $results->fetchObject(EntityCaixaCarrinho::class)) {
 			$qtd++;
-			$total += (float)$obItem->valor;
+			$valorExibir = (float)$obItem->valor;
+			$badgeEnc = '';
+
+			if ($obItem->tipo === 'titulo' && (int)$obItem->referencia_id > 0) {
+				$obCaixa = EntityCaixa::getCaixaById((int)$obItem->referencia_id);
+				if ($obCaixa instanceof EntityCaixa) {
+					$vals = self::resolverValoresTitulo($obCaixa, true);
+					$valorExibir = $vals['valor'];
+					if (!empty($vals['enc']['elegivel_encargos'])) {
+						$badgeEnc = '<br><small class="text-warning">incl. multa/juros</small>';
+					}
+				}
+			}
+
+			$total += $valorExibir;
 
 			$tipo = ucfirst($obItem->tipo);
 
@@ -37,10 +109,10 @@ class CaixaCarrinho extends Page{
 			<li class="list-group-item d-flex justify-content-between align-items-center">
 				<div>
 					<strong>'.$obItem->descricao.'</strong><br>
-					<small class="text-muted">'.$tipo.'</small>
+					<small class="text-muted">'.$tipo.'</small>'.$badgeEnc.'
 				</div>
 				<div class="text-end">
-					<span>R$ '.NumeroHelper::moedaBr($obItem->valor).'</span><br>
+					<span>R$ '.NumeroHelper::moedaBr($valorExibir).'</span><br>
 					<button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="removerItemCarrinho('.$obItem->id.')">
 						&times; remover
 					</button>
@@ -133,6 +205,12 @@ class CaixaCarrinho extends Page{
 			$flagPont
 		);
 
+		$vals = self::resolverValoresTitulo($obCaixa, true);
+		$msgExtra = '';
+		if (!empty($vals['enc']['elegivel_encargos'])) {
+			$msgExtra = ' Multa/juros incluídos — ajuste no pagamento se quiser perdoar.';
+		}
+
 		$obCarrinho = new EntityCaixaCarrinho;
 		$obCarrinho->id_admin      = $id_admin;
 		$obCarrinho->id_usuario    = $id_usuario;
@@ -143,6 +221,7 @@ class CaixaCarrinho extends Page{
 		$obCarrinho->cadastrar();
 
 		$resposta['sucesso'] = true;
+		$resposta['mensagem'] = 'Título adicionado ao carrinho.'.$msgExtra;
 
 		return json_encode($resposta);
 	}
@@ -224,18 +303,54 @@ class CaixaCarrinho extends Page{
 
 		$itensHtml = '';
 		$total = 0;
+		$temEncargos = false;
 
 		while ($obItem = $results->fetchObject(EntityCaixaCarrinho::class)) {
-			$total += (float)$obItem->valor;
-
-			$itensHtml .= '
-			<li class="list-group-item d-flex justify-content-between align-items-center">
+			if ($obItem->tipo === 'titulo' && (int)$obItem->referencia_id > 0) {
+				$obCaixa = EntityCaixa::getCaixaById((int)$obItem->referencia_id);
+				if (!$obCaixa instanceof EntityCaixa) {
+					continue;
+				}
+				$vals = self::resolverValoresTitulo($obCaixa, true);
+				$idCaixa = (int)$obCaixa->id;
+				$total += $vals['valor'];
+				if (!empty($vals['enc']['elegivel_encargos'])) {
+					$temEncargos = true;
+				}
+				$encHtml = self::htmlEncargosLinhaCarrinho($idCaixa, $vals['enc']);
+				$itensHtml .= '
+			<li class="list-group-item carrinho-linha-item carrinho-linha-titulo" data-caixa-id="'.$idCaixa.'">
+				<div class="d-flex justify-content-between align-items-start gap-2">
+					<div class="flex-grow-1">
+						<strong>'.$obItem->descricao.'</strong>
+						<div class="small text-muted">Parcela: R$ '.NumeroHelper::moedaBr($vals['face']).'</div>
+						'.$encHtml.'
+					</div>
+					<span class="carrinho-item-valor fw-semibold text-nowrap"
+						data-valor="'.htmlspecialchars((string)$vals['valor'], ENT_QUOTES, 'UTF-8').'"
+						data-sem-enc="'.htmlspecialchars((string)$vals['face'], ENT_QUOTES, 'UTF-8').'"
+						data-com-enc="'.htmlspecialchars((string)($vals['enc']['total_com_encargos'] ?? $vals['face']), ENT_QUOTES, 'UTF-8').'">
+						R$ '.NumeroHelper::moedaBr($vals['valor']).'
+					</span>
+				</div>
+			</li>';
+			} else {
+				$valorItem = (float)$obItem->valor;
+				$total += $valorItem;
+				$itensHtml .= '
+			<li class="list-group-item carrinho-linha-item d-flex justify-content-between align-items-center">
 				<div>
 					<strong>'.$obItem->descricao.'</strong><br>
 					<small class="text-muted">'.ucfirst($obItem->tipo).'</small>
 				</div>
-				<span>R$ '.NumeroHelper::moedaBr($obItem->valor).'</span>
+				<span class="carrinho-item-valor fw-semibold"
+					data-valor="'.htmlspecialchars((string)$valorItem, ENT_QUOTES, 'UTF-8').'"
+					data-sem-enc="'.htmlspecialchars((string)$valorItem, ENT_QUOTES, 'UTF-8').'"
+					data-com-enc="'.htmlspecialchars((string)$valorItem, ENT_QUOTES, 'UTF-8').'">
+					R$ '.NumeroHelper::moedaBr($valorItem).'
+				</span>
 			</li>';
+			}
 		}
 
 		if($itensHtml == ''){
@@ -248,6 +363,20 @@ class CaixaCarrinho extends Page{
 		$valorTotalBr = NumeroHelper::moedaBr($total);
 		$dataPagamento = date('Y-m-d\TH:i');
 
+		$blocoEncargosGlobal = '';
+		if ($temEncargos) {
+			$blocoEncargosGlobal = '
+				<li class="list-group-item bg-light encargos-carrinho-global">
+					<div class="form-check mb-0">
+						<input class="form-check-input" type="checkbox" id="cobrar_encargos_todos" checked>
+						<label class="form-check-label fw-semibold" for="cobrar_encargos_todos">
+							Cobrar multa e juros em todas as parcelas em atraso
+						</label>
+					</div>
+					<p class="small text-muted mb-0 mt-1">Desmarque para perdoar encargos de todas as parcelas de uma vez.</p>
+				</li>';
+		}
+
 		$form = '
 		<form id="form-carrinho" method="post">
 			<div class="modal-header">
@@ -257,10 +386,10 @@ class CaixaCarrinho extends Page{
 			<div class="modal-body">
 				<div id="response-carrinho"></div>
 				<ul class="list-group mb-3 col-md-12">
-					'.$itensHtml.'
+					'.$blocoEncargosGlobal.$itensHtml.'
 					<li class="list-group-item d-flex justify-content-between">
 						<span>Total a pagar</span>
-						<strong>R$ '.$valorTotalBr.'</strong>
+						<strong id="carrinho-total-pagar">R$ '.$valorTotalBr.'</strong>
 					</li>
 				</ul>
 
@@ -312,6 +441,7 @@ class CaixaCarrinho extends Page{
 
 		$tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
 		$data_pagamento = $postVars['data_pagamento'] ?? '';
+		$cobrarEncargosMap = is_array($postVars['cobrar_encargos'] ?? null) ? $postVars['cobrar_encargos'] : [];
 
 		$valor_pagar_total = (float)($postVars['valor_pagar_total'] ?? 0);
 
@@ -344,6 +474,7 @@ class CaixaCarrinho extends Page{
 
 		$totalCalculado = 0;
 		$idsPagos = [];
+		$pendentes = [];
 
 		while ($obItem = $results->fetchObject(EntityCaixaCarrinho::class)) {
 
@@ -359,62 +490,74 @@ class CaixaCarrinho extends Page{
 					continue;
 				}
 
-				$flagPont = 0;
-				$idRef = (int)($obCaixa->id_ref ?? 0);
-				if ($idRef > 0) {
-					$mat = EntityMatri::getMatriculaById($idRef);
-					if ($mat) {
-						$flagPont = $mat->desconto_pontualidade ?? 0;
-					}
-				}
-				$pont = FinanceiroAlunoHelper::calcularPontualidade(
-					(float)$obCaixa->valor,
-					$obCaixa->vencimento ?? '',
-					$flagPont
-				);
-				$valorItem = (float)$pont['valor_pagar'];
+				$idCaixa = (int)$obCaixa->id;
+				$cobrarEnc = !empty($cobrarEncargosMap[$idCaixa]) || !empty($cobrarEncargosMap[(string)$idCaixa]);
+				$vals = self::resolverValoresTitulo($obCaixa, $cobrarEnc);
+				$valorItem = (float)$vals['valor'];
 				$totalCalculado += $valorItem;
 
-				$obUpdate = new EntityCaixa;
-				$obUpdate->id             = $obCaixa->id;
-				$obUpdate->valor_pago     = $valorItem;
-				$obUpdate->data_pagamento = $data_pagamento;
-				$obUpdate->tipo_pagamento = $tipo_pagamento;
-				$obUpdate->status         = FinanceiroAlunoHelper::STATUS_PAGO;
-				$obUpdate->atualizar();
-				$idsPagos[] = (int)$obCaixa->id;
+				$pendentes[] = [
+					'tipo' => 'titulo',
+					'caixa_id' => $idCaixa,
+					'valor' => $valorItem,
+				];
 
 			} else {
 
-				//ITEM AVULSO - LANÇA COMO ENTRADA AVULSA NO CAIXA
 				$valorItem = (float)$obItem->valor;
 				$totalCalculado += $valorItem;
 
-				$obCaixa = new EntityCaixa;
-				$obCaixa->id_admin       = $id_admin;
-				$obCaixa->descricao      = $obItem->descricao;
-				$obCaixa->valor          = $valorItem;
-				$obCaixa->valor_pago     = $valorItem;
-				$obCaixa->vencimento     = $data_pagamento;
-				$obCaixa->data_pagamento = $data_pagamento;
-				$obCaixa->tipo_pagamento = $tipo_pagamento;
-				$obCaixa->tipo_transacao = 'Entrada';
-				$obCaixa->referencia     = 'Venda/serviço avulso';
-				$obCaixa->id_ref         = 0;
-				$obCaixa->txt_id         = '';
-				$obCaixa->pix_copia_cola = '';
-				$obCaixa->nosso_numero   = '';
-				$obCaixa->status         = FinanceiroAlunoHelper::STATUS_PAGO;
-				$obCaixa->lancarMovimentacao();
-				if (!empty($obCaixa->id)) {
-					$idsPagos[] = (int)$obCaixa->id;
-				}
+				$pendentes[] = [
+					'tipo' => 'servico',
+					'descricao' => $obItem->descricao,
+					'valor' => $valorItem,
+				];
 			}
 		}
 
 		if($totalCalculado <= 0){
 			$resposta['erro'] = 'Nenhum item válido encontrado no carrinho.';
 			return json_encode($resposta);
+		}
+
+		if (abs($totalCalculado - $valor_pagar_total) > 0.02) {
+			$resposta['erro'] = 'Total do pagamento não confere. Reabra o carrinho e tente novamente.';
+			return json_encode($resposta);
+		}
+
+		foreach ($pendentes as $item) {
+			if ($item['tipo'] === 'titulo') {
+				$obUpdate = new EntityCaixa;
+				$obUpdate->id             = $item['caixa_id'];
+				$obUpdate->valor_pago     = $item['valor'];
+				$obUpdate->data_pagamento = $data_pagamento;
+				$obUpdate->tipo_pagamento = $tipo_pagamento;
+				$obUpdate->status         = FinanceiroAlunoHelper::STATUS_PAGO;
+				$obUpdate->atualizar();
+				$idsPagos[] = (int)$item['caixa_id'];
+				continue;
+			}
+
+			$valorItem = (float)$item['valor'];
+			$obCaixa = new EntityCaixa;
+			$obCaixa->id_admin       = $id_admin;
+			$obCaixa->descricao      = $item['descricao'];
+			$obCaixa->valor          = $valorItem;
+			$obCaixa->valor_pago     = $valorItem;
+			$obCaixa->vencimento     = $data_pagamento;
+			$obCaixa->data_pagamento = $data_pagamento;
+			$obCaixa->tipo_pagamento = $tipo_pagamento;
+			$obCaixa->tipo_transacao = 'Entrada';
+			$obCaixa->referencia     = 'Venda/serviço avulso';
+			$obCaixa->id_ref         = 0;
+			$obCaixa->txt_id         = '';
+			$obCaixa->pix_copia_cola = '';
+			$obCaixa->nosso_numero   = '';
+			$obCaixa->status         = FinanceiroAlunoHelper::STATUS_PAGO;
+			$obCaixa->lancarMovimentacao();
+			if (!empty($obCaixa->id)) {
+				$idsPagos[] = (int)$obCaixa->id;
+			}
 		}
 
 		//LIMPA O CARRINHO

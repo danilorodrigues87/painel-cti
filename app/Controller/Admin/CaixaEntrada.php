@@ -8,6 +8,7 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\FinanceiroAlunoHelper;
+use \App\Common\Helpers\EncargosContratoHelper;
 use \App\Model\Entity\Matriculas as EntityMatri;
 
 class CaixaEntrada extends Page{
@@ -180,6 +181,20 @@ private static function getForm($request) {
         $valorComDesconto = $pont['valor_com_desconto'];
         $valorPagar = $pont['valor_pagar'];
 
+        $blocoEncargos = '';
+        if ($idRef > 0 && ($dados['vencimento'] ?? '') !== '' && ($dados['vencimento'] ?? '') <= DateTimeHelper::hoje()) {
+            $paramsEnc = EncargosContratoHelper::parametrosPorMatricula($idRef);
+            $enc = EncargosContratoHelper::calcularAtraso(
+                $valorPagar,
+                (string)($dados['vencimento'] ?? ''),
+                $paramsEnc
+            );
+            if (!empty($enc['elegivel_encargos'])) {
+                $blocoEncargos = EncargosContratoHelper::htmlBlocoPagamento($enc);
+                $valorPagar = $enc['total_com_encargos'];
+            }
+        }
+
         if (($dados['vencimento'] ?? '') > DateTimeHelper::hoje()) {
             $vencido = 'vence em';
         } else {
@@ -203,6 +218,13 @@ private static function getForm($request) {
          <small class="text-muted">' .'R$ '. NumeroHelper::moedaBr(@$dados['valor']) . '</small>
          <input value="' . $valorPagar . '" type="hidden" id="valor_pagar" name="valor_pagar">';
 
+         if ($blocoEncargos !== '') {
+            $total_pagar = $blocoEncargos . '
+            <li class="list-group-item d-flex justify-content-between enc-total-row">
+                <span>Total a pagar</span>
+                <strong id="enc_total_label">R$ ' . NumeroHelper::moedaBr($valorPagar) . '</strong>
+            </li>';
+         } elseif ($pont['elegivel']) {
          $total_pagar = '<li class="list-group-item d-flex justify-content-between lh-sm">
                 <div>
                     <h6 class="my-0">Desconto pontualidade</h6>
@@ -214,6 +236,12 @@ private static function getForm($request) {
                 <span>Total a pagar</span>
                 <strong>R$ ' . NumeroHelper::moedaBr($valorPagar) . '</strong>
             </li>';
+         } else {
+            $total_pagar = '<li class="list-group-item d-flex justify-content-between">
+                <span>Total a pagar</span>
+                <strong>R$ ' . NumeroHelper::moedaBr($valorPagar) . '</strong>
+            </li>';
+         }
     }
 
     $form = '<form id="form" method="post">

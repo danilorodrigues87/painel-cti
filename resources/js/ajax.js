@@ -184,45 +184,7 @@ function excluir(id) {
 }
 
 
-// FUNÇÃO DE CANCELAMENTO DE CONTRATO
-function cancelar_contrato(id) {
-
-    Swal.fire({
-      title: "Cancelar este contrato?",
-      text: "As parcelas em aberto serão baixadas com R$ 0 (histórico preservado). Parcelas já pagas não mudam.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#3085d6",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sim, cancelar!"
-  }).then((result) => {
-
-      if (result.isConfirmed) {
-
-       $.ajax({
-        url: url_base+cancelar,
-        method: "post",
-        data: {id},
-        dataType: "json",
-        success: function(result){
-            var ok = result === true || (result && result.ok);
-            var msg = (result && result.message) ? result.message : (ok ? "Contrato cancelado com sucesso!" : "Erro ao cancelar.");
-            Swal.fire({
-              title: ok ? "Cancelado!" : "Atenção",
-              text: msg,
-              icon: ok ? "success" : "error"
-          });
-            listar(null,1);
-        },
-        error: function(){
-            Swal.fire({ title: "Erro", text: "Falha ao cancelar o contrato.", icon: "error" });
-        }
-    })
-
-   }
-});
-
-}
+// cancelar_contrato — ver encargos-cancelamento.js (matrículas)
 
 function encerrar_contrato(id) {
   if (typeof encerrar === 'undefined' || !encerrar) {
@@ -418,8 +380,11 @@ function darBaixa(id) {
     success: function(result) {
 
         $('#formModal').modal('hide');
-        $('#modalDarBaixa').modal('show');
         $('#body_dar_baixa').html(result);
+        $('#modalDarBaixa').modal('show');
+        if (typeof atualizarTotalEncargosPagamento === 'function') {
+            atualizarTotalEncargosPagamento();
+        }
 
     },
 

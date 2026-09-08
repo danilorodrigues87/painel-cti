@@ -101,11 +101,46 @@ class MatriculaStatusHelper {
 
 	/**
 	 * Baixa administrativa R$ 0 nas parcelas abertas do carnê (não apaga histórico).
+	 * @param bool $somenteFuturas Se true, só parcelas com vencimento >= hoje (vencidas permanecem em aberto).
 	 * @return int quantidade baixada
 	 */
-	public static function cancelarParcelasAbertas(int $idMatricula, int $idAdmin): int {
+	public static function cancelarParcelasAbertas(int $idMatricula, int $idAdmin, bool $somenteFuturas = false): int {
 		if ($idMatricula <= 0 || $idAdmin <= 0) {
 			return 0;
+		}
+		$n = 0;
+		$where = 'id_admin = '.(int)$idAdmin
+			.' AND id_ref = '.(int)$idMatricula
+			.' AND tipo_transacao = "Entrada"'
+			.' AND '.FinanceiroAlunoHelper::sqlTituloAberto('status');
+		if ($somenteFuturas) {
+			$where .= ' AND vencimento >= CURDATE()';
+		}
+		$rs = Caixa::getCaixa($where, 'id ASC');
+		$obs = 'Cancelamento matrícula #'.$idMatricula;
+		while ($c = $rs->fetchObject(Caixa::class)) {
+			if (self::baixarTituloAdministrativo($c, $obs)) {
+				$n++;
+			}
+		}
+		return $n;
+	}
+
+	/**
+	 * Baixa administrativa nas parcelas abertas que NÃO estão na lista de cobrança.
+	 * @param int[] $idsManterAbertos IDs de caixa que permanecem em aberto para quitação.
+	 * @return int quantidade baixada
+	 */
+	public static function baixarParcelasExceto(int $idMatricula, int $idAdmin, array $idsManterAbertos): int {
+		if ($idMatricula <= 0 || $idAdmin <= 0) {
+			return 0;
+		}
+		$manter = [];
+		foreach ($idsManterAbertos as $id) {
+			$id = (int)$id;
+			if ($id > 0) {
+				$manter[$id] = true;
+			}
 		}
 		$n = 0;
 		$where = 'id_admin = '.(int)$idAdmin
@@ -115,20 +150,32 @@ class MatriculaStatusHelper {
 		$rs = Caixa::getCaixa($where, 'id ASC');
 		$obs = 'Cancelamento matrícula #'.$idMatricula;
 		while ($c = $rs->fetchObject(Caixa::class)) {
-			$c->status = FinanceiroAlunoHelper::STATUS_PAGO;
-			$c->tipo_pagamento = self::TIPO_CANCELAMENTO;
-			$c->data_pagamento = date('Y-m-d');
-			$c->valor_pago = 0;
-			$c->atualizar();
-			$desc = (string)($c->descricao ?? '');
-			if (strpos($desc, $obs) === false) {
-				(new Database('caixa'))->update('id = '.(int)$c->id, [
-					'descricao' => mb_substr(trim($desc.' | '.$obs), 0, 250),
-					'ultima_alteracao' => date('Y-m-d H:i:s'),
-				]);
+			if (isset($manter[(int)$c->id])) {
+				continue;
 			}
-			$n++;
+			if (trim((string)($c->referencia ?? '')) === 'Multa rescisória') {
+				continue;
+			}
+			if (self::baixarTituloAdministrativo($c, $obs)) {
+				$n++;
+			}
 		}
 		return $n;
+	}
+
+	private static function baixarTituloAdministrativo(Caixa $c, string $obs): bool {
+		$c->status = FinanceiroAlunoHelper::STATUS_PAGO;
+		$c->tipo_pagamento = self::TIPO_CANCELAMENTO;
+		$c->data_pagamento = date('Y-m-d');
+		$c->valor_pago = 0;
+		$c->atualizar();
+		$desc = (string)($c->descricao ?? '');
+		if (strpos($desc, $obs) === false) {
+			(new Database('caixa'))->update('id = '.(int)$c->id, [
+				'descricao' => mb_substr(trim($desc.' | '.$obs), 0, 250),
+				'ultima_alteracao' => date('Y-m-d H:i:s'),
+			]);
+		}
+		return true;
 	}
 }

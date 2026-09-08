@@ -80,7 +80,7 @@ function carregarContratoCategoria() {
 		}
 		if (!res.coluna_ok) {
 			$('#alert-sql-cat-contrato').removeClass('d-none').html(
-				'Execute o SQL <code>database/categorias_contrato.sql</code> no phpMyAdmin.'
+				'Execute os SQL <code>database/categorias_contrato.sql</code> no phpMyAdmin.'
 			);
 			$('#btn-salvar-cat-contrato, #btn-modelo-sugerido-cat').prop('disabled', true);
 		} else {

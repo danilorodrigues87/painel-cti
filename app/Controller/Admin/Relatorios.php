@@ -26,7 +26,7 @@ class Relatorios extends Page{
          * CURRENTSESSION SESSÃO ATUAL
          * REQUEST SE NESCESSÁRIO
          */
-    return parent::getPanel('Relatórios',$content,'Financeiro');
+    return parent::getPanel('Relatório financeiro',$content,'Financeiro');
   }
 
 

@@ -45,6 +45,15 @@ $obRouter->post('/painel/matriculas/save',[
 ]);
 
 //ROTA DE CANCELAMENTO
+$obRouter->post('/painel/matriculas/cancelar/simular',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\Matriculas::simularCancelamento($request));
+	}
+]);
+
 $obRouter->post('/painel/matriculas/cancelar',[
 	'middlewares' => [
 		'required-admin-login'

@@ -115,9 +115,10 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
                     continue;
                 }
 
-                $labelsPermitidos = !empty($subSection['requires_label'])
-                    ? [(string)$subSection['requires_label']]
-                    : [$subSection['label']];
+                $labelsPermitidos = [(string)$subSection['label']];
+                if (!empty($subSection['requires_label'])) {
+                    $labelsPermitidos[] = (string)$subSection['requires_label'];
+                }
                 if ($subSection['label'] === 'Agendamentos') {
                     $labelsPermitidos[] = 'Laboratório';
                 }
@@ -301,6 +302,9 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 		if(!$temAcesso && $currentModule === 'Agendamentos' && in_array('Laboratório', $allPermittedModules)){
 			$temAcesso = true;
 		}
+		if(!$temAcesso && $currentModule === 'Relatório de presença' && in_array('Diário', $allPermittedModules)){
+			$temAcesso = true;
+		}
 		if ($bloqueada && $currentModule === 'Assinatura') {
 			$temAcesso = true;
 		}
@@ -316,10 +320,11 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
 
 	} else {
 
+		$destino = $termosAceito ? '/painel' : '/painel/termos-de-uso';
 		if ($request instanceof \App\Http\Request && $request->getRouter()) {
-			$request->getRouter()->redirect('/painel/termos-de-uso');
+			$request->getRouter()->redirect($destino);
 		}
-		header('Location: '.URL.'/painel/termos-de-uso');
+		header('Location: '.URL.$destino);
 		exit;
 	}
 

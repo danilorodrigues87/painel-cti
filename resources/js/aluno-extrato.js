@@ -66,20 +66,36 @@
 
 	function renderTotais(t) {
 		t = t || {};
-		$('#totais-extrato').html(
+		var html =
 			'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Pago</div><strong class="text-success">' +
-				moeda(t.pago) +
-				'</strong></div></div>' +
-				'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Em aberto</div><strong class="text-primary">' +
-				moeda(t.aberto) +
-				'</strong></div></div>' +
-				'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Vencido</div><strong class="text-danger">' +
-				moeda(t.vencido) +
-				'</strong></div></div>' +
-				'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Títulos</div><strong>' +
-				(t.titulos || 0) +
-				'</strong></div></div>'
-		);
+			moeda(t.pago) +
+			'</strong></div></div>' +
+			'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Em aberto</div><strong class="text-primary">' +
+			moeda(t.aberto) +
+			'</strong></div></div>' +
+			'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Vencido</div><strong class="text-danger">' +
+			moeda(t.vencido) +
+			'</strong></div></div>' +
+			'<div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Títulos</div><strong>' +
+			(t.titulos || 0) +
+			'</strong></div></div>';
+		if (t.divida_atualizada != null && t.divida_atualizada > 0) {
+			html +=
+				'<div class="col-12 mt-2"><div class="border rounded p-2 small bg-light">' +
+				'<span class="text-muted">Dívida atualizada (com encargos até hoje):</span> ' +
+				'<strong class="text-danger">' +
+				moeda(t.divida_atualizada) +
+				'</strong>' +
+				(t.divida_multa > 0 || t.divida_juros > 0
+					? ' <span class="text-muted">(multa ' +
+						moeda(t.divida_multa) +
+						' + juros ' +
+						moeda(t.divida_juros) +
+						')</span>'
+					: '') +
+				'</div></div>';
+		}
+		$('#totais-extrato').html(html);
 	}
 
 	function render(res) {
@@ -117,7 +133,7 @@
 						? '<button type="button" class="btn btn-sm btn-outline-success btn-dar-baixa" data-id="' +
 							t.id +
 							'" data-valor="' +
-							t.valor +
+							(t.total_com_encargos || t.valor) +
 							'" data-desc="' +
 							esc(t.descricao) +
 							'">Só esta</button>'
@@ -137,6 +153,9 @@
 						'</td>' +
 						'<td>' +
 						moeda(t.valor) +
+						(t.elegivel_encargos && t.total_com_encargos > t.valor
+							? '<div class="small text-danger">c/ enc. ' + moeda(t.total_com_encargos) + '</div>'
+							: '') +
 						'</td>' +
 						'<td>' +
 						badgeStatus(t.status) +
@@ -225,7 +244,7 @@
 				? '<button type="button" class="btn btn-sm btn-outline-success btn-dar-baixa" data-id="' +
 					t.id +
 					'" data-valor="' +
-					t.valor +
+					(t.total_com_encargos || t.valor) +
 					'" data-desc="' +
 					esc(t.descricao) +
 					'">Só esta</button>'
@@ -239,6 +258,9 @@
 				'</td>' +
 				'<td class="small">' +
 				esc(t.origem_label) +
+				(t.referencia === 'Multa rescisória'
+					? ' <span class="badge bg-warning text-dark">Multa</span>'
+					: '') +
 				'</td>' +
 				'<td class="small">' +
 				esc(t.descricao) +
@@ -248,6 +270,9 @@
 				'</td>' +
 				'<td>' +
 				moeda(t.valor) +
+				(t.elegivel_encargos && t.total_com_encargos > t.valor
+					? '<div class="small text-danger">c/ enc. ' + moeda(t.total_com_encargos) + '</div>'
+					: '') +
 				'</td>' +
 				'<td>' +
 				badgeStatus(t.status) +
@@ -282,8 +307,7 @@
 		$('#box-extrato')
 			.off('click', '.btn-baixa-acordo')
 			.on('click', '.btn-baixa-acordo', function () {
-				var idAc = $(this).data('acordo');
-				abrirBaixaLote('.chk-acordo-' + idAc + ':checked');
+				abrirBaixaLote(parseInt($(this).data('acordo'), 10));
 			});
 		$('#box-extrato')
 			.off('change', '.chk-acordo-todos')
@@ -303,72 +327,141 @@
 		var yyyy = hoje.getFullYear();
 		var mm = String(hoje.getMonth() + 1).padStart(2, '0');
 		var dd = String(hoje.getDate()).padStart(2, '0');
-		Swal.fire({
-			title: 'Dar baixa',
-			width: 480,
-			html:
-				'<p class="small text-start mb-2">' +
-				esc(desc) +
-				'</p>' +
-				'<div class="text-start">' +
-				'<label class="form-label small mb-0">Valor pago (R$)</label>' +
-				'<input id="bx-valor" type="number" step="0.01" min="0.01" class="form-control form-control-sm mb-2" value="' +
-				(Number(valor) || 0).toFixed(2) +
-				'">' +
-				'<label class="form-label small mb-0">Forma de pagamento</label>' +
-				'<select id="bx-tipo" class="form-select form-select-sm mb-2">' +
-				'<option value="">Selecione</option>' +
-				'<option value="Dinheiro">Dinheiro</option>' +
-				'<option value="Pix">Pix</option>' +
-				'<option value="Cartão">Cartão</option>' +
-				'<option value="Transferência">Transferência</option>' +
-				'<option value="Boleto">Boleto</option>' +
-				'</select>' +
-				'<label class="form-label small mb-0">Data do pagamento</label>' +
-				'<input id="bx-data" type="date" class="form-control form-control-sm" value="' +
-				yyyy +
-				'-' +
-				mm +
-				'-' +
-				dd +
-				'">' +
-				'</div>',
-			showCancelButton: true,
-			confirmButtonText: 'Confirmar baixa',
-			preConfirm: function () {
-				var tipo = ($('#bx-tipo').val() || '').trim();
-				var v = parseFloat($('#bx-valor').val());
-				var data = $('#bx-data').val();
-				if (!tipo) {
-					Swal.showValidationMessage('Selecione a forma de pagamento.');
-					return false;
-				}
-				if (!(v > 0)) {
-					Swal.showValidationMessage('Informe o valor pago.');
-					return false;
-				}
-				if (!data) {
-					Swal.showValidationMessage('Informe a data.');
-					return false;
-				}
-				return { valor_pago: v, tipo_pagamento: tipo, data_pagamento: data };
-			},
-		}).then(function (r) {
-			if (!r.isConfirmed) return;
-			post({
-				acao: 'dar_baixa',
-				id_titulo: idTitulo,
-				valor_pago: r.value.valor_pago,
-				tipo_pagamento: r.value.tipo_pagamento,
-				data_pagamento: r.value.data_pagamento,
-			}).done(function (res) {
+		var dataDefault = yyyy + '-' + mm + '-' + dd;
+
+		function montarHtmlEncargos(enc) {
+			if (!enc || !enc.html_bloco) return '';
+			return (
+				'<ul class="list-group list-group-flush border rounded mb-2 text-start small">' +
+				enc.html_bloco +
+				'</ul>'
+			);
+		}
+
+		function valorSugerido(enc) {
+			if (enc && enc.elegivel_encargos) {
+				return Number(enc.total_com_encargos) || Number(valor) || 0;
+			}
+			return Number(valor) || 0;
+		}
+
+		function abrirModal(enc) {
+			var v0 = valorSugerido(enc);
+			Swal.fire({
+				title: 'Dar baixa',
+				width: 520,
+				html:
+					'<p class="small text-start mb-2">' +
+					esc(desc) +
+					'</p>' +
+					montarHtmlEncargos(enc) +
+					'<div class="text-start">' +
+					'<label class="form-label small mb-0">Valor pago (R$)</label>' +
+					'<input id="bx-valor" type="number" step="0.01" min="0.01" class="form-control form-control-sm mb-2" value="' +
+					v0.toFixed(2) +
+					'">' +
+					'<label class="form-label small mb-0">Forma de pagamento</label>' +
+					'<select id="bx-tipo" class="form-select form-select-sm mb-2">' +
+					'<option value="">Selecione</option>' +
+					'<option value="Dinheiro">Dinheiro</option>' +
+					'<option value="Pix">Pix</option>' +
+					'<option value="Cartão">Cartão</option>' +
+					'<option value="Transferência">Transferência</option>' +
+					'<option value="Boleto">Boleto</option>' +
+					'</select>' +
+					'<label class="form-label small mb-0">Data do pagamento</label>' +
+					'<input id="bx-data" type="date" class="form-control form-control-sm" value="' +
+					dataDefault +
+					'">' +
+					'</div>',
+				showCancelButton: true,
+				confirmButtonText: 'Confirmar baixa',
+				didOpen: function () {
+					if (typeof atualizarTotalEncargosPagamento === 'function') {
+						atualizarTotalEncargosPagamento();
+					}
+					$('#bx-data')
+						.off('change.extratoEnc')
+						.on('change.extratoEnc', function () {
+							var dataRef = $(this).val() || dataDefault;
+							post({
+								acao: 'encargos_titulo',
+								id_titulo: idTitulo,
+								data_referencia: dataRef,
+							}).done(function (r) {
+								if (!r || !r.success) return;
+								var $wrap = $('.encargos-bloco').closest('ul');
+								if (r.html_bloco) {
+									if ($wrap.length) {
+										$wrap.html(r.html_bloco);
+									} else {
+										$wrap = $(
+											'<ul class="list-group list-group-flush border rounded mb-2 text-start small"></ul>'
+										);
+										$wrap.html(r.html_bloco);
+										$('#bx-valor').closest('.text-start').before($wrap);
+									}
+								} else if ($wrap.length) {
+									$wrap.remove();
+								}
+								$('#bx-valor').val(valorSugerido(r).toFixed(2));
+								if (typeof atualizarTotalEncargosPagamento === 'function') {
+									atualizarTotalEncargosPagamento();
+								}
+							});
+						});
+				},
+				preConfirm: function () {
+					var tipo = ($('#bx-tipo').val() || '').trim();
+					var v = parseFloat($('#bx-valor').val());
+					var data = $('#bx-data').val();
+					if (!tipo) {
+						Swal.showValidationMessage('Selecione a forma de pagamento.');
+						return false;
+					}
+					if (!(v > 0)) {
+						Swal.showValidationMessage('Informe o valor pago.');
+						return false;
+					}
+					if (!data) {
+						Swal.showValidationMessage('Informe a data.');
+						return false;
+					}
+					return { valor_pago: v, tipo_pagamento: tipo, data_pagamento: data };
+				},
+			}).then(function (r) {
+				if (!r.isConfirmed) return;
+				post({
+					acao: 'dar_baixa',
+					id_titulo: idTitulo,
+					valor_pago: r.value.valor_pago,
+					tipo_pagamento: r.value.tipo_pagamento,
+					data_pagamento: r.value.data_pagamento,
+				}).done(function (res) {
+					if (!res || !res.success) {
+						toastErr((res && res.message) || 'Falha ao dar baixa.');
+						return;
+					}
+					carregar();
+				});
+			});
+		}
+
+		post({
+			acao: 'encargos_titulo',
+			id_titulo: idTitulo,
+			data_referencia: dataDefault,
+		})
+			.done(function (res) {
 				if (!res || !res.success) {
-					toastErr((res && res.message) || 'Falha ao dar baixa.');
+					abrirModal(null);
 					return;
 				}
-				carregar();
+				abrirModal(res);
+			})
+			.fail(function () {
+				abrirModal(null);
 			});
-		});
 	}
 
 	function carregar() {
@@ -387,19 +480,36 @@
 			});
 	}
 
-	function idsSelecionados(selector) {
+	function idsSelecionados() {
 		var ids = [];
-		$(selector || '.chk-titulo:checked').each(function () {
-			ids.push(parseInt($(this).val(), 10));
+		var vistos = {};
+		$('#box-extrato .chk-titulo:checked').each(function () {
+			if ($(this).hasClass('chk-acordo-todos') || this.id === 'chk-todos') return;
+			var id = parseInt($(this).val(), 10);
+			if (id > 0 && !vistos[id]) {
+				vistos[id] = true;
+				ids.push(id);
+			}
 		});
 		return ids;
 	}
 
-	function somaSelecionados(selector) {
-		var ids = idsSelecionados(selector);
+	function valorTituloParaSoma(t) {
+		if (!t) return 0;
+		if (t.referencia === 'Multa rescisória') {
+			return Number(t.total_com_encargos) || Number(t.valor) || 0;
+		}
+		if (t.status === 'vencido' && t.total_com_encargos != null) {
+			return Number(t.total_com_encargos) || Number(t.valor) || 0;
+		}
+		return Number(t.valor) || 0;
+	}
+
+	function somaSelecionados() {
+		var ids = idsSelecionados();
 		var sum = 0;
 		(estado.titulos || []).forEach(function (t) {
-			if (ids.indexOf(t.id) >= 0) sum += Number(t.valor) || 0;
+			if (ids.indexOf(t.id) >= 0) sum += valorTituloParaSoma(t);
 		});
 		return sum;
 	}
@@ -488,6 +598,43 @@
 		});
 	}
 
+	function aplicarCoresClarasPdf(root) {
+		root.querySelectorAll('*').forEach(function (el) {
+			if (el.tagName === 'IMG') return;
+			el.style.setProperty('color', '#000', 'important');
+			el.style.setProperty('background-color', '#fff', 'important');
+			el.style.setProperty('background', '#fff', 'important');
+			el.style.setProperty('border-color', '#ccc', 'important');
+			el.style.setProperty('box-shadow', 'none', 'important');
+		});
+		root.querySelectorAll('.table-hover tbody tr:nth-child(odd) td, .table-hover tbody tr:nth-child(odd) th').forEach(
+			function (el) {
+				el.style.setProperty('background-color', '#f5f5f5', 'important');
+				el.style.setProperty('color', '#000', 'important');
+			}
+		);
+	}
+
+	function prepararExtratoParaPdf(node) {
+		var clone = node.cloneNode(true);
+		clone.querySelectorAll('input[type="checkbox"], .btn, button').forEach(function (el) {
+			el.remove();
+		});
+		clone.querySelectorAll('tr').forEach(function (tr) {
+			var cells = tr.querySelectorAll('th, td');
+			if (cells.length >= 2) {
+				cells[cells.length - 1].remove();
+				cells[0].remove();
+			}
+		});
+		clone.querySelectorAll('.badge').forEach(function (el) {
+			el.style.setProperty('background-color', '#eee', 'important');
+			el.style.setProperty('color', '#000', 'important');
+		});
+		aplicarCoresClarasPdf(clone);
+		return clone;
+	}
+
 	function baixarPdf() {
 		var el = document.getElementById('card-titulos-pdf');
 		if (!el || typeof html2pdf === 'undefined') {
@@ -495,29 +642,70 @@
 			return;
 		}
 		var nome = (estado.aluno && estado.aluno.nome) || 'aluno';
+		var wrapper = document.createElement('div');
+		wrapper.className = 'extrato-pdf-export';
+		wrapper.style.background = '#fff';
+		wrapper.style.color = '#000';
+		wrapper.style.padding = '12px';
+
+		var stylePdf = document.createElement('style');
+		stylePdf.textContent =
+			'.extrato-pdf-export, .extrato-pdf-export * {' +
+			'color: #000 !important; background: #fff !important; background-color: #fff !important;' +
+			'border-color: #ccc !important; box-shadow: none !important;' +
+			'}';
+		wrapper.appendChild(stylePdf);
+
+		var cab = document.createElement('div');
+		cab.style.marginBottom = '12px';
+		cab.innerHTML =
+			'<h4 style="margin:0 0 4px;font-size:16px;color:#000">Extrato financeiro</h4>' +
+			'<div style="font-size:12px;color:#333">' +
+			esc(nome) +
+			(estado.aluno && estado.aluno.email ? ' · ' + esc(estado.aluno.email) : '') +
+			' · ' +
+			new Date().toLocaleDateString('pt-BR') +
+			'</div>';
+		wrapper.appendChild(cab);
+		wrapper.appendChild(prepararExtratoParaPdf(el));
+		aplicarCoresClarasPdf(wrapper);
+
 		var opt = {
-			margin: 10,
+			margin: [10, 10, 10, 10],
 			filename: 'extrato-' + nome.replace(/\s+/g, '-').toLowerCase() + '.pdf',
-			image: { type: 'jpeg', quality: 0.95 },
-			html2canvas: { scale: 2 },
+			image: { type: 'jpeg', quality: 0.98 },
+			html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
 			jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
 		};
-		html2pdf().set(opt).from(el).save();
+		html2pdf().set(opt).from(wrapper).save();
 	}
 
-	function abrirBaixaLote(selectorChk) {
-		var sel = selectorChk || '.chk-geral:checked, .chk-titulo.chk-geral:checked';
-		// botão global: preferir checkboxes da tabela geral; se vazio, qualquer chk marcado
-		if (!selectorChk) {
-			sel = '.chk-geral:checked';
-			if (!$(sel).length) sel = '.chk-titulo:checked';
+	function coletarIdsBaixaLote(idAcordo) {
+		if (idAcordo) {
+			var ids = [];
+			var vistos = {};
+			$('#box-extrato .chk-acordo-' + idAcordo + ':checked').each(function () {
+				var id = parseInt($(this).val(), 10);
+				if (id > 0 && !vistos[id]) {
+					vistos[id] = true;
+					ids.push(id);
+				}
+			});
+			return ids;
 		}
-		var ids = idsSelecionados(sel);
+		return idsSelecionados();
+	}
+
+	function abrirBaixaLote(idAcordo) {
+		var ids = coletarIdsBaixaLote(idAcordo || 0);
 		if (!ids.length) {
 			toastInfo('Marque as parcelas em aberto/vencidas que deseja baixar.');
 			return;
 		}
-		var total = somaSelecionados(sel);
+		var total = 0;
+		(estado.titulos || []).forEach(function (t) {
+			if (ids.indexOf(t.id) >= 0) total += valorTituloParaSoma(t);
+		});
 		var hoje = new Date();
 		var yyyy = hoje.getFullYear();
 		var mm = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -528,7 +716,7 @@
 			html:
 				'<p class="small text-start mb-2">Total: <strong>' +
 				moeda(total) +
-				'</strong> (cada parcela pelo valor integral)</p>' +
+				'</strong> (com encargos quando aplicável)</p>' +
 				'<div class="text-start">' +
 				'<label class="form-label small mb-0">Forma de pagamento</label>' +
 				'<select id="bx-lote-tipo" class="form-select form-select-sm mb-2">' +
@@ -564,20 +752,26 @@
 				return { tipo_pagamento: tipo, data_pagamento: data };
 			},
 		}).then(function (r) {
-			if (!r.isConfirmed) return;
+			if (!r.isConfirmed || !r.value) return;
 			post({
 				acao: 'dar_baixa_lote',
-				ids_titulos: JSON.stringify(ids),
+				ids_titulos: ids.join(','),
 				tipo_pagamento: r.value.tipo_pagamento,
 				data_pagamento: r.value.data_pagamento,
-			}).done(function (res) {
-				if (!res || !res.success) {
-					toastErr((res && res.message) || 'Falha ao dar baixa.');
-					return;
-				}
-				toastOk(res.message || 'Baixas registradas.');
-				carregar();
-			});
+			})
+				.done(function (res) {
+					if (!res || !res.success) {
+						toastErr((res && res.message) || 'Falha ao dar baixa.');
+						return;
+					}
+					toastOk(res.message || 'Baixas registradas.');
+					carregar();
+				})
+				.fail(function (xhr) {
+					var msg = 'Falha ao dar baixa.';
+					if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+					toastErr(msg);
+				});
 		});
 	}
 

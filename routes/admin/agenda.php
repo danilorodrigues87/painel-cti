@@ -188,3 +188,18 @@ $obRouter->post('/painel/agenda/diario/whatsapp',[
 		return new Response(200, Admin\AgendaDiario::whatsapp($request));
 	}
 ]);
+
+// RELATÓRIO DE PRESENÇA
+$obRouter->get('/painel/agenda/relatorio',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaRelatorio::index($request));
+	}
+]);
+
+$obRouter->post('/painel/agenda/relatorio',[
+	'middlewares' => ['required-admin-login'],
+	function($request){
+		return new Response(200, Admin\AgendaRelatorio::getInfo($request), 'application/json');
+	}
+]);

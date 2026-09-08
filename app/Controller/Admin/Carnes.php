@@ -14,6 +14,7 @@
   use \App\Common\Helpers\BrandingHelper;
   use \App\Common\Helpers\MatriculaStatusHelper;
   use \App\Common\Helpers\FinanceiroAlunoHelper;
+  use \App\Common\Helpers\EncargosContratoHelper;
   use \App\Model\Entity\Responsaveis as EntityRes;
 
   class Carnes extends Page{
@@ -231,7 +232,7 @@
       <td>'.$data_pagamento.'</td>
       <td>'.$status.'</td>
       <td>
-      <a class="dropdown-item '.$baixaIcon.'" href="#"  title="Adicionar ao carrinho" onclick="addCarrinhoTitulo('.$obDados->id.')">
+      <a class="dropdown-item '.$baixaIcon.'" href="#" title="Adicionar ao carrinho para pagar" onclick="addCarrinhoTitulo('.$obDados->id.'); return false;">
       <i class="fa-solid fa-cart-plus fa-lg"></i>
       </a>
 
@@ -304,6 +305,21 @@
    $valorComDesconto = $pont['valor_com_desconto'];
    $valorPagar = $pont['valor_pagar'];
 
+   $blocoEncargos = '';
+   $idRef = (int)($dados['id_ref'] ?? 0);
+   if ($idRef > 0 && ($dados['vencimento'] ?? '') !== '' && ($dados['vencimento'] ?? '') <= DateTimeHelper::hoje()) {
+     $paramsEnc = EncargosContratoHelper::parametrosPorMatricula($idRef);
+     $enc = EncargosContratoHelper::calcularAtraso(
+       $valorPagar,
+       (string)($dados['vencimento'] ?? ''),
+       $paramsEnc
+     );
+     if (!empty($enc['elegivel_encargos'])) {
+       $blocoEncargos = EncargosContratoHelper::htmlBlocoPagamento($enc);
+       $valorPagar = $enc['total_com_encargos'];
+     }
+   }
+
    if(($dados['vencimento'] ?? '') > DateTimeHelper::hoje()){
     $vencido = 'vence em';
   } else {
@@ -345,19 +361,40 @@
   </div>
   <span class="text-muted">'.$vencido.' '.$dias.' dias</span>
   </li>
+  ';
 
+  if ($pont['elegivel']) {
+    $form .= '
   <li class="list-group-item d-flex justify-content-between lh-sm">
   <div>
   <h6 class="my-0">Desconto pontualidade</h6>
   <small class="text-muted">'.'R$ '.NumeroHelper::moedaBr($valorComDesconto).'</small>
   </div>
   <span class="text-muted">'.'Valor do desconto: R$ '.NumeroHelper::moedaBr($desconto).'</span>
-  </li>
+  </li>';
+  }
 
+  if ($blocoEncargos !== '') {
+    $form .= $blocoEncargos . '
+  <li class="list-group-item d-flex justify-content-between enc-total-row">
+  <span>Total a pagar</span>
+  <strong id="enc_total_label">R$ '.NumeroHelper::moedaBr($valorPagar).'</strong>
+  </li>';
+  } elseif ($pont['elegivel']) {
+    $form .= '
   <li class="list-group-item d-flex justify-content-between">
   <span>Total a pagar</span>
   <strong>R$ '.NumeroHelper::moedaBr($valorPagar).'</strong>
-  </li>
+  </li>';
+  } else {
+    $form .= '
+  <li class="list-group-item d-flex justify-content-between">
+  <span>Total a pagar</span>
+  <strong>R$ '.NumeroHelper::moedaBr($valorPagar).'</strong>
+  </li>';
+  }
+
+  $form .= '
   </ul>
 
   <input value="' . @$valorPagar. '" type="hidden" id="valor_pagar" name="valor_pagar">

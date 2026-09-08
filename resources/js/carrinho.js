@@ -38,9 +38,9 @@ function addCarrinhoTitulo(id){
 			} else {
 				Swal.fire({
 					title: "Adicionado!",
-					text: "Título adicionado ao carrinho.",
+					text: result.mensagem || "Título adicionado ao carrinho.",
 					icon: "success",
-					timer: 1200,
+					timer: 2200,
 					showConfirmButton: false
 				});
 				atualizarWidgetCarrinho();
@@ -130,7 +130,11 @@ function abrirPagamentoCarrinho(){
 		dataType: "json",
 		success: function(result){
 			$('#body_carrinho_pagamento').html(result);
-			calcularTrocoCarrinho();
+			if (typeof atualizarTotalCarrinhoEncargos === 'function') {
+				atualizarTotalCarrinhoEncargos();
+			} else if (typeof calcularTrocoCarrinho === 'function') {
+				calcularTrocoCarrinho();
+			}
 			abrirModalCarrinho();
 		},
 		error: function(){

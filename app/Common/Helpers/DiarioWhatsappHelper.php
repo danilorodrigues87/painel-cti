@@ -23,6 +23,18 @@ class DiarioWhatsappHelper {
 		return in_array($status, self::STATUS_VALIDOS, true) ? $status : 'aguardando';
 	}
 
+	public static function labelStatus(?string $status): string {
+		$status = self::normalizarStatus($status);
+		$labels = [
+			'aguardando'  => 'Aguardando',
+			'presente'    => 'Presente',
+			'falta'       => 'Falta',
+			'justificada' => 'Justificada',
+			'reposicao'   => 'Reposição',
+		];
+		return $labels[$status] ?? $status;
+	}
+
 	/** Formata Y-m-d para dd/mm/aaaa. */
 	public static function dataBr(?string $ymd): string {
 		$ymd = trim((string)$ymd);

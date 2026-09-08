@@ -32,9 +32,16 @@ class Matriculas{
 	$tipo_parcelamento,
 	$desconto_pontualidade = 0,
 	$bolsista = 0,
+	$multa_atraso_pct = 2.0,
+	$juros_mora_pct_mes = 1.0,
+	$multa_cancelamento_pct = 10.0,
+	$carencia_dias = 7,
+	$data_cancelamento = null,
 	$status = 0;
 
 	private static $colunaBolsista = null;
+	private static $colunaEncargos = null;
+	private static $colunaDataCancelamento = null;
 
 	public static function temColunaBolsista(): bool {
 		if (self::$colunaBolsista !== null) {
@@ -49,8 +56,33 @@ class Matriculas{
 		return self::$colunaBolsista;
 	}
 
-	
+	public static function temColunaEncargos(): bool {
+		if (self::$colunaEncargos !== null) {
+			return self::$colunaEncargos;
+		}
+		try {
+			$row = (new Database())->execute("SHOW COLUMNS FROM `matriculas` LIKE 'multa_atraso_pct'")->fetch(\PDO::FETCH_ASSOC);
+			self::$colunaEncargos = !empty($row);
+		} catch (\Throwable $e) {
+			self::$colunaEncargos = false;
+		}
+		return self::$colunaEncargos;
+	}
 
+	public static function temColunaDataCancelamento(): bool {
+		if (self::$colunaDataCancelamento !== null) {
+			return self::$colunaDataCancelamento;
+		}
+		try {
+			$row = (new Database())->execute("SHOW COLUMNS FROM `matriculas` LIKE 'data_cancelamento'")->fetch(\PDO::FETCH_ASSOC);
+			self::$colunaDataCancelamento = !empty($row);
+		} catch (\Throwable $e) {
+			self::$colunaDataCancelamento = false;
+		}
+		return self::$colunaDataCancelamento;
+	}
+
+	
 	//ENVIA A MENSAGEM PARA O BANCO
 	public function matricular(){
 
@@ -82,6 +114,12 @@ class Matriculas{
 		];
 		if (self::temColunaBolsista()) {
 			$dadosInsert['bolsista'] = !empty($this->bolsista) ? 1 : 0;
+		}
+		if (self::temColunaEncargos()) {
+			$dadosInsert['multa_atraso_pct'] = round(max(0, (float)($this->multa_atraso_pct ?? 2)), 2);
+			$dadosInsert['juros_mora_pct_mes'] = round(max(0, (float)($this->juros_mora_pct_mes ?? 1)), 2);
+			$dadosInsert['multa_cancelamento_pct'] = round(max(0, (float)($this->multa_cancelamento_pct ?? 10)), 2);
+			$dadosInsert['carencia_dias'] = max(0, (int)($this->carencia_dias ?? 7));
 		}
 		$this->id = $obDatabase->insert($dadosInsert);
 
@@ -219,18 +257,28 @@ class Matriculas{
 		if (self::temColunaBolsista()) {
 			$dadosUpdate['bolsista'] = !empty($this->bolsista) ? 1 : 0;
 		}
+		if (self::temColunaEncargos()) {
+			$dadosUpdate['multa_atraso_pct'] = round(max(0, (float)($this->multa_atraso_pct ?? 2)), 2);
+			$dadosUpdate['juros_mora_pct_mes'] = round(max(0, (float)($this->juros_mora_pct_mes ?? 1)), 2);
+			$dadosUpdate['multa_cancelamento_pct'] = round(max(0, (float)($this->multa_cancelamento_pct ?? 10)), 2);
+			$dadosUpdate['carencia_dias'] = max(0, (int)($this->carencia_dias ?? 7));
+		}
 		return (new Database('matriculas'))->update('id = '.$this->id, $dadosUpdate);
 
 	}
 
 	//CANCELA A MATRICULA NO BANCO DE DADOS
-	public function cancelar(){
+	public function cancelar(?string $dataCancelamento = null){
 
-		return (new Database('matriculas'))->update('id = '.$this->id,[
+		$dados = ['status' => 3];
+		if (self::temColunaDataCancelamento()) {
+			$dataCancelamento = trim((string)($dataCancelamento ?: date('Y-m-d')));
+			if ($dataCancelamento !== '') {
+				$dados['data_cancelamento'] = $dataCancelamento;
+			}
+		}
 
-			'status' => 3
-
-		]);
+		return (new Database('matriculas'))->update('id = '.$this->id, $dados);
 
 	}
 

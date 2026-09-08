@@ -65,6 +65,9 @@ class ModuleGateHelper {
 		if (in_array('ead', $slugs, true) && !in_array('vitrine', $slugs, true)) {
 			$slugs[] = 'vitrine';
 		}
+		if (in_array('diario', $slugs, true) && !in_array('agenda_relatorio', $slugs, true)) {
+			$slugs[] = 'agenda_relatorio';
+		}
 		return array_values(array_unique($slugs));
 	}
 

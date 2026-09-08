@@ -4,6 +4,8 @@ namespace App\Common\Communication;
 
 use App\Common\Helpers\CampanhaPacingHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
+use App\Common\Helpers\EncargosContratoHelper;
+use App\Common\Helpers\NumeroHelper;
 use App\Common\Helpers\EmailValidator;
 use App\Common\Helpers\WhatsappPacingHelper;
 use App\Common\Helpers\WhatsappTextoVariacaoHelper;
@@ -436,6 +438,28 @@ class CampanhaWorker {
 			$did = (string)(int)($item->destinatario_id ?? 0);
 			if ($did !== '0' && isset($mapVars[$did]) && is_array($mapVars[$did])) {
 				$vars = array_merge($vars, $mapVars[$did]);
+			}
+			if (($segmento['tipo'] ?? '') === 'inadimplentes') {
+				$idAluno = (int)($item->destinatario_id ?? 0);
+				if ($idAluno > 0) {
+					$div = EncargosContratoHelper::calcularDividaAluno($escolaId, $idAluno);
+					if (!empty($div['ok'])) {
+						$vars['valor_debito'] = NumeroHelper::moedaBr((float)($div['total_com_encargos'] ?? 0));
+						$vars['qtd_parcelas_atraso'] = (string)(int)($div['qtd_vencidos'] ?? 0);
+						$primeiroVenc = '';
+						foreach ($div['titulos'] ?? [] as $tit) {
+							$v = (string)($tit['vencimento'] ?? '');
+							if ($v !== '' && $v < date('Y-m-d')) {
+								if ($primeiroVenc === '' || $v < $primeiroVenc) {
+									$primeiroVenc = $v;
+								}
+							}
+						}
+						if ($primeiroVenc !== '') {
+							$vars['primeiro_vencimento_atraso'] = \App\Common\Helpers\DiarioWhatsappHelper::dataBr($primeiroVenc);
+						}
+					}
+				}
 			}
 			if (empty($vars['data']) && !empty($segmento['data'])) {
 				$vars['data'] = \App\Common\Helpers\DiarioWhatsappHelper::dataBr((string)$segmento['data']);

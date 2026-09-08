@@ -120,6 +120,10 @@ class ContratoVariaveisBuilder {
 			'aulas_semanais'        => 2,
 			'desconto_pontualidade' => $parcelado ? 1 : 0,
 			'bolsista'              => $pagamento === 'bolsista' ? 1 : 0,
+			'multa_atraso_pct'      => EncargosContratoHelper::DEFAULT_MULTA_ATRASO,
+			'juros_mora_pct_mes'    => EncargosContratoHelper::DEFAULT_JUROS_MES,
+			'multa_cancelamento_pct'=> EncargosContratoHelper::DEFAULT_MULTA_CANCEL,
+			'carencia_dias'         => EncargosContratoHelper::DEFAULT_CARENCIA,
 		];
 
 		$nascAluno = $menor

@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\FinanceiroAlunoHelper;
+use App\Common\Helpers\EncargosContratoHelper;
 use App\Model\Entity\User as EntityUser;
 
 class AlunoExtrato extends Page {
@@ -93,6 +94,56 @@ class AlunoExtrato extends Page {
 				'success' => !empty($res['ok']),
 				'message' => $res['message'] ?? '',
 				'id_acordo' => $res['id_acordo'] ?? null,
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		if ($acao === 'divida_atualizada') {
+			$res = EncargosContratoHelper::calcularDividaAluno(
+				$idAdmin,
+				$idAluno,
+				(string)($post['data_referencia'] ?? '')
+			);
+			return json_encode([
+				'success' => !empty($res['ok']),
+				'message' => $res['message'] ?? '',
+				'total_face' => $res['total_face'] ?? 0,
+				'total_multa' => $res['total_multa'] ?? 0,
+				'total_juros' => $res['total_juros'] ?? 0,
+				'total_com_encargos' => $res['total_com_encargos'] ?? 0,
+				'qtd_abertos' => $res['qtd_abertos'] ?? 0,
+				'qtd_vencidos' => $res['qtd_vencidos'] ?? 0,
+				'data_referencia' => $res['data_referencia'] ?? date('Y-m-d'),
+				'titulos' => $res['titulos'] ?? [],
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		if ($acao === 'encargos_titulo') {
+			$res = EncargosContratoHelper::encargosParaTitulo(
+				$idAdmin,
+				$idAluno,
+				(int)($post['id_titulo'] ?? 0),
+				(string)($post['data_referencia'] ?? '')
+			);
+			if (empty($res['ok'])) {
+				return json_encode([
+					'success' => false,
+					'message' => $res['message'] ?? 'Falha ao simular encargos.',
+				], JSON_UNESCAPED_UNICODE);
+			}
+			$html = '';
+			if (!empty($res['elegivel_encargos'])) {
+				$html = EncargosContratoHelper::htmlBlocoPagamento($res);
+			}
+			return json_encode([
+				'success' => true,
+				'elegivel_encargos' => !empty($res['elegivel_encargos']),
+				'valor_face' => $res['valor_face'] ?? 0,
+				'multa' => $res['multa'] ?? 0,
+				'juros' => $res['juros'] ?? 0,
+				'total_com_encargos' => $res['total_com_encargos'] ?? 0,
+				'total_sem_encargos' => $res['total_sem_encargos'] ?? 0,
+				'dias_cobraveis' => $res['dias_cobraveis'] ?? 0,
+				'html_bloco' => $html,
 			], JSON_UNESCAPED_UNICODE);
 		}
 

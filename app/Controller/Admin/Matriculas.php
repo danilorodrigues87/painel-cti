@@ -18,6 +18,7 @@ use \App\Common\Helpers\BrandingHelper;
 use \App\Common\Helpers\ContratoTemplateHelper;
 use \App\Common\Helpers\ContratoVariaveisBuilder;
 use \App\Common\Helpers\MatriculaStatusHelper;
+use \App\Common\Helpers\EncargosContratoHelper;
 use \App\Common\Helpers\CrmPessoaHelper;
 use \App\Model\Entity\EscolasAssinantes;
 
@@ -425,6 +426,35 @@ $form = '<form id="form" method="post">
 </select>
 '.(!\App\Common\Helpers\MercadoPagoEscolaHelper::escolaTemPixAtivo((int)$id_admin) ? '<div class="form-text">PIX indisponível: configure em Configurações → Pagamentos.</div>' : '<div class="form-text">Com Mercado Pago o desconto de pontualidade fica desativado.</div>').'
 </div>
+' . (function () use ($dados) {
+	$enc = EncargosContratoHelper::parametrosFromMatriculaRow($dados);
+	if (!EntityMatri::temColunaEncargos()) {
+		return '<div class="col-12"><div class="form-text text-warning small">Execute <code>database/matriculas_encargos.sql</code> no phpMyAdmin para configurar multa/juros por matrícula.</div></div>';
+	}
+	$vMulta = htmlspecialchars((string)$enc['multa_atraso_pct'], ENT_QUOTES, 'UTF-8');
+	$vJuros = htmlspecialchars((string)$enc['juros_mora_pct_mes'], ENT_QUOTES, 'UTF-8');
+	$vResc = htmlspecialchars((string)$enc['multa_cancelamento_pct'], ENT_QUOTES, 'UTF-8');
+	$vCar = (int)$enc['carencia_dias'];
+	return '
+<div class="col-12"><hr class="my-2"><h6 class="small text-muted mb-0">Multa e juros (contrato)</h6>
+<p class="form-text small mb-2">Gravados nesta matrícula — usados na simulação de atraso/cancelamento e no texto do contrato impresso.</p></div>
+<div class="form-group col-md-3">
+<label>Multa por atraso (%)</label>
+<input name="multa_atraso_pct" type="number" step="0.01" min="0" class="form-control" value="' . $vMulta . '">
+</div>
+<div class="form-group col-md-3">
+<label>Juros mora (% a.m.)</label>
+<input name="juros_mora_pct_mes" type="number" step="0.01" min="0" class="form-control" value="' . $vJuros . '">
+</div>
+<div class="form-group col-md-3">
+<label>Multa rescisória (%)</label>
+<input name="multa_cancelamento_pct" type="number" step="0.01" min="0" class="form-control" value="' . $vResc . '">
+</div>
+<div class="form-group col-md-3">
+<label>Carência (dias)</label>
+<input name="carencia_dias" type="number" step="1" min="0" class="form-control" value="' . $vCar . '">
+</div>';
+})() . '
 </div>
 
 </div>
@@ -492,6 +522,7 @@ $resposta = [
  $primeiro_mes = filter_var($postVars['primeiromes'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $primeiro_ano = filter_var($postVars['primeiroano'] ?? 0, FILTER_SANITIZE_NUMBER_INT);
  $tipo_parcelamento = trim(strip_tags((string)($postVars['tipo_parcelamento'] ?? 'Carnê Simples')));
+ $encargos = EncargosContratoHelper::normalizarPostEncargos($postVars);
 
  if ($bolsista) {
   if (!EntityMatri::temColunaBolsista()) {
@@ -561,6 +592,12 @@ if (!empty($postVars['id'])) {
   $obMatricula->inicio = $inicio;
   $obMatricula->fim = $fim;
   $obMatricula->tipo_parcelamento = $tipo_parcelamento;
+  if (EntityMatri::temColunaEncargos()) {
+   $obMatricula->multa_atraso_pct = $encargos['multa_atraso_pct'];
+   $obMatricula->juros_mora_pct_mes = $encargos['juros_mora_pct_mes'];
+   $obMatricula->multa_cancelamento_pct = $encargos['multa_cancelamento_pct'];
+   $obMatricula->carencia_dias = $encargos['carencia_dias'];
+  }
 
   $obMatricula->atualizar();
 
@@ -586,6 +623,12 @@ if (!empty($postVars['id'])) {
   $obMatricula->inicio = $inicio;
   $obMatricula->fim = $fim;
   $obMatricula->tipo_parcelamento = $tipo_parcelamento;
+  if (EntityMatri::temColunaEncargos()) {
+   $obMatricula->multa_atraso_pct = $encargos['multa_atraso_pct'];
+   $obMatricula->juros_mora_pct_mes = $encargos['juros_mora_pct_mes'];
+   $obMatricula->multa_cancelamento_pct = $encargos['multa_cancelamento_pct'];
+   $obMatricula->carencia_dias = $encargos['carencia_dias'];
+  }
   $obMatricula->matricular();
 }
 
@@ -610,11 +653,51 @@ if(!$obMatricula){
 
 
 
+public static function simularCancelamento($request) {
+  $postVars = $request->getPostVars();
+  $id = (int)($postVars['id'] ?? 0);
+  $id_admin = parent::getIdAdminInt();
+  $parcelasCobrar = self::normalizarIdsParcelas($postVars['parcelas_cobrar'] ?? null);
+  $sim = EncargosContratoHelper::simularCancelamento($id, $id_admin, $parcelasCobrar);
+  return json_encode($sim, JSON_UNESCAPED_UNICODE);
+}
+
+/** @return int[]|null null = padrão (vencidas sim, futuras não); [] = nenhuma selecionada */
+private static function normalizarIdsParcelas($raw): ?array {
+  if ($raw === null) {
+    return null;
+  }
+  if (is_string($raw)) {
+    $trim = trim($raw);
+    if ($trim === '') {
+      return [];
+    }
+    $decoded = json_decode($trim, true);
+    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+      $raw = $decoded;
+    } else {
+      $raw = preg_split('/\s*,\s*/', $trim, -1, PREG_SPLIT_NO_EMPTY);
+    }
+  }
+  if (!is_array($raw)) {
+    return [];
+  }
+  $ids = [];
+  foreach ($raw as $v) {
+    $id = (int)$v;
+    if ($id > 0) {
+      $ids[] = $id;
+    }
+  }
+  return array_values(array_unique($ids));
+}
+
 public static function cancelarMatricula($request){
 
   $postVars = $request->getPostVars();
   $id = (int)($postVars['id'] ?? 0);
   $id_admin = parent::getIdAdminInt();
+  $parcelasCobrar = self::normalizarIdsParcelas($postVars['parcelas_cobrar'] ?? []) ?? [];
 
   if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
     return json_encode(['ok' => false, 'message' => 'Matrícula não encontrada.']);
@@ -625,17 +708,51 @@ public static function cancelarMatricula($request){
     return json_encode(['ok' => false, 'message' => 'Só é possível cancelar matrícula em andamento.']);
   }
 
+  $sim = EncargosContratoHelper::simularCancelamento($id, $id_admin, $parcelasCobrar);
+  if (empty($sim['ok'])) {
+    return json_encode(['ok' => false, 'message' => $sim['message'] ?? 'Falha ao simular cancelamento.']);
+  }
+
   $obUsers = new EntityMatri;
   $obUsers->id = $id;
-  $obUsers->cancelar();
+  $obUsers->cancelar(date('Y-m-d'));
 
-  $baixadas = MatriculaStatusHelper::cancelarParcelasAbertas($id, $id_admin);
+  $baixadas = MatriculaStatusHelper::baixarParcelasExceto($id, $id_admin, $parcelasCobrar);
+
+  $tituloMultaId = null;
+  if ((float)($sim['multa_rescisoria'] ?? 0) > 0) {
+    $tituloMultaId = EncargosContratoHelper::lancarMultaRescisoria(
+      $id_admin,
+      (int)$mat->id_aluno,
+      $id,
+      (float)$sim['multa_rescisoria']
+    );
+  }
+
+  $msg = 'Contrato cancelado.';
+  if ((int)($sim['qtd_baixar'] ?? 0) > 0) {
+    $msg .= ' '.$baixadas.' parcela(s) baixada(s) com R$ 0 (histórico preservado).';
+  }
+  if ((int)($sim['qtd_cobrar'] ?? 0) > 0) {
+    $msg .= ' '.(int)$sim['qtd_cobrar'].' parcela(s) permanecem em aberto para quitação (total com encargos até hoje: R$ '
+      .NumeroHelper::moedaBr((float)($sim['total_cobrar_com_encargos'] ?? 0)).').';
+  } else {
+    $msg .= ' Nenhuma parcela ficou em aberto para cobrança.';
+  }
+  if ($tituloMultaId) {
+    $msg .= ' Título de multa rescisória #'.$tituloMultaId.' em aberto (R$ '.NumeroHelper::moedaBr((float)$sim['multa_rescisoria']).') — quite no carnê ou extrato do aluno.';
+  } elseif ((float)($sim['multa_rescisoria'] ?? 0) <= 0) {
+    $msg .= ' Multa rescisória não aplicável (sem parcelas futuras a cancelar).';
+  }
 
   return json_encode([
     'ok' => true,
-    'message' => 'Contrato cancelado. '.$baixadas.' parcela(s) em aberto baixada(s) com R$ 0 (histórico preservado).',
+    'message' => $msg,
     'parcelas_baixadas' => $baixadas,
-  ]);
+    'parcelas_cobrar' => count($parcelasCobrar),
+    'titulo_multa_id' => $tituloMultaId,
+    'simulacao' => $sim,
+  ], JSON_UNESCAPED_UNICODE);
 }
 
 public static function encerrarMatricula($request){

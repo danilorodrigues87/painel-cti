@@ -116,6 +116,9 @@ class CampanhaSegmentoHelper {
 			'{escola}'   => $vars['escola'] ?? '',
 			'{horario}'  => $vars['horario'] ?? '',
 			'{data}'     => self::formatarDataVariavel($vars['data'] ?? ''),
+			'{valor_debito}' => $vars['valor_debito'] ?? '',
+			'{qtd_parcelas_atraso}' => $vars['qtd_parcelas_atraso'] ?? '',
+			'{primeiro_vencimento_atraso}' => $vars['primeiro_vencimento_atraso'] ?? '',
 		];
 
 		return str_replace(array_keys($mapa), array_values($mapa), $texto);
@@ -407,15 +410,15 @@ class CampanhaSegmentoHelper {
 		if ($parcelasMin > 6) {
 			$parcelasMin = 6;
 		}
-		// Compat: se só veio dias_atraso_min antigo e não parcelas, mantém piso de 1 dia
 		$diasMin = max(0, (int)($segmento['dias_atraso_min'] ?? 0));
 		if ($diasMin <= 0) {
-			$diasMin = 1; // vencida há pelo menos 1 dia (= antes de hoje)
+			$diasMin = 1;
 		}
 		$dataLimite = date('Y-m-d', strtotime('-'.$diasMin.' days'));
 		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
+		$abertoSql = FinanceiroAlunoHelper::sqlTituloAberto('c.status');
 
-		$sql = '
+		$sqlMat = '
 			SELECT
 				u.id,
 				u.nome,
@@ -428,43 +431,116 @@ class CampanhaSegmentoHelper {
 			INNER JOIN usuarios u ON u.id = m.id_aluno AND u.id_admin = c.id_admin
 			WHERE c.id_admin = :id_admin
 			  AND c.tipo_transacao = "Entrada"
-			  AND (c.status = 0 OR c.status = "0" OR c.status = "Em aberto")
+			  AND '.$abertoSql.'
+			  AND (c.id_acordo IS NULL OR c.id_acordo = 0)
 			  AND c.vencimento <= :data_limite
-			  AND m.status = 0
+			  AND m.status IN (0, 3)
 			  AND '.$campo.' IS NOT NULL
 			  AND '.$campo.' != ""
 			GROUP BY u.id, u.nome, '.$campo.'
-			HAVING COUNT(*) >= :parcelas_min
-			ORDER BY qtd_atraso DESC, primeiro_venc ASC
 		';
 
-		$stmt = self::pdo()->prepare($sql);
+		$stmt = self::pdo()->prepare($sqlMat);
 		$stmt->execute([
 			'id_admin' => $idAdmin,
 			'data_limite' => $dataLimite,
-			'parcelas_min' => $parcelasMin,
 		]);
-		$linhas = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+		$porAluno = [];
+		foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+			$id = (int)($row['id'] ?? 0);
+			if ($id <= 0) {
+				continue;
+			}
+			$porAluno[$id] = $row;
+		}
+
+		if (\App\Model\Entity\FinanceiroAcordo::tabelasExistem()
+			&& \App\Model\Entity\FinanceiroAcordo::caixaTemIdAcordo()) {
+			$sqlAc = '
+				SELECT
+					u.id,
+					u.nome,
+					'.$campo.' AS contato,
+					COUNT(*) AS qtd_atraso,
+					MIN(c.vencimento) AS primeiro_venc,
+					SUBSTRING_INDEX(GROUP_CONCAT(c.descricao ORDER BY c.vencimento ASC SEPARATOR " · "), " · ", 1) AS curso
+				FROM caixa c
+				INNER JOIN financeiro_acordos fa ON fa.id = c.id_acordo AND fa.id_admin = c.id_admin
+				INNER JOIN usuarios u ON u.id = fa.id_aluno AND u.id_admin = c.id_admin
+				WHERE c.id_admin = :id_admin
+				  AND c.tipo_transacao = "Entrada"
+				  AND '.$abertoSql.'
+				  AND c.id_acordo > 0
+				  AND c.vencimento <= :data_limite
+				  AND fa.status = "ativo"
+				  AND '.$campo.' IS NOT NULL
+				  AND '.$campo.' != ""
+				GROUP BY u.id, u.nome, '.$campo.'
+			';
+			$stmtAc = self::pdo()->prepare($sqlAc);
+			$stmtAc->execute([
+				'id_admin' => $idAdmin,
+				'data_limite' => $dataLimite,
+			]);
+			foreach ($stmtAc->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+				$id = (int)($row['id'] ?? 0);
+				if ($id <= 0) {
+					continue;
+				}
+				if (!isset($porAluno[$id])) {
+					$porAluno[$id] = $row;
+					continue;
+				}
+				$porAluno[$id]['qtd_atraso'] = (int)$porAluno[$id]['qtd_atraso'] + (int)($row['qtd_atraso'] ?? 0);
+				$pv = (string)($row['primeiro_venc'] ?? '');
+				$atual = (string)($porAluno[$id]['primeiro_venc'] ?? '');
+				if ($pv !== '' && ($atual === '' || $pv < $atual)) {
+					$porAluno[$id]['primeiro_venc'] = $pv;
+				}
+			}
+		}
 
 		$lista = [];
-		foreach ($linhas as $row) {
+		foreach ($porAluno as $row) {
 			$qtd = (int)($row['qtd_atraso'] ?? 0);
+			if ($qtd < $parcelasMin) {
+				continue;
+			}
+			$idAluno = (int)($row['id'] ?? 0);
 			$desde = !empty($row['primeiro_venc'])
 				? date('d/m/Y', strtotime($row['primeiro_venc']))
 				: '';
 			$cursoBase = trim((string)($row['curso'] ?? ''));
+			$valorDebito = '';
+			$div = EncargosContratoHelper::calcularDividaAluno($idAdmin, $idAluno);
+			if (!empty($div['ok'])) {
+				$valorDebito = NumeroHelper::moedaBr((float)($div['total_com_encargos'] ?? 0));
+			}
 			$lista[] = [
 				'destinatario_tipo' => 'aluno',
-				'destinatario_id'   => (int)$row['id'],
+				'destinatario_id'   => $idAluno,
 				'nome'              => $row['nome'],
 				'contato'           => trim((string)($row['contato'] ?? '')),
 				'curso'             => trim(
 					($cursoBase !== '' ? $cursoBase.' — ' : '')
 					.$qtd.' parcela'.($qtd === 1 ? '' : 's').' em atraso'
 					.($desde !== '' ? ' (desde '.$desde.')' : '')
+					.($valorDebito !== '' ? ' · débito R$ '.$valorDebito : '')
 				),
+				'valor_debito' => $valorDebito,
+				'qtd_parcelas_atraso' => (string)$qtd,
+				'primeiro_vencimento_atraso' => $desde,
 			];
 		}
+
+		usort($lista, static function ($a, $b) {
+			$qa = (int)($a['qtd_parcelas_atraso'] ?? 0);
+			$qb = (int)($b['qtd_parcelas_atraso'] ?? 0);
+			if ($qa !== $qb) {
+				return $qb <=> $qa;
+			}
+			return strcmp((string)($a['nome'] ?? ''), (string)($b['nome'] ?? ''));
+		});
 
 		return $lista;
 	}
