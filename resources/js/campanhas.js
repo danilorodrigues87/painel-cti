@@ -140,8 +140,10 @@ function atualizarUiSegmento(){
 function labelStatusMatriculaCampanha(v){
 	const mapa = {
 		ativa: 'contrato ativo (em andamento)',
+		encerrada: 'contrato encerrado',
 		cancelada: 'contrato cancelado',
-		todas: 'qualquer contrato (ativo ou cancelado)',
+		inativa: 'contrato inativo (encerrado ou cancelado)',
+		todas: 'qualquer status de contrato',
 	};
 	return mapa[v] || mapa.todas;
 }
@@ -173,7 +175,9 @@ function resumoFiltroInadimplentes(seg){
 	}
 	const contrato = {
 		ativa: 'Contrato ativo',
+		encerrada: 'Contrato encerrado',
 		cancelada: 'Contrato cancelado',
+		inativa: 'Contrato inativo',
 		todas: 'Todos os contratos',
 	}[st] || 'Todos os contratos';
 	return parc + ' · ' + contrato;

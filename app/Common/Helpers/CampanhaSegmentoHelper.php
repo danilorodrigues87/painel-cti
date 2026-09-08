@@ -481,6 +481,7 @@ class CampanhaSegmentoHelper {
 			$stDiag = self::pdo()->prepare($sqlDiag);
 			$stDiag->execute(['id_admin' => $idAdmin, 'data_limite' => $dataLimite]);
 			self::debugLog('CampanhaSegmentoHelper.php:inadimplentes', 'segmento campanha inadimplentes', [
+				'runId' => 'post-fix',
 				'filtro_status' => $f['status_matricula'],
 				'where_status_sql' => $whereStatusMat,
 				'alunos_apos_filtro' => count($porAluno),
@@ -491,7 +492,7 @@ class CampanhaSegmentoHelper {
 		}
 		// #endregion
 
-		if ($f['status_matricula'] === 'todas'
+		if (in_array($f['status_matricula'], ['todas', 'inativa'], true)
 			&& \App\Model\Entity\FinanceiroAcordo::tabelasExistem()
 			&& \App\Model\Entity\FinanceiroAcordo::caixaTemIdAcordo()) {
 			$sqlAc = '
@@ -605,10 +606,10 @@ class CampanhaSegmentoHelper {
 		if ($qtd > 12) {
 			$qtd = 12;
 		}
-		$status = trim((string)($in['status_matricula'] ?? 'todas'));
-		if (!in_array($status, ['ativa', 'cancelada', 'todas'], true)) {
-			$status = 'todas';
-		}
+		$status = MatriculaStatusHelper::normalizarFiltroStatusMatricula(
+			(string)($in['status_matricula'] ?? 'todas'),
+			'todas'
+		);
 		$out = [
 			'modo' => $modo,
 			'qtd' => $qtd,
@@ -633,14 +634,7 @@ class CampanhaSegmentoHelper {
 	}
 
 	private static function sqlStatusMatriculaCampanha(string $status, string $alias = 'm'): string {
-		$a = rtrim($alias, '.').'.';
-		if ($status === 'cancelada') {
-			return $a.'status = '.MatriculaStatusHelper::STATUS_CANCELADO;
-		}
-		if ($status === 'todas') {
-			return $a.'status IN ('.MatriculaStatusHelper::STATUS_ANDAMENTO.','.MatriculaStatusHelper::STATUS_CANCELADO.')';
-		}
-		return $a.'status = '.MatriculaStatusHelper::STATUS_ANDAMENTO;
+		return MatriculaStatusHelper::sqlFiltroInadimplentes($status, $alias);
 	}
 
 	private static function mapearLinhas(array $linhas, string $tipo): array {

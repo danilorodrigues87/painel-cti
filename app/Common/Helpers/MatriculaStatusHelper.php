@@ -52,6 +52,35 @@ class MatriculaStatusHelper {
 		return (string)$status;
 	}
 
+	/** Valores aceitos nos filtros de inadimplentes/campanhas. */
+	public static function normalizarFiltroStatusMatricula(string $status, string $fallback = 'ativa'): string {
+		$status = trim($status);
+		$validos = ['ativa', 'encerrada', 'cancelada', 'inativa', 'todas'];
+		return in_array($status, $validos, true) ? $status : $fallback;
+	}
+
+	/**
+	 * Fragmento SQL para filtro de status em relatórios de inadimplência.
+	 * inativa = encerrado ou cancelado (sem matrícula em andamento).
+	 */
+	public static function sqlFiltroInadimplentes(string $status, string $alias = 'm'): string {
+		$a = rtrim($alias, '.').'.';
+		$status = self::normalizarFiltroStatusMatricula($status, 'ativa');
+		if ($status === 'cancelada') {
+			return $a.'status = '.self::STATUS_CANCELADO;
+		}
+		if ($status === 'encerrada') {
+			return $a.'status = '.self::STATUS_ENCERRADO;
+		}
+		if ($status === 'inativa') {
+			return $a.'status IN ('.self::STATUS_ENCERRADO.','.self::STATUS_CANCELADO.')';
+		}
+		if ($status === 'todas') {
+			return $a.'status IN ('.self::STATUS_ANDAMENTO.','.self::STATUS_ENCERRADO.','.self::STATUS_CANCELADO.')';
+		}
+		return $a.'status = '.self::STATUS_ANDAMENTO;
+	}
+
 	/** Tipos de baixa que não contam como receita real. */
 	public static function sqlExcluirNaoReceita(string $colunaTipo = 'tipo_pagamento'): string {
 		return '('.$colunaTipo.' IS NULL OR '.$colunaTipo.' = "" OR ('

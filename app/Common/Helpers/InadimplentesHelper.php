@@ -39,10 +39,10 @@ class InadimplentesHelper {
 
 	/** @return array{status_matricula:string,dias_atraso_min:int,parcelas_atraso_min:int,id_trilha:int,busca:string,page:int,per_page:int} */
 	public static function parseFiltrosInadimplentes(array $in): array {
-		$status = trim((string)($in['status_matricula'] ?? 'ativa'));
-		if (!in_array($status, ['ativa', 'cancelada', 'todas'], true)) {
-			$status = 'ativa';
-		}
+		$status = MatriculaStatusHelper::normalizarFiltroStatusMatricula(
+			(string)($in['status_matricula'] ?? 'ativa'),
+			'ativa'
+		);
 		$dias = max(1, min(365, (int)($in['dias_atraso_min'] ?? 1)));
 		$parc = max(1, min(6, (int)($in['parcelas_atraso_min'] ?? 1)));
 		$idTrilha = max(0, (int)($in['id_trilha'] ?? 0));
@@ -68,10 +68,10 @@ class InadimplentesHelper {
 	/** @return array{meses_sem_presenca:int,status_matricula:string,somente_com_debito:bool,id_trilha:int,busca:string,page:int,per_page:int} */
 	public static function parseFiltrosAbandono(array $in): array {
 		$meses = max(1, min(12, (int)($in['meses_sem_presenca'] ?? 3)));
-		$status = trim((string)($in['status_matricula'] ?? 'ativa'));
-		if (!in_array($status, ['ativa', 'cancelada', 'todas'], true)) {
-			$status = 'ativa';
-		}
+		$status = MatriculaStatusHelper::normalizarFiltroStatusMatricula(
+			(string)($in['status_matricula'] ?? 'ativa'),
+			'ativa'
+		);
 		return [
 			'meses_sem_presenca' => $meses,
 			'status_matricula' => $status,
@@ -84,14 +84,7 @@ class InadimplentesHelper {
 	}
 
 	private static function sqlStatusMatricula(string $status, string $alias = 'm'): string {
-		$a = rtrim($alias, '.').'.';
-		if ($status === 'cancelada') {
-			return $a.'status = '.MatriculaStatusHelper::STATUS_CANCELADO;
-		}
-		if ($status === 'todas') {
-			return $a.'status IN ('.MatriculaStatusHelper::STATUS_ANDAMENTO.','.MatriculaStatusHelper::STATUS_CANCELADO.')';
-		}
-		return $a.'status = '.MatriculaStatusHelper::STATUS_ANDAMENTO;
+		return MatriculaStatusHelper::sqlFiltroInadimplentes($status, $alias);
 	}
 
 	/**
@@ -166,6 +159,7 @@ class InadimplentesHelper {
 			$stDiag->execute(['id_admin' => $idAdmin, 'data_limite' => $dataLimite]);
 			$porStatus = $stDiag->fetchAll(\PDO::FETCH_ASSOC) ?: [];
 			self::debugLog('InadimplentesHelper.php:listarInadimplentes', 'listagem inadimplentes', [
+				'runId' => 'post-fix',
 				'filtro_status' => $f['status_matricula'],
 				'where_status_sql' => $whereExtra,
 				'resultado_linhas' => count($rows),
