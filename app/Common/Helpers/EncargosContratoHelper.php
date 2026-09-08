@@ -429,7 +429,7 @@ class EncargosContratoHelper {
 		$totalCobrarFace = 0.0;
 		$totalCobrarEnc = 0.0;
 		$totalBaixarFace = 0.0;
-		$totalFutNaoCobrar = 0.0;
+		$totalMultaBase = 0.0;
 		$qtdCobrar = 0;
 		$qtdBaixar = 0;
 
@@ -444,9 +444,6 @@ class EncargosContratoHelper {
 			} else {
 				$futuras[] = $p;
 				$totalFutFace += (float)$p['valor_face'];
-				if (!$cobrar) {
-					$totalFutNaoCobrar += (float)$p['valor_face'];
-				}
 			}
 			if ($cobrar) {
 				$qtdCobrar++;
@@ -455,11 +452,12 @@ class EncargosContratoHelper {
 			} else {
 				$qtdBaixar++;
 				$totalBaixarFace += (float)$p['valor_face'];
+				$totalMultaBase += (float)$p['valor_face'];
 			}
 		}
 
 		$multaRescisoria = round(
-			$totalFutNaoCobrar * ((float)$params['multa_cancelamento_pct'] / 100),
+			$totalMultaBase * ((float)$params['multa_cancelamento_pct'] / 100),
 			2
 		);
 		$idsCobrar = array_keys($cobrarMap);

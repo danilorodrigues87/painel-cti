@@ -447,12 +447,39 @@ function exportarPdf() {
 		var $area = $('#inad-pdf-area');
 		$area.removeClass('d-none').html(montarHtmlPdf(res));
 		var node = $area.find('.relatorio-financeiro-impressao')[0];
+		if (!node) {
+			$('#btn-export-pdf').prop('disabled', false);
+			Swal.fire('Erro', 'Nada para exportar.', 'warning');
+			return;
+		}
+
 		var wrapper = document.createElement('div');
+		wrapper.className = 'relatorio-pdf-export';
 		wrapper.style.background = '#fff';
 		wrapper.style.color = '#000';
 		wrapper.style.padding = '8px';
+		wrapper.style.width = '1100px';
+		wrapper.style.position = 'fixed';
+		wrapper.style.left = '0';
+		wrapper.style.top = '0';
+		wrapper.style.zIndex = '-1';
+		wrapper.style.opacity = '0';
+		wrapper.style.pointerEvents = 'none';
+
+		var stylePdf = document.createElement('style');
+		stylePdf.textContent =
+			'.relatorio-pdf-export, .relatorio-pdf-export * {' +
+			'color: #000 !important; background: #fff !important; background-color: #fff !important;' +
+			'border-color: #ccc !important; box-shadow: none !important;' +
+			'}' +
+			'.relatorio-pdf-export table { page-break-inside: auto; }' +
+			'.relatorio-pdf-export tr { page-break-inside: avoid; page-break-after: auto; }' +
+			'.relatorio-pdf-export thead { display: table-header-group; }';
+		wrapper.appendChild(stylePdf);
+
 		var clone = node.cloneNode(true);
 		wrapper.appendChild(clone);
+		document.body.appendChild(wrapper);
 		aplicarCoresClarasPdf(wrapper);
 
 		var nome =
@@ -460,12 +487,24 @@ function exportarPdf() {
 			'_' +
 			new Date().toISOString().slice(0, 10) +
 			'.pdf';
+		var altura = Math.max(wrapper.scrollHeight, wrapper.offsetHeight, clone.scrollHeight || 0);
 		var opt = {
 			margin: [8, 8, 8, 8],
 			filename: nome,
 			image: { type: 'jpeg', quality: 0.98 },
-			html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+			html2canvas: {
+				scale: 2,
+				useCORS: true,
+				backgroundColor: '#ffffff',
+				scrollY: 0,
+				scrollX: 0,
+				height: altura,
+				windowHeight: altura,
+				width: wrapper.scrollWidth || 1100,
+				windowWidth: wrapper.scrollWidth || 1100,
+			},
 			jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+			pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] },
 		};
 
 		html2pdf()
@@ -473,10 +512,14 @@ function exportarPdf() {
 			.from(wrapper)
 			.save()
 			.then(function () {
+				document.body.removeChild(wrapper);
 				$('#btn-export-pdf').prop('disabled', false);
 				$area.addClass('d-none').empty();
 			})
 			.catch(function () {
+				if (wrapper.parentNode) {
+					document.body.removeChild(wrapper);
+				}
 				$('#btn-export-pdf').prop('disabled', false);
 				$area.addClass('d-none').empty();
 				Swal.fire('Erro', 'Falha ao gerar PDF.', 'error');

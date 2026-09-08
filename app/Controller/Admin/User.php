@@ -42,13 +42,13 @@ class User extends Page{
 		$filtro = $postVars['filtro'] ?? null;
 
 		if ($filtro) {
-			if($filtro == 'inativo'){
-				$where = 'id_admin = "'.$id_admin.'" AND ativo = "n" AND nivel NOT IN ("Cliente","Empresa")';
+			if ($filtro == 'inativo') {
+				$where = 'id_admin = "'.$id_admin.'" AND ativo = "n" AND nivel NOT IN ("Cliente","Empresa","Aluno")';
 			} else {
 				$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel IN ("' . $filtro . '")';
 			}
 		} else {
-			$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel NOT IN ("Cliente","Empresa")';
+			$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel NOT IN ("Cliente","Empresa","Aluno")';
 		}
 
 		// Não listar operadores do Painel Master na escola

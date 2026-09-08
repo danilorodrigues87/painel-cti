@@ -742,7 +742,7 @@ public static function cancelarMatricula($request){
   if ($tituloMultaId) {
     $msg .= ' Título de multa rescisória #'.$tituloMultaId.' em aberto (R$ '.NumeroHelper::moedaBr((float)$sim['multa_rescisoria']).') — quite no carnê ou extrato do aluno.';
   } elseif ((float)($sim['multa_rescisoria'] ?? 0) <= 0) {
-    $msg .= ' Multa rescisória não aplicável (sem parcelas futuras a cancelar).';
+    $msg .= ' Multa rescisória não aplicável (nenhuma parcela cancelada com baixa administrativa).';
   }
 
   return json_encode([

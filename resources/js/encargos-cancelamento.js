@@ -12,21 +12,22 @@ function moedaBrJs(n) {
 	return v.toFixed(2).replace('.', ',');
 }
 
-function idsParcelasMarcadas() {
+function idsParcelasMarcadas($scope) {
+	var $root = $scope && $scope.length ? $scope : $(document);
 	var ids = [];
-	$('.chk-parc-cobrar:checked').each(function () {
+	$root.find('.chk-parc-cobrar:checked').each(function () {
 		var id = parseInt($(this).val(), 10);
 		if (id > 0) ids.push(id);
 	});
 	return ids;
 }
 
-function parcelasCobrarPayload() {
-	var ids = idsParcelasMarcadas();
+function parcelasCobrarPayload($scope) {
+	var ids = idsParcelasMarcadas($scope);
 	return ids.length ? ids.join(',') : '';
 }
 
-function recalcularSimulacao(id, callback) {
+function recalcularSimulacao(id, callback, $scope) {
 	var simUrl =
 		typeof cancelarSimular !== 'undefined' && cancelarSimular
 			? cancelarSimular
@@ -35,7 +36,7 @@ function recalcularSimulacao(id, callback) {
 	$.ajax({
 		url: url_base + simUrl,
 		method: 'post',
-		data: { id: id, parcelas_cobrar: parcelasCobrarPayload() },
+		data: { id: id, parcelas_cobrar: parcelasCobrarPayload($scope) },
 		dataType: 'json',
 		success: function (sim) {
 			$('#box-totais-cancel').css('opacity', '1');
@@ -58,7 +59,7 @@ function renderBlocoMulta(sim) {
 		moedaBrJs(sim.multa_rescisoria) +
 		' <span class="text-muted">(' +
 		moedaBrJs((sim.params && sim.params.multa_cancelamento_pct) || 10) +
-		'% sobre parcelas futuras que serão canceladas)</span> — ' +
+		'% sobre parcelas canceladas (baixa administrativa)</span> — ' +
 		'será gerado <u>título em aberto</u> para quitação no carnê ou extrato do aluno.</p>'
 	);
 }
@@ -78,7 +79,7 @@ function renderTotaisCancelamento(sim) {
 		'</strong></div>' +
 		'<div>Multa rescisória (' +
 		moedaBrJs((sim.params && sim.params.multa_cancelamento_pct) || 10) +
-		'% sobre futuras não cobradas): <strong>R$ ' +
+		'% sobre parcelas canceladas): <strong>R$ ' +
 		moedaBrJs(sim.multa_rescisoria) +
 		'</strong></div>' +
 		'<div class="fw-semibold mt-1">Dívida estimada (cobrança + multa): R$ ' +
@@ -168,7 +169,7 @@ function abrirModalCancelamento(id, sim) {
 	html += renderListaParcelas(sim);
 	html += renderBlocoMulta(sim);
 	html +=
-		'<p class="text-muted mb-0 small">Encargos de atraso continuam sendo calculados até a data do pagamento de cada título. A multa rescisória recalcula ao marcar/desmarcar parcelas futuras.</p>';
+		'<p class="text-muted mb-0 small">Encargos de atraso continuam sendo calculados até a data do pagamento de cada título. A multa rescisória recalcula ao marcar/desmarcar parcelas (vencidas ou futuras).</p>';
 	html += '</div>';
 
 	Swal.fire({
@@ -189,7 +190,7 @@ function abrirModalCancelamento(id, sim) {
 					recalcularSimulacao(id, function (novoSim) {
 						$popup.find('#box-totais-cancel').replaceWith(renderTotaisCancelamento(novoSim));
 						$popup.find('#box-multa-cancel').replaceWith(renderBlocoMulta(novoSim));
-					});
+					}, $popup);
 				});
 		},
 		willClose: function () {
@@ -199,8 +200,9 @@ function abrirModalCancelamento(id, sim) {
 			}
 		},
 		preConfirm: function () {
+			var $popup = $(Swal.getHtmlContainer());
 			return {
-				parcelas_cobrar: idsParcelasMarcadas(),
+				parcelas_cobrar: idsParcelasMarcadas($popup),
 			};
 		},
 	}).then(function (result) {
