@@ -444,7 +444,9 @@ class CampanhaWorker {
 				if ($idAluno > 0) {
 					$div = EncargosContratoHelper::calcularDividaAluno($escolaId, $idAluno);
 					if (!empty($div['ok'])) {
-						$vars['valor_debito'] = NumeroHelper::moedaBr((float)($div['total_com_encargos'] ?? 0));
+						$vars['valor_debito'] = NumeroHelper::moedaBr(
+							EncargosContratoHelper::valorDebitoCampanhaInadimplentes($escolaId, $idAluno, $div)
+						);
 						$vars['qtd_parcelas_atraso'] = (string)(int)($div['qtd_vencidos'] ?? 0);
 						$primeiroVenc = '';
 						foreach ($div['titulos'] ?? [] as $tit) {

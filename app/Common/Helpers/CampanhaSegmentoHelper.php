@@ -514,7 +514,9 @@ class CampanhaSegmentoHelper {
 			$valorDebito = '';
 			$div = EncargosContratoHelper::calcularDividaAluno($idAdmin, $idAluno);
 			if (!empty($div['ok'])) {
-				$valorDebito = NumeroHelper::moedaBr((float)($div['total_com_encargos'] ?? 0));
+				$valorDebito = NumeroHelper::moedaBr(
+					EncargosContratoHelper::valorDebitoCampanhaInadimplentes($idAdmin, $idAluno, $div)
+				);
 			}
 			$lista[] = [
 				'destinatario_tipo' => 'aluno',

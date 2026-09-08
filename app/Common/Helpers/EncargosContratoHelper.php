@@ -211,7 +211,7 @@ class EncargosContratoHelper {
 
 	/**
 	 * Dívida consolidada do aluno (títulos em aberto com encargos até a data de referência).
-	 * @return array{ok:bool,message?:string,titulos?:array,total_face?:float,total_multa?:float,total_juros?:float,total_com_encargos?:float,qtd_abertos?:int,data_referencia?:string}
+	 * @return array{ok:bool,message?:string,titulos?:array,total_face?:float,total_multa?:float,total_juros?:float,total_com_encargos?:float,total_vencidos_com_encargos?:float,qtd_abertos?:int,qtd_vencidos?:int,data_referencia?:string}
 	 */
 	public static function calcularDividaAluno(int $idAdmin, int $idAluno, ?string $dataReferencia = null): array {
 		if ($idAdmin <= 0 || $idAluno <= 0) {
@@ -227,6 +227,7 @@ class EncargosContratoHelper {
 		$totalMulta = 0.0;
 		$totalJuros = 0.0;
 		$totalComEnc = 0.0;
+		$totalVencidosComEnc = 0.0;
 		$qtdVencidos = 0;
 
 		$mats = Matriculas::getMatriculas(
@@ -262,6 +263,7 @@ class EncargosContratoHelper {
 				$totalComEnc += $vals['valor'];
 				if (($c->vencimento ?? '') !== '' && (string)$c->vencimento < $dataReferencia) {
 					$qtdVencidos++;
+					$totalVencidosComEnc += $vals['valor'];
 				}
 			}
 		}
@@ -293,6 +295,7 @@ class EncargosContratoHelper {
 					$totalComEnc += $face;
 					if (($c->vencimento ?? '') !== '' && (string)$c->vencimento < $dataReferencia) {
 						$qtdVencidos++;
+						$totalVencidosComEnc += $face;
 					}
 				}
 			}
@@ -305,10 +308,36 @@ class EncargosContratoHelper {
 			'total_multa' => round($totalMulta, 2),
 			'total_juros' => round($totalJuros, 2),
 			'total_com_encargos' => round($totalComEnc, 2),
+			'total_vencidos_com_encargos' => round($totalVencidosComEnc, 2),
 			'qtd_abertos' => count($titulos),
 			'qtd_vencidos' => $qtdVencidos,
 			'data_referencia' => $dataReferencia,
 		];
+	}
+
+	/** Valor para campanhas de inadimplentes: ativo = só vencidos; só cancelado = dívida total em aberto. */
+	public static function valorDebitoCampanhaInadimplentes(int $idAdmin, int $idAluno, array $div): float {
+		if (empty($div['ok'])) {
+			return 0.0;
+		}
+		if (self::alunoTemMatriculaAtiva($idAdmin, $idAluno)) {
+			return (float)($div['total_vencidos_com_encargos'] ?? 0);
+		}
+		return (float)($div['total_com_encargos'] ?? 0);
+	}
+
+	private static function alunoTemMatriculaAtiva(int $idAdmin, int $idAluno): bool {
+		if ($idAdmin <= 0 || $idAluno <= 0) {
+			return false;
+		}
+		$rs = Matriculas::getMatriculas(
+			'id_admin = '.(int)$idAdmin
+			.' AND id_aluno = '.(int)$idAluno
+			.' AND '.MatriculaStatusHelper::sqlAtiva('matriculas'),
+			'id DESC',
+			'1'
+		);
+		return (bool)$rs->fetchObject(Matriculas::class);
 	}
 
 	/**
