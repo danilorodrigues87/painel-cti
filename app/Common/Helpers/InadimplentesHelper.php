@@ -9,6 +9,20 @@ use App\Model\Entity\FinanceiroAcordo;
  */
 class InadimplentesHelper {
 
+	// #region agent log
+	private static function debugLog(string $location, string $message, array $data, string $hypothesisId): void {
+		$line = json_encode([
+			'sessionId' => '6b4d05',
+			'hypothesisId' => $hypothesisId,
+			'location' => $location,
+			'message' => $message,
+			'data' => $data,
+			'timestamp' => (int)(microtime(true) * 1000),
+		], JSON_UNESCAPED_UNICODE);
+		@file_put_contents(__DIR__.'/../../../debug-6b4d05.log', $line."\n", FILE_APPEND);
+	}
+	// #endregion
+
 	private static function pdo(): \PDO {
 		static $pdo = null;
 		if ($pdo instanceof \PDO) {
@@ -134,6 +148,33 @@ class InadimplentesHelper {
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute($params);
 		$rows = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+		// #region agent log
+		try {
+			$sqlDiag = '
+				SELECT m.status AS st, COUNT(DISTINCT m.id) AS matriculas, COUNT(c.id) AS titulos
+				FROM caixa c
+				INNER JOIN matriculas m ON m.id = c.id_ref AND m.id_admin = c.id_admin
+				WHERE c.id_admin = :id_admin
+				  AND c.tipo_transacao = "Entrada"
+				  AND '.$abertoSql.'
+				  AND (c.id_acordo IS NULL OR c.id_acordo = 0)
+				  AND c.vencimento <= :data_limite
+				GROUP BY m.status
+			';
+			$stDiag = self::pdo()->prepare($sqlDiag);
+			$stDiag->execute(['id_admin' => $idAdmin, 'data_limite' => $dataLimite]);
+			$porStatus = $stDiag->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+			self::debugLog('InadimplentesHelper.php:listarInadimplentes', 'listagem inadimplentes', [
+				'filtro_status' => $f['status_matricula'],
+				'where_status_sql' => $whereExtra,
+				'resultado_linhas' => count($rows),
+				'atraso_por_status_matricula' => $porStatus,
+			], 'H1');
+		} catch (\Throwable $e) {
+			self::debugLog('InadimplentesHelper.php:listarInadimplentes', 'diag falhou', ['erro' => $e->getMessage()], 'H3');
+		}
+		// #endregion
 
 		$acordosPorAluno = self::alunosComAcordoVencido($idAdmin, $dataLimite);
 		$dividaCache = [];
