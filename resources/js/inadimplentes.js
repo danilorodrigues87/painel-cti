@@ -444,12 +444,10 @@ function exportarPdf() {
 	}
 	$('#btn-export-pdf').prop('disabled', true);
 	buscarTodosParaExporte(function (res) {
-		var $area = $('#inad-pdf-area');
-		$area.removeClass('d-none').html(montarHtmlPdf(res));
-		var node = $area.find('.relatorio-financeiro-impressao')[0];
-		if (!node) {
+		var linhas = (res && res.linhas) || [];
+		if (!linhas.length) {
 			$('#btn-export-pdf').prop('disabled', false);
-			Swal.fire('Erro', 'Nada para exportar.', 'warning');
+			Swal.fire('Aviso', 'Nenhum registro para exportar.', 'warning');
 			return;
 		}
 
@@ -457,14 +455,8 @@ function exportarPdf() {
 		wrapper.className = 'relatorio-pdf-export';
 		wrapper.style.background = '#fff';
 		wrapper.style.color = '#000';
-		wrapper.style.padding = '8px';
+		wrapper.style.padding = '12px';
 		wrapper.style.width = '1100px';
-		wrapper.style.position = 'fixed';
-		wrapper.style.left = '0';
-		wrapper.style.top = '0';
-		wrapper.style.zIndex = '-1';
-		wrapper.style.opacity = '0';
-		wrapper.style.pointerEvents = 'none';
 
 		var stylePdf = document.createElement('style');
 		stylePdf.textContent =
@@ -472,14 +464,15 @@ function exportarPdf() {
 			'color: #000 !important; background: #fff !important; background-color: #fff !important;' +
 			'border-color: #ccc !important; box-shadow: none !important;' +
 			'}' +
-			'.relatorio-pdf-export table { page-break-inside: auto; }' +
-			'.relatorio-pdf-export tr { page-break-inside: avoid; page-break-after: auto; }' +
-			'.relatorio-pdf-export thead { display: table-header-group; }';
+			'.relatorio-pdf-export table { width: 100%; border-collapse: collapse; font-size: 11px; }' +
+			'.relatorio-pdf-export th, .relatorio-pdf-export td { border: 1px solid #ccc; padding: 4px 6px; }' +
+			'.relatorio-pdf-export thead th { background: #f5f5f5 !important; }';
 		wrapper.appendChild(stylePdf);
-
-		var clone = node.cloneNode(true);
-		wrapper.appendChild(clone);
-		document.body.appendChild(wrapper);
+		var tempContent = document.createElement('div');
+		tempContent.innerHTML = montarHtmlPdf(res);
+		while (tempContent.firstChild) {
+			wrapper.appendChild(tempContent.firstChild);
+		}
 		aplicarCoresClarasPdf(wrapper);
 
 		var nome =
@@ -487,7 +480,6 @@ function exportarPdf() {
 			'_' +
 			new Date().toISOString().slice(0, 10) +
 			'.pdf';
-		var altura = Math.max(wrapper.scrollHeight, wrapper.offsetHeight, clone.scrollHeight || 0);
 		var opt = {
 			margin: [8, 8, 8, 8],
 			filename: nome,
@@ -496,32 +488,27 @@ function exportarPdf() {
 				scale: 2,
 				useCORS: true,
 				backgroundColor: '#ffffff',
-				scrollY: 0,
-				scrollX: 0,
-				height: altura,
-				windowHeight: altura,
-				width: wrapper.scrollWidth || 1100,
-				windowWidth: wrapper.scrollWidth || 1100,
 			},
 			jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
 			pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] },
 		};
 
+		document.body.appendChild(wrapper);
 		html2pdf()
 			.set(opt)
 			.from(wrapper)
 			.save()
 			.then(function () {
-				document.body.removeChild(wrapper);
+				if (wrapper.parentNode) {
+					document.body.removeChild(wrapper);
+				}
 				$('#btn-export-pdf').prop('disabled', false);
-				$area.addClass('d-none').empty();
 			})
 			.catch(function () {
 				if (wrapper.parentNode) {
 					document.body.removeChild(wrapper);
 				}
 				$('#btn-export-pdf').prop('disabled', false);
-				$area.addClass('d-none').empty();
 				Swal.fire('Erro', 'Falha ao gerar PDF.', 'error');
 			});
 	});

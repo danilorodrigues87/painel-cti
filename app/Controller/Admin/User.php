@@ -14,6 +14,15 @@ use \App\Common\Helpers\UserFotoHelper;
 
 class User extends Page{
 
+	/** Cargos exibidos na tela Funcionários (nunca alunos/leads/candidatos). */
+	private static function sqlNiveisFuncionario(): string {
+		$niveis = ['Diretor', 'Secretario', 'Financeiro', 'Comercial'];
+		$quoted = array_map(static function ($n) {
+			return '"'.addslashes($n).'"';
+		}, $niveis);
+		return 'nivel IN ('.implode(',', $quoted).')';
+	}
+
 	//RETORNA O FORMULARIO DE UM NOVO DEPOIMENTO
 	public static function index($request){
 		//CONTEÚDO DE FORMULÁRIO
@@ -41,14 +50,17 @@ class User extends Page{
 		// Obtenção do filtro com valor padrão 'Aluno' se não definido
 		$filtro = $postVars['filtro'] ?? null;
 
+		$nivelSql = self::sqlNiveisFuncionario();
+
 		if ($filtro) {
 			if ($filtro == 'inativo') {
-				$where = 'id_admin = "'.$id_admin.'" AND ativo = "n" AND nivel NOT IN ("Cliente","Empresa","Aluno")';
+				$where = 'id_admin = "'.$id_admin.'" AND ativo = "n" AND '.$nivelSql;
 			} else {
-				$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel IN ("' . $filtro . '")';
+				$filtro = addslashes($filtro);
+				$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel = "'.$filtro.'" AND '.$nivelSql;
 			}
 		} else {
-			$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND nivel NOT IN ("Cliente","Empresa","Aluno")';
+			$where = 'id_admin = "'.$id_admin.'" AND ativo = "s" AND '.$nivelSql;
 		}
 
 		// Não listar operadores do Painel Master na escola

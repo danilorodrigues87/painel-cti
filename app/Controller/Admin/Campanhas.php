@@ -271,7 +271,6 @@ class Campanhas extends Page {
 			$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
 			$tipoSegmento = $postVars['segmento_tipo'] ?? 'alunos_matriculados';
 			$statusLead = $postVars['status_lead'] ?? '';
-			$parcelasAtrasoMin = self::normalizarParcelasAtrasoMin($postVars['parcelas_atraso_min'] ?? 1);
 
 			if ($canal === 'email' && ($assunto === '' || $mensagem === '')) {
 				return json_encode(['success' => false, 'message' => 'Preencha assunto e mensagem do e-mail.']);
@@ -294,7 +293,7 @@ class Campanhas extends Page {
 				'status_lead' => $statusLead,
 			];
 			if ($tipoSegmento === 'inadimplentes') {
-				$segmento['parcelas_atraso_min'] = $parcelasAtrasoMin;
+				$segmento = array_merge($segmento, CampanhaSegmentoHelper::normalizarSegmentoInadimplentes($postVars));
 			}
 			if ($tipoSegmento === 'whatsapp_grupos') {
 				$destinos = self::parseDestinosGrupos($postVars);
@@ -766,7 +765,7 @@ class Campanhas extends Page {
 			'status_lead' => $postVars['status_lead'] ?? '',
 		];
 		if (($seg['tipo'] ?? '') === 'inadimplentes') {
-			$seg['parcelas_atraso_min'] = self::normalizarParcelasAtrasoMin($postVars['parcelas_atraso_min'] ?? 1);
+			$seg = array_merge($seg, CampanhaSegmentoHelper::normalizarSegmentoInadimplentes($postVars));
 		}
 		if (($seg['tipo'] ?? '') === 'whatsapp_grupos') {
 			$seg['destinos'] = self::parseDestinosGrupos($postVars);
@@ -774,16 +773,13 @@ class Campanhas extends Page {
 		return $seg;
 	}
 
-	/** 1–6 = mínimo de parcelas em atraso (N ou mais). */
+	/** @deprecated use CampanhaSegmentoHelper::normalizarSegmentoInadimplentes */
 	private static function normalizarParcelasAtrasoMin($valor): int {
-		$n = (int)$valor;
-		if ($n < 1) {
-			return 1;
-		}
-		if ($n > 6) {
-			return 6;
-		}
-		return $n;
+		$n = CampanhaSegmentoHelper::normalizarSegmentoInadimplentes([
+			'parcelas_atraso_modo' => 'min',
+			'parcelas_atraso_qtd' => $valor,
+		]);
+		return (int)$n['qtd'];
 	}
 
 	private static function parseDestinosGrupos(array $postVars): array {

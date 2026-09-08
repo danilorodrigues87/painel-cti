@@ -403,13 +403,7 @@ class CampanhaSegmentoHelper {
 	}
 
 	private static function inadimplentes(int $idAdmin, array $segmento, string $canal): array {
-		$parcelasMin = (int)($segmento['parcelas_atraso_min'] ?? 1);
-		if ($parcelasMin < 1) {
-			$parcelasMin = 1;
-		}
-		if ($parcelasMin > 6) {
-			$parcelasMin = 6;
-		}
+		$f = self::parseFiltrosInadimplentesCampanha($segmento);
 		$diasMin = max(0, (int)($segmento['dias_atraso_min'] ?? 0));
 		if ($diasMin <= 0) {
 			$diasMin = 1;
@@ -417,6 +411,7 @@ class CampanhaSegmentoHelper {
 		$dataLimite = date('Y-m-d', strtotime('-'.$diasMin.' days'));
 		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
 		$abertoSql = FinanceiroAlunoHelper::sqlTituloAberto('c.status');
+		$whereStatusMat = self::sqlStatusMatriculaCampanha($f['status_matricula'], 'm');
 
 		$sqlMat = '
 			SELECT
@@ -434,7 +429,7 @@ class CampanhaSegmentoHelper {
 			  AND '.$abertoSql.'
 			  AND (c.id_acordo IS NULL OR c.id_acordo = 0)
 			  AND c.vencimento <= :data_limite
-			  AND m.status IN (0, 3)
+			  AND '.$whereStatusMat.'
 			  AND '.$campo.' IS NOT NULL
 			  AND '.$campo.' != ""
 			GROUP BY u.id, u.nome, '.$campo.'
@@ -454,7 +449,8 @@ class CampanhaSegmentoHelper {
 			$porAluno[$id] = $row;
 		}
 
-		if (\App\Model\Entity\FinanceiroAcordo::tabelasExistem()
+		if ($f['status_matricula'] === 'todas'
+			&& \App\Model\Entity\FinanceiroAcordo::tabelasExistem()
 			&& \App\Model\Entity\FinanceiroAcordo::caixaTemIdAcordo()) {
 			$sqlAc = '
 				SELECT
@@ -503,7 +499,11 @@ class CampanhaSegmentoHelper {
 		$lista = [];
 		foreach ($porAluno as $row) {
 			$qtd = (int)($row['qtd_atraso'] ?? 0);
-			if ($qtd < $parcelasMin) {
+			if ($f['modo'] === 'exato') {
+				if ($qtd !== $f['qtd']) {
+					continue;
+				}
+			} elseif ($qtd < $f['qtd']) {
 				continue;
 			}
 			$idAluno = (int)($row['id'] ?? 0);
@@ -543,6 +543,60 @@ class CampanhaSegmentoHelper {
 		});
 
 		return $lista;
+	}
+
+	/**
+	 * Normaliza filtros do segmento inadimplentes (formulário ou JSON legado).
+	 * @return array{modo:string,qtd:int,status_matricula:string,parcelas_atraso_modo:string,parcelas_atraso_qtd:int,parcelas_atraso_min?:int}
+	 */
+	public static function normalizarSegmentoInadimplentes(array $in): array {
+		$modo = trim((string)($in['parcelas_atraso_modo'] ?? 'min'));
+		if (!in_array($modo, ['min', 'exato'], true)) {
+			$modo = 'min';
+		}
+		$qtd = (int)($in['parcelas_atraso_qtd'] ?? $in['parcelas_atraso_min'] ?? 1);
+		if ($qtd < 1) {
+			$qtd = 1;
+		}
+		if ($qtd > 12) {
+			$qtd = 12;
+		}
+		$status = trim((string)($in['status_matricula'] ?? 'todas'));
+		if (!in_array($status, ['ativa', 'cancelada', 'todas'], true)) {
+			$status = 'todas';
+		}
+		$out = [
+			'modo' => $modo,
+			'qtd' => $qtd,
+			'status_matricula' => $status,
+			'parcelas_atraso_modo' => $modo,
+			'parcelas_atraso_qtd' => $qtd,
+		];
+		if ($modo === 'min') {
+			$out['parcelas_atraso_min'] = $qtd;
+		}
+		return $out;
+	}
+
+	/** @return array{modo:string,qtd:int,status_matricula:string} */
+	private static function parseFiltrosInadimplentesCampanha(array $segmento): array {
+		$n = self::normalizarSegmentoInadimplentes($segmento);
+		return [
+			'modo' => $n['modo'],
+			'qtd' => $n['qtd'],
+			'status_matricula' => $n['status_matricula'],
+		];
+	}
+
+	private static function sqlStatusMatriculaCampanha(string $status, string $alias = 'm'): string {
+		$a = rtrim($alias, '.').'.';
+		if ($status === 'cancelada') {
+			return $a.'status = '.MatriculaStatusHelper::STATUS_CANCELADO;
+		}
+		if ($status === 'todas') {
+			return $a.'status IN ('.MatriculaStatusHelper::STATUS_ANDAMENTO.','.MatriculaStatusHelper::STATUS_CANCELADO.')';
+		}
+		return $a.'status = '.MatriculaStatusHelper::STATUS_ANDAMENTO;
 	}
 
 	private static function mapearLinhas(array $linhas, string $tipo): array {

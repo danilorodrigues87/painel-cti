@@ -113,17 +113,45 @@
 								<option value="perdido">Perdido</option>
 							</select>
 						</div>
-						<div class="col-md-6" id="wrap-inadimplentes" style="display:none;">
-							<label class="form-label" for="parcelas_atraso_min">Parcelas em atraso (mínimo)</label>
-							<select class="form-control" id="parcelas_atraso_min">
-								<option value="1">1 ou mais</option>
-								<option value="2">2 ou mais</option>
-								<option value="3">3 ou mais</option>
-								<option value="4">4 ou mais</option>
-								<option value="5">5 ou mais</option>
-								<option value="6">6 ou mais</option>
-							</select>
-							<div class="form-text">Só entram alunos com pelo menos essa quantidade de mensalidades vencidas em aberto.</div>
+						<div class="col-12" id="wrap-inadimplentes" style="display:none;">
+							<div class="row g-2">
+								<div class="col-md-4">
+									<label class="form-label" for="parcelas_atraso_modo">Parcelas em atraso</label>
+									<select class="form-control" id="parcelas_atraso_modo">
+										<option value="min">No mínimo (ou mais)</option>
+										<option value="exato">Exatamente</option>
+									</select>
+								</div>
+								<div class="col-md-4">
+									<label class="form-label" for="parcelas_atraso_qtd">Quantidade</label>
+									<select class="form-control" id="parcelas_atraso_qtd">
+										<option value="1">1</option>
+										<option value="2">2</option>
+										<option value="3">3</option>
+										<option value="4">4</option>
+										<option value="5">5</option>
+										<option value="6">6</option>
+										<option value="7">7</option>
+										<option value="8">8</option>
+										<option value="9">9</option>
+										<option value="10">10</option>
+										<option value="11">11</option>
+										<option value="12">12</option>
+									</select>
+								</div>
+								<div class="col-md-4">
+									<label class="form-label" for="inad_status_matricula">Contrato do aluno</label>
+									<select class="form-control" id="inad_status_matricula">
+										<option value="ativa">Ativo (em andamento)</option>
+										<option value="cancelada">Cancelado</option>
+										<option value="todas">Todos</option>
+									</select>
+								</div>
+								<div class="col-12">
+									<div class="form-text" id="inad-filtro-ajuda">—</div>
+									<div class="form-text text-muted">Use campanhas separadas (contrato ativo vs cancelado) para personalizar a mensagem.</div>
+								</div>
+							</div>
 						</div>
 						<div class="col-12 d-none" id="wrap-grupos-wa">
 							<div class="d-flex justify-content-between align-items-center mb-2">
@@ -337,4 +365,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260901f"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260908c"></script>

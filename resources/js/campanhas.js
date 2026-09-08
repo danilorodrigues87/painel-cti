@@ -128,10 +128,55 @@ function atualizarUiSegmento(){
 	$('#wrap-status-lead').toggle(tipo === 'leads');
 	$('#wrap-inadimplentes').toggle(tipo === 'inadimplentes');
 	$('#wrap-grupos-wa').toggleClass('d-none', !grupos);
+	if (tipo === 'inadimplentes') {
+		atualizarTextoAjudaInadimplentes();
+	}
 	if(grupos || emailsInvalidos){
 		$('#campanha_canal').val('whatsapp');
 		atualizarUiCanalSemSegmento();
 	}
+}
+
+function labelStatusMatriculaCampanha(v){
+	const mapa = {
+		ativa: 'contrato ativo (em andamento)',
+		cancelada: 'contrato cancelado',
+		todas: 'qualquer contrato (ativo ou cancelado)',
+	};
+	return mapa[v] || mapa.todas;
+}
+
+function atualizarTextoAjudaInadimplentes(){
+	const modo = $('#parcelas_atraso_modo').val() || 'min';
+	const qtd = parseInt($('#parcelas_atraso_qtd').val(), 10) || 1;
+	const st = $('#inad_status_matricula').val() || 'todas';
+	let txt;
+	if (modo === 'exato') {
+		txt = 'Entram alunos com exatamente ' + qtd + ' mensalidade' + (qtd === 1 ? '' : 's') + ' vencida' + (qtd === 1 ? '' : 's') + ' em aberto';
+	} else {
+		txt = 'Entram alunos com ' + qtd + ' ou mais mensalidades vencidas em aberto';
+	}
+	txt += ', com ' + labelStatusMatriculaCampanha(st) + '.';
+	$('#inad-filtro-ajuda').text(txt);
+}
+
+function resumoFiltroInadimplentes(seg){
+	seg = seg || {};
+	const modo = seg.parcelas_atraso_modo || (seg.parcelas_atraso_min ? 'min' : 'min');
+	const qtd = parseInt(seg.parcelas_atraso_qtd || seg.parcelas_atraso_min, 10) || 1;
+	const st = seg.status_matricula || 'todas';
+	let parc;
+	if (modo === 'exato') {
+		parc = 'Exatamente ' + qtd + ' parcela' + (qtd === 1 ? '' : 's') + ' em atraso';
+	} else {
+		parc = qtd + ' ou mais parcelas em atraso';
+	}
+	const contrato = {
+		ativa: 'Contrato ativo',
+		cancelada: 'Contrato cancelado',
+		todas: 'Todos os contratos',
+	}[st] || 'Todos os contratos';
+	return parc + ' · ' + contrato;
 }
 
 function atualizarUiCanalSemSegmento(){
@@ -375,7 +420,10 @@ function coletarFormulario(){
 		mensagem: $('#campanha_mensagem').val(),
 		segmento_tipo: $('#segmento_tipo').val(),
 		status_lead: $('#status_lead').val(),
-		parcelas_atraso_min: $('#parcelas_atraso_min').val() || '1',
+		parcelas_atraso_modo: $('#parcelas_atraso_modo').val() || 'min',
+		parcelas_atraso_qtd: $('#parcelas_atraso_qtd').val() || '1',
+		status_matricula: $('#inad_status_matricula').val() || 'todas',
+		parcelas_atraso_min: $('#parcelas_atraso_modo').val() === 'min' ? ($('#parcelas_atraso_qtd').val() || '1') : '',
 		destinos_json: JSON.stringify(coletarDestinosGrupos()),
 		pacing_personalizado: $('#pacing_personalizado').is(':checked') ? 1 : 0,
 		pacing_delay_1a1: $('#pacing_delay_1a1').val(),
@@ -467,11 +515,13 @@ function limparFormulario(){
 	$('#campanha_mensagem').val('');
 	$('#segmento_tipo').val('alunos_matriculados');
 	$('#status_lead').val('');
-	$('#parcelas_atraso_min').val('1');
+	$('#parcelas_atraso_modo').val('min');
+	$('#parcelas_atraso_qtd').val('1');
+	$('#inad_status_matricula').val('ativa');
 	$('#preview-resultado').text('');
 	$('#titulo-modal-campanha').text('Nova campanha');
 	$('#btn-salvar-campanha').html('<i class="fas fa-save"></i> Salvar rascunho');
-	$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_min').prop('disabled', false);
+	$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula').prop('disabled', false);
 	$('#wrap-grupos-wa').find('input,button').prop('disabled', false);
 	$('#wrap-status-lead').hide();
 	$('#wrap-inadimplentes').hide();
@@ -1235,8 +1285,7 @@ function abrirDetalhes(id){
 		const seg = c.segmento || {};
 		let segExtra = '';
 		if(seg.tipo === 'inadimplentes'){
-			const n = parseInt(seg.parcelas_atraso_min, 10) || 1;
-			segExtra = '<p><strong>Filtro:</strong> '+n+' ou mais parcela'+(n === 1 ? '' : 's')+' em atraso</p>';
+			segExtra = '<p><strong>Filtro:</strong> '+escHtml(resumoFiltroInadimplentes(seg))+'</p>';
 		}
 
 		$('#body-detalhes-campanha').html(`
@@ -1290,7 +1339,10 @@ function editarCampanha(id){
 		$('#campanha_mensagem').val(res.mensagem || c.mensagem || '');
 		$('#segmento_tipo').val(seg.tipo || 'alunos_matriculados');
 		$('#status_lead').val(seg.status_lead || '');
-		$('#parcelas_atraso_min').val(String(seg.parcelas_atraso_min || 1));
+		$('#parcelas_atraso_modo').val(seg.parcelas_atraso_modo || 'min');
+		$('#parcelas_atraso_qtd').val(String(seg.parcelas_atraso_qtd || seg.parcelas_atraso_min || 1));
+		$('#inad_status_matricula').val(seg.status_matricula || 'todas');
+		atualizarTextoAjudaInadimplentes();
 		preencherPacingCampanha(seg);
 		$('#titulo-modal-campanha').text(emCurso
 			? 'Ajustar mensagem/mídia ('+(c.status === 'pausada' ? 'pausada' : 'em envio')+')'
@@ -1298,7 +1350,7 @@ function editarCampanha(id){
 		$('#btn-salvar-campanha').html(emCurso
 			? '<i class="fas fa-save"></i> Salvar mensagem/mídia'
 			: '<i class="fas fa-save"></i> Salvar rascunho');
-		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_min').prop('disabled', emCurso);
+		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula').prop('disabled', emCurso);
 		$('#pacing_personalizado, #pacing_delay_1a1, #pacing_grupo_minutos, #pacing_max_hora_wa, #pacing_email_delay, #pacing_max_hora_email').prop('disabled', emCurso);
 		window._campanhaArquivo = null;
 		window._campanhaMidiaExistente = c.midia || seg.midia || null;
@@ -1359,6 +1411,7 @@ $(function(){
 	$('#pacing_personalizado').on('change', atualizarUiPacingCampanha);
 	$('#filtro-canal').on('change', function(){ campanhaPagina = 1; carregarCampanhas(); });
 	$('#segmento_tipo').on('change', atualizarUiSegmento);
+	$('#parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula').on('change', atualizarTextoAjudaInadimplentes);
 	$('#btn-sync-grupos-wa').on('click', syncGruposWa);
 
 	$('#btn-salvar-campanha').on('click', salvarCampanha);
