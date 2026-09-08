@@ -12,6 +12,44 @@ function moedaBrJs(n) {
 	return v.toFixed(2).replace('.', ',');
 }
 
+function acertoFinanceiroConfig(modo) {
+	if (modo === 'regularizar') {
+		return {
+			modo: 'regularizar',
+			simUrl:
+				typeof regularizarSimular !== 'undefined' && regularizarSimular
+					? regularizarSimular
+					: 'painel/matriculas/regularizar/simular',
+			confirmUrl:
+				typeof regularizar !== 'undefined' && regularizar
+					? regularizar
+					: 'painel/matriculas/regularizar',
+			title: 'Regularizar financeiro?',
+			confirmText: 'Confirmar regularização',
+			successTitle: 'Regularizado!',
+			erroSim: 'Não foi possível simular a regularização.',
+			erroConfirm: 'Falha ao regularizar o financeiro.',
+			intro:
+				'<p class="mb-2 text-info">O contrato permanece <strong>encerrado</strong>. Escolha o que permanece em aberto para cobrança.</p>',
+		};
+	}
+	return {
+		modo: 'cancelar',
+		simUrl:
+			typeof cancelarSimular !== 'undefined' && cancelarSimular
+				? cancelarSimular
+				: 'painel/matriculas/cancelar/simular',
+		confirmUrl:
+			typeof cancelar !== 'undefined' && cancelar ? cancelar : 'painel/matriculas/cancelar',
+		title: 'Cancelar contrato?',
+		confirmText: 'Confirmar cancelamento',
+		successTitle: 'Cancelado!',
+		erroSim: 'Não foi possível simular o cancelamento.',
+		erroConfirm: 'Falha ao cancelar o contrato.',
+		intro: '',
+	};
+}
+
 function idsParcelasMarcadas($scope) {
 	var $root = $scope && $scope.length ? $scope : $(document);
 	var ids = [];
@@ -27,14 +65,11 @@ function parcelasCobrarPayload($scope) {
 	return ids.length ? ids.join(',') : '';
 }
 
-function recalcularSimulacao(id, callback, $scope) {
-	var simUrl =
-		typeof cancelarSimular !== 'undefined' && cancelarSimular
-			? cancelarSimular
-			: 'painel/matriculas/cancelar/simular';
+function recalcularSimulacao(id, callback, $scope, modo) {
+	var cfg = acertoFinanceiroConfig(modo);
 	$('#box-totais-cancel').css('opacity', '0.55');
 	$.ajax({
-		url: url_base + simUrl,
+		url: url_base + cfg.simUrl,
 		method: 'post',
 		data: { id: id, parcelas_cobrar: parcelasCobrarPayload($scope) },
 		dataType: 'json',
@@ -48,11 +83,52 @@ function recalcularSimulacao(id, callback, $scope) {
 	});
 }
 
+function aplicarPoliticaDesistencia(id, $popup, modo) {
+	var cfg = acertoFinanceiroConfig(modo);
+	var max = parseInt($popup.data('max-parcelas') || '3', 10) || 3;
+	$('#box-totais-cancel').css('opacity', '0.55');
+	$.ajax({
+		url: url_base + cfg.simUrl,
+		method: 'post',
+		data: { id: id, preset: 'politica_desistencia' },
+		dataType: 'json',
+		success: function (sim) {
+			$('#box-totais-cancel').css('opacity', '1');
+			if (!sim || !sim.ok) {
+				Swal.showValidationMessage((sim && sim.message) || 'Não foi possível aplicar a política.');
+				return;
+			}
+			$popup.find('#box-totais-cancel').replaceWith(renderTotaisCancelamento(sim));
+			$popup.find('#box-multa-cancel').replaceWith(renderBlocoMulta(sim));
+			$popup.find('.chk-parc-cobrar').each(function () {
+				var pid = parseInt($(this).val(), 10);
+				var marcar = (sim.parcelas_cobrar || []).indexOf(pid) >= 0;
+				$(this).prop('checked', marcar);
+			});
+			Swal.fire({
+				toast: true,
+				position: 'top-end',
+				icon: 'info',
+				title: 'Política aplicada: até ' + max + ' vencida(s) para cobrança',
+				showConfirmButton: false,
+				timer: 2200,
+			});
+		},
+		error: function () {
+			$('#box-totais-cancel').css('opacity', '1');
+		},
+	});
+}
+
 function renderBlocoMulta(sim) {
 	var multa = parseFloat(sim.multa_rescisoria) || 0;
 	if (multa <= 0) {
 		return '<div id="box-multa-cancel" class="d-none"></div>';
 	}
+	var avisoMultaExistente =
+		sim.tem_multa_rescisoria_aberta && sim.modo === 'regularizar'
+			? ' <span class="text-warning">(já existe multa rescisória em aberto — não será duplicada)</span>'
+			: '';
 	return (
 		'<p id="box-multa-cancel" class="mb-2 border-start border-3 border-warning ps-2">' +
 		'<strong>Multa rescisória:</strong> R$ ' +
@@ -60,7 +136,9 @@ function renderBlocoMulta(sim) {
 		' <span class="text-muted">(' +
 		moedaBrJs((sim.params && sim.params.multa_cancelamento_pct) || 10) +
 		'% sobre parcelas canceladas (baixa administrativa)</span> — ' +
-		'será gerado <u>título em aberto</u> para quitação no carnê ou extrato do aluno.</p>'
+		'será gerado <u>título em aberto</u> para quitação no carnê ou extrato do aluno.' +
+		avisoMultaExistente +
+		'</p>'
 	);
 }
 
@@ -94,7 +172,14 @@ function renderListaParcelas(sim) {
 	if (!parcelas.length) {
 		return '<p class="text-muted mb-2">Nenhuma parcela em aberto nesta matrícula.</p>';
 	}
+	var maxPol = parseInt(sim.max_parcelas_desistencia || '3', 10) || 3;
 	var html =
+		'<div class="d-flex flex-wrap gap-2 mb-2">' +
+		'<button type="button" class="btn btn-sm btn-outline-primary btn-politica-desistencia">' +
+		'Aplicar política (máx. ' +
+		maxPol +
+		' vencidas)</button>' +
+		'</div>' +
 		'<p class="fw-semibold mb-1">Selecione as parcelas que <u>permanecem em aberto</u> para cobrança. As demais recebem baixa administrativa (R$ 0).</p>' +
 		'<div class="table-responsive mb-2" style="max-height:220px;overflow:auto">' +
 		'<table class="table table-sm table-bordered mb-0"><thead class="table-light">' +
@@ -130,33 +215,40 @@ function renderListaParcelas(sim) {
 	return html;
 }
 
-function cancelar_contrato(id) {
-	var simUrl =
-		typeof cancelarSimular !== 'undefined' && cancelarSimular
-			? cancelarSimular
-			: 'painel/matriculas/cancelar/simular';
-
+function iniciarAcertoFinanceiro(id, modo) {
+	var cfg = acertoFinanceiroConfig(modo);
 	$.ajax({
-		url: url_base + simUrl,
+		url: url_base + cfg.simUrl,
 		method: 'post',
 		data: { id: id },
 		dataType: 'json',
 		success: function (sim) {
 			if (!sim || !sim.ok) {
-				Swal.fire('Erro', (sim && sim.message) || 'Não foi possível simular o cancelamento.', 'error');
+				Swal.fire('Erro', (sim && sim.message) || cfg.erroSim, 'error');
 				return;
 			}
-			abrirModalCancelamento(id, sim);
+			sim.modo = cfg.modo;
+			abrirModalAcertoFinanceiro(id, sim, modo);
 		},
 		error: function () {
-			Swal.fire('Erro', 'Falha ao simular cancelamento.', 'error');
+			Swal.fire('Erro', cfg.erroSim, 'error');
 		},
 	});
 }
 
-function abrirModalCancelamento(id, sim) {
+function cancelar_contrato(id) {
+	iniciarAcertoFinanceiro(id, 'cancelar');
+}
+
+function regularizar_financeiro(id) {
+	iniciarAcertoFinanceiro(id, 'regularizar');
+}
+
+function abrirModalAcertoFinanceiro(id, sim, modo) {
+	var cfg = acertoFinanceiroConfig(modo);
 	var params = sim.params || {};
 	var html = '<div class="text-start small" id="wrap-cancel-modal">';
+	html += cfg.intro;
 	html +=
 		'<p class="mb-2">Carência: <strong>' +
 		(params.carencia_dias || 7) +
@@ -173,30 +265,43 @@ function abrirModalCancelamento(id, sim) {
 	html += '</div>';
 
 	Swal.fire({
-		title: 'Cancelar contrato?',
+		title: cfg.title,
 		html: html,
 		icon: 'warning',
 		width: 720,
 		showCancelButton: true,
 		confirmButtonColor: '#3085d6',
 		cancelButtonColor: '#d33',
-		confirmButtonText: 'Confirmar cancelamento',
+		confirmButtonText: cfg.confirmText,
 		cancelButtonText: 'Voltar',
 		didOpen: function () {
 			var $popup = $(Swal.getHtmlContainer());
+			$popup.data('max-parcelas', sim.max_parcelas_desistencia || 3);
 			$popup
 				.off('change.cancelParc', '.chk-parc-cobrar')
 				.on('change.cancelParc', '.chk-parc-cobrar', function () {
-					recalcularSimulacao(id, function (novoSim) {
-						$popup.find('#box-totais-cancel').replaceWith(renderTotaisCancelamento(novoSim));
-						$popup.find('#box-multa-cancel').replaceWith(renderBlocoMulta(novoSim));
-					}, $popup);
+					recalcularSimulacao(
+						id,
+						function (novoSim) {
+							novoSim.modo = cfg.modo;
+							$popup.find('#box-totais-cancel').replaceWith(renderTotaisCancelamento(novoSim));
+							$popup.find('#box-multa-cancel').replaceWith(renderBlocoMulta(novoSim));
+						},
+						$popup,
+						modo
+					);
+				});
+			$popup
+				.off('click.politicaDesist', '.btn-politica-desistencia')
+				.on('click.politicaDesist', '.btn-politica-desistencia', function () {
+					aplicarPoliticaDesistencia(id, $popup, modo);
 				});
 		},
 		willClose: function () {
 			var $popup = Swal.getHtmlContainer();
 			if ($popup) {
 				$($popup).off('change.cancelParc', '.chk-parc-cobrar');
+				$($popup).off('click.politicaDesist', '.btn-politica-desistencia');
 			}
 		},
 		preConfirm: function () {
@@ -210,7 +315,7 @@ function abrirModalCancelamento(id, sim) {
 
 		var flags = result.value || {};
 		$.ajax({
-			url: url_base + (typeof cancelar !== 'undefined' ? cancelar : 'painel/matriculas/cancelar'),
+			url: url_base + cfg.confirmUrl,
 			method: 'post',
 			data: {
 				id: id,
@@ -220,15 +325,21 @@ function abrirModalCancelamento(id, sim) {
 			success: function (res) {
 				var ok = res && res.ok;
 				Swal.fire({
-					title: ok ? 'Cancelado!' : 'Atenção',
-					text: (res && res.message) || (ok ? 'Contrato cancelado.' : 'Erro ao cancelar.'),
+					title: ok ? cfg.successTitle : 'Atenção',
+					text: (res && res.message) || (ok ? 'OK' : cfg.erroConfirm),
 					icon: ok ? 'success' : 'error',
 				});
 				if (typeof listar === 'function') listar(null, 1);
+				if (typeof carregarInadimplentes === 'function') carregarInadimplentes();
 			},
 			error: function () {
-				Swal.fire({ title: 'Erro', text: 'Falha ao cancelar o contrato.', icon: 'error' });
+				Swal.fire({ title: 'Erro', text: cfg.erroConfirm, icon: 'error' });
 			},
 		});
 	});
+}
+
+/** Compatibilidade com código legado */
+function abrirModalCancelamento(id, sim) {
+	abrirModalAcertoFinanceiro(id, sim, 'cancelar');
 }

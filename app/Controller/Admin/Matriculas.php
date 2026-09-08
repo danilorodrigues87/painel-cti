@@ -116,6 +116,15 @@ class Matriculas extends Page{
                 $disabled='disabled';
 			}
 
+			$btnRegularizar = '';
+			if ($statusMat === MatriculaStatusHelper::STATUS_ENCERRADO
+				&& MatriculaStatusHelper::contarTitulosAbertosMatricula((int)$dados->id, (int)$id_admin) > 0) {
+				$btnRegularizar = '<li>
+        <a class="dropdown-item" href="#" onclick="regularizar_financeiro('.$dados->id.'); return false;">
+        <i class="fa-solid fa-scale-balanced fa-lg"></i> Regularizar financeiro</a>
+        </li>';
+			}
+
         $itens .= 
         '<tr>
         <td>'.$dados->id.'</td>
@@ -138,6 +147,7 @@ class Matriculas extends Page{
         <i class="far fa-edit fa-lg"></i> Editar</a>
         </li>
         '.$btnEncerrar.'
+        '.$btnRegularizar.'
         <li>
         <a class="dropdown-item '.$disabled.'" href="#" onclick="cancelar_contrato('.$dados->id.')" >
         <i class="fa-regular fa-rectangle-xmark fa-lg"></i> Cancelar</a>
@@ -657,9 +667,45 @@ public static function simularCancelamento($request) {
   $postVars = $request->getPostVars();
   $id = (int)($postVars['id'] ?? 0);
   $id_admin = parent::getIdAdminInt();
+  return json_encode(self::simularAcertoFinanceiroRequest(
+    $id,
+    $id_admin,
+    $postVars,
+    'cancelar'
+  ), JSON_UNESCAPED_UNICODE);
+}
+
+public static function simularRegularizacaoFinanceira($request) {
+  $postVars = $request->getPostVars();
+  $id = (int)($postVars['id'] ?? 0);
+  $id_admin = parent::getIdAdminInt();
+  return json_encode(self::simularAcertoFinanceiroRequest(
+    $id,
+    $id_admin,
+    $postVars,
+    'regularizar'
+  ), JSON_UNESCAPED_UNICODE);
+}
+
+/** @return array<string,mixed> */
+private static function simularAcertoFinanceiroRequest(int $id, int $id_admin, array $postVars, string $modo): array {
   $parcelasCobrar = self::normalizarIdsParcelas($postVars['parcelas_cobrar'] ?? null);
-  $sim = EncargosContratoHelper::simularCancelamento($id, $id_admin, $parcelasCobrar);
-  return json_encode($sim, JSON_UNESCAPED_UNICODE);
+  if (trim((string)($postVars['preset'] ?? '')) === 'politica_desistencia') {
+    $base = $modo === 'regularizar'
+      ? EncargosContratoHelper::simularRegularizacaoFinanceira($id, $id_admin, [])
+      : EncargosContratoHelper::simularCancelamento($id, $id_admin, []);
+    if (empty($base['ok'])) {
+      return $base;
+    }
+    $parcelasCobrar = EncargosContratoHelper::parcelasCobrarPresetPoliticaDesistencia(
+      $base['parcelas'] ?? [],
+      (int)($base['max_parcelas_desistencia'] ?? EncargosContratoHelper::DEFAULT_MAX_PARCELAS_DESISTENCIA)
+    );
+  }
+  if ($modo === 'regularizar') {
+    return EncargosContratoHelper::simularRegularizacaoFinanceira($id, $id_admin, $parcelasCobrar);
+  }
+  return EncargosContratoHelper::simularCancelamento($id, $id_admin, $parcelasCobrar);
 }
 
 /** @return int[]|null null = padrão (vencidas sim, futuras não); [] = nenhuma selecionada */
@@ -755,11 +801,81 @@ public static function cancelarMatricula($request){
   ], JSON_UNESCAPED_UNICODE);
 }
 
+public static function regularizarFinanceiro($request) {
+  $postVars = $request->getPostVars();
+  $id = (int)($postVars['id'] ?? 0);
+  $id_admin = parent::getIdAdminInt();
+  $parcelasCobrar = self::normalizarIdsParcelas($postVars['parcelas_cobrar'] ?? []) ?? [];
+
+  if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
+    return json_encode(['ok' => false, 'message' => 'Matrícula não encontrada.']);
+  }
+
+  $mat = EntityMatri::getMatriculaById($id);
+  if (!$mat || (int)$mat->status !== MatriculaStatusHelper::STATUS_ENCERRADO) {
+    return json_encode(['ok' => false, 'message' => 'Só é possível regularizar matrícula encerrada.']);
+  }
+
+  $sim = EncargosContratoHelper::simularRegularizacaoFinanceira($id, $id_admin, $parcelasCobrar);
+  if (empty($sim['ok'])) {
+    return json_encode(['ok' => false, 'message' => $sim['message'] ?? 'Falha ao simular regularização.']);
+  }
+
+  $obsBaixa = 'Regularização financeira matrícula #'.$id;
+  $baixadas = MatriculaStatusHelper::baixarParcelasExceto($id, $id_admin, $parcelasCobrar, $obsBaixa);
+
+  $tituloMultaId = null;
+  $multaRescisoria = (float)($sim['multa_rescisoria'] ?? 0);
+  if ($multaRescisoria > 0 && !EncargosContratoHelper::temMultaRescisoriaAberta($id, $id_admin)) {
+    $tituloMultaId = EncargosContratoHelper::lancarMultaRescisoria(
+      $id_admin,
+      (int)$mat->id_aluno,
+      $id,
+      $multaRescisoria
+    );
+  }
+
+  $msg = 'Financeiro regularizado. O contrato permanece encerrado.';
+  if ((int)($sim['qtd_baixar'] ?? 0) > 0) {
+    $msg .= ' '.$baixadas.' parcela(s) baixada(s) com R$ 0 (histórico preservado).';
+  }
+  if ((int)($sim['qtd_cobrar'] ?? 0) > 0) {
+    $msg .= ' '.(int)$sim['qtd_cobrar'].' parcela(s) permanecem em aberto para quitação (total com encargos até hoje: R$ '
+      .NumeroHelper::moedaBr((float)($sim['total_cobrar_com_encargos'] ?? 0)).').';
+  } else {
+    $msg .= ' Nenhuma parcela ficou em aberto para cobrança.';
+  }
+  if ($tituloMultaId) {
+    $msg .= ' Título de multa rescisória #'.$tituloMultaId.' em aberto (R$ '.NumeroHelper::moedaBr($multaRescisoria).').';
+  } elseif ($multaRescisoria > 0 && EncargosContratoHelper::temMultaRescisoriaAberta($id, $id_admin)) {
+    $msg .= ' Multa rescisória já existente em aberto — nenhum título duplicado foi gerado.';
+  } elseif ($multaRescisoria <= 0) {
+    $msg .= ' Multa rescisória não aplicável (nenhuma parcela com baixa administrativa).';
+  }
+
+  return json_encode([
+    'ok' => true,
+    'message' => $msg,
+    'baixadas' => $baixadas,
+    'id_multa' => $tituloMultaId,
+  ], JSON_UNESCAPED_UNICODE);
+}
+
 public static function encerrarMatricula($request){
 
   $postVars = $request->getPostVars();
   $id = (int)($postVars['id'] ?? 0);
   $id_admin = parent::getIdAdminInt();
+
+  if (!TenantHelper::pertenceMatricula($id, $id_admin)) {
+    return json_encode(['ok' => false, 'message' => 'Matrícula não encontrada.']);
+  }
+  if (MatriculaStatusHelper::contarTitulosAbertosMatricula($id, $id_admin) > 0) {
+    return json_encode([
+      'ok' => false,
+      'message' => 'Existem parcelas em aberto nesta matrícula. Use Cancelar contrato para regularizar o financeiro antes de encerrar.',
+    ], JSON_UNESCAPED_UNICODE);
+  }
 
   if (!MatriculaStatusHelper::encerrarMatricula($id, $id_admin)) {
     return json_encode(['ok' => false, 'message' => 'Não foi possível encerrar esta matrícula.']);

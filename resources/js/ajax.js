@@ -192,7 +192,7 @@ function encerrar_contrato(id) {
   }
   Swal.fire({
     title: "Encerrar esta matrícula?",
-    text: "Marca o contrato como encerrado (conclusão). Não altera o carnê.",
+    text: "Marca o contrato como encerrado (conclusão). Só é permitido se não houver parcelas em aberto — use Cancelar contrato para regularizar débitos antes.",
     icon: "question",
     showCancelButton: true,
     confirmButtonText: "Sim, encerrar"

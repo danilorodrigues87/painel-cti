@@ -7,20 +7,6 @@ use App\Model\Entity\CrmLeads;
 
 class CampanhaSegmentoHelper {
 
-	// #region agent log
-	private static function debugLog(string $location, string $message, array $data, string $hypothesisId): void {
-		$line = json_encode([
-			'sessionId' => '6b4d05',
-			'hypothesisId' => $hypothesisId,
-			'location' => $location,
-			'message' => $message,
-			'data' => $data,
-			'timestamp' => (int)(microtime(true) * 1000),
-		], JSON_UNESCAPED_UNICODE);
-		@file_put_contents(__DIR__.'/../../../debug-6b4d05.log', $line."\n", FILE_APPEND);
-	}
-	// #endregion
-
 	public static function getTipos(): array {
 		return [
 			'alunos_matriculados'    => 'Alunos matriculados (ativos)',
@@ -462,35 +448,6 @@ class CampanhaSegmentoHelper {
 			}
 			$porAluno[$id] = $row;
 		}
-
-		// #region agent log
-		try {
-			$sqlDiag = '
-				SELECT m.status AS st, COUNT(DISTINCT u.id) AS alunos
-				FROM caixa c
-				INNER JOIN matriculas m ON m.id = c.id_ref AND m.id_admin = c.id_admin
-				INNER JOIN usuarios u ON u.id = m.id_aluno AND u.id_admin = c.id_admin
-				WHERE c.id_admin = :id_admin
-				  AND c.tipo_transacao = "Entrada"
-				  AND '.$abertoSql.'
-				  AND (c.id_acordo IS NULL OR c.id_acordo = 0)
-				  AND c.vencimento <= :data_limite
-				  AND '.$campo.' IS NOT NULL AND '.$campo.' != ""
-				GROUP BY m.status
-			';
-			$stDiag = self::pdo()->prepare($sqlDiag);
-			$stDiag->execute(['id_admin' => $idAdmin, 'data_limite' => $dataLimite]);
-			self::debugLog('CampanhaSegmentoHelper.php:inadimplentes', 'segmento campanha inadimplentes', [
-				'runId' => 'post-fix',
-				'filtro_status' => $f['status_matricula'],
-				'where_status_sql' => $whereStatusMat,
-				'alunos_apos_filtro' => count($porAluno),
-				'atraso_por_status_matricula' => $stDiag->fetchAll(\PDO::FETCH_ASSOC) ?: [],
-			], 'H1');
-		} catch (\Throwable $e) {
-			self::debugLog('CampanhaSegmentoHelper.php:inadimplentes', 'diag falhou', ['erro' => $e->getMessage()], 'H3');
-		}
-		// #endregion
 
 		if (in_array($f['status_matricula'], ['todas', 'inativa'], true)
 			&& \App\Model\Entity\FinanceiroAcordo::tabelasExistem()

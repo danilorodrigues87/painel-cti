@@ -122,10 +122,33 @@ class MatriculaStatusHelper {
 		if (!$m || (int)$m->status !== self::STATUS_ANDAMENTO) {
 			return false;
 		}
+		if (self::contarTitulosAbertosMatricula($idMatricula, $idAdmin) > 0) {
+			return false;
+		}
 		return (bool)(new Database('matriculas'))->update(
 			'id = '.(int)$idMatricula.' AND id_admin = '.(int)$idAdmin,
 			['status' => self::STATUS_ENCERRADO]
 		);
+	}
+
+	/** Títulos de entrada em aberto vinculados à matrícula (exceto multa rescisória). */
+	public static function contarTitulosAbertosMatricula(int $idMatricula, int $idAdmin): int {
+		if ($idMatricula <= 0 || $idAdmin <= 0) {
+			return 0;
+		}
+		$n = 0;
+		$where = 'id_admin = '.(int)$idAdmin
+			.' AND id_ref = '.(int)$idMatricula
+			.' AND tipo_transacao = "Entrada"'
+			.' AND '.FinanceiroAlunoHelper::sqlTituloAberto('status');
+		$rs = Caixa::getCaixa($where, 'id ASC');
+		while ($c = $rs->fetchObject(Caixa::class)) {
+			if (trim((string)($c->referencia ?? '')) === 'Multa rescisória') {
+				continue;
+			}
+			$n++;
+		}
+		return $n;
 	}
 
 	/**
@@ -160,7 +183,7 @@ class MatriculaStatusHelper {
 	 * @param int[] $idsManterAbertos IDs de caixa que permanecem em aberto para quitação.
 	 * @return int quantidade baixada
 	 */
-	public static function baixarParcelasExceto(int $idMatricula, int $idAdmin, array $idsManterAbertos): int {
+	public static function baixarParcelasExceto(int $idMatricula, int $idAdmin, array $idsManterAbertos, string $observacao = ''): int {
 		if ($idMatricula <= 0 || $idAdmin <= 0) {
 			return 0;
 		}
@@ -177,7 +200,9 @@ class MatriculaStatusHelper {
 			.' AND tipo_transacao = "Entrada"'
 			.' AND '.FinanceiroAlunoHelper::sqlTituloAberto('status');
 		$rs = Caixa::getCaixa($where, 'id ASC');
-		$obs = 'Cancelamento matrícula #'.$idMatricula;
+		$obs = trim($observacao) !== ''
+			? trim($observacao)
+			: 'Cancelamento matrícula #'.$idMatricula;
 		while ($c = $rs->fetchObject(Caixa::class)) {
 			if (isset($manter[(int)$c->id])) {
 				continue;

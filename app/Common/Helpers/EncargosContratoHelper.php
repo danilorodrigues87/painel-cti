@@ -15,6 +15,7 @@ class EncargosContratoHelper {
 	public const DEFAULT_JUROS_MES = 1.0;
 	public const DEFAULT_MULTA_CANCEL = 10.0;
 	public const DEFAULT_CARENCIA = 7;
+	public const DEFAULT_MAX_PARCELAS_DESISTENCIA = 3;
 
 	/** @return array{multa_atraso_pct:float,juros_mora_pct_mes:float,multa_cancelamento_pct:float,carencia_dias:int} */
 	public static function defaults(): array {
@@ -385,6 +386,80 @@ class EncargosContratoHelper {
 	 *   multa_rescisoria?:float,total_geral_com_encargos?:float,qtd_vencidas?:int,qtd_futuras?:int,qtd_cobrar?:int,qtd_baixar?:int}
 	 */
 	public static function simularCancelamento(int $idMatricula, int $idAdmin, ?array $parcelasCobrar = null): array {
+		return self::simularAcertoFinanceiro(
+			$idMatricula,
+			$idAdmin,
+			$parcelasCobrar,
+			[MatriculaStatusHelper::STATUS_ANDAMENTO],
+			'Só é possível simular cancelamento de matrícula em andamento.'
+		);
+	}
+
+	public static function simularRegularizacaoFinanceira(int $idMatricula, int $idAdmin, ?array $parcelasCobrar = null): array {
+		$res = self::simularAcertoFinanceiro(
+			$idMatricula,
+			$idAdmin,
+			$parcelasCobrar,
+			[MatriculaStatusHelper::STATUS_ENCERRADO],
+			'Só é possível regularizar matrícula encerrada.'
+		);
+		if (!empty($res['ok'])) {
+			$res['modo'] = 'regularizar';
+			$res['tem_multa_rescisoria_aberta'] = self::temMultaRescisoriaAberta($idMatricula, $idAdmin);
+			$res['max_parcelas_desistencia'] = self::DEFAULT_MAX_PARCELAS_DESISTENCIA;
+		}
+		return $res;
+	}
+
+	/** @return int[] IDs das vencidas mais antigas (até $max) para cobrança. */
+	public static function parcelasCobrarPresetPoliticaDesistencia(array $parcelas, int $max = self::DEFAULT_MAX_PARCELAS_DESISTENCIA): array {
+		$max = max(1, min(12, $max));
+		$vencidas = [];
+		foreach ($parcelas as $p) {
+			if (($p['grupo'] ?? '') === 'vencida') {
+				$vencidas[] = $p;
+			}
+		}
+		usort($vencidas, static function ($a, $b) {
+			return strcmp((string)($a['vencimento'] ?? ''), (string)($b['vencimento'] ?? ''));
+		});
+		$ids = [];
+		foreach (array_slice($vencidas, 0, $max) as $p) {
+			$id = (int)($p['id'] ?? 0);
+			if ($id > 0) {
+				$ids[] = $id;
+			}
+		}
+		return $ids;
+	}
+
+	public static function temMultaRescisoriaAberta(int $idMatricula, int $idAdmin): bool {
+		if ($idMatricula <= 0 || $idAdmin <= 0) {
+			return false;
+		}
+		$rs = Caixa::getCaixa(
+			'id_admin = '.(int)$idAdmin
+			.' AND id_ref = '.(int)$idMatricula
+			.' AND tipo_transacao = "Entrada"'
+			.' AND referencia = "Multa rescisória"'
+			.' AND '.FinanceiroAlunoHelper::sqlTituloAberto('status'),
+			'id ASC',
+			'1'
+		);
+		return (bool)$rs->fetchObject(Caixa::class);
+	}
+
+	/**
+	 * @param int[]|null $parcelasCobrar
+	 * @param int[] $statusPermitidos
+	 */
+	private static function simularAcertoFinanceiro(
+		int $idMatricula,
+		int $idAdmin,
+		?array $parcelasCobrar,
+		array $statusPermitidos,
+		string $msgStatusInvalido
+	): array {
 		if ($idMatricula <= 0 || $idAdmin <= 0) {
 			return ['ok' => false, 'message' => 'Matrícula inválida.'];
 		}
@@ -395,8 +470,8 @@ class EncargosContratoHelper {
 		if (!$m || (int)$m->id_admin !== $idAdmin) {
 			return ['ok' => false, 'message' => 'Matrícula não encontrada.'];
 		}
-		if ((int)($m->status ?? 0) !== MatriculaStatusHelper::STATUS_ANDAMENTO) {
-			return ['ok' => false, 'message' => 'Só é possível simular cancelamento de matrícula em andamento.'];
+		if (!in_array((int)($m->status ?? 0), $statusPermitidos, true)) {
+			return ['ok' => false, 'message' => $msgStatusInvalido];
 		}
 
 		$params = self::parametrosPorMatricula($idMatricula);
@@ -412,6 +487,9 @@ class EncargosContratoHelper {
 		$idsValidos = [];
 
 		while ($c = $rs->fetchObject(Caixa::class)) {
+			if (trim((string)($c->referencia ?? '')) === 'Multa rescisória') {
+				continue;
+			}
 			$idCx = (int)$c->id;
 			$idsValidos[$idCx] = true;
 			$face = self::faceTituloMatricula($c);
@@ -432,6 +510,10 @@ class EncargosContratoHelper {
 				'grupo'              => $grupo,
 				'cobrar_default'     => $grupo === 'vencida',
 			];
+		}
+
+		if (empty($parcelas)) {
+			return ['ok' => false, 'message' => 'Nenhuma parcela em aberto nesta matrícula.'];
 		}
 
 		$cobrarMap = [];
@@ -510,6 +592,7 @@ class EncargosContratoHelper {
 			'qtd_futuras'                 => count($futuras),
 			'qtd_cobrar'                  => $qtdCobrar,
 			'qtd_baixar'                  => $qtdBaixar,
+			'max_parcelas_desistencia'    => self::DEFAULT_MAX_PARCELAS_DESISTENCIA,
 		];
 	}
 

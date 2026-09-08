@@ -144,6 +144,12 @@ function botoesAcao(linha) {
 			idMat +
 			'" title="Cancelar contrato"><i class="fa-solid fa-ban"></i></button>';
 	}
+	if (linha.pode_regularizar && idMat > 0) {
+		html +=
+			'<button type="button" class="btn btn-outline-warning btn-regularizar-financeiro" data-id="' +
+			idMat +
+			'" title="Regularizar financeiro"><i class="fa-solid fa-scale-balanced"></i></button>';
+	}
 	html += '</div>';
 	return html;
 }
@@ -558,6 +564,17 @@ $(document).ready(function () {
 			cancelar_contrato(id);
 		}
 	});
+
+	$(document).on('click', '.btn-regularizar-financeiro', function () {
+		var id = parseInt($(this).data('id'), 10);
+		if (id > 0 && typeof regularizar_financeiro === 'function') {
+			regularizar_financeiro(id);
+		}
+	});
+
+	window.carregarInadimplentes = function () {
+		listar();
+	};
 
 	listar();
 });

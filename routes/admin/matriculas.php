@@ -63,6 +63,24 @@ $obRouter->post('/painel/matriculas/cancelar',[
 	}
 ]);
 
+$obRouter->post('/painel/matriculas/regularizar/simular',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\Matriculas::simularRegularizacaoFinanceira($request));
+	}
+]);
+
+$obRouter->post('/painel/matriculas/regularizar',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\Matriculas::regularizarFinanceiro($request));
+	}
+]);
+
 //ROTA DE ENCERRAMENTO
 $obRouter->post('/painel/matriculas/encerrar',[
 	'middlewares' => [
