@@ -33,6 +33,7 @@ class SystemModules {
 		'vendas'          => 'PDV',
 		'pagamentos'      => 'Pagamentos',
 		'relatorios'      => 'Relatório financeiro',
+		'inadimplentes'   => 'Inadimplentes',
 		'agendamentos'    => 'Agendamentos',
 		'laboratorios'    => 'Laboratórios',
 		'horarios'        => 'Horários',
@@ -299,6 +300,10 @@ class SystemModules {
 					[
 						'label' => 'Relatório financeiro',
 						'link' => URL.'/painel/caixa/relatorio'
+					],
+					[
+						'label' => 'Inadimplentes',
+						'link' => URL.'/painel/financeiro/inadimplentes'
 					]
 				]
 			]

@@ -52,6 +52,8 @@ include __DIR__.'/admin/contrato.php';
 
 include __DIR__.'/admin/campanhas.php';
 
+include __DIR__.'/admin/inadimplentes.php';
+
 include __DIR__.'/admin/evolution.php';
 
 include __DIR__.'/admin/telegram.php';
