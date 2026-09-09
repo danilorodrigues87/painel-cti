@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\SocialMediaStorage;
+use App\Common\Helpers\SocialBibliotecaService;
 use App\Common\Helpers\SocialPublishService;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\SocialPost;
@@ -40,7 +41,7 @@ class SocialAgenda extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/social/agenda', []);
-		return parent::getPanel('Redes sociais', $content, 'social', $request);
+		return parent::getPanel('Redes sociais', $content, 'marketing', $request);
 	}
 
 	public static function getInfo($request) {
@@ -103,37 +104,13 @@ class SocialAgenda extends Page {
 		if (!is_array($file)) {
 			return self::json(['success' => false, 'message' => 'Arquivo ausente.']);
 		}
-		$saved = SocialMediaStorage::salvarUpload($idAdmin, $file);
-		if (!$saved) {
-			return self::json(['success' => false, 'message' => 'Upload inválido (use imagem ≤8MB ou vídeo ≤100MB).']);
-		}
 		$formato = trim((string)($post['formato'] ?? ''));
-		if (!in_array($formato, ['feed', 'story'], true)) {
-			$formato = $saved['tipo'] === 'image' ? 'feed' : null;
-		}
-		$bibId = null;
-		if (SocialBiblioteca::tabelaExiste()) {
-			$bib = new SocialBiblioteca();
-			$bib->id_admin = $idAdmin;
-			$bib->titulo = trim((string)($file['name'] ?? '')) ?: null;
-			$bib->tipo = $saved['tipo'];
-			$bib->formato = $formato;
-			$bib->path_local = $saved['relative'];
-			$bib->mime = $saved['mime'];
-			$bib->bytes = $saved['bytes'];
-			$bib->created_by = (int)($user['usuario']['id'] ?? 0) ?: null;
-			$bibId = $bib->salvar();
-		}
-		return self::json([
-			'success' => true,
-			'path' => $saved['relative'],
-			'url' => $saved['url'],
-			'tipo' => $saved['tipo'],
-			'formato' => $formato,
-			'mime' => $saved['mime'],
-			'bytes' => $saved['bytes'],
-			'biblioteca_id' => $bibId,
-		]);
+		return self::json(SocialBibliotecaService::upload(
+			$idAdmin,
+			$file,
+			$formato,
+			(int)($user['usuario']['id'] ?? 0) ?: null
+		));
 	}
 
 	private static function statusMeta(): string {
@@ -340,7 +317,7 @@ class SocialAgenda extends Page {
 		$existentes = SocialPostMidia::listByPost((int)$ob->id, $idAdmin);
 		if ($listaMidias) {
 			foreach ($existentes as $m) {
-				if (!empty($m->path_local) && !SocialBiblioteca::pathEmUso($idAdmin, (string)$m->path_local)) {
+				if (!empty($m->path_local) && !SocialBiblioteca::pathNaBiblioteca($idAdmin, (string)$m->path_local)) {
 					SocialMediaStorage::apagar((string)$m->path_local);
 				}
 				$m->excluir();
@@ -422,7 +399,7 @@ class SocialAgenda extends Page {
 			return self::json(['success' => false, 'message' => 'Não é possível cancelar.']);
 		}
 		foreach (SocialPostMidia::listByPost($id, $idAdmin) as $m) {
-			if (!empty($m->path_local) && !SocialBiblioteca::pathEmUso($idAdmin, (string)$m->path_local)) {
+			if (!empty($m->path_local) && !SocialBiblioteca::pathNaBiblioteca($idAdmin, (string)$m->path_local)) {
 				SocialMediaStorage::apagar((string)$m->path_local);
 			}
 			$m->excluir();
@@ -473,48 +450,17 @@ class SocialAgenda extends Page {
 	}
 
 	private static function bibliotecaListar(array $post): string {
-		if (!SocialBiblioteca::tabelaExiste()) {
-			return self::json([
-				'success' => false,
-				'sql_ok' => false,
-				'message' => 'Execute database/social_fase_a_produto.sql',
-			]);
-		}
 		$idAdmin = TenantHelper::getIdAdmin();
 		$tipo = trim((string)($post['tipo'] ?? ''));
 		$tipo = ($tipo === 'image' || $tipo === 'video') ? $tipo : null;
 		$formato = trim((string)($post['formato'] ?? ''));
 		$formato = in_array($formato, ['feed', 'story'], true) ? $formato : null;
-		$itens = [];
-		foreach (SocialBiblioteca::listByAdmin($idAdmin, $tipo, $formato, 120) as $b) {
-			$itens[] = [
-				'id' => (int)$b->id,
-				'titulo' => (string)($b->titulo ?? ''),
-				'tipo' => $b->tipo,
-				'formato' => $b->formato ?? null,
-				'path' => $b->path_local,
-				'url' => $b->urlPublica(),
-				'mime' => $b->mime,
-				'bytes' => $b->bytes,
-				'created_at' => $b->created_at,
-			];
-		}
-		return self::json([
-			'success' => true,
-			'sql_ok' => true,
-			'formato_col_ok' => SocialBiblioteca::colunaFormatoExiste(),
-			'itens' => $itens,
-		]);
+		return self::json(SocialBibliotecaService::listar($idAdmin, $tipo, $formato, 120));
 	}
 
 	private static function bibliotecaExcluir(int $id): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$ob = SocialBiblioteca::getById($id, $idAdmin);
-		if (!$ob) {
-			return self::json(['success' => false, 'message' => 'Mídia não encontrada.']);
-		}
-		$ob->excluir();
-		return self::json(['success' => true, 'message' => 'Removida da biblioteca.']);
+		return self::json(SocialBibliotecaService::excluir($id, $idAdmin));
 	}
 
 	private static function historico(): string {

@@ -260,28 +260,23 @@ class SocialBiblioteca {
 
 
 
-	public static function pathEmUso(int $idAdmin, string $path): bool {
-
+	/** Path registrado na biblioteca desta escola. */
+	public static function pathNaBiblioteca(int $idAdmin, string $path): bool {
 		if ($path === '' || !self::tabelaExiste()) {
-
 			return false;
-
 		}
-
 		$row = (new Database('social_biblioteca'))->select(
-
 			'id_admin = '.(int)$idAdmin.' AND path_local = "'.addslashes($path).'"',
-
 			null,
-
 			1,
-
 			'id'
-
 		)->fetch(\PDO::FETCH_ASSOC);
-
 		return !empty($row);
+	}
 
+	/** @deprecated Use pathNaBiblioteca() */
+	public static function pathEmUso(int $idAdmin, string $path): bool {
+		return self::pathNaBiblioteca($idAdmin, $path);
 	}
 
 }

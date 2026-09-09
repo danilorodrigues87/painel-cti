@@ -46,11 +46,13 @@
 	<button type="button" class="btn btn-primary btn-sm ms-auto" id="btn-novo-post">Novo post</button>
 	<button type="button" class="btn btn-outline-dark btn-sm" id="btn-worker">Rodar worker</button>
 	<a class="btn btn-outline-secondary btn-sm" href="{{URL}}/painel/config/social">Config Meta</a>
+	<a class="btn btn-outline-primary btn-sm" href="{{URL}}/painel/marketing/biblioteca">
+		<i class="fas fa-photo-video"></i> Biblioteca de mídias
+	</a>
 </div>
 
 <ul class="nav nav-tabs mb-3" id="tabs-social">
 	<li class="nav-item"><button class="nav-link active" data-tab="agenda" type="button">Agenda</button></li>
-	<li class="nav-item"><button class="nav-link" data-tab="biblioteca" type="button">Biblioteca</button></li>
 	<li class="nav-item"><button class="nav-link" data-tab="historico" type="button">Histórico</button></li>
 </ul>
 
@@ -88,33 +90,6 @@
 					<ul class="list-group list-group-flush" id="lista-posts"></ul>
 				</div>
 			</div>
-		</div>
-	</div>
-</div>
-
-<div id="pane-biblioteca" class="d-none">
-	<div class="card shadow">
-		<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-			<span>Biblioteca de mídia</span>
-			<div class="d-flex gap-2 align-items-center flex-wrap">
-				<select class="form-select form-select-sm" id="bib-upload-formato" style="width:auto;">
-					<option value="feed">Quadrado (feed)</option>
-					<option value="story">Story (vertical)</option>
-				</select>
-				<label class="btn btn-sm btn-primary mb-0">
-					Upload
-					<input type="file" id="bib-upload" class="d-none" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple>
-				</label>
-			</div>
-		</div>
-		<div class="card-body">
-			<ul class="nav nav-pills nav-sm mb-3" id="bib-filtro-formato">
-				<li class="nav-item"><button type="button" class="nav-link active" data-formato="feed" data-tipo="image">Quadrado</button></li>
-				<li class="nav-item"><button type="button" class="nav-link" data-formato="story" data-tipo="image">Story</button></li>
-				<li class="nav-item"><button type="button" class="nav-link" data-formato="" data-tipo="video">Vídeos</button></li>
-				<li class="nav-item"><button type="button" class="nav-link" data-formato="" data-tipo="">Todos</button></li>
-			</ul>
-			<div id="bib-grid" class="row g-2"></div>
 		</div>
 	</div>
 </div>
@@ -234,4 +209,5 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/social-agenda.js?v=20260825a"></script>
+<script src="{{URL}}/resources/js/social-biblioteca-shared.js?v=20260909c"></script>
+<script src="{{URL}}/resources/js/social-agenda.js?v=20260909c"></script>

@@ -64,6 +64,8 @@ include __DIR__.'/admin/ead.php';
 
 include __DIR__.'/admin/social.php';
 
+include __DIR__.'/admin/marketing.php';
+
 include __DIR__.'/admin/suporte.php';
 
 include __DIR__.'/admin/conect.php';

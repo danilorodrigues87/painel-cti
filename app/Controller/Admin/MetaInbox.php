@@ -50,7 +50,7 @@ class MetaInbox extends Page {
 			return '';
 		}
 		$content = View::render('admin/modules/social/mensagens', []);
-		return parent::getPanel('Redes sociais', $content, 'social', $request);
+		return parent::getPanel('Redes sociais', $content, 'marketing', $request);
 	}
 
 	public static function getInfo($request) {

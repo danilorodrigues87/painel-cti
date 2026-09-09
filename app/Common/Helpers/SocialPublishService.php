@@ -180,7 +180,7 @@ class SocialPublishService {
 	}
 
 	private static function pathNaBiblioteca(int $idAdmin, string $path): bool {
-		return SocialBiblioteca::pathEmUso($idAdmin, $path);
+		return SocialBiblioteca::pathNaBiblioteca($idAdmin, $path);
 	}
 
 	/**

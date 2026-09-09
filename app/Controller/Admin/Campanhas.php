@@ -11,6 +11,7 @@ use App\Common\Communication\CampanhaWorker;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Communication\WhatsappMediaStorage;
 use App\Common\Helpers\SocialMediaStorage;
+use App\Common\Helpers\SocialBibliotecaService;
 use App\Model\Entity\Campanhas as EntityCampanhas;
 use App\Model\Entity\CampanhaFila;
 use App\Model\Entity\CampanhaWorkerRun;
@@ -32,7 +33,7 @@ class Campanhas extends Page {
 
 	public static function index($request) {
 		$content = View::render('admin/modules/campanhas/index', []);
-		return parent::getPanel('Campanhas', $content, 'campanhas');
+		return parent::getPanel('Campanhas', $content, 'marketing');
 	}
 
 	public static function getInfo($request) {
@@ -864,31 +865,12 @@ class Campanhas extends Page {
 	}
 
 	private static function bibliotecaListar(array $postVars): string {
-		if (!SocialBiblioteca::tabelaExiste()) {
-			return json_encode([
-				'success' => false,
-				'sql_ok' => false,
-				'message' => 'Execute database/social_fase_a_produto.sql',
-			], JSON_UNESCAPED_UNICODE);
-		}
 		$idAdmin = TenantHelper::getIdAdmin();
 		$tipo = trim((string)($postVars['tipo'] ?? 'image'));
 		$tipo = ($tipo === 'image' || $tipo === 'video') ? $tipo : 'image';
 		$formato = trim((string)($postVars['formato'] ?? ''));
 		$formato = in_array($formato, ['feed', 'story'], true) ? $formato : null;
-		$itens = [];
-		foreach (SocialBiblioteca::listByAdmin($idAdmin, $tipo, $formato, 120) as $b) {
-			$itens[] = [
-				'id' => (int)$b->id,
-				'titulo' => (string)($b->titulo ?? ''),
-				'tipo' => $b->tipo,
-				'formato' => $b->formato ?? null,
-				'path' => $b->path_local,
-				'url' => $b->urlPublica(),
-				'mime' => $b->mime,
-			];
-		}
-		return json_encode(['success' => true, 'sql_ok' => true, 'itens' => $itens], JSON_UNESCAPED_UNICODE);
+		return json_encode(SocialBibliotecaService::listar($idAdmin, $tipo, $formato, 120), JSON_UNESCAPED_UNICODE);
 	}
 
 	/** @return array{tipo:string,path:string,nome:string,mime:?string,url:string,origem:string}|null */
@@ -898,7 +880,7 @@ class Campanhas extends Page {
 			return null;
 		}
 		$prefix = 'uploads/social/'.(int)$idAdmin.'/';
-		if (strpos($pathRel, $prefix) !== 0 && !SocialBiblioteca::pathEmUso($idAdmin, $pathRel)) {
+		if (strpos($pathRel, $prefix) !== 0 && !SocialBiblioteca::pathNaBiblioteca($idAdmin, $pathRel)) {
 			return null;
 		}
 		$abs = SocialMediaStorage::caminhoAbsoluto($pathRel);

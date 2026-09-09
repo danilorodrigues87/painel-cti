@@ -119,6 +119,9 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
                 if (!empty($subSection['requires_label'])) {
                     $labelsPermitidos[] = (string)$subSection['requires_label'];
                 }
+                if (!empty($subSection['requires_any']) && is_array($subSection['requires_any'])) {
+                    $labelsPermitidos = array_merge($labelsPermitidos, $subSection['requires_any']);
+                }
                 if ($subSection['label'] === 'Agendamentos') {
                     $labelsPermitidos[] = 'Laboratório';
                 }
@@ -130,7 +133,6 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
                         break;
                     }
                 }
-
                 if ($subPermitido) {
                     $includeModule = true;
 

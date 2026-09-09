@@ -249,11 +249,11 @@ class SystemModules {
 			'link' => URL.'/painel/whatsapp',
 			'icon' => 'fab fa-whatsapp'
 		],
-		'social' => [
-			'label' => 'Redes sociais',
-			'icon' => 'fa-solid fa-share-nodes',
+		'marketing' => [
+			'label' => 'Marketing',
+			'icon' => 'fa-solid fa-bullhorn',
 			'subsections' => [
-				'name' => 'Layouts-social',
+				'name' => 'Layouts-marketing',
 				'icon' => 'fas fa-caret-down',
 				'items' => [
 					[
@@ -262,17 +262,27 @@ class SystemModules {
 						'requires_label' => 'Redes sociais',
 					],
 					[
+						'label' => 'Biblioteca de mídias',
+						'link' => URL.'/painel/marketing/biblioteca',
+						'requires_any' => ['Redes sociais', 'Campanhas'],
+					],
+					[
 						'label' => 'Mensagens',
 						'link' => URL.'/painel/social/mensagens',
 						'requires_label' => 'Redes sociais',
 					],
+					[
+						'label' => 'Campanhas',
+						'link' => URL.'/painel/campanhas',
+						'requires_label' => 'Campanhas',
+					],
+					[
+						'label' => 'Aniversariantes',
+						'link' => URL.'/painel/marketing/aniversariantes',
+						'requires_label' => 'Campanhas',
+					],
 				],
 			],
-		],
-		'campanhas' => [
-			'label' => 'Campanhas',
-			'link' => URL.'/painel/campanhas',
-			'icon' => 'fa-solid fa-bullhorn'
 		],
 		'Financeiro' => [
 			'label' => 'Financeiro',

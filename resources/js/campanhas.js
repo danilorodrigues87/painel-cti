@@ -460,7 +460,7 @@ function montarFormDataSalvar(){
 function renderCampBibGrid(itens){
 	const $grid = $('#camp-bib-grid');
 	if(!itens || !itens.length){
-		$grid.html('<div class="col-12 text-muted">Nenhuma imagem nesta categoria. Envie na Redes sociais → Biblioteca.</div>');
+		$grid.html('<div class="col-12 text-muted">Nenhuma imagem nesta categoria. Envie em Marketing → Biblioteca de mídias.</div>');
 		return;
 	}
 	$grid.html(itens.map(function(it){
@@ -1494,4 +1494,23 @@ $(function(){
 		campanhaProgressoId = null;
 		campanhaProgressoAguardando = false;
 	});
+
+	try {
+		const params = new URLSearchParams(window.location.search || '');
+		const seg = params.get('segmento');
+		if(seg){
+			$('#segmento_tipo').val(seg);
+			atualizarUiSegmento();
+			const canal = params.get('canal');
+			if(canal === 'whatsapp' || canal === 'email'){
+				$('#campanha_canal').val(canal);
+				atualizarUiCanal();
+			}
+			const titulo = params.get('titulo');
+			if(titulo){
+				$('#campanha_titulo').val(titulo);
+			}
+			$('#modalCampanha').modal('show');
+		}
+	} catch (e) {}
 });
