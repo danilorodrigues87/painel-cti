@@ -1,83 +1,190 @@
-<h1 class="mt-4">Redes sociais (Meta)</h1>
+<h1 class="mt-4"><i class="fab fa-facebook text-primary"></i> Conexão Meta</h1>
 <ol class="breadcrumb mb-4">
 	<li class="breadcrumb-item"><a href="{{URL}}/painel">Painel</a></li>
-	<li class="breadcrumb-item active">Configurações → Redes sociais</li>
+	<li class="breadcrumb-item"><a href="{{URL}}/painel/social">Marketing</a></li>
+	<li class="breadcrumb-item active">Conexão Meta</li>
 </ol>
 
 <div id="alert-sql-meta" class="alert alert-warning d-none">
 	A conexão com redes sociais ainda não está liberada nesta escola. Fale com o <strong>suporte</strong> para ativar.
 </div>
 <div id="alert-sql-auto" class="alert alert-warning d-none">
-	As automações de comentário ainda não estão liberadas. Fale com o <strong>suporte</strong> para ativar.
+	As automações de comentário ainda não estão liberadas. Execute <code>database/social_automacoes.sql</code> ou fale com o suporte.
 </div>
 <div id="alert-app-meta" class="alert alert-warning d-none">
-	A conexão automática com o Facebook ainda não está disponível neste servidor.
-	Fale com o <strong>suporte</strong> para liberar, ou use os campos avançados abaixo se o suporte orientar.
+	A conexão automática com o Facebook ainda não está disponível neste servidor. Fale com o <strong>suporte</strong>.
 </div>
 <div id="alert-oauth" class="alert d-none"></div>
 
-<div class="alert alert-light border mb-4 small">
-	<p class="mb-1"><strong>Como funciona:</strong> a CTI Educacional fornece a integração com a Meta. Sua escola conecta a própria <em>Página do Facebook</em> e o <em>Instagram Profissional</em> vinculado a ela.</p>
-	<p class="mb-1">Enquanto a Meta não aprovar o aplicativo em modo completo, só contas liberadas pelo suporte conseguem publicar normalmente. Após a aprovação, clique em <strong>Conectar com Facebook</strong> de novo para renovar as permissões (incl. comentários).</p>
-	<p class="mb-0">Para agendar posts, use o menu <em>Redes sociais</em>. Automações: quando alguém comenta com uma palavra-chave, o sistema pode responder em mensagem privada (DM).</p>
-</div>
+<div class="alert mb-3 d-none" id="meta-status-banner"></div>
 
-<div class="row g-3">
-	<div class="col-lg-7">
-		<div class="card shadow mb-3">
-			<div class="card-header">Conexão</div>
-			<div class="card-body">
-				<div class="form-check form-switch mb-2">
-					<input class="form-check-input" type="checkbox" id="meta_fb_ativo">
-					<label class="form-check-label" for="meta_fb_ativo">Publicar no Facebook (Page)</label>
+<ul class="nav nav-tabs mb-3" id="meta-nav-tabs" role="tablist">
+	<li class="nav-item" role="presentation">
+		<button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-meta-visao" type="button" role="tab">
+			<i class="fas fa-tachometer-alt"></i> Visão geral
+		</button>
+	</li>
+	<li class="nav-item" role="presentation">
+		<button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-meta-conectar" type="button" role="tab">
+			<i class="fas fa-link"></i> Conectar
+		</button>
+	</li>
+	<li class="nav-item" role="presentation">
+		<button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-meta-auto" type="button" role="tab">
+			<i class="fas fa-reply"></i> Automações
+		</button>
+	</li>
+	<li class="nav-item" role="presentation">
+		<button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-meta-diag" type="button" role="tab">
+			<i class="fas fa-stethoscope"></i> Diagnóstico
+		</button>
+	</li>
+</ul>
+
+<div class="tab-content" id="meta-tab-content">
+
+	<!-- Visão geral -->
+	<div class="tab-pane fade show active" id="tab-meta-visao" role="tabpanel">
+		<div class="row g-3">
+			<div class="col-md-4">
+				<div class="card shadow-sm h-100">
+					<div class="card-body">
+						<div class="small text-muted mb-1">Status da conexão</div>
+						<div id="meta-card-estado" class="fs-5 fw-semibold">—</div>
+						<div class="small text-muted mt-2" id="meta-card-detalhe">—</div>
+					</div>
 				</div>
-				<div class="form-check form-switch mb-2">
-					<input class="form-check-input" type="checkbox" id="meta_ig_ativo">
-					<label class="form-check-label" for="meta_ig_ativo">Publicar no Instagram</label>
+			</div>
+			<div class="col-md-4">
+				<div class="card shadow-sm h-100">
+					<div class="card-body">
+						<div class="small text-muted mb-1">Última publicação</div>
+						<div id="meta-card-publicacao" class="small">—</div>
+						<a href="{{URL}}/painel/social" class="btn btn-sm btn-outline-primary mt-2">Abrir agenda</a>
+					</div>
 				</div>
-				<div class="form-check form-switch mb-3">
-					<input class="form-check-input" type="checkbox" id="meta_auto_ativo">
-					<label class="form-check-label" for="meta_auto_ativo">Automações keyword → DM</label>
+			</div>
+			<div class="col-md-4">
+				<div class="card shadow-sm h-100">
+					<div class="card-body">
+						<div class="small text-muted mb-1">Worker / cron social</div>
+						<div id="meta-card-worker" class="small">—</div>
+					</div>
 				</div>
-				<div class="mb-2">
-					<button type="button" class="btn btn-primary" id="btn-oauth">Conectar com Facebook</button>
-					<button type="button" class="btn btn-outline-secondary" id="btn-testar">Testar conexão</button>
-					<button type="button" class="btn btn-outline-secondary" id="btn-subscribe">Assinar webhooks</button>
-					<button type="button" class="btn btn-outline-danger" id="btn-desconectar">Desconectar</button>
+			</div>
+			<div class="col-lg-7">
+				<div class="card shadow-sm">
+					<div class="card-header"><strong>Passo a passo</strong></div>
+					<ol class="list-group list-group-flush" id="meta-checklist">
+						<li class="list-group-item small text-muted">Carregando…</li>
+					</ol>
 				</div>
-				<p class="small text-muted mb-0" id="meta-status-txt">—</p>
+			</div>
+			<div class="col-lg-5">
+				<div class="card shadow-sm">
+					<div class="card-header"><strong>Atalhos Marketing</strong></div>
+					<div class="list-group list-group-flush">
+						<a href="{{URL}}/painel/social" class="list-group-item list-group-item-action small">Agenda de posts</a>
+						<a href="{{URL}}/painel/marketing/biblioteca" class="list-group-item list-group-item-action small">Biblioteca de mídias</a>
+						<a href="{{URL}}/painel/marketing/mensagens" class="list-group-item list-group-item-action small">Mensagens Meta (inbox)</a>
+					</div>
+				</div>
+				<div class="card shadow-sm mt-3 border-0 bg-light">
+					<div class="card-body small">
+						<strong>App Review Meta:</strong> enquanto o app CTI não estiver aprovado em modo completo, só contas liberadas pelo suporte publicam normalmente. Após aprovação, use <em>Conectar com Facebook</em> de novo para renovar permissões (comentários, mensagens).
+					</div>
+				</div>
 			</div>
 		</div>
+	</div>
 
-		<div class="card shadow mb-3">
-			<div class="card-header">Dados da conexão (avançado)</div>
-			<div class="card-body">
-				<div class="mb-2">
-					<label class="form-label">Page ID</label>
-					<input type="text" class="form-control" id="meta_page_id" placeholder="ID da Facebook Page">
+	<!-- Conectar -->
+	<div class="tab-pane fade" id="tab-meta-conectar" role="tabpanel">
+		<div class="row g-3">
+			<div class="col-lg-7">
+				<div class="card shadow-sm mb-3">
+					<div class="card-header">Canais e OAuth</div>
+					<div class="card-body">
+						<div class="form-check form-switch mb-2">
+							<input class="form-check-input" type="checkbox" id="meta_fb_ativo">
+							<label class="form-check-label" for="meta_fb_ativo">Publicar no Facebook (Page)</label>
+						</div>
+						<div class="form-check form-switch mb-2">
+							<input class="form-check-input" type="checkbox" id="meta_ig_ativo">
+							<label class="form-check-label" for="meta_ig_ativo">Publicar no Instagram</label>
+						</div>
+						<div class="form-check form-switch mb-3">
+							<input class="form-check-input" type="checkbox" id="meta_auto_ativo">
+							<label class="form-check-label" for="meta_auto_ativo">Automações keyword → DM</label>
+						</div>
+						<div class="d-flex flex-wrap gap-2 mb-2">
+							<button type="button" class="btn btn-primary" id="btn-oauth">
+								<i class="fab fa-facebook"></i> Conectar com Facebook
+							</button>
+							<button type="button" class="btn btn-outline-secondary" id="btn-testar">Testar conexão</button>
+							<button type="button" class="btn btn-outline-secondary" id="btn-subscribe">Assinar webhooks</button>
+							<button type="button" class="btn btn-outline-danger" id="btn-desconectar">Desconectar</button>
+						</div>
+						<p class="small text-muted mb-0" id="meta-status-txt">—</p>
+					</div>
 				</div>
-				<div class="mb-2">
-					<label class="form-label">Nome da Page</label>
-					<input type="text" class="form-control" id="meta_page_name" placeholder="Opcional">
+
+				<div class="accordion" id="accordion-meta-avancado">
+					<div class="accordion-item">
+						<h2 class="accordion-header">
+							<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-meta-avancado">
+								Dados avançados (token manual / suporte)
+							</button>
+						</h2>
+						<div id="collapse-meta-avancado" class="accordion-collapse collapse" data-bs-parent="#accordion-meta-avancado">
+							<div class="accordion-body">
+								<div class="mb-2">
+									<label class="form-label">Page ID</label>
+									<input type="text" class="form-control" id="meta_page_id" placeholder="ID da Facebook Page">
+								</div>
+								<div class="mb-2">
+									<label class="form-label">Nome da Page</label>
+									<input type="text" class="form-control" id="meta_page_name" placeholder="Opcional">
+								</div>
+								<div class="mb-2">
+									<label class="form-label">Instagram User ID</label>
+									<input type="text" class="form-control" id="meta_ig_user_id" placeholder="IG Professional vinculado à Page">
+								</div>
+								<div class="mb-2">
+									<label class="form-label">@ Instagram</label>
+									<input type="text" class="form-control" id="meta_ig_username" placeholder="Opcional">
+								</div>
+								<div class="mb-2">
+									<label class="form-label">Page Access Token</label>
+									<input type="password" class="form-control" id="meta_page_token" placeholder="Deixe em branco para manter o salvo" autocomplete="off">
+									<div class="form-text" id="token_mask_txt"></div>
+								</div>
+								<button type="button" class="btn btn-success" id="btn-salvar">Salvar configuração</button>
+							</div>
+						</div>
+					</div>
 				</div>
-				<div class="mb-2">
-					<label class="form-label">Instagram User ID</label>
-					<input type="text" class="form-control" id="meta_ig_user_id" placeholder="IG Professional vinculado à Page">
+			</div>
+			<div class="col-lg-5">
+				<div class="card shadow-sm">
+					<div class="card-header">Permissões solicitadas no OAuth</div>
+					<div class="card-body small">
+						<ul class="mb-0 ps-3">
+							<li>Publicar na Page do Facebook</li>
+							<li>Publicar no Instagram Profissional vinculado</li>
+							<li>Ler/responder comentários (automações)</li>
+							<li>Mensagens privadas (DM) quando aplicável</li>
+						</ul>
+						<p class="text-muted mt-3 mb-0">Se faltar escopo após App Review, reconecte para renovar.</p>
+					</div>
 				</div>
-				<div class="mb-2">
-					<label class="form-label">@ Instagram</label>
-					<input type="text" class="form-control" id="meta_ig_username" placeholder="Opcional">
-				</div>
-				<div class="mb-2">
-					<label class="form-label">Page Access Token</label>
-					<input type="password" class="form-control" id="meta_page_token" placeholder="Deixe em branco para manter o salvo" autocomplete="off">
-					<div class="form-text" id="token_mask_txt"></div>
-				</div>
-				<button type="button" class="btn btn-success" id="btn-salvar">Salvar</button>
 			</div>
 		</div>
+	</div>
 
-		<div class="card shadow mb-3">
+	<!-- Automações -->
+	<div class="tab-pane fade" id="tab-meta-auto" role="tabpanel">
+		<div class="card shadow-sm mb-3">
 			<div class="card-header d-flex justify-content-between align-items-center">
 				<span>Regras keyword → DM</span>
 				<button type="button" class="btn btn-sm btn-primary" id="btn-nova-regra">+ Regra</button>
@@ -91,57 +198,63 @@
 				</div>
 			</div>
 		</div>
-
-		<div class="card shadow mb-3">
-			<div class="card-header">Log recente</div>
+		<div class="card shadow-sm">
+			<div class="card-header">Log recente de automações</div>
 			<div class="card-body p-0">
 				<ul class="list-group list-group-flush small" id="lista-log-auto"></ul>
 			</div>
 		</div>
+	</div>
 
-		<div class="card shadow mb-3">
-			<div class="card-header d-flex justify-content-between align-items-center">
-				<span>Debug webhook comentários</span>
-				<div>
-					<button type="button" class="btn btn-sm btn-outline-primary me-1" id="btn-ping-debug">Testar log</button>
-					<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-recarregar-debug">Atualizar</button>
+	<!-- Diagnóstico -->
+	<div class="tab-pane fade" id="tab-meta-diag" role="tabpanel">
+		<div class="row g-3">
+			<div class="col-lg-5">
+				<div class="card shadow-sm mb-3">
+					<div class="card-header">URLs de webhook</div>
+					<div class="card-body small">
+						<p class="mb-1"><strong>URL principal (recomendada):</strong></p>
+						<code id="webhook_url_global" class="d-block text-break mb-2 user-select-all">—</code>
+						<p class="mb-1"><strong>URL desta escola (alternativa):</strong></p>
+						<code id="webhook_url" class="d-block text-break user-select-all">—</code>
+						<p class="mt-2 mb-0 text-muted">Após conectar, use <strong>Assinar webhooks</strong> na aba Conectar.</p>
+					</div>
+				</div>
+				<div class="card shadow-sm">
+					<div class="card-header">Cron de publicação</div>
+					<div class="card-body small" id="meta-cron-resumo">—</div>
 				</div>
 			</div>
-			<div class="card-body py-2 small" id="webhook-debug-status">Carregando status do debug…</div>
-			<div class="card-body p-0">
-				<ul class="list-group list-group-flush small" id="lista-webhook-debug"></ul>
-			</div>
-			<div class="card-footer small text-muted">
-				Registra <strong>todo</strong> POST em <code>/webhook/meta</code>. Envie uma DM de teste: deve aparecer <code>mensagem</code> aqui.
-				Comente em um post: deve aparecer <code>comentario?</code> ou <code>feed</code>/<code>comments</code>.
-				Se DM aparece e comentário não, a Meta não está enviando evento de comentário.
-			</div>
-		</div>
-	</div>
-	<div class="col-lg-5">
-		<div class="card shadow mb-3">
-			<div class="card-header">URL de integração (suporte / Meta)</div>
-			<div class="card-body small">
-				<p class="mb-1"><strong>URL principal:</strong></p>
-				<code id="webhook_url_global" class="d-block text-break mb-2">—</code>
-				<p class="mb-1"><strong>URL desta escola (alternativa):</strong></p>
-				<code id="webhook_url" class="d-block text-break">—</code>
-				<p class="mt-2 mb-0 text-muted">Se precisar configurar isso no painel da Meta, peça orientação ao suporte.</p>
-			</div>
-		</div>
-		<div class="card shadow">
-			<div class="card-header">Dicas</div>
-			<div class="card-body small">
-				<ol class="mb-0 ps-3">
-					<li>Use <strong>Conectar com Facebook</strong> para vincular a Página e o Instagram da escola.</li>
-					<li>Depois de conectar, clique em <strong>Assinar webhooks</strong> para as automações funcionarem.</li>
-					<li>Teste um comentário com a palavra-chave cadastrada e confira se a DM chega.</li>
-					<li>Agende publicações em <a href="{{URL}}/painel/social">Redes sociais</a>.</li>
-					<li>Se algo falhar, fale com o <strong>suporte</strong>.</li>
-				</ol>
+			<div class="col-lg-7">
+				<div class="card shadow-sm mb-3">
+					<div class="card-header d-flex justify-content-between align-items-center">
+						<span>Último teste de conexão</span>
+						<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-testar-diag">Testar agora</button>
+					</div>
+					<div class="card-body small">
+						<pre id="meta-diag-teste" class="mb-0 p-2 bg-light border rounded small" style="white-space:pre-wrap;max-height:220px;overflow:auto;">Execute “Testar conexão” para ver escopos, webhooks e erros de token.</pre>
+					</div>
+				</div>
+				<div class="card shadow-sm">
+					<div class="card-header d-flex justify-content-between align-items-center">
+						<span>Debug webhook (comentários / DM)</span>
+						<div>
+							<button type="button" class="btn btn-sm btn-outline-primary me-1" id="btn-ping-debug">Testar log</button>
+							<button type="button" class="btn btn-sm btn-outline-secondary" id="btn-recarregar-debug">Atualizar</button>
+						</div>
+					</div>
+					<div class="card-body py-2 small" id="webhook-debug-status">Carregando…</div>
+					<div class="card-body p-0">
+						<ul class="list-group list-group-flush small" id="lista-webhook-debug"></ul>
+					</div>
+					<div class="card-footer small text-muted">
+						Registra POSTs em <code>/webhook/meta</code>. DM de teste → evento <code>mensagem</code>; comentário → <code>comentario</code> ou <code>feed</code>.
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>
+
 </div>
 
 <div class="modal fade" id="modalRegra" tabindex="-1">
@@ -187,4 +300,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-social.js?v=20260818e"></script>
+<script src="{{URL}}/resources/js/config-social.js?v=20260909f"></script>

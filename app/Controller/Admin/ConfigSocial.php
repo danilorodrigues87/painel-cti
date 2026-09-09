@@ -12,6 +12,9 @@ use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\SocialAutomacao;
 use App\Model\Entity\SocialAutomacaoLog;
 use App\Model\Entity\MetaWebhookLog;
+use App\Model\Entity\SocialPost;
+use App\Model\Entity\SocialWorkerRun;
+use App\Model\Db\Database;
 
 class ConfigSocial extends Page {
 
@@ -112,6 +115,11 @@ class ConfigSocial extends Page {
 
 		$webhookUrlGlobal = rtrim((string)URL, '/').'/webhook/meta';
 
+		$metaPronto = $cfg instanceof EscolaIntegracoes && $cfg->temMetaPronto();
+		$tokenExpires = $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_token_expires_at ?? '') : '';
+		$tokenExpirado = $tokenExpires !== '' && strtotime($tokenExpires) !== false && strtotime($tokenExpires) < time();
+		$estado = self::resolverEstadoMeta($colOk, MetaGraphHelper::appConfigurado(), $tokenMask !== '', $metaPronto, $tokenExpirado);
+
 		return json_encode([
 			'success' => true,
 			'coluna_ok' => $colOk,
@@ -127,11 +135,132 @@ class ConfigSocial extends Page {
 			'meta_ig_username' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_ig_username ?? '') : '',
 			'token_salvo' => $tokenMask !== '',
 			'token_mask' => $tokenMask,
-			'meta_pronto' => $cfg instanceof EscolaIntegracoes && $cfg->temMetaPronto(),
+			'meta_pronto' => $metaPronto,
 			'meta_conectado_em' => $cfg instanceof EscolaIntegracoes ? (string)($cfg->meta_conectado_em ?? '') : '',
+			'meta_token_expires_at' => $tokenExpires,
+			'token_expirado' => $tokenExpirado,
+			'estado' => $estado,
 			'webhook_url' => $webhookUrl,
 			'webhook_url_global' => $webhookUrlGlobal,
+			'operacao' => [
+				'ultima_publicacao' => self::ultimaPublicacao($idAdmin),
+				'worker_ultima' => SocialWorkerRun::ultima($idAdmin),
+				'posts_publicados' => self::contarPublicados($idAdmin),
+			],
+			'cron_social' => self::metaCronSocial(),
+			'links' => [
+				'agenda' => rtrim((string)URL, '/').'/painel/social',
+				'biblioteca' => rtrim((string)URL, '/').'/painel/marketing/biblioteca',
+				'mensagens' => rtrim((string)URL, '/').'/painel/marketing/mensagens',
+			],
+			'checklist' => self::montarChecklist(
+				$colOk,
+				SocialAutomacao::tabelaExiste(),
+				MetaGraphHelper::appConfigurado(),
+				$tokenMask !== '',
+				$metaPronto,
+				$cfg instanceof EscolaIntegracoes ? (int)$cfg->meta_fb_ativo : 0,
+				$cfg instanceof EscolaIntegracoes ? (int)$cfg->meta_ig_ativo : 0,
+				$wh !== ''
+			),
 		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	}
+
+	private static function resolverEstadoMeta(
+		bool $colOk,
+		bool $appOk,
+		bool $tokenSalvo,
+		bool $metaPronto,
+		bool $tokenExpirado
+	): string {
+		if (!$colOk) {
+			return 'sql_pendente';
+		}
+		if (!$appOk) {
+			return 'app_indisponivel';
+		}
+		if ($metaPronto && !$tokenExpirado) {
+			return 'conectado';
+		}
+		if ($tokenExpirado) {
+			return 'token_expirado';
+		}
+		if ($tokenSalvo) {
+			return 'incompleto';
+		}
+		return 'desconectado';
+	}
+
+	/** @return array<string,bool> */
+	private static function montarChecklist(
+		bool $colOk,
+		bool $autoSqlOk,
+		bool $appOk,
+		bool $tokenSalvo,
+		bool $metaPronto,
+		int $fbAtivo,
+		int $igAtivo,
+		bool $webhookTokenOk
+	): array {
+		return [
+			'sql_meta' => $colOk,
+			'sql_automacoes' => $autoSqlOk,
+			'app_servidor' => $appOk,
+			'oauth_conectado' => $tokenSalvo && $metaPronto,
+			'canais_ativos' => $fbAtivo === 1 || $igAtivo === 1,
+			'webhook_token' => $webhookTokenOk,
+		];
+	}
+
+	/** @return array|null */
+	private static function ultimaPublicacao(int $idAdmin): ?array {
+		if (!SocialPost::tabelaExiste() || $idAdmin <= 0) {
+			return null;
+		}
+		try {
+			$row = (new Database('social_posts'))->select(
+				'id_admin = '.(int)$idAdmin.' AND status = "publicado"',
+				'publicado_em DESC',
+				1,
+				'id, canais, formato, caption, publicado_em'
+			)->fetch(\PDO::FETCH_ASSOC);
+			return is_array($row) ? $row : null;
+		} catch (\Throwable $e) {
+			return null;
+		}
+	}
+
+	private static function contarPublicados(int $idAdmin): int {
+		if (!SocialPost::tabelaExiste() || $idAdmin <= 0) {
+			return 0;
+		}
+		try {
+			$row = (new Database('social_posts'))->select(
+				'id_admin = '.(int)$idAdmin.' AND status = "publicado"',
+				null,
+				null,
+				'COUNT(*) AS qtd'
+			)->fetch(\PDO::FETCH_ASSOC);
+			return (int)($row['qtd'] ?? 0);
+		} catch (\Throwable $e) {
+			return 0;
+		}
+	}
+
+	private static function metaCronSocial(): array {
+		$tokenOk = defined('SYSTEM_TOKEN') && SYSTEM_TOKEN !== '';
+		$base = rtrim((string)URL, '/');
+		$tokenHint = $tokenOk ? '***' : 'SEU_SYSTEM_TOKEN';
+
+		return [
+			'token_ok' => $tokenOk,
+			'worker_ok' => SocialWorkerRun::tabelaExiste(),
+			'url_cron' => $base.'/cron/social?token='.$tokenHint,
+			'cron_cli' => '*/5 * * * * php worker/social.php',
+			'hint' => $tokenOk
+				? 'Configure no cPanel a cada 5 minutos para publicar com o painel fechado.'
+				: 'Defina SYSTEM_TOKEN no .env para usar cron HTTP.',
+		];
 	}
 
 	private static function salvar(array $post): string {

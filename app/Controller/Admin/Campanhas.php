@@ -296,6 +296,9 @@ class Campanhas extends Page {
 			if ($tipoSegmento === 'inadimplentes') {
 				$segmento = array_merge($segmento, CampanhaSegmentoHelper::normalizarSegmentoInadimplentes($postVars));
 			}
+			if (in_array($tipoSegmento, ['aniversariantes_mes', 'aniversariantes_dia'], true)) {
+				$segmento = array_merge($segmento, CampanhaSegmentoHelper::normalizarSegmentoAniversariantes($postVars));
+			}
 			if ($tipoSegmento === 'whatsapp_grupos') {
 				$destinos = self::parseDestinosGrupos($postVars);
 				if (empty($destinos)) {
@@ -767,6 +770,9 @@ class Campanhas extends Page {
 		];
 		if (($seg['tipo'] ?? '') === 'inadimplentes') {
 			$seg = array_merge($seg, CampanhaSegmentoHelper::normalizarSegmentoInadimplentes($postVars));
+		}
+		if (in_array($seg['tipo'] ?? '', ['aniversariantes_mes', 'aniversariantes_dia'], true)) {
+			$seg = array_merge($seg, CampanhaSegmentoHelper::normalizarSegmentoAniversariantes($postVars));
 		}
 		if (($seg['tipo'] ?? '') === 'whatsapp_grupos') {
 			$seg['destinos'] = self::parseDestinosGrupos($postVars);

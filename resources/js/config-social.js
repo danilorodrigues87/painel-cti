@@ -1,3 +1,29 @@
+const META_TAB_MAP = {
+	visao: '#tab-meta-visao',
+	overview: '#tab-meta-visao',
+	conectar: '#tab-meta-conectar',
+	connect: '#tab-meta-conectar',
+	auto: '#tab-meta-auto',
+	automacoes: '#tab-meta-auto',
+	diag: '#tab-meta-diag',
+	diagnostico: '#tab-meta-diag'
+};
+const META_TAB_REV = {
+	'#tab-meta-visao': 'visao',
+	'#tab-meta-conectar': 'conectar',
+	'#tab-meta-auto': 'auto',
+	'#tab-meta-diag': 'diag'
+};
+
+const META_ESTADO_LABEL = {
+	conectado: { cls: 'success', txt: 'Conectado e pronto' },
+	incompleto: { cls: 'warning', txt: 'Conexão incompleta' },
+	desconectado: { cls: 'secondary', txt: 'Não conectado' },
+	token_expirado: { cls: 'danger', txt: 'Token expirado — reconecte' },
+	sql_pendente: { cls: 'warning', txt: 'SQL pendente' },
+	app_indisponivel: { cls: 'warning', txt: 'App Meta indisponível no servidor' }
+};
+
 function postSocialCfg(data) {
 	return $.ajax({
 		url: url_base + 'painel/config/social',
@@ -9,6 +35,138 @@ function postSocialCfg(data) {
 
 function esc(s) {
 	return $('<div>').text(s == null ? '' : String(s)).html();
+}
+
+function formatWorkerRun(run) {
+	if (!run || !run.created_at) return 'Nunca registrado';
+	let txt = run.created_at + (run.origem ? ' (' + run.origem + ')' : '');
+	const parts = [];
+	if (run.processados != null) parts.push(run.processados + ' proc.');
+	if (run.ok != null && parseInt(run.ok, 10) > 0) parts.push(run.ok + ' ok');
+	if (run.erro != null && parseInt(run.erro, 10) > 0) parts.push(run.erro + ' erro(s)');
+	if (parts.length) txt += ' — ' + parts.join(', ');
+	return txt;
+}
+
+function renderStatusBanner(res) {
+	const est = META_ESTADO_LABEL[res.estado] || META_ESTADO_LABEL.desconectado;
+	let html = '<i class="fas fa-circle me-1"></i> <strong>' + est.txt + '</strong>';
+	if (res.meta_page_name) html += ' · ' + esc(res.meta_page_name);
+	if (res.meta_ig_username) html += ' · @' + esc(res.meta_ig_username);
+	if (res.meta_token_expires_at && !res.token_expirado) {
+		html += ' <span class="ms-1 text-muted">(token até ' + esc(res.meta_token_expires_at) + ')</span>';
+	}
+	$('#meta-status-banner')
+		.removeClass('d-none alert-success alert-warning alert-danger alert-secondary alert-info')
+		.addClass('alert-' + est.cls)
+		.html(html);
+}
+
+function renderCardsOperacao(res) {
+	const op = res.operacao || {};
+	const pub = op.ultima_publicacao;
+	if (pub && pub.publicado_em) {
+		const cap = (pub.caption || '').slice(0, 80) || 'Post publicado';
+		$('#meta-card-publicacao').html(
+			'<div><strong>' + esc(cap) + '</strong></div>'
+			+ '<div class="text-muted">' + esc(pub.canais || '') + ' · ' + esc(pub.formato || '') + '</div>'
+			+ '<div class="text-muted">' + esc(pub.publicado_em) + '</div>'
+			+ '<div class="mt-1">' + (op.posts_publicados || 0) + ' post(s) publicado(s) no total</div>'
+		);
+	} else {
+		$('#meta-card-publicacao').html('<span class="text-muted">Nenhuma publicação registrada ainda.</span>');
+	}
+
+	const wr = op.worker_ultima;
+	$('#meta-card-worker').html(formatWorkerRun(wr));
+
+	const est = META_ESTADO_LABEL[res.estado] || META_ESTADO_LABEL.desconectado;
+	let det = res.meta_conectado_em ? 'Conectado em ' + res.meta_conectado_em : 'Use OAuth na aba Conectar.';
+	if (res.meta_fb_ativo) det += ' · FB ativo';
+	if (res.meta_ig_ativo) det += ' · IG ativo';
+	if (res.meta_auto_ativo) det += ' · Automações ON';
+	$('#meta-card-estado').html('<span class="badge bg-' + est.cls + '">' + est.txt + '</span>');
+	$('#meta-card-detalhe').text(det);
+}
+
+function renderChecklist(res) {
+	const c = res.checklist || {};
+	const steps = [
+		{ key: 'sql_meta', label: 'Colunas Meta no banco (escola_integracoes)', hint: 'database/escola_integracoes_meta.sql' },
+		{ key: 'app_servidor', label: 'App Facebook configurado no servidor (.env)', hint: 'Suporte CTI' },
+		{ key: 'oauth_conectado', label: 'Conta conectada via Facebook OAuth', hint: 'Aba Conectar' },
+		{ key: 'canais_ativos', label: 'Facebook e/ou Instagram ativados', hint: 'Switches na aba Conectar' },
+		{ key: 'webhook_token', label: 'Token de webhook gerado', hint: 'Salvar config ou OAuth' },
+		{ key: 'sql_automacoes', label: 'Tabela de automações (keyword → DM)', hint: 'database/social_automacoes.sql' }
+	];
+	let html = '';
+	steps.forEach(function (s, i) {
+		const ok = !!c[s.key];
+		html += '<li class="list-group-item d-flex align-items-start gap-2 small">'
+			+ '<span class="badge bg-' + (ok ? 'success' : 'secondary') + ' mt-1">' + (ok ? '✓' : (i + 1)) + '</span>'
+			+ '<div><div>' + esc(s.label) + '</div>'
+			+ (ok ? '' : '<div class="text-muted">' + esc(s.hint) + '</div>')
+			+ '</div></li>';
+	});
+	$('#meta-checklist').html(html);
+}
+
+function renderCronSocial(cron) {
+	if (!cron) {
+		$('#meta-cron-resumo').html('<span class="text-muted">—</span>');
+		return;
+	}
+	let html = '';
+	if (cron.url_cron) {
+		html += '<p class="mb-2"><strong>A cada 5 min (cPanel):</strong><br><code class="user-select-all">' + esc(cron.url_cron) + '</code></p>';
+	}
+	html += '<p class="mb-2 text-muted">' + esc(cron.hint || '') + '</p>';
+	if (!cron.worker_ok) {
+		html += '<p class="text-warning mb-0">Tabela <code>social_worker_runs</code> ausente — rode SQL da Fase A produto.</p>';
+	}
+	$('#meta-cron-resumo').html(html || '—');
+}
+
+function renderDiagTeste(res) {
+	if (!res) {
+		$('#meta-diag-teste').text('Sem resposta do servidor.');
+		return;
+	}
+	let lines = [];
+	lines.push((res.success ? 'OK' : 'FALHA') + ': ' + (res.message || ''));
+	if (res.page_name) lines.push('Page: ' + res.page_name);
+	if (res.ig_username) lines.push('Instagram: @' + res.ig_username);
+	if (res.token_type) lines.push('Tipo token: ' + res.token_type);
+	if (res.token_scopes && res.token_scopes.length) lines.push('Escopos: ' + res.token_scopes.join(', '));
+	if (res.scopes_faltando && res.scopes_faltando.length) {
+		lines.push('FALTAM escopos: ' + res.scopes_faltando.join(', '));
+		lines.push('→ Reconecte com Facebook após App Review.');
+	}
+	if (res.webhook_fields && res.webhook_fields.length) lines.push('Webhook fields: ' + res.webhook_fields.join(', '));
+	if (res.webhook_messages_ok != null) lines.push('Webhook mensagens: ' + (res.webhook_messages_ok ? 'OK' : 'pendente'));
+	if (res.auth_error) lines.push('Erro de autenticação no token.');
+	if (res.app_mismatch) lines.push('Token de outro App Meta — reconecte.');
+	$('#meta-diag-teste').text(lines.join('\n'));
+}
+
+function executarTesteMeta(showSwal) {
+	return postSocialCfg({ acao: 'testar' }).done(function (res) {
+		renderDiagTeste(res);
+		if (!showSwal) return;
+		var html = '<div class="text-start small" style="white-space:pre-wrap;text-align:left;">';
+		html += esc((res && res.message) || 'Sem resposta.');
+		if (res && res.scopes_faltando && res.scopes_faltando.length) {
+			html += '\n\nReconecte com Facebook para solicitar os escopos novos (ex.: após App Review).';
+		}
+		html += '</div>';
+		Swal.fire({
+			title: res && res.success ? 'Diagnóstico Meta' : 'Falha na conexão',
+			html: html,
+			width: 620,
+			icon: res && res.success ? 'info' : 'error',
+			confirmButtonText: 'Fechar'
+		});
+	});
 }
 
 function carregar() {
@@ -34,12 +192,19 @@ function carregar() {
 		$('#token_mask_txt').text(res.token_salvo ? ('Token salvo: ' + (res.token_mask || '********')) : 'Nenhum token salvo.');
 		$('#webhook_url').text(res.webhook_url || 'Salve a config uma vez para gerar o token do webhook.');
 		$('#webhook_url_global').text(res.webhook_url_global || '—');
+
 		var st = res.meta_pronto ? 'Pronto para publicar.' : 'Incompleto — conecte Page/token e ative FB e/ou IG.';
 		if (res.meta_conectado_em) st += ' Conectado em ' + res.meta_conectado_em;
 		if (res.meta_page_name) st += ' · ' + res.meta_page_name;
 		if (res.meta_ig_username) st += ' · @' + res.meta_ig_username;
 		if (res.meta_auto_ativo) st += ' · Automações ON';
+		if (res.token_expirado) st += ' · Token expirado — reconecte.';
 		$('#meta-status-txt').text(st);
+
+		renderStatusBanner(res);
+		renderCardsOperacao(res);
+		renderChecklist(res);
+		renderCronSocial(res.cron_social);
 
 		carregarRegras();
 		carregarLog();
@@ -154,17 +319,49 @@ function hideModal(id) {
 	else $(el).modal('hide');
 }
 
+function ativarAbaMeta(chave) {
+	const alvo = META_TAB_MAP[String(chave || '').toLowerCase()];
+	if (!alvo) return;
+	const btn = document.querySelector('#meta-nav-tabs button[data-bs-target="' + alvo + '"]');
+	if (btn && window.bootstrap && bootstrap.Tab) {
+		bootstrap.Tab.getOrCreateInstance(btn).show();
+	}
+}
+
+function lerAbaMetaUrl() {
+	try {
+		const params = new URLSearchParams(window.location.search || '');
+		const tab = params.get('tab');
+		if (tab) ativarAbaMeta(tab);
+		if (params.get('oauth') === 'ok' || params.get('oauth') === 'erro') {
+			ativarAbaMeta('conectar');
+		}
+	} catch (e) {}
+}
+
 $(function () {
 	var params = new URLSearchParams(window.location.search);
 	if (params.get('oauth') === 'ok') {
 		$('#alert-oauth').removeClass('d-none').addClass('alert-success')
-			.text('Conexão realizada. Página do Facebook vinculada' + (params.get('pages') ? ' (' + params.get('pages') + '). Se o suporte liberar novas permissões, conecte novamente.' : '.') );
+			.text('Conexão realizada. Página do Facebook vinculada' + (params.get('pages') ? ' (' + params.get('pages') + '). Se o suporte liberar novas permissões, conecte novamente.' : '.'));
 	} else if (params.get('oauth') === 'erro') {
 		$('#alert-oauth').removeClass('d-none').addClass('alert-danger')
 			.text(params.get('msg') || 'Não foi possível conectar. Tente de novo ou fale com o suporte.');
 	}
 
 	carregar();
+	lerAbaMetaUrl();
+
+	$('#meta-nav-tabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+		const target = $(e.target).attr('data-bs-target') || '';
+		const chave = META_TAB_REV[target];
+		if (!chave) return;
+		try {
+			const url = new URL(window.location.href);
+			url.searchParams.set('tab', chave);
+			history.replaceState(null, '', url.pathname + url.search);
+		} catch (err) {}
+	});
 
 	$('#btn-recarregar-debug').on('click', function () {
 		carregarLog();
@@ -203,22 +400,8 @@ $(function () {
 		});
 	});
 
-	$('#btn-testar').on('click', function () {
-		postSocialCfg({ acao: 'testar' }).done(function (res) {
-			var html = '<div class="text-start small" style="white-space:pre-wrap;text-align:left;">';
-			html += esc((res && res.message) || 'Sem resposta.');
-			if (res && res.scopes_faltando && res.scopes_faltando.length) {
-				html += '\n\nReconecte com Facebook para solicitar os escopos novos (ex.: após App Review).';
-			}
-			html += '</div>';
-			Swal.fire({
-				title: res && res.success ? 'Diagnóstico Meta' : 'Falha na conexão',
-				html: html,
-				width: 620,
-				icon: res && res.success ? 'info' : 'error',
-				confirmButtonText: 'Fechar'
-			});
-		});
+	$('#btn-testar, #btn-testar-diag').on('click', function () {
+		executarTesteMeta($(this).is('#btn-testar'));
 	});
 
 	$('#btn-subscribe').on('click', function () {

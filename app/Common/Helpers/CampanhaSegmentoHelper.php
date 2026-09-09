@@ -39,13 +39,18 @@ class CampanhaSegmentoHelper {
 				$lista = self::exAlunos($idAdmin, $canal);
 				break;
 			case 'aniversariantes_mes':
-				$lista = self::aniversariantesMes($idAdmin, $canal);
+				$lista = self::aniversariantesComFiltro($idAdmin, $segmento, 'mes', $canal);
 				break;
 			case 'aniversariantes_dia':
-				$lista = self::aniversariantesDia($idAdmin, false, $canal);
+				$lista = self::aniversariantesComFiltro($idAdmin, $segmento, 'hoje', $canal);
 				break;
 			case 'aniversariantes_dia_matriculados':
-				$lista = self::aniversariantesDia($idAdmin, true, $canal);
+				$lista = self::aniversariantesComFiltro(
+					$idAdmin,
+					array_merge($segmento, ['aniv_situacao' => 'ativos']),
+					'hoje',
+					$canal
+				);
 				break;
 			case 'leads':
 				$lista = self::leads($idAdmin, $segmento, $canal);
@@ -307,69 +312,39 @@ class CampanhaSegmentoHelper {
 		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
 	}
 
-	private static function aniversariantesMes(int $idAdmin, string $canal): array {
-		$mes = (int)date('m');
-		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
-		$sql = '
-			SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
-			FROM usuarios u
-			WHERE u.id_admin = :id_admin
-			  AND u.nivel = "Cliente"
-			  AND u.nascimento IS NOT NULL
-			  AND u.nascimento != "0000-00-00"
-			  AND MONTH(u.nascimento) = :mes
-			  AND '.$campo.' IS NOT NULL
-			  AND '.$campo.' != ""
-		';
+	/**
+	 * Reutiliza filtros de AniversariantesHelper (situação do aluno, inadimplência, etc.).
+	 * @param string $periodo mes|hoje
+	 */
+	private static function aniversariantesComFiltro(int $idAdmin, array $segmento, string $periodo, string $canal): array {
+		$situacao = AniversariantesHelper::normalizarSituacao((string)($segmento['aniv_situacao'] ?? 'todos'));
+		$raw = AniversariantesHelper::listar($idAdmin, $periodo, '', null, $situacao, null);
+		$lista = [];
 
-		$stmt = self::pdo()->prepare($sql);
-		$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes]);
-
-		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
-	}
-
-	private static function aniversariantesDia(int $idAdmin, bool $apenasMatriculados, string $canal = 'email'): array {
-		$mes = (int)date('m');
-		$dia = (int)date('d');
-		$hoje = date('Y-m-d');
-		$campo = $canal === 'whatsapp' ? 'u.whatsapp' : 'u.email';
-
-		if ($apenasMatriculados) {
-			$sql = '
-				SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
-				FROM usuarios u
-				INNER JOIN matriculas m ON m.id_aluno = u.id AND m.id_admin = u.id_admin
-				WHERE u.id_admin = :id_admin
-				  AND u.nivel = "Cliente"
-				  AND u.nascimento IS NOT NULL
-				  AND u.nascimento != "0000-00-00"
-				  AND MONTH(u.nascimento) = :mes
-				  AND DAY(u.nascimento) = :dia
-				  AND m.status = 0
-				  AND (m.fim IS NULL OR m.fim >= :hoje)
-				  AND '.$campo.' IS NOT NULL
-				  AND '.$campo.' != ""
-			';
-			$stmt = self::pdo()->prepare($sql);
-			$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes, 'dia' => $dia, 'hoje' => $hoje]);
-		} else {
-			$sql = '
-				SELECT DISTINCT u.id, u.nome, '.$campo.' AS contato, "" AS curso
-				FROM usuarios u
-				WHERE u.id_admin = :id_admin
-				  AND u.nivel = "Cliente"
-				  AND u.nascimento IS NOT NULL
-				  AND u.nascimento != "0000-00-00"
-				  AND MONTH(u.nascimento) = :mes
-				  AND DAY(u.nascimento) = :dia
-				  AND '.$campo.' IS NOT NULL
-				  AND '.$campo.' != ""
-			';
-			$stmt = self::pdo()->prepare($sql);
-			$stmt->execute(['id_admin' => $idAdmin, 'mes' => $mes, 'dia' => $dia]);
+		foreach ($raw as $row) {
+			$contato = $canal === 'whatsapp'
+				? trim((string)($row['whatsapp'] ?? ''))
+				: trim((string)($row['email'] ?? ''));
+			if ($contato === '') {
+				continue;
+			}
+			$lista[] = [
+				'destinatario_tipo' => 'aluno',
+				'destinatario_id'   => (int)($row['id'] ?? 0),
+				'nome'              => (string)($row['nome'] ?? ''),
+				'contato'           => $contato,
+				'curso'             => (string)($row['curso'] ?? ''),
+			];
 		}
 
-		return self::mapearLinhas($stmt->fetchAll(\PDO::FETCH_ASSOC), 'aluno');
+		return $lista;
+	}
+
+	/** Normaliza filtro de situação para segmentos de aniversariantes. */
+	public static function normalizarSegmentoAniversariantes(array $in): array {
+		return [
+			'aniv_situacao' => AniversariantesHelper::normalizarSituacao((string)($in['aniv_situacao'] ?? 'todos')),
+		];
 	}
 
 	private static function leads(int $idAdmin, array $segmento, string $canal): array {

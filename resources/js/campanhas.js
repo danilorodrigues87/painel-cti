@@ -121,15 +121,51 @@ function limparPacingCampanha(){
 	atualizarUiPacingCampanha();
 }
 
+const LABELS_ANIV_SITUACAO = {
+	todos: 'Todos',
+	ativos: 'Alunos ativos',
+	inativos: 'Alunos inativos',
+	inadimplentes: 'Inadimplentes',
+	ativos_inadimplentes: 'Ativos inadimplentes',
+	inativos_inadimplentes: 'Inativos inadimplentes',
+	inativos_regular: 'Inativos em dia (sem débito)',
+	com_email: 'Com e-mail',
+	com_whatsapp: 'Com WhatsApp',
+	nao_enviado_ano: 'Ainda não enviado este ano'
+};
+
+function segmentoEhAniversariantes(tipo){
+	return tipo === 'aniversariantes_mes' || tipo === 'aniversariantes_dia';
+}
+
+function atualizarTextoAjudaAniversariantes(){
+	const st = $('#aniv_situacao').val() || 'todos';
+	const periodo = $('#segmento_tipo').val() === 'aniversariantes_dia' ? 'de hoje' : 'do mês';
+	$('#aniv-filtro-ajuda').text(
+		'Entram aniversariantes ' + periodo + ' com filtro: ' + (LABELS_ANIV_SITUACAO[st] || LABELS_ANIV_SITUACAO.todos) + '.'
+	);
+}
+
+function resumoFiltroAniversariantes(seg){
+	seg = seg || {};
+	const st = seg.aniv_situacao || 'todos';
+	return LABELS_ANIV_SITUACAO[st] || LABELS_ANIV_SITUACAO.todos;
+}
+
 function atualizarUiSegmento(){
 	const tipo = $('#segmento_tipo').val();
 	const grupos = tipo === 'whatsapp_grupos';
 	const emailsInvalidos = tipo === 'emails_invalidos_alunos';
+	const aniv = segmentoEhAniversariantes(tipo);
 	$('#wrap-status-lead').toggle(tipo === 'leads');
+	$('#wrap-aniv-situacao').toggle(aniv);
 	$('#wrap-inadimplentes').toggle(tipo === 'inadimplentes');
 	$('#wrap-grupos-wa').toggleClass('d-none', !grupos);
 	if (tipo === 'inadimplentes') {
 		atualizarTextoAjudaInadimplentes();
+	}
+	if (aniv) {
+		atualizarTextoAjudaAniversariantes();
 	}
 	if(grupos || emailsInvalidos){
 		$('#campanha_canal').val('whatsapp');
@@ -427,6 +463,7 @@ function coletarFormulario(){
 		parcelas_atraso_modo: $('#parcelas_atraso_modo').val() || 'min',
 		parcelas_atraso_qtd: $('#parcelas_atraso_qtd').val() || '1',
 		status_matricula: $('#inad_status_matricula').val() || 'todas',
+		aniv_situacao: $('#aniv_situacao').val() || 'todos',
 		parcelas_atraso_min: $('#parcelas_atraso_modo').val() === 'min' ? ($('#parcelas_atraso_qtd').val() || '1') : '',
 		destinos_json: JSON.stringify(coletarDestinosGrupos()),
 		pacing_personalizado: $('#pacing_personalizado').is(':checked') ? 1 : 0,
@@ -522,12 +559,14 @@ function limparFormulario(){
 	$('#parcelas_atraso_modo').val('min');
 	$('#parcelas_atraso_qtd').val('1');
 	$('#inad_status_matricula').val('ativa');
+	$('#aniv_situacao').val('todos');
 	$('#preview-resultado').text('');
 	$('#titulo-modal-campanha').text('Nova campanha');
 	$('#btn-salvar-campanha').html('<i class="fas fa-save"></i> Salvar rascunho');
-	$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula').prop('disabled', false);
+	$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula, #aniv_situacao').prop('disabled', false);
 	$('#wrap-grupos-wa').find('input,button').prop('disabled', false);
 	$('#wrap-status-lead').hide();
+	$('#wrap-aniv-situacao').hide();
 	$('#wrap-inadimplentes').hide();
 	$('#lista-grupos-wa').html('<div class="text-muted small">Clique em sincronizar com o WhatsApp conectado.</div>');
 	limparPacingCampanha();
@@ -1290,6 +1329,8 @@ function abrirDetalhes(id){
 		let segExtra = '';
 		if(seg.tipo === 'inadimplentes'){
 			segExtra = '<p><strong>Filtro:</strong> '+escHtml(resumoFiltroInadimplentes(seg))+'</p>';
+		} else if(segmentoEhAniversariantes(seg.tipo)){
+			segExtra = '<p><strong>Situação:</strong> '+escHtml(resumoFiltroAniversariantes(seg))+'</p>';
 		}
 
 		$('#body-detalhes-campanha').html(`
@@ -1346,7 +1387,9 @@ function editarCampanha(id){
 		$('#parcelas_atraso_modo').val(seg.parcelas_atraso_modo || 'min');
 		$('#parcelas_atraso_qtd').val(String(seg.parcelas_atraso_qtd || seg.parcelas_atraso_min || 1));
 		$('#inad_status_matricula').val(seg.status_matricula || 'todas');
+		$('#aniv_situacao').val(seg.aniv_situacao || 'todos');
 		atualizarTextoAjudaInadimplentes();
+		atualizarTextoAjudaAniversariantes();
 		preencherPacingCampanha(seg);
 		$('#titulo-modal-campanha').text(emCurso
 			? 'Ajustar mensagem/mídia ('+(c.status === 'pausada' ? 'pausada' : 'em envio')+')'
@@ -1354,7 +1397,7 @@ function editarCampanha(id){
 		$('#btn-salvar-campanha').html(emCurso
 			? '<i class="fas fa-save"></i> Salvar mensagem/mídia'
 			: '<i class="fas fa-save"></i> Salvar rascunho');
-		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula').prop('disabled', emCurso);
+		$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula, #aniv_situacao').prop('disabled', emCurso);
 		$('#pacing_personalizado, #pacing_delay_1a1, #pacing_grupo_minutos, #pacing_max_hora_wa, #pacing_email_delay, #pacing_max_hora_email').prop('disabled', emCurso);
 		window._campanhaArquivo = null;
 		window._campanhaMidiaExistente = c.midia || seg.midia || null;
@@ -1371,6 +1414,7 @@ function editarCampanha(id){
 		$('#campanha_remover_midia').val('0');
 		$('#campanha_midia_tipo').val(window._campanhaMidiaExistente ? (window._campanhaMidiaExistente.tipo || '') : '');
 		$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').val('');
+		atualizarUiSegmento();
 		atualizarUiCanal();
 		atualizarInfoMidia();
 		if(seg.tipo === 'whatsapp_grupos'){
@@ -1416,6 +1460,7 @@ $(function(){
 	$('#filtro-canal').on('change', function(){ campanhaPagina = 1; carregarCampanhas(); });
 	$('#segmento_tipo').on('change', atualizarUiSegmento);
 	$('#parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula').on('change', atualizarTextoAjudaInadimplentes);
+	$('#aniv_situacao').on('change', atualizarTextoAjudaAniversariantes);
 	$('#btn-sync-grupos-wa').on('click', syncGruposWa);
 
 	$('#btn-salvar-campanha').on('click', salvarCampanha);
@@ -1500,6 +1545,10 @@ $(function(){
 		const seg = params.get('segmento');
 		if(seg){
 			$('#segmento_tipo').val(seg);
+			const anivSit = params.get('aniv_situacao');
+			if(anivSit){
+				$('#aniv_situacao').val(anivSit);
+			}
 			atualizarUiSegmento();
 			const canal = params.get('canal');
 			if(canal === 'whatsapp' || canal === 'email'){

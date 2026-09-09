@@ -3,7 +3,7 @@
 > **Público-alvo:** desenvolvedores humanos e **agentes de IA** (Cursor, VS Code Copilot/Continue, etc.).  
 > Leia este arquivo **antes** de alterar o código. Preferir seguir os padrões já existentes a inventar novos.
 
-**Última atualização:** 2026-07-31 (Agente Telegram nativo Fase 2)  
+**Última atualização:** 2026-09-09 (Marketing UX Fases 6–10)  
 **Repo:** `painel-cti`  
 **DB local XAMPP:** `cti_admin` (produção: conforme `.env`)  
 **Linguagem:** PHP (MVC próprio) · Ambiente: XAMPP local + Linux produção  
@@ -180,7 +180,8 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 ### 5.2b Configurações da escola (Diretor)
 - `/painel/config/escola` — edita telefone, e-mail, site, endereço, logo, modelo cert, redes
 - Bloqueado no Diretor (só Master): nome, CNPJ, ativo, plano/módulos
-- Menu reorganizado: Campanhas no topo (junto ao WA); Config = Dados / Comunicação / Pagamentos / Contrato; Financeiro começa em Carnês
+- Menu **Marketing** (Agenda, Biblioteca, Mensagens, Campanhas, Aniversariantes) — ver §5.15; WhatsApp permanece item próprio no menu
+- Config = Dados / Comunicação / Conexão Meta / Pagamentos / Contrato; Financeiro começa em Carnês
 
 ### 5.3 CRM
 - `crm_leads` Kanban, funis, histórico, importação planilha
@@ -200,34 +201,59 @@ laboratorios → horarios (laboratorio_id) → agenda_plano → agenda_aulas →
 - Menu: Laboratórios / Horários / Agendamentos / Diário
 - Migração legado `agenda_aula` → `agenda_plano` no primeiro acesso
 
-### 5.5 Comunicação / e-mail (Fases 1–2 + cobrança + validador — feitas)
+### 5.5 Comunicação / e-mail (Fases 1–7 — feitas)
+
+#### UI — `/painel/config/comunicacao` (Fase 7: abas)
+Tela reorganizada em **nav-tabs** (deep-link `?tab=smtp|auto|wa|audit`):
+
+| Aba | Conteúdo |
+|-----|----------|
+| **SMTP** | Host, porta, credenciais, teste de envio |
+| **Automações** | Cobrança de mensalidades + aniversário (e-mail/WA); simular / enviar agora |
+| **WhatsApp** | Evolution API — QR, status da instância |
+| **Auditoria** | Relatório de e-mails e WhatsApp inválidos/ausentes |
+
+Controller: `ConfigComunicacao` · JS: `config-email.js`
 
 #### SMTP
 - `Email::sistema()` → `.env` (recovery de senha)
 - `Email::escola($idAdmin)` → `escola_integracoes` se SMTP ativo; senão fallback sistema
-- Tela: `/painel/config/comunicacao` (`ConfigComunicacao`)
-- Entity: `EscolaIntegracoes` — senha criptografada
+- Entity: `EscolaIntegracoes` — senha criptografada (`CryptoHelper`)
 
-#### Campanhas
-- Tabelas: `campanhas`, `campanha_fila`
-- UI: `/painel/campanhas`
-- Worker: `worker/campanhas.php` **ou** HTTP `GET/POST /cron/campanhas?token={SYSTEM_TOKEN}` (HostGator — não depende de login)
+#### Campanhas (módulo separado — ver também §5.15)
+- Tabelas: `campanhas`, `campanha_fila`, `campanha_worker_runs`
+- UI: `/painel/campanhas` (menu Marketing)
+- Worker: `worker/campanhas.php` **ou** HTTP `GET/POST /cron/campanhas?token={SYSTEM_TOKEN}`
 - Fallback com painel aberto: `campanha-heartbeat.js` + botão “Processar fila”
-- Segmentos (`CampanhaSegmentoHelper`): matriculados, ex-alunos, aniversariantes do mês, leads, inadimplentes
-- Variáveis: `{nome}`, `{email}`, `{curso}`, `{escola}`
+- Segmentos (`CampanhaSegmentoHelper`): matriculados, ex-alunos, menores/maiores 18, e-mails inválidos (só WA), aniversariantes mês/dia (**com `aniv_situacao`**), leads, inadimplentes, grupos/listas WA
+- Variáveis: `{nome}`, `{email}`, `{whatsapp}`, `{curso}`, `{escola}`, `{valor_debito}`, `{qtd_parcelas_atraso}`, `{primeiro_vencimento_atraso}` (inadimplentes)
 
 #### Cobrança automática de mensalidades
-- Config na mesma tela Comunicação (dias antes / no dia / depois)
+- Config na aba **Automações** (dias antes / no dia / depois)
 - Service: `CobrancaEmailService`
 - Log anti-duplicidade: `email_cobranca_log` (UNIQUE caixa+tipo+dias)
-- Worker: `worker/cobranca.php` (cron diário)
+- Worker CLI: `worker/cobranca.php` · Cron HTTP: `/cron/cobranca?token={SYSTEM_TOKEN}`
 - **Simular hoje** usa dados do formulário e **não envia**; **Enviar agora** envia de verdade
 - Destinatário: e-mail do aluno; se inválido/ausente, responsável (se habilitado)
 
-#### Validador / auditoria
+#### Aniversário automático (e-mail / WhatsApp)
+- Config na aba **Automações** (mensagem, canal, matriculados ou todos)
+- Service: `AniversarioEmailService` · Log: `email_aniversario_log` (1× por aluno/ano)
+- Worker CLI: `worker/aniversario.php` · Cron HTTP: `/cron/aniversario?token={SYSTEM_TOKEN}`
+
+#### Cron HTTP + logs de execução (Fase 6)
+- Endpoints: `/cron/cobranca`, `/cron/aniversario` (mesmo padrão de `/cron/campanhas` e `/cron/social`)
+- Controllers: `App\Controller\Cron\Cobranca`, `Aniversario`
+- Tabela: `comunicacao_worker_runs` — última execução, enviados/erros por tipo
+- SQL: `database/comunicacao_fase6.sql`
+- Diagnóstico: `php worker/status-email.php [id_admin]`
+- Doc operacional: `docs/OPERACAO_EMAIL.md`
+
+#### Validador / auditoria (Fase 6 ampliada)
 - `EmailValidator` — rejeita fakes (`sememail@email`, `sem@email.com`, domínios placeholder…)
 - Aplicado em campanhas, cobrança, teste SMTP
-- Botão **Auditar e-mails** → `EmailAuditoriaHelper` (alunos, responsáveis, leads)
+- `EmailAuditoriaHelper::auditarContatosEscola` — alunos, responsáveis, leads + **WhatsApp inválido/ausente**
+- Aba **Auditoria** na Comunicação; rodar antes de campanhas em massa
 
 ### 5.6 WhatsApp / Evolution API (Fase 3)
 - Credenciais: `EVOLUTION_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_WEBHOOK_SECRET` no `.env`
@@ -300,7 +326,7 @@ catalogo_cti: planos_cursos + lms_escola_cursos_cti (cursos origem=cti, incluíd
 ### 5.9 Redes sociais (Meta — Facebook / Instagram)
 
 - **App Meta:** um só da CTI (`.env`: `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `META_GRAPH_VERSION`). Escolas **conectam** Page + IG Professional (OAuth ou token Dev).
-- **Config:** `/painel/config/social` (Diretor + permissão Redes sociais) — tokens em `escola_integracoes` via `CryptoHelper`. SQL: `database/escola_integracoes_meta.sql`
+- **Config (Conexão Meta — Fase 8 UI):** `/painel/config/social` (Diretor + permissão Redes sociais) — abas **Visão geral** (banner status, checklist, última publicação, worker/cron), **Conectar** (OAuth, switches FB/IG/automações), **Automações** (keyword → DM), **Diagnóstico** (webhook, teste, debug). Deep-link `?tab=visao|conectar|auto|diag`. Controller: `ConfigSocial` · JS: `config-social.js`. Tokens em `escola_integracoes` via `CryptoHelper`. SQL: `database/escola_integracoes_meta.sql`
 - **Agenda (Fase A produto):** `/painel/social` — visão **semana/mês**, filtros status/formato, aba Histórico. Formatos **`feed` | `story` | `reel` | `carousel`**. SQL: `database/social_posts.sql` + `social_posts_formato.sql` + **`social_fase_a_produto.sql`** (`social_biblioteca`, `social_publish_log`, `social_worker_runs`).
 - **Biblioteca de mídias (Marketing):** `/painel/marketing/biblioteca` — upload, edição de título, exclusão segura (bloqueia se path em post ou campanha). Service: `SocialBibliotecaService`. Upload em `uploads/social/{id_admin}/`. Pickers na Agenda e Campanhas reutilizam a mesma tabela.
 - **Publicação:** Feed imagem FB+IG; Carrossel IG (e fotos FB); **Story/Reel só Instagram**. Arquivos da biblioteca **não** são apagados ao cancelar/publicar.
@@ -311,6 +337,67 @@ catalogo_cti: planos_cursos + lms_escola_cursos_cti (cursos origem=cti, incluíd
 - **Permissão:** slug `social` no plano **e** label `Redes sociais` no checklist do usuário (sem auto-grant Diretor).
 - **App Review Meta** obrigatório para Live (publicação + messaging/comments).
 - **Roadmap produto:** B aprovação editorial · C legendas IA + Insights Meta · D fluxos tipo ManyChat.
+
+### 5.15 Marketing — menu, Aniversariantes, Biblioteca (Fases 3–5, 9)
+
+Menu lateral **Marketing** (`SystemModules` → slug `marketing`):
+
+| Item | Rota | Permissão efetiva |
+|------|------|-------------------|
+| Agenda | `/painel/social` | `Redes sociais` |
+| Biblioteca de mídias | `/painel/marketing/biblioteca` | `Redes sociais` **ou** `Campanhas` (`requires_any`) |
+| Mensagens | `/painel/social/mensagens` | `Redes sociais` |
+| Campanhas | `/painel/campanhas` | `Campanhas` |
+| Aniversariantes | `/painel/marketing/aniversariantes` | `Campanhas` |
+
+**WhatsApp inbox** (`/painel/whatsapp`) permanece item **próprio** no menu (não dentro de Marketing).
+
+#### Biblioteca de mídias (Fase 5)
+- Página dedicada (antes só aba na Agenda)
+- Controller: `MarketingBiblioteca` · Service: `SocialBibliotecaService`
+- Upload em `uploads/social/{id_admin}/` · tabela `social_biblioteca`
+- Exclusão segura: bloqueia se path em post agendado ou campanha
+- Pickers reutilizados na Agenda (`social-agenda.js`) e Campanhas (`campanhas.js`)
+- JS compartilhado: `social-biblioteca-shared.js`, `marketing-biblioteca.js`
+
+#### Aniversariantes (Fase 4 + 9)
+- Controller: `MarketingAniversariantes` · Helper: `AniversariantesHelper`
+- Filtros: período (hoje / esta semana / este mês), mês calendário, **situação do aluno**, busca por nome
+- Situações (`aniv_situacao`): `todos`, `ativos`, `inativos`, `inadimplentes`, `ativos_inadimplentes`, `inativos_inadimplentes`, `inativos_regular`, `com_email`, `com_whatsapp`, `nao_enviado_ano`
+- Lista limitada a **500** registros na UI (performance)
+- Botão **Criar campanha** → deep-link:
+  ```
+  /painel/campanhas?segmento=aniversariantes_mes|aniversariantes_dia&aniv_situacao=...&titulo=Aniversariantes
+  ```
+- Automação **diária** (1 e-mail/WA por aluno/ano) continua em **Configurações → Comunicação** (aba Automações), não nesta página
+
+#### Campanhas ↔ situação do aluno (Fase 9)
+- `CampanhaSegmentoHelper` reutiliza `AniversariantesHelper::listar()` para segmentos `aniversariantes_mes` e `aniversariantes_dia`
+- JSON do segmento salva `aniv_situacao`; modal de campanha exibe select quando o público é aniversariantes
+- Preview e envio respeitam o mesmo filtro da página Aniversariantes
+- Campanhas chamam `listar(..., limit: null)` — sem teto de 500 no envio
+
+#### Guias operacionais — Aniversário + campanhas
+
+**Cenário A — Aniversário + promoção (alunos ativos)**  
+1. Marketing → **Aniversariantes** → período **Este mês** (ou **Hoje**)  
+2. Situação: **Alunos ativos**  
+3. **Criar campanha** → escolher canal (e-mail ou WhatsApp), redigir mensagem com `{nome}`, `{curso}`  
+4. **Preview** → conferir quantidade → salvar rascunho → iniciar envio (cron `/cron/campanhas` processa a fila)
+
+**Cenário B — Aniversário + negociação de dívida**  
+1. Marketing → **Aniversariantes** → situação **Ativos inadimplentes** ou **Inadimplentes**  
+2. **Criar campanha** (o filtro `aniv_situacao` já vem na URL)  
+3. Mensagem combina parabéns + convite à negociação (sem variáveis de débito neste segmento)  
+4. Se precisar de **`{valor_debito}`** e **`{qtd_parcelas_atraso}`**, use segmento **Inadimplentes** em Campanhas (filtros de parcelas/contrato) — ou duas campanhas complementares
+
+**Cenário C — Só quem ainda não recebeu automação este ano**  
+1. Aniversariantes → situação **Ainda não enviado este ano** (requer `email_aniversario_log`)  
+2. Criar campanha manual para complementar a automação da Comunicação
+
+#### Performance (Fase 9)
+- Índices opcionais: `database/marketing_fase9_indexes.sql` (`usuarios`, `matriculas`, `caixa`)
+- Cache-bust JS Marketing/Campanhas: `?v=20260909g` (bump ao alterar JS)
 
 ### 5.10 Documentação / Ajuda da plataforma
 
@@ -383,8 +470,13 @@ Contrato API aluno (resumo): `POST /auth/login` → `{user,tokens}`; `GET /cours
 | Login / sessão | `Session/User/Login.php`, middlewares `RequireAdminLogin` |
 | Tenant | `TenantHelper.php`, `EscolasAssinantes.php` |
 | E-mail | `Common/Communication/Email.php`, `EscolaIntegracoes.php`, `CryptoHelper.php` |
-| Campanhas | `Controller/Admin/Campanhas.php`, `CampanhaWorker.php`, `CampanhaSegmentoHelper.php` |
+| Campanhas | `Controller/Admin/Campanhas.php`, `CampanhaWorker.php`, `CampanhaSegmentoHelper.php`, `resources/js/campanhas.js` |
+| Marketing Aniversariantes | `MarketingAniversariantes.php`, `AniversariantesHelper.php`, `marketing-aniversariantes.js` |
+| Marketing Biblioteca | `MarketingBiblioteca.php`, `SocialBibliotecaService.php`, `marketing-biblioteca.js` |
+| Comunicação (config) | `ConfigComunicacao.php`, `config-email.js`, `Cron/Cobranca.php`, `Cron/Aniversario.php`, `ComunicacaoWorkerRun.php` |
+| Conexão Meta (config) | `ConfigSocial.php`, `config-social.js`, `SocialWorkerRun.php` |
 | Cobrança | `CobrancaEmailService.php`, `EmailCobrancaLog.php`, `worker/cobranca.php` |
+| Aniversário auto | `AniversarioEmailService.php`, `EmailAniversarioLog.php`, `worker/aniversario.php` |
 | WhatsApp | `EvolutionApiService.php`, `WhatsappEscolaService.php`, `Controller/Webhook/Evolution.php` |
 | Validador | `EmailValidator.php`, `EmailAuditoriaHelper.php` |
 | Agenda | `AgendaHelper.php`, controllers `Agenda*` |
@@ -489,6 +581,17 @@ CREATE TABLE IF NOT EXISTS email_cobranca_log (
   KEY idx_admin_data (id_admin, enviado_em)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
+
+### Marketing / Comunicação (Fases 5–9 — scripts prontos)
+
+Rodar no phpMyAdmin quando a tela indicar SQL pendente:
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `database/social_fase_a_produto.sql` | `social_biblioteca`, `social_publish_log`, `social_worker_runs` |
+| `database/social_biblioteca_formato.sql` | Coluna `formato` na biblioteca |
+| `database/comunicacao_fase6.sql` | `comunicacao_worker_runs`, `email_aniversario_log`, `email_cobranca_log` |
+| `database/marketing_fase9_indexes.sql` | Índices opcionais (aniversariantes / inadimplentes) |
 
 ### WhatsApp / Evolution (colar se ainda não existir)
 
@@ -738,19 +841,27 @@ php worker/campanhas.php [id_admin] [limite]
 # Social FB/IG (produção: */5  OU  /cron/social?token=SYSTEM_TOKEN)
 php worker/social.php [id_admin] [limite]
 
-# Cobrança diária mensalidades alunos (produção: 0 8 * * *)
+# Cobrança diária mensalidades alunos (produção: 0 8 * * *  OU  /cron/cobranca?token=SYSTEM_TOKEN)
 php worker/cobranca.php [id_admin]
+
+# Aniversário automático e-mail/WA (produção: 5 8 * * *  OU  /cron/aniversario?token=SYSTEM_TOKEN)
+php worker/aniversario.php [id_admin]
 
 # Assinatura SaaS escolas → CTI (produção: 0 7 * * *)
 php worker/saas.php [id_admin]
 ```
 
+**Crons HTTP recomendados (cPanel / HostGator):** ver exemplos completos em `docs/OPERACAO_EMAIL.md` (`/cron/campanhas`, `/cron/social`, `/cron/cobranca`, `/cron/aniversario`).
+
 Painel (Diretor):
-- `/painel/assinatura` — pagar mensalidade do Painel CTI (PIX)
-- `/painel/config/comunicacao` — SMTP, cobrança alunos, aniversário, WhatsApp (Evolution)
+- `/painel/assinatura` — pagar mensualidade do Painel CTI (PIX)
+- `/painel/config/comunicacao` — abas SMTP / Automações / WhatsApp / Auditoria
+- `/painel/config/social` — Conexão Meta (OAuth, automações, diagnóstico)
 - `/painel/config/pagamentos` — Mercado Pago da escola (carnê alunos)
 - `/painel/config/contrato` — modelo HTML do contrato + frase do certificado
 - `/painel/campanhas` — campanhas manuais + processar fila
+- `/painel/marketing/aniversariantes` — segmentação + atalho para campanha
+- `/painel/marketing/biblioteca` — mídias reutilizáveis (Agenda + Campanhas)
 
 Master:
 - `/master/escolas`, `/master/planos`, `/master/assinaturas`
@@ -761,21 +872,36 @@ Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 ---
 
-## 11. Testes manuais sugeridos (e-mail)
+## 11. Testes manuais sugeridos
 
+### E-mail / Comunicação
 1. SMTP escola: salvar Gmail (app password) + e-mail de **teste para você**
 2. Campanha: preview público → salvar rascunho → iniciar → processar fila
 3. Cobrança: **Simular hoje** (não envia) → só depois **Enviar agora**
-4. Auditar e-mails → corrigir cadastros com fakes
+4. **Auditar contatos** (aba Auditoria) → corrigir e-mails fakes e WhatsApp inválido
 5. Confirmar recovery de senha ainda usa `Email::sistema()`
+6. `php worker/status-email.php` → `"pronto_para_workers": true`
+
+### Marketing / Aniversariantes
+1. Aniversariantes → filtrar **Ativos inadimplentes** → **Criar campanha** → modal abre com segmento + `aniv_situacao`
+2. Preview da campanha → total deve bater com a lista filtrada
+3. Biblioteca → upload → usar picker na Agenda ou Campanha → tentar excluir (deve bloquear se em uso)
+4. Conexão Meta → aba Visão geral → checklist e status coerentes com OAuth
 
 ---
 
-## 12. Handoff para agente / contexto recente (jul/2026)
+## 12. Handoff para agente / contexto recente (set/2026)
 
 **Leia primeiro:** este arquivo + `.cursorrules` + `.cursor/rules/painel-cti.mdc` + `README.md` + `.env.example`.
 
-**Concluído recentemente:** chamados de suporte (escola ↔ Master); curto prazo CRM/WA + Chart.js; matrícula status + financeiro; Fase 1 segurança; Master SaaS 2+; Social Fase A; LMS EAD.
+**Concluído recentemente (Marketing UX Fases 1–10):**
+- Inbox WhatsApp — poll, mensagens, finalizar todas, permissões
+- Menu **Marketing** (Agenda, Biblioteca, Mensagens, Campanhas, Aniversariantes)
+- **Biblioteca de mídias** dedicada + pickers Agenda/Campanhas
+- **Comunicação Fase 6–7** — cron HTTP cobrança/aniversário, auditoria WA, abas na config
+- **Conexão Meta Fase 8** — UI em abas, checklist, status operacional
+- **Campanhas Fase 9** — `aniv_situacao` integrado ao segmento aniversariantes
+- **Docs Fase 10** — este arquivo §5.5, §5.15, guias operacionais
 
 **MVP LMS:** painel Cursos Online + API `/api/v1/student` + portal do aluno (`ascend-academy`). SQL: `database/LMS_CHECKLIST_PRODUCAO.md`.
 
@@ -783,6 +909,6 @@ Docs: `docs/OPERACAO_EMAIL.md`, `docs/OPERACAO_WHATSAPP.md`
 
 **Workspace multi-root:** `painel-cti` + `ascend-academy` — integração via API aluno (não compartilhar sessão admin).
 
-**Próximo foco sugerido:** médio prazo — Fase 5+ templates CRM editáveis; Fase 3c multi-números WA; Social Meta App Review sob demanda.
+**Próximo foco sugerido:** Social Meta App Review sob demanda; Fase 3c multi-números WA; legendas IA / Insights Meta.
 
 **Fim do documento.** Atualize este `ARCHITECTURE.md` sempre que concluir uma fase do roadmap.

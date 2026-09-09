@@ -1,4 +1,18 @@
 const CONFIG_EMAIL_URL = 'painel/config/comunicacao';
+const COM_TAB_MAP = {
+	smtp: '#tab-com-smtp',
+	auto: '#tab-com-auto',
+	wa: '#tab-com-wa',
+	whatsapp: '#tab-com-wa',
+	audit: '#tab-com-audit',
+	auditoria: '#tab-com-audit'
+};
+const COM_TAB_REV = {
+	'#tab-com-smtp': 'smtp',
+	'#tab-com-auto': 'auto',
+	'#tab-com-wa': 'wa',
+	'#tab-com-audit': 'audit'
+};
 
 function aplicarPreset(preset){
 	if(preset === 'gmail'){
@@ -561,6 +575,23 @@ function preencherCronComunicacao(cron){
 		htmlAniv += '<br><span class="text-muted">'+cron.hint+'</span>';
 	}
 	$('#aniversario-cron-hint').html(htmlAniv);
+
+	let htmlAudit = '';
+	if(cob.url_cron){
+		htmlAudit += '<p class="mb-2"><strong>Cobrança (08:00)</strong><br><code class="small">'+cob.url_cron+'</code><br>'
+			+'<span class="text-muted">'+formatUltimaExecucaoWorker(cob.ultima)+'</span></p>';
+	}
+	if(aniv.url_cron){
+		htmlAudit += '<p class="mb-2"><strong>Aniversário (08:05)</strong><br><code class="small">'+aniv.url_cron+'</code><br>'
+			+'<span class="text-muted">'+formatUltimaExecucaoWorker(aniv.ultima)+'</span></p>';
+	}
+	if(cron.hint){
+		htmlAudit += '<p class="text-muted mb-0">'+cron.hint+'</p>';
+	}
+	if(!cron.worker_ok){
+		htmlAudit += '<p class="text-warning mb-0 mt-2">Execute <code>database/comunicacao_fase6.sql</code> para registrar execuções.</p>';
+	}
+	$('#audit-cron-resumo').html(htmlAudit || '<span class="text-muted">Sem dados de cron.</span>');
 }
 
 function preencherAniversario(data){
@@ -913,13 +944,42 @@ function executarAniversario(){
 	});
 }
 
+function ativarAbaComunicacao(chave){
+	const alvo = COM_TAB_MAP[String(chave || '').toLowerCase()];
+	if(!alvo) return;
+	const btn = document.querySelector('#com-nav-tabs button[data-bs-target="'+alvo+'"]');
+	if(btn && window.bootstrap && bootstrap.Tab){
+		bootstrap.Tab.getOrCreateInstance(btn).show();
+	}
+}
+
+function lerAbaComunicacaoUrl(){
+	try {
+		const params = new URLSearchParams(window.location.search || '');
+		const tab = params.get('tab');
+		if(tab) ativarAbaComunicacao(tab);
+	} catch (e) {}
+}
+
 $(function(){
 	carregarConfiguracao();
+	lerAbaComunicacaoUrl();
+
+	$('#com-nav-tabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function(e){
+		const target = $(e.target).attr('data-bs-target') || '';
+		const chave = COM_TAB_REV[target];
+		if(!chave) return;
+		try {
+			const url = new URL(window.location.href);
+			url.searchParams.set('tab', chave);
+			history.replaceState(null, '', url.pathname + url.search);
+		} catch (err) {}
+	});
 
 	$('#btn-preset-gmail').on('click', function(){ aplicarPreset('gmail'); });
 	$('#btn-preset-outlook').on('click', function(){ aplicarPreset('outlook'); });
 	$('#btn-preset-corp').on('click', function(){ aplicarPreset('corp'); });
-	$('#btn-salvar-smtp').on('click', salvarConfiguracao);
+	$('#btn-salvar-smtp, #btn-salvar-automacoes').on('click', salvarConfiguracao);
 	$('#btn-testar-email').on('click', testarEmail);
 	$('#btn-preview-cobranca').on('click', previewCobranca);
 	$('#btn-executar-cobranca').on('click', executarCobranca);

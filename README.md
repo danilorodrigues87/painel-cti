@@ -19,7 +19,8 @@ Documentação completa (módulos, SQL, roadmap, handoff para IA): **[`ARCHITECT
 | **Financeiro** | Caixa, carnês (simples / PIX MP da escola), relatórios, **Assinatura** do painel (PIX CTI) |
 | **CRM** | Leads (Kanban), tarefas, histórico, WA automático em mudança de status |
 | **Agenda** | Laboratórios, horários, agendamentos, diário |
-| **Comunicação** | SMTP por escola, campanhas e-mail, cobrança mensalidade alunos, WhatsApp (Evolution) |
+| **Marketing** | Agenda Meta (FB/IG), biblioteca de mídias, campanhas e-mail/WA, aniversariantes |
+| **Comunicação** | SMTP por escola, cobrança/aniversário automáticos, auditoria de contatos, WhatsApp (Evolution) |
 | **Acesso** | Multi-escola (`id_admin`), permissões usuário ∩ módulos do plano/escola |
 
 ---

@@ -39,11 +39,15 @@ class SocialWorkerRun {
 	}
 
 	/** @return array|null */
-	public static function ultima(): ?array {
+	public static function ultima(int $idAdmin = 0): ?array {
 		if (!self::tabelaExiste()) {
 			return null;
 		}
-		$row = (new Database('social_worker_runs'))->select('1=1', 'id DESC', 1)->fetch(\PDO::FETCH_ASSOC);
+		$where = '1=1';
+		if ($idAdmin > 0) {
+			$where = '(id_admin = 0 OR id_admin = '.(int)$idAdmin.')';
+		}
+		$row = (new Database('social_worker_runs'))->select($where, 'id DESC', 1)->fetch(\PDO::FETCH_ASSOC);
 		return is_array($row) ? $row : null;
 	}
 }

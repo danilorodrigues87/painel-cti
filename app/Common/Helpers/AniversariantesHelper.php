@@ -35,7 +35,8 @@ class AniversariantesHelper {
 		string $periodo = 'mes',
 		string $busca = '',
 		?int $mes = null,
-		string $situacao = 'todos'
+		string $situacao = 'todos',
+		?int $limit = 500
 	): array {
 		$periodo = in_array($periodo, ['hoje', 'semana', 'mes'], true) ? $periodo : 'mes';
 		$situacao = self::normalizarSituacao($situacao);
@@ -99,8 +100,10 @@ class AniversariantesHelper {
 			FROM usuarios u
 			WHERE '.$where.'
 			ORDER BY MONTH(u.nascimento), DAY(u.nascimento), u.nome ASC
-			LIMIT 500
 		';
+		if ($limit !== null && $limit > 0) {
+			$sql .= ' LIMIT '.(int)$limit;
+		}
 
 		$stmt = self::pdo()->prepare($sql);
 		$stmt->execute($params);
