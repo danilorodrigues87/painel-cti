@@ -183,6 +183,52 @@ class WhatsappEscolaService {
 		];
 	}
 
+	/**
+	 * Traduz falhas da Evolution (especialmente HTTP 500) e revalida conexão ao vivo.
+	 */
+	private static function tratarFalhaEvolution(
+		EvolutionApiService $api,
+		int $idAdmin,
+		string $instance,
+		string $fallback = 'Falha na Evolution API.'
+	): string {
+		$http = $api->getLastHttpCode();
+		$err = trim($api->getLastError() ?: $fallback);
+
+		$pareceConexao = $http >= 500
+			|| stripos($err, 'internal server error') !== false
+			|| stripos($err, 'disconnected') !== false
+			|| stripos($err, 'not connected') !== false
+			|| stripos($err, 'connection closed') !== false
+			|| stripos($err, 'session') !== false
+			|| stripos($err, 'instável') !== false
+			|| stripos($err, 'desconectado') !== false;
+
+		if (!$pareceConexao) {
+			return $err;
+		}
+
+		$state = $api->connectionState($instance);
+		$estado = is_array($state) && $api->getLastHttpCode() < 400
+			? EvolutionApiService::extrairEstado($state)
+			: 'unknown';
+		$conectado = in_array($estado, ['open', 'connected'], true);
+
+		if (!$conectado) {
+			$integracao = EscolaIntegracoes::getByIdAdmin($idAdmin);
+			self::persistirStatus($idAdmin, $instance, $estado ?: 'disconnected', $integracao, 0);
+			return 'WhatsApp desconectado na Evolution (status: '.$estado.'). '
+				.'Vá em Comunicação → Conectar / QR antes de enviar campanhas.';
+		}
+
+		if ($http >= 500 || stripos($err, 'internal server error') !== false || stripos($err, 'instável') !== false) {
+			return 'WhatsApp instável na Evolution — a sessão parece aberta, mas a API falhou. '
+				.'Reconecte em Comunicação → Conectar / QR ou Trocar número.';
+		}
+
+		return $err;
+	}
+
 	private static function nomeInstanciaEscola(int $idAdmin, $integracao = null): string {
 		if ($integracao instanceof EscolaIntegracoes && !empty($integracao->evolution_instance)) {
 			return (string)$integracao->evolution_instance;
@@ -240,15 +286,20 @@ class WhatsappEscolaService {
 			$webhookOk = self::garantirWebhook($api, $instance, $idAdmin);
 
 			if ($forcarRecriar) {
-				$removido = $api->removerInstancia($instance);
+				$remocao = $api->removerInstanciaDetalhado($instance);
+				$removido = !empty($remocao['ok']);
 				$logs[] = 'remove:'.($removido ? 'ok' : 'fail');
+				if (!empty($remocao['passos'])) {
+					$logs[] = implode(' | ', $remocao['passos']);
+				}
 				if (!$removido) {
 					return [
-						'ok' => true,
-						'message' => 'WhatsApp já está conectado na Evolution (instância: '.$instance.'). '
-							.'Não foi possível remover automaticamente — desvincule em '
-							.'WhatsApp → Aparelhos conectados no celular, depois use “Remover instância”. '
-							.'Webhook '.($webhookOk ? 'aplicado' : 'pendente').'. ['.implode(' | ', $logs).']',
+						'ok' => false,
+						'message' => 'Não foi possível remover a instância na Evolution (instância: '.$instance.'). '
+							.($remocao['ultimo_erro'] ?? $api->getLastError() ?: '')
+							.' Desvincule em WhatsApp → Aparelhos conectados no celular, '
+							.'depois use “Remover instância” ou apague manualmente no painel da Evolution. '
+							.'['.implode(' | ', $logs).']',
 						'instance' => $instance,
 						'status' => $estadoAtual,
 						'qrcode' => null,
@@ -617,7 +668,39 @@ class WhatsappEscolaService {
 		$itens = [];
 		$vistos = [];
 
+		// #region agent log
+		$settings = $api->getSettings($instance);
+		$connState = $api->connectionState($instance);
+		EvolutionApiService::agentDebugLogPublic('WhatsappEscolaService.php:listarGruposEListas', 'Sync grupos — estado instância', [
+			'idAdmin'        => $idAdmin,
+			'instance'       => $instance,
+			'statusPainel'   => $status['status'] ?? '',
+			'connState'      => is_array($connState) ? EvolutionApiService::extrairEstado($connState) : null,
+			'connHttp'       => $api->getLastHttpCode(),
+			'groupsIgnore'   => is_array($settings) ? ($settings['groupsIgnore'] ?? ($settings['settings']['groupsIgnore'] ?? null)) : null,
+			'settingsHttp'   => $api->getLastHttpCode(),
+			'settingsErr'    => $api->getLastError(),
+		], 'H2,H5');
+		// #endregion
+
 		$grupos = $api->fetchAllGroups($instance, false);
+		$fetchHttp = $api->getLastHttpCode();
+		$fetchOk = is_array($grupos) && $fetchHttp < 400;
+		// #region agent log
+		$cntFetch = 0;
+		if (is_array($grupos)) {
+			$rowsDbg = isset($grupos[0]) || $grupos === [] ? $grupos : ($grupos['groups'] ?? $grupos['data'] ?? [$grupos]);
+			$cntFetch = is_array($rowsDbg) ? count($rowsDbg) : 0;
+		}
+		EvolutionApiService::agentDebugLogPublic('WhatsappEscolaService.php:fetchAllGroups', 'Resultado fetchAllGroups', [
+			'idAdmin'   => $idAdmin,
+			'instance'  => $instance,
+			'httpCode'  => $fetchHttp,
+			'error'     => $api->getLastError(),
+			'count'     => $cntFetch,
+			'responseKeys'=> is_array($grupos) ? array_keys($grupos) : null,
+		], 'H2');
+		// #endregion
 		if (is_array($grupos)) {
 			$rows = isset($grupos[0]) || $grupos === [] ? $grupos : ($grupos['groups'] ?? $grupos['data'] ?? [$grupos]);
 			foreach ($rows as $g) {
@@ -642,6 +725,31 @@ class WhatsappEscolaService {
 		}
 
 		$chats = $api->findChats($instance);
+		// #region agent log
+		$cntChats = 0;
+		if (is_array($chats)) {
+			$rowsCh = isset($chats[0]) || $chats === [] ? $chats : ($chats['chats'] ?? $chats['data'] ?? [$chats]);
+			if (is_array($rowsCh)) {
+				foreach ($rowsCh as $c) {
+					if (!is_array($c)) {
+						continue;
+					}
+					$jid = (string)($c['id'] ?? $c['remoteJid'] ?? $c['jid'] ?? '');
+					$jl = strtolower($jid);
+					if (strpos($jl, '@g.us') !== false || strpos($jl, '@broadcast') !== false) {
+						$cntChats++;
+					}
+				}
+			}
+		}
+		EvolutionApiService::agentDebugLogPublic('WhatsappEscolaService.php:findChats', 'Resultado findChats (grupos/listas)', [
+			'idAdmin'  => $idAdmin,
+			'httpCode' => $api->getLastHttpCode(),
+			'error'    => $api->getLastError(),
+			'grupoListaCount' => $cntChats,
+			'totalItensFinal' => count($itens),
+		], 'H2');
+		// #endregion
 		if (is_array($chats)) {
 			$rows = isset($chats[0]) || $chats === [] ? $chats : ($chats['chats'] ?? $chats['data'] ?? [$chats]);
 			foreach ($rows as $c) {
@@ -670,12 +778,28 @@ class WhatsappEscolaService {
 			return strcasecmp($a['nome'], $b['nome']);
 		});
 
+		$total = count($itens);
+		if ($total === 0) {
+			$msg = 'Nenhum grupo/lista retornado.';
+			if (!$fetchOk) {
+				$msg = self::tratarFalhaEvolution($api, $idAdmin, $instance, 'Falha ao listar grupos na Evolution.');
+			} else {
+				$msg .= ' Confira se a Evolution tem permissão de grupos e se há listas no aparelho.';
+			}
+			return ['ok' => false, 'message' => $msg, 'itens' => []];
+		}
+
+		$message = $total.' destino(s) encontrados.';
+		if (!$fetchOk) {
+			$message = $total.' destino(s) via chats recentes (lista incompleta). '
+				.self::tratarFalhaEvolution($api, $idAdmin, $instance, 'Falha ao buscar todos os grupos.');
+		}
+
 		return [
 			'ok' => true,
 			'itens' => $itens,
-			'message' => count($itens)
-				? count($itens).' destino(s) encontrados.'
-				: 'Nenhum grupo/lista retornado. Confira se a Evolution tem permissão de grupos e se há listas no aparelho.',
+			'message' => $message,
+			'lista_incompleta' => !$fetchOk,
 		];
 	}
 
@@ -813,7 +937,10 @@ class WhatsappEscolaService {
 		$res = $api->sendText($status['instance'], $telefone, $texto);
 
 		if ($res === null || $api->getLastHttpCode() >= 400) {
-			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar mensagem.'];
+			return [
+				'ok' => false,
+				'message' => self::tratarFalhaEvolution($api, $idAdmin, (string)$status['instance'], 'Falha ao enviar mensagem.'),
+			];
 		}
 
 		return ['ok' => true, 'message' => 'Mensagem enviada.'];
@@ -871,7 +998,7 @@ class WhatsappEscolaService {
 				is_string($nome) ? $nome : null
 			);
 			if ($res === null || $api->getLastHttpCode() >= 400) {
-				return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar mídia.'];
+				return ['ok' => false, 'message' => self::tratarFalhaEvolution($api, $idAdmin, $instance, 'Falha ao enviar mídia.')];
 			}
 			return ['ok' => true, 'message' => 'Mídia enviada.'];
 		}
@@ -882,7 +1009,21 @@ class WhatsappEscolaService {
 
 		$res = $api->sendText($instance, $destino, $texto);
 		if ($res === null || $api->getLastHttpCode() >= 400) {
-			return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar mensagem.'];
+			// #region agent log
+			$raw = $api->getLastResponseRaw();
+			$msgErro = self::tratarFalhaEvolution($api, $idAdmin, $instance, 'Falha ao enviar mensagem.');
+			EvolutionApiService::agentDebugLogPublic('WhatsappEscolaService.php:enviarCampanha', 'Falha sendText campanha', [
+				'idAdmin'         => $idAdmin,
+				'instance'        => $instance,
+				'destinoSuffix'   => substr($destino, -12),
+				'isGrupo'         => EvolutionApiService::isJidGrupoOuLista($destino),
+				'httpCode'        => $api->getLastHttpCode(),
+				'lastError'       => $msgErro,
+				'errorField'      => is_array($raw) ? ($raw['error'] ?? null) : null,
+				'responseMessage' => is_array($raw) ? ($raw['response']['message'] ?? null) : null,
+			], 'H1,H3,H4');
+			// #endregion
+			return ['ok' => false, 'message' => $msgErro];
 		}
 		return ['ok' => true, 'message' => 'Mensagem enviada.'];
 	}
@@ -910,51 +1051,66 @@ class WhatsappEscolaService {
 		$instance = self::nomeInstanciaEscola($idAdmin, $integracao);
 		$instance = $api->resolverNomeInstancia($instance);
 
-		$avisos = [];
+		$passos = [];
 		$instanceExiste = $api->instanciaExiste($instance);
+		$passos[] = 'existe:'.($instanceExiste ? 'sim' : 'não');
 
-		if ($instanceExiste) {
-			if (!$apagarInstancia) {
-				$api->logout($instance);
-				$httpLogout = $api->getLastHttpCode();
-				if ($httpLogout >= 400 && $httpLogout !== 404) {
-					$avisos[] = 'logout: '.($api->getLastError() ?: 'HTTP '.$httpLogout);
-				}
-			} else {
-				$removido = $api->removerInstancia($instance);
-				if (!$removido) {
-					self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
-					return [
-						'ok' => false,
-						'message' => 'Não foi possível remover a instância na Evolution (instância: '.$instance.'). '
-							.'Desvincule em WhatsApp → Aparelhos conectados no celular e tente novamente, '
-							.'ou apague manualmente no painel da Evolution.',
-					];
-				}
-			}
+		if (!$instanceExiste) {
+			self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
+			EvolutionApiService::agentDebugLogPublic('WhatsappEscolaService.php:desconectar', 'Sem instância', [
+				'idAdmin' => $idAdmin, 'instance' => $instance, 'apagar' => $apagarInstancia,
+			], 'H6');
+			return [
+				'ok' => true,
+				'message' => 'Nenhuma instância ativa na Evolution. Use “Conectar / QR” para parear.',
+			];
 		}
 
-		self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
+		$logoutOk = false;
+		if (!$apagarInstancia) {
+			$api->logout($instance);
+			$httpLogout = $api->getLastHttpCode();
+			$logoutOk = ($httpLogout >= 200 && $httpLogout < 300) || $httpLogout === 404;
+			$passos[] = 'logout:HTTP '.$httpLogout.($logoutOk ? '' : ' '.($api->getLastError() ?: ''));
+		}
 
-		if ($apagarInstancia) {
+		$removido = false;
+		$remocao = ['ok' => false, 'passos' => [], 'ultimo_erro' => null];
+		if ($apagarInstancia || !$logoutOk) {
+			$remocao = $api->removerInstanciaDetalhado($instance);
+			$removido = !empty($remocao['ok']);
+			$passos = array_merge($passos, $remocao['passos'] ?? []);
+		}
+
+		EvolutionApiService::agentDebugLogPublic('WhatsappEscolaService.php:desconectar', 'Resultado', [
+			'idAdmin' => $idAdmin, 'instance' => $instance, 'apagar' => $apagarInstancia,
+			'logoutOk' => $logoutOk, 'removido' => $removido, 'passos' => $passos,
+		], 'H6');
+
+		if ($apagarInstancia || !$logoutOk) {
+			if (!$removido) {
+				self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
+				$detalhe = (string)($remocao['ultimo_erro'] ?? $api->getLastError() ?: '');
+				return [
+					'ok' => false,
+					'message' => 'Não foi possível remover a instância na Evolution (instância: '.$instance.'). '
+						.($detalhe !== '' ? $detalhe.' ' : '')
+						.'Desvincule em WhatsApp → Aparelhos conectados e tente “Remover instância” novamente. '
+						.'['.implode(' | ', $passos).']',
+				];
+			}
+			self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
 			return [
 				'ok' => true,
 				'message' => 'Instância removida na Evolution. Clique em “Conectar / QR” para parear um novo número.',
 			];
 		}
 
-		$msg = 'Sessão desconectada no painel.';
-		if ($avisos) {
-			$msg .= ' Aviso Evolution: '.implode(' | ', $avisos)
-				.'. Se não conseguir reconectar, use “Remover instância” ou “Trocar número”.';
-		} elseif ($instanceExiste) {
-			$msg .= ' Se ainda aparecer conectada na Evolution, use “Trocar número”.';
-		}
+		self::persistirStatus($idAdmin, $instance, 'disconnected', $integracao, 0, '');
 
 		return [
 			'ok' => true,
-			'message' => $msg,
-			'warning' => !empty($avisos),
+			'message' => 'Sessão desconectada na Evolution. Clique em “Conectar / QR” para parear novamente.',
 		];
 	}
 

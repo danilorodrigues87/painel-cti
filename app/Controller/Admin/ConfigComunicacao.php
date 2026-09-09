@@ -518,6 +518,7 @@ class ConfigComunicacao extends Page {
 		return json_encode([
 			'success' => !empty($res['ok']),
 			'message' => $res['message'] ?? '',
+			'warning' => !empty($res['warning']),
 		], JSON_UNESCAPED_UNICODE);
 	}
 

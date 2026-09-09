@@ -14,6 +14,8 @@ class EvolutionApiService {
 	private $apiKey;
 	private $lastError = null;
 	private $lastHttpCode = 0;
+	private $lastRequestPath = '';
+	private $lastResponseRaw = null;
 
 	public function __construct(?string $baseUrl = null, ?string $apiKey = null) {
 		$this->baseUrl = rtrim($baseUrl ?? (string)Environment::get('EVOLUTION_URL', ''), '/');
@@ -38,6 +40,60 @@ class EvolutionApiService {
 
 	public function getLastHttpCode(): int {
 		return $this->lastHttpCode;
+	}
+
+	public function getLastRequestPath(): string {
+		return $this->lastRequestPath;
+	}
+
+	/** @return array<string,mixed>|null */
+	public function getLastResponseRaw(): ?array {
+		return $this->lastResponseRaw;
+	}
+
+	/** @param array<string,mixed> $data */
+	private static function agentDebugLog(string $location, string $message, array $data = [], string $hypothesisId = ''): void {
+		// #region agent log
+		$payload = json_encode([
+			'sessionId'     => '6b4d05',
+			'location'      => $location,
+			'message'       => $message,
+			'data'          => $data,
+			'timestamp'     => (int)(microtime(true) * 1000),
+			'hypothesisId'  => $hypothesisId,
+			'runId'         => 'pre-fix',
+		], JSON_UNESCAPED_UNICODE);
+		if (!is_string($payload)) {
+			return;
+		}
+		$paths = [
+			__DIR__.'/../../../debug-6b4d05.log',
+			'C:/Users/Meu PC/.cursor/debug-logs/debug-6b4d05.log',
+		];
+		foreach ($paths as $p) {
+			@file_put_contents($p, $payload."\n", FILE_APPEND | LOCK_EX);
+		}
+		if (function_exists('curl_init')) {
+			$ch = curl_init('http://127.0.0.1:7299/ingest/c2f3b05d-73bd-477d-8214-a3a1d104df4e');
+			if ($ch !== false) {
+				curl_setopt_array($ch, [
+					CURLOPT_POST           => true,
+					CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'X-Debug-Session-Id: 6b4d05'],
+					CURLOPT_POSTFIELDS     => $payload,
+					CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_TIMEOUT        => 2,
+					CURLOPT_CONNECTTIMEOUT => 1,
+				]);
+				@curl_exec($ch);
+				curl_close($ch);
+			}
+		}
+		// #endregion
+	}
+
+	/** @param array<string,mixed> $data */
+	public static function agentDebugLogPublic(string $location, string $message, array $data = [], string $hypothesisId = ''): void {
+		self::agentDebugLog($location, $message, $data, $hypothesisId);
 	}
 
 	public static function nomeInstancia(int $idAdmin): string {
@@ -94,6 +150,10 @@ class EvolutionApiService {
 		return strpos($lower, '@g.us') !== false || strpos($lower, '@broadcast') !== false;
 	}
 
+	public function getSettings(string $instance): ?array {
+		return $this->request('GET', '/settings/find/'.rawurlencode($instance));
+	}
+
 	/** Lista grupos da instância. */
 	public function fetchAllGroups(string $instance, bool $getParticipants = false): ?array {
 		$q = $getParticipants ? 'true' : 'false';
@@ -122,9 +182,7 @@ class EvolutionApiService {
 		if ($state !== null && $this->lastHttpCode < 400) {
 			return true;
 		}
-		if ($this->lastHttpCode !== 404) {
-			return $state !== null;
-		}
+		// HTTP 500/403 etc. não significa que a instância existe — confirma na listagem.
 
 		$list = $this->fetchInstances();
 		if (!is_array($list)) {
@@ -305,31 +363,55 @@ class EvolutionApiService {
 
 	/**
 	 * Logout + delete com confirmação (404 sozinho NÃO significa sucesso).
+	 * @return array{ok:bool,passos:list<string>,ultimo_erro:?string}
 	 */
-	public function removerInstancia(string $instance): bool {
+	public function removerInstanciaDetalhado(string $instance): array {
+		$passos = [];
+
 		if (!$this->instanciaExiste($instance)) {
-			return true;
+			$passos[] = 'existe:não';
+			return ['ok' => true, 'passos' => $passos, 'ultimo_erro' => null];
 		}
+
+		$passos[] = 'existe:sim';
 
 		$this->deleteInstanceForce($instance);
+		$passos[] = 'delete1:HTTP '.$this->lastHttpCode;
 		if (!$this->instanciaExiste($instance)) {
-			return true;
+			return ['ok' => true, 'passos' => $passos, 'ultimo_erro' => null];
 		}
 
-		for ($i = 0; $i < 2; $i++) {
+		for ($i = 0; $i < 3; $i++) {
 			$this->logout($instance);
+			$passos[] = 'logout'.($i + 1).':HTTP '.$this->lastHttpCode;
 			usleep(800000);
 			$this->deleteInstanceForce($instance);
+			$passos[] = 'delete'.($i + 2).':HTTP '.$this->lastHttpCode;
 			if (!$this->instanciaExiste($instance)) {
-				return true;
+				return ['ok' => true, 'passos' => $passos, 'ultimo_erro' => null];
 			}
 		}
 
 		$this->restartInstance($instance);
+		$passos[] = 'restart:HTTP '.$this->lastHttpCode;
+		usleep(800000);
+		$this->logout($instance);
+		$passos[] = 'logout-final:HTTP '.$this->lastHttpCode;
 		usleep(500000);
 		$this->deleteInstanceForce($instance);
+		$passos[] = 'delete-final:HTTP '.$this->lastHttpCode;
 
-		return !$this->instanciaExiste($instance);
+		$ok = !$this->instanciaExiste($instance);
+		$passos[] = 'resultado:'.($ok ? 'ok' : 'fail');
+		return [
+			'ok' => $ok,
+			'passos' => $passos,
+			'ultimo_erro' => $ok ? null : ($this->getLastError() ?: 'HTTP '.$this->getLastHttpCode()),
+		];
+	}
+
+	public function removerInstancia(string $instance): bool {
+		return $this->removerInstanciaDetalhado($instance)['ok'];
 	}
 
 	private static function eventosWebhook(): array {
@@ -573,11 +655,25 @@ class EvolutionApiService {
 	}
 
 	public function logout(string $instance): ?array {
-		$res = $this->request('DELETE', '/instance/logout/'.rawurlencode($instance));
-		if ($res !== null && $this->lastHttpCode < 400) {
-			return $res;
+		$tentativas = [
+			['DELETE', '/instance/logout/'.rawurlencode($instance), null],
+			['POST', '/instance/logout/'.rawurlencode($instance), []],
+			['DELETE', '/instance/logout/'.$instance, null],
+			['POST', '/instance/logout', ['instanceName' => $instance]],
+		];
+		$ultimo = null;
+		foreach ($tentativas as [$method, $path, $body]) {
+			$ultimo = $body !== null
+				? $this->request($method, $path, $body)
+				: $this->request($method, $path);
+			if ($this->lastHttpCode >= 200 && $this->lastHttpCode < 300) {
+				return $ultimo;
+			}
+			if ($this->lastHttpCode === 404) {
+				return $ultimo;
+			}
 		}
-		return $this->request('POST', '/instance/logout/'.rawurlencode($instance), []);
+		return $ultimo;
 	}
 
 	public function deleteInstance(string $instance): ?array {
@@ -590,6 +686,8 @@ class EvolutionApiService {
 			['DELETE', '/instance/delete/'.$instance, null],
 			['DELETE', '/instance/'.rawurlencode($instance), null],
 			['POST', '/instance/delete', ['instanceName' => $instance]],
+			['DELETE', '/instance/delete', ['instanceName' => $instance]],
+			['POST', '/instance/delete/'.rawurlencode($instance), []],
 		];
 
 		$ultimo = null;
@@ -768,6 +866,8 @@ class EvolutionApiService {
 	private function request(string $method, string $path, ?array $body = null): ?array {
 		$this->lastError = null;
 		$this->lastHttpCode = 0;
+		$this->lastRequestPath = $path;
+		$this->lastResponseRaw = null;
 
 		if (!$this->isConfigured()) {
 			$this->lastError = 'Evolution API não configurada no .env (EVOLUTION_URL / EVOLUTION_API_KEY).';
@@ -877,8 +977,20 @@ class EvolutionApiService {
 			return null;
 		}
 
+		$this->lastResponseRaw = $decoded;
+
 		if ($this->lastHttpCode >= 400) {
 			$this->lastError = self::extrairMensagemErro($decoded) ?: ('Erro Evolution HTTP '.$this->lastHttpCode);
+			// #region agent log
+			self::agentDebugLog('EvolutionApiService.php:parseResponse', 'Evolution HTTP error', [
+				'path'            => $this->lastRequestPath,
+				'httpCode'        => $this->lastHttpCode,
+				'lastError'       => $this->lastError,
+				'errorField'      => $decoded['error'] ?? null,
+				'messageField'    => $decoded['message'] ?? null,
+				'responseMessage' => $decoded['response']['message'] ?? null,
+			], 'H1,H3');
+			// #endregion
 			return $decoded;
 		}
 
@@ -886,22 +998,41 @@ class EvolutionApiService {
 	}
 
 	public static function extrairMensagemErro(array $decoded): ?string {
-		$msg = $decoded['message']
-			?? $decoded['error']['message']
-			?? $decoded['error']
-			?? $decoded['response']['message']
-			?? null;
+		$candidatos = [
+			$decoded['response']['message'] ?? null,
+			$decoded['message'] ?? null,
+			$decoded['error']['message'] ?? null,
+			is_string($decoded['error'] ?? null) ? $decoded['error'] : null,
+		];
 
-		if (is_array($msg)) {
-			$flat = [];
-			array_walk_recursive($msg, function ($v) use (&$flat) {
-				if (is_string($v) && $v !== '') {
-					$flat[] = $v;
-				}
-			});
-			$msg = $flat ? implode(' | ', $flat) : json_encode($msg, JSON_UNESCAPED_UNICODE);
+		$msg = null;
+		foreach ($candidatos as $candidato) {
+			if ($candidato === null || $candidato === '') {
+				continue;
+			}
+			if (is_array($candidato)) {
+				$flat = [];
+				array_walk_recursive($candidato, function ($v) use (&$flat) {
+					if (is_string($v) && $v !== '') {
+						$flat[] = $v;
+					}
+				});
+				$candidato = $flat ? implode(' | ', $flat) : json_encode($candidato, JSON_UNESCAPED_UNICODE);
+			}
+			if (is_string($candidato) && $candidato !== '') {
+				$msg = $candidato;
+				break;
+			}
 		}
 
-		return is_string($msg) && $msg !== '' ? $msg : null;
+		if ($msg === null) {
+			return null;
+		}
+
+		if (strcasecmp(trim($msg), 'Internal Server Error') === 0) {
+			return 'WhatsApp desconectado ou instável na Evolution (Internal Server Error).';
+		}
+
+		return $msg;
 	}
 }
