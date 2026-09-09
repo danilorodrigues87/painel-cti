@@ -3,14 +3,42 @@
 namespace App\Common\Helpers;
 
 use App\Model\Entity\EmailAniversarioLog;
+use App\Model\Entity\FinanceiroAcordo;
 
 class AniversariantesHelper {
+
+	/** @return array<string,string> */
+	public static function situacoesDisponiveis(): array {
+		return [
+			'todos'                  => 'Todos',
+			'ativos'                 => 'Alunos ativos',
+			'inativos'               => 'Alunos inativos',
+			'inadimplentes'          => 'Inadimplentes',
+			'ativos_inadimplentes'   => 'Ativos inadimplentes',
+			'inativos_inadimplentes' => 'Inativos inadimplentes',
+			'inativos_regular'       => 'Inativos em dia (sem débito)',
+			'com_email'              => 'Com e-mail',
+			'com_whatsapp'           => 'Com WhatsApp',
+			'nao_enviado_ano'        => 'Ainda não enviado este ano',
+		];
+	}
+
+	public static function normalizarSituacao(string $situacao): string {
+		return array_key_exists($situacao, self::situacoesDisponiveis()) ? $situacao : 'todos';
+	}
 
 	/**
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function listar(int $idAdmin, string $periodo = 'mes', string $busca = '', ?int $mes = null): array {
+	public static function listar(
+		int $idAdmin,
+		string $periodo = 'mes',
+		string $busca = '',
+		?int $mes = null,
+		string $situacao = 'todos'
+	): array {
 		$periodo = in_array($periodo, ['hoje', 'semana', 'mes'], true) ? $periodo : 'mes';
+		$situacao = self::normalizarSituacao($situacao);
 		if ($mes === null || $mes < 1 || $mes > 12) {
 			$mes = (int)date('m');
 		}
@@ -36,6 +64,14 @@ class AniversariantesHelper {
 			$params['mes'] = $mes;
 		}
 
+		$filtroSituacao = self::sqlFiltroSituacao($situacao);
+		if ($filtroSituacao !== '') {
+			$where .= ' AND '.$filtroSituacao;
+		}
+
+		$abertoSql = FinanceiroAlunoHelper::sqlTituloAberto('c.status');
+		$sqlInad = self::sqlInadimplente('u', $abertoSql);
+
 		$sql = '
 			SELECT
 				u.id,
@@ -58,7 +94,8 @@ class AniversariantesHelper {
 					  AND m2.id_admin = u.id_admin
 					  AND m2.status = 0
 					  AND (m2.fim IS NULL OR m2.fim >= CURDATE())
-				) AS matricula_ativa
+				) AS matricula_ativa,
+				'.$sqlInad.' AS inadimplente
 			FROM usuarios u
 			WHERE '.$where.'
 			ORDER BY MONTH(u.nascimento), DAY(u.nascimento), u.nome ASC
@@ -116,7 +153,8 @@ class AniversariantesHelper {
 					  AND m2.id_admin = u.id_admin
 					  AND m2.status = 0
 					  AND (m2.fim IS NULL OR m2.fim >= CURDATE())
-				) AS matricula_ativa
+				) AS matricula_ativa,
+				'.self::sqlInadimplente('u', FinanceiroAlunoHelper::sqlTituloAberto('c.status')).' AS inadimplente
 			FROM usuarios u
 			WHERE u.id_admin = :id_admin
 			  AND u.nivel = "Cliente"
@@ -150,6 +188,7 @@ class AniversariantesHelper {
 			'whatsapp' => trim((string)($row['whatsapp'] ?? '')),
 			'curso' => trim((string)($row['cursos'] ?? '')),
 			'matricula_ativa' => !empty($row['matricula_ativa']),
+			'inadimplente' => !empty($row['inadimplente']),
 			'enviado_ano' => EmailAniversarioLog::tabelaExiste()
 				&& EmailAniversarioLog::jaEnviou($id, $ano),
 		];
@@ -188,6 +227,87 @@ class AniversariantesHelper {
 			return $proximo >= $hoje && $proximo <= $limite;
 		} catch (\Throwable $e) {
 			return false;
+		}
+	}
+
+	private static function sqlMatriculaAtiva(string $aliasUsuario = 'u'): string {
+		return 'EXISTS(
+			SELECT 1 FROM matriculas m2
+			WHERE m2.id_aluno = '.$aliasUsuario.'.id
+			  AND m2.id_admin = '.$aliasUsuario.'.id_admin
+			  AND m2.status = 0
+			  AND (m2.fim IS NULL OR m2.fim >= CURDATE())
+		)';
+	}
+
+	private static function sqlInadimplente(string $aliasUsuario, string $abertoSql): string {
+		$viaMatricula = 'EXISTS(
+			SELECT 1 FROM caixa c
+			INNER JOIN matriculas m ON m.id = c.id_ref AND m.id_admin = c.id_admin
+			WHERE m.id_aluno = '.$aliasUsuario.'.id
+			  AND c.id_admin = '.$aliasUsuario.'.id_admin
+			  AND c.tipo_transacao = "Entrada"
+			  AND '.$abertoSql.'
+			  AND (c.id_acordo IS NULL OR c.id_acordo = 0)
+			  AND c.vencimento < CURDATE()
+			  AND (c.referencia IS NULL OR c.referencia != "Multa rescisória")
+		)';
+
+		if (FinanceiroAcordo::tabelasExistem() && FinanceiroAcordo::caixaTemIdAcordo()) {
+			$viaAcordo = ' OR EXISTS(
+				SELECT 1 FROM caixa c
+				INNER JOIN financeiro_acordos fa ON fa.id = c.id_acordo AND fa.id_admin = c.id_admin
+				WHERE fa.id_aluno = '.$aliasUsuario.'.id
+				  AND c.id_admin = '.$aliasUsuario.'.id_admin
+				  AND c.tipo_transacao = "Entrada"
+				  AND '.$abertoSql.'
+				  AND c.id_acordo > 0
+				  AND c.vencimento < CURDATE()
+				  AND fa.status = "ativo"
+			)';
+			return '('.$viaMatricula.$viaAcordo.')';
+		}
+
+		return $viaMatricula;
+	}
+
+	private static function sqlFiltroSituacao(string $situacao): string {
+		if ($situacao === 'todos') {
+			return '';
+		}
+
+		$matAtiva = self::sqlMatriculaAtiva('u');
+		$inad = self::sqlInadimplente('u', FinanceiroAlunoHelper::sqlTituloAberto('c.status'));
+
+		switch ($situacao) {
+			case 'ativos':
+				return $matAtiva;
+			case 'inativos':
+				return 'NOT '.$matAtiva;
+			case 'inadimplentes':
+				return $inad;
+			case 'ativos_inadimplentes':
+				return $matAtiva.' AND '.$inad;
+			case 'inativos_inadimplentes':
+				return 'NOT '.$matAtiva.' AND '.$inad;
+			case 'inativos_regular':
+				return 'NOT '.$matAtiva.' AND NOT '.$inad;
+			case 'com_email':
+				return 'u.email IS NOT NULL AND TRIM(u.email) != ""';
+			case 'com_whatsapp':
+				return 'u.whatsapp IS NOT NULL AND TRIM(u.whatsapp) != ""';
+			case 'nao_enviado_ano':
+				if (!EmailAniversarioLog::tabelaExiste()) {
+					return '1=1';
+				}
+				$ano = (int)date('Y');
+				return 'NOT EXISTS(
+					SELECT 1 FROM email_aniversario_log l
+					WHERE l.usuario_id = u.id
+					  AND l.ano = '.$ano.'
+				)';
+			default:
+				return '';
 		}
 	}
 
