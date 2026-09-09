@@ -127,7 +127,7 @@
 				<strong><i class="fas fa-bell"></i> Cobrança automática por e-mail</strong>
 				<div class="d-flex gap-2">
 					<button type="button" class="btn btn-outline-warning btn-sm" id="btn-auditar-emails">
-						<i class="fas fa-user-check"></i> Auditar e-mails
+						<i class="fas fa-user-check"></i> Auditar contatos
 					</button>
 					<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-preview-cobranca">
 						<i class="fas fa-search"></i> Simular hoje
@@ -141,8 +141,8 @@
 				<div class="alert alert-warning small d-none" id="alert-cobranca-sql"></div>
 				<p class="small text-muted">
 					Avisos automáticos de mensalidades do carnê (títulos em aberto). Cada combinação título + tipo de aviso é enviada <strong>uma única vez</strong>.
-					Configure um cron diário: <code>php worker/cobranca.php</code>
 				</p>
+				<div class="small text-muted mb-3" id="cobranca-cron-hint"></div>
 
 				<div class="form-check form-switch mb-2">
 					<input class="form-check-input" type="checkbox" id="cobranca_ativo" value="1">
@@ -233,9 +233,9 @@
 			<div class="card-body">
 				<div class="alert alert-warning small d-none" id="alert-aniversario-sql"></div>
 				<p class="small text-muted">
-					Envia felicitações no dia do aniversário (campo nascimento do aluno). Cada aluno recebe no máximo <strong>1 e-mail por ano</strong>.
-					Cron: <code>php worker/aniversario.php</code>
+					Envia felicitações no dia do aniversário (campo nascimento do aluno). Cada aluno recebe no máximo <strong>1 mensagem por ano</strong>.
 				</p>
+				<div class="small text-muted mb-3" id="aniversario-cron-hint"></div>
 
 				<div class="form-check form-switch mb-2">
 					<input class="form-check-input" type="checkbox" id="aniversario_ativo" value="1">
@@ -446,4 +446,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/config-email.js?v=20260824a"></script>
+<script src="{{URL}}/resources/js/config-email.js?v=20260909d"></script>

@@ -13,6 +13,7 @@ use App\Common\Helpers\EmailAuditoriaHelper;
 use App\Common\Helpers\EmailValidator;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\EmailAniversarioLog;
+use App\Model\Entity\ComunicacaoWorkerRun;
 
 class ConfigComunicacao extends Page {
 
@@ -199,7 +200,32 @@ class ConfigComunicacao extends Page {
 				'configurado' => !empty($sistema['email']),
 			],
 			'modo_envio' => $modoEnvio,
+			'cron_comunicacao' => self::metaCronComunicacao($idAdmin),
 		]);
+	}
+
+	private static function metaCronComunicacao(int $idAdmin): array {
+		$tokenOk = defined('SYSTEM_TOKEN') && SYSTEM_TOKEN !== '';
+		$base = rtrim((string)URL, '/');
+		$tokenHint = $tokenOk ? '***' : 'SEU_SYSTEM_TOKEN';
+
+		return [
+			'token_ok' => $tokenOk,
+			'worker_ok' => ComunicacaoWorkerRun::tabelaExiste(),
+			'cobranca' => [
+				'url_cron' => $base.'/cron/cobranca?token='.$tokenHint,
+				'cron_cli' => '0 8 * * * php worker/cobranca.php',
+				'ultima' => ComunicacaoWorkerRun::ultima('cobranca', $idAdmin),
+			],
+			'aniversario' => [
+				'url_cron' => $base.'/cron/aniversario?token='.$tokenHint,
+				'cron_cli' => '5 8 * * * php worker/aniversario.php',
+				'ultima' => ComunicacaoWorkerRun::ultima('aniversario', $idAdmin),
+			],
+			'hint' => $tokenOk
+				? 'Configure os crons no cPanel com SYSTEM_TOKEN do .env (1x/dia).'
+				: 'Defina SYSTEM_TOKEN no .env para usar cron HTTP no cPanel.',
+		];
 	}
 
 	private static function salvarConfig(array $postVars): string {
@@ -387,6 +413,7 @@ class ConfigComunicacao extends Page {
 	private static function executarCobranca(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$resumo = CobrancaEmailService::processar($idAdmin, false);
+		ComunicacaoWorkerRun::registrar('cobranca', 'painel', $idAdmin, $resumo);
 		return json_encode([
 			'success' => true,
 			'message' => 'Enviados: '.($resumo['enviados'] ?? 0).'. Erros: '.($resumo['erros'] ?? 0).'.',
@@ -396,7 +423,7 @@ class ConfigComunicacao extends Page {
 
 	private static function auditarEmails(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
-		$relatorio = EmailAuditoriaHelper::auditarEscola($idAdmin, 150);
+		$relatorio = EmailAuditoriaHelper::auditarContatosEscola($idAdmin, 150);
 		return json_encode(['success' => true, 'auditoria' => $relatorio]);
 	}
 
@@ -445,6 +472,7 @@ class ConfigComunicacao extends Page {
 	private static function executarAniversario(): string {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$resumo = AniversarioEmailService::processar($idAdmin, false);
+		ComunicacaoWorkerRun::registrar('aniversario', 'painel', $idAdmin, $resumo);
 		return json_encode([
 			'success' => empty($resumo['erro']),
 			'message' => isset($resumo['erro'])

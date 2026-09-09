@@ -13,6 +13,8 @@ use App\Common\Communication\Email;
 use App\Model\Entity\Campanhas;
 use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\EmailCobrancaLog;
+use App\Model\Entity\EmailAniversarioLog;
+use App\Model\Entity\ComunicacaoWorkerRun;
 
 $idAdmin = isset($argv[1]) ? (int)$argv[1] : 0;
 
@@ -48,7 +50,10 @@ $checks['tabelas'] = [
 	'escola_integracoes' => EscolaIntegracoes::tabelaExiste(),
 	'campanhas' => Campanhas::tabelaExiste(),
 	'email_cobranca_log' => EmailCobrancaLog::tabelaExiste(),
+	'email_aniversario_log' => EmailAniversarioLog::tabelaExiste(),
+	'comunicacao_worker_runs' => ComunicacaoWorkerRun::tabelaExiste(),
 	'colunas_cobranca' => EscolaIntegracoes::temColunasCobranca(),
+	'colunas_aniversario' => EscolaIntegracoes::temColunasAniversario(),
 ];
 
 if ($idAdmin > 0) {
@@ -59,6 +64,9 @@ if ($idAdmin > 0) {
 		'smtp_configurado' => $int instanceof EscolaIntegracoes && $int->temSmtpConfigurado(),
 		'cobranca_ativo' => $int instanceof EscolaIntegracoes ? (int)($int->cobranca_ativo ?? 0) : 0,
 		'enviados_cobranca_hoje' => EmailCobrancaLog::contarHoje($idAdmin),
+		'enviados_aniversario_hoje' => EmailAniversarioLog::contarHoje($idAdmin),
+		'ultima_cobranca' => ComunicacaoWorkerRun::ultima('cobranca', $idAdmin),
+		'ultima_aniversario' => ComunicacaoWorkerRun::ultima('aniversario', $idAdmin),
 	];
 }
 

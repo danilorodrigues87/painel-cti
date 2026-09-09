@@ -57,7 +57,7 @@ Reinicie Apache após alterar `.env` (XAMPP: Stop/Start Apache).
 
 1. SMTP da escola salvo e **teste** para o **seu** e-mail
 2. Cobrança automática: configure dias (ex.: antes `3,5` / depois `1,3,7`)
-3. **Auditar e-mails** → corrigir cadastros com fake
+3. **Auditar contatos** → corrigir e-mails fictícios e WhatsApp inválido
 4. **Simular hoje** → ver lista (não envia)
 5. Só quando estiver certo: marcar cobrança **ativa**, **Salvar**, e usar **Enviar agora** ou o cron
 
@@ -75,6 +75,12 @@ No **Cron Jobs** do cPanel, use URL HTTP com `SYSTEM_TOKEN` do `.env` (não depe
 
 # Social (Facebook/Instagram) — a cada 5 minutos
 */5 * * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/social?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+
+# Cobrança automática — todo dia às 08:00
+0 8 * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/cobranca?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
+
+# Aniversariantes — todo dia às 08:05
+5 8 * * * curl -fsS "https://SEU-DOMINIO-PAINEL/cron/aniversario?token=SEU_SYSTEM_TOKEN" >/dev/null 2>&1
 ```
 
 Alternativa CLI (se o hosting permitir `php` no cron):
@@ -123,7 +129,7 @@ Sem cron, use no painel:
 | Passo | Envia para alunos? |
 |-------|--------------------|
 | `status-email.php` | Não |
-| Auditar e-mails | Não |
+| Auditar contatos | Não |
 | Simular hoje | Não |
 | E-mail de teste (campo SMTP) | Só o endereço que você digitar |
 | Enviar agora / worker cobrança com switch ativo | **Sim** |
@@ -153,4 +159,15 @@ php worker/campanhas.php
 php worker/campanhas.php 1 10
 php worker/cobranca.php
 php worker/cobranca.php 1
+php worker/aniversario.php
+php worker/aniversario.php 1
 ```
+
+Teste cron HTTP (substitua token):
+
+```bash
+curl -fsS "https://SEU-DOMINIO-PAINEL/cron/cobranca?token=SEU_SYSTEM_TOKEN"
+curl -fsS "https://SEU-DOMINIO-PAINEL/cron/aniversario?token=SEU_SYSTEM_TOKEN"
+```
+
+SQL da Fase 6 (log de execuções): `database/comunicacao_fase6.sql`

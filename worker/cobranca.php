@@ -10,6 +10,7 @@
 require __DIR__.'/../includes/app.php';
 
 use App\Common\Communication\CobrancaEmailService;
+use App\Model\Entity\ComunicacaoWorkerRun;
 use App\Model\Entity\EmailCobrancaLog;
 
 if (!EmailCobrancaLog::tabelaExiste()) {
@@ -19,5 +20,6 @@ if (!EmailCobrancaLog::tabelaExiste()) {
 
 $idAdmin = isset($argv[1]) ? (int)$argv[1] : 0;
 $resumo = CobrancaEmailService::processar($idAdmin, false);
+ComunicacaoWorkerRun::registrar('cobranca', 'cli', $idAdmin, $resumo);
 
 echo json_encode($resumo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT).PHP_EOL;

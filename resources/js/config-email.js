@@ -77,6 +77,7 @@ function preencherFormulario(data){
 	atualizarAlertaModo(data);
 	preencherCobranca(data);
 	preencherAniversario(data);
+	preencherCronComunicacao(data.cron_comunicacao || {});
 	preencherWhatsapp(data.whatsapp || {});
 
 	if(data.aviso_smtp){
@@ -519,6 +520,49 @@ function whatsappRecriar(){
 	});
 }
 
+function formatUltimaExecucaoWorker(run){
+	if(!run || !run.created_at){
+		return 'Nunca registrado';
+	}
+	let txt = run.created_at;
+	if(run.origem){
+		txt += ' ('+run.origem+')';
+	}
+	const parts = [];
+	if(run.enviados != null) parts.push(run.enviados+' enviado(s)');
+	if(run.erros != null && parseInt(run.erros, 10) > 0) parts.push(run.erros+' erro(s)');
+	if(parts.length) txt += ' — '+parts.join(', ');
+	return txt;
+}
+
+function preencherCronComunicacao(cron){
+	const cob = cron.cobranca || {};
+	const aniv = cron.aniversario || {};
+	let htmlCob = '<strong>Cron diário (08:00):</strong> ';
+	if(cob.url_cron){
+		htmlCob += '<code>'+cob.url_cron+'</code>';
+	} else {
+		htmlCob += '<code>'+(cob.cron_cli || 'php worker/cobranca.php')+'</code>';
+	}
+	htmlCob += '<br><span class="text-muted">Última execução: '+formatUltimaExecucaoWorker(cob.ultima)+'</span>';
+	if(!cron.worker_ok){
+		htmlCob += '<br><span class="text-warning">Execute <code>database/comunicacao_fase6.sql</code> para registrar execuções.</span>';
+	}
+	$('#cobranca-cron-hint').html(htmlCob);
+
+	let htmlAniv = '<strong>Cron diário (08:05):</strong> ';
+	if(aniv.url_cron){
+		htmlAniv += '<code>'+aniv.url_cron+'</code>';
+	} else {
+		htmlAniv += '<code>'+(aniv.cron_cli || 'php worker/aniversario.php')+'</code>';
+	}
+	htmlAniv += '<br><span class="text-muted">Última execução: '+formatUltimaExecucaoWorker(aniv.ultima)+'</span>';
+	if(cron.hint){
+		htmlAniv += '<br><span class="text-muted">'+cron.hint+'</span>';
+	}
+	$('#aniversario-cron-hint').html(htmlAniv);
+}
+
 function preencherAniversario(data){
 	const a = data.aniversario || {};
 	const tpl = data.templates_aniversario || a.templates || {};
@@ -749,8 +793,39 @@ function executarCobranca(){
 			}
 			Swal.fire('Concluído', res.message, 'success');
 			previewCobranca();
+			carregarConfiguracao();
 		}, 'json');
 	});
+}
+
+function montarBlocoAuditoria(titulo, bloco){
+	if(!bloco){
+		return '';
+	}
+	let html = '<h6 class="mt-3 mb-2">'+titulo+'</h6>';
+	html += '<p class="mb-1"><strong>'+(bloco.total || 0)+'</strong> problema(s) encontrado(s).</p>';
+	if(bloco.por_motivo){
+		html += '<ul class="small text-start mb-2">';
+		Object.keys(bloco.por_motivo).forEach(function(m){
+			html += '<li>'+m+': <strong>'+bloco.por_motivo[m]+'</strong></li>';
+		});
+		html += '</ul>';
+	}
+	if(bloco.itens && bloco.itens.length){
+		html += '<div class="table-responsive" style="max-height:220px;"><table class="table table-sm table-striped text-start mb-0">';
+		html += '<thead><tr><th>Tipo</th><th>Nome</th><th>Contato</th><th>Motivo</th></tr></thead><tbody>';
+		bloco.itens.forEach(function(i){
+			const contato = i.contato || i.email || '—';
+			html += '<tr><td>'+i.tipo+'</td><td>'+i.nome+'</td><td><code>'+contato+'</code></td><td class="small">'+i.motivo+'</td></tr>';
+		});
+		html += '</tbody></table></div>';
+	} else {
+		html += '<p class="text-success small mb-0">Nenhum problema detectado na amostra.</p>';
+	}
+	if(bloco.truncado){
+		html += '<p class="small text-muted mt-1">Lista limitada a 150 registros.</p>';
+	}
+	return html;
 }
 
 function auditarEmails(){
@@ -764,40 +839,20 @@ function auditarEmails(){
 		}
 
 		const a = res.auditoria || {};
-		let html = '<p><strong>'+(a.total || 0)+'</strong> e-mail(s) inválido(s) ou fictício(s) encontrado(s).</p>';
-
-		if(a.por_motivo){
-			html += '<p class="small text-muted mb-2">Por motivo:</p><ul class="small text-start">';
-			Object.keys(a.por_motivo).forEach(function(m){
-				html += '<li>'+m+': <strong>'+a.por_motivo[m]+'</strong></li>';
-			});
-			html += '</ul>';
-		}
-
-		if(a.itens && a.itens.length){
-			html += '<div class="table-responsive" style="max-height:280px;"><table class="table table-sm table-striped text-start mb-0">';
-			html += '<thead><tr><th>Tipo</th><th>Nome</th><th>E-mail</th><th>Motivo</th></tr></thead><tbody>';
-			a.itens.forEach(function(i){
-				html += '<tr><td>'+i.tipo+'</td><td>'+i.nome+'</td><td><code>'+i.email+'</code></td><td class="small">'+i.motivo+'</td></tr>';
-			});
-			html += '</tbody></table></div>';
-		} else {
-			html += '<p class="text-success mb-0">Nenhum e-mail fictício detectado na amostra.</p>';
-		}
-
-		if(a.truncado){
-			html += '<p class="small text-muted mt-2">Lista limitada a 150 registros. Corrija nos cadastros de Alunos, Responsáveis e Leads.</p>';
-		}
+		let html = '<p class="mb-2">Total: <strong>'+(a.total || 0)+'</strong> problema(s) em e-mails e WhatsApp.</p>';
+		html += montarBlocoAuditoria('E-mails inválidos ou fictícios', a.emails);
+		html += montarBlocoAuditoria('WhatsApp inválido', a.whatsapp);
+		html += '<p class="small text-muted mt-2 mb-0">Corrija nos cadastros de Alunos, Responsáveis e Leads antes de campanhas ou automações.</p>';
 
 		Swal.fire({
-			title: 'Auditoria de e-mails',
+			title: 'Auditoria de contatos',
 			html: html,
-			width: 720,
+			width: 760,
 			confirmButtonText: 'OK'
 		});
 	}, 'json').fail(function(){
 		$('#btn-auditar-emails').prop('disabled', false);
-		Swal.fire('Erro', 'Falha ao auditar e-mails.', 'error');
+		Swal.fire('Erro', 'Falha ao auditar contatos.', 'error');
 	});
 }
 
@@ -853,6 +908,7 @@ function executarAniversario(){
 			}
 			Swal.fire('Concluído', res.message, 'success');
 			previewAniversario();
+			carregarConfiguracao();
 		}, 'json');
 	});
 }
