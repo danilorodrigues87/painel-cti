@@ -14,8 +14,6 @@ class EvolutionApiService {
 	private $apiKey;
 	private $lastError = null;
 	private $lastHttpCode = 0;
-	private $lastRequestPath = '';
-	private $lastResponseRaw = null;
 
 	public function __construct(?string $baseUrl = null, ?string $apiKey = null) {
 		$this->baseUrl = rtrim($baseUrl ?? (string)Environment::get('EVOLUTION_URL', ''), '/');
@@ -40,60 +38,6 @@ class EvolutionApiService {
 
 	public function getLastHttpCode(): int {
 		return $this->lastHttpCode;
-	}
-
-	public function getLastRequestPath(): string {
-		return $this->lastRequestPath;
-	}
-
-	/** @return array<string,mixed>|null */
-	public function getLastResponseRaw(): ?array {
-		return $this->lastResponseRaw;
-	}
-
-	/** @param array<string,mixed> $data */
-	private static function agentDebugLog(string $location, string $message, array $data = [], string $hypothesisId = ''): void {
-		// #region agent log
-		$payload = json_encode([
-			'sessionId'     => '6b4d05',
-			'location'      => $location,
-			'message'       => $message,
-			'data'          => $data,
-			'timestamp'     => (int)(microtime(true) * 1000),
-			'hypothesisId'  => $hypothesisId,
-			'runId'         => 'pre-fix',
-		], JSON_UNESCAPED_UNICODE);
-		if (!is_string($payload)) {
-			return;
-		}
-		$paths = [
-			__DIR__.'/../../../debug-6b4d05.log',
-			'C:/Users/Meu PC/.cursor/debug-logs/debug-6b4d05.log',
-		];
-		foreach ($paths as $p) {
-			@file_put_contents($p, $payload."\n", FILE_APPEND | LOCK_EX);
-		}
-		if (function_exists('curl_init')) {
-			$ch = curl_init('http://127.0.0.1:7299/ingest/c2f3b05d-73bd-477d-8214-a3a1d104df4e');
-			if ($ch !== false) {
-				curl_setopt_array($ch, [
-					CURLOPT_POST           => true,
-					CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'X-Debug-Session-Id: 6b4d05'],
-					CURLOPT_POSTFIELDS     => $payload,
-					CURLOPT_RETURNTRANSFER => true,
-					CURLOPT_TIMEOUT        => 2,
-					CURLOPT_CONNECTTIMEOUT => 1,
-				]);
-				@curl_exec($ch);
-				curl_close($ch);
-			}
-		}
-		// #endregion
-	}
-
-	/** @param array<string,mixed> $data */
-	public static function agentDebugLogPublic(string $location, string $message, array $data = [], string $hypothesisId = ''): void {
-		self::agentDebugLog($location, $message, $data, $hypothesisId);
 	}
 
 	public static function nomeInstancia(int $idAdmin): string {
@@ -148,10 +92,6 @@ class EvolutionApiService {
 	public static function isJidGrupoOuLista(string $destino): bool {
 		$lower = strtolower(trim($destino));
 		return strpos($lower, '@g.us') !== false || strpos($lower, '@broadcast') !== false;
-	}
-
-	public function getSettings(string $instance): ?array {
-		return $this->request('GET', '/settings/find/'.rawurlencode($instance));
 	}
 
 	/** Lista grupos da instância. */
@@ -866,8 +806,6 @@ class EvolutionApiService {
 	private function request(string $method, string $path, ?array $body = null): ?array {
 		$this->lastError = null;
 		$this->lastHttpCode = 0;
-		$this->lastRequestPath = $path;
-		$this->lastResponseRaw = null;
 
 		if (!$this->isConfigured()) {
 			$this->lastError = 'Evolution API não configurada no .env (EVOLUTION_URL / EVOLUTION_API_KEY).';
@@ -977,20 +915,8 @@ class EvolutionApiService {
 			return null;
 		}
 
-		$this->lastResponseRaw = $decoded;
-
 		if ($this->lastHttpCode >= 400) {
 			$this->lastError = self::extrairMensagemErro($decoded) ?: ('Erro Evolution HTTP '.$this->lastHttpCode);
-			// #region agent log
-			self::agentDebugLog('EvolutionApiService.php:parseResponse', 'Evolution HTTP error', [
-				'path'            => $this->lastRequestPath,
-				'httpCode'        => $this->lastHttpCode,
-				'lastError'       => $this->lastError,
-				'errorField'      => $decoded['error'] ?? null,
-				'messageField'    => $decoded['message'] ?? null,
-				'responseMessage' => $decoded['response']['message'] ?? null,
-			], 'H1,H3');
-			// #endregion
 			return $decoded;
 		}
 

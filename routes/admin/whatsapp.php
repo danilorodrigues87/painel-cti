@@ -13,7 +13,7 @@ $obRouter->get('/painel/whatsapp', [
 $obRouter->post('/painel/whatsapp', [
 	'middlewares' => ['required-admin-login'],
 	function ($request) {
-		return new Response(200, Admin\WhatsappInbox::getInfo($request));
+		return new Response(200, Admin\WhatsappInbox::getInfo($request), 'application/json');
 	}
 ]);
 

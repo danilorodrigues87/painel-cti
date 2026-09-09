@@ -3,7 +3,9 @@ let waConversaId = null;
 let waIsDiretor = false;
 let waPoll = null;
 let waUltimaMsgId = null;
+let waUltimaMsgHash = null;
 let waCarregandoMsg = false;
+let waMsgReqSeq = 0;
 let waMediaRecorder = null;
 let waAudioChunks = [];
 let waGravando = false;
@@ -82,12 +84,14 @@ function renderMensagens(mensagens, forcarScroll){
 	const pertoDoFim = !el || (el.scrollHeight - el.scrollTop - el.clientHeight) < 80;
 	const ultima = mensagens.length ? mensagens[mensagens.length - 1] : null;
 	const novoUltimoId = ultima ? String(ultima.id) : null;
+	const novoHash = novoUltimoId + ':' + (mensagens ? mensagens.length : 0);
 
-	if(!forcarScroll && novoUltimoId && novoUltimoId === waUltimaMsgId){
+	if(!forcarScroll && novoHash === waUltimaMsgHash){
 		return false;
 	}
 
 	waUltimaMsgId = novoUltimoId;
+	waUltimaMsgHash = novoHash;
 	$m.empty();
 	(mensagens || []).forEach(function(m){
 		const mine = m.direction === 'out';
@@ -169,22 +173,38 @@ function abrirConversa(id, opcoes){
 	opcoes = opcoes || {};
 	const silencioso = !!opcoes.silencioso;
 	const idNum = parseInt(id, 10);
+	if(!idNum) return;
+
 	if(!silencioso){
 		waConversaId = idNum;
 		waUltimaMsgId = null;
+		waUltimaMsgHash = null;
+	} else if(waConversaId !== idNum){
+		return;
 	}
-	if(waCarregandoMsg) return;
+
+	const reqSeq = ++waMsgReqSeq;
 	waCarregandoMsg = true;
 
-	waPost({ acao: 'mensagens', conversa_id: idNum }, function(res){
-		waCarregandoMsg = false;
+	$.ajax({
+		url: url_base + WA_URL,
+		method: 'POST',
+		data: { acao: 'mensagens', conversa_id: idNum },
+		dataType: 'json'
+	}).always(function(){
+		if(reqSeq === waMsgReqSeq){
+			waCarregandoMsg = false;
+		}
+	}).done(function(res){
+		if(reqSeq !== waMsgReqSeq || waConversaId !== idNum){
+			return;
+		}
 		if(!res || !res.success){
 			if(!silencioso){
-				Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
+				Swal.fire('Erro', (res && res.message) || 'Falha ao carregar mensagens.', 'error');
 			}
 			return;
 		}
-		if(waConversaId !== idNum) return;
 
 		const c = res.conversa || {};
 		$('#wa-chat-titulo').text(c.nome_contato || c.telefone || 'Conversa');
@@ -192,11 +212,21 @@ function abrirConversa(id, opcoes){
 		$('#btn-wa-assumir, #btn-wa-transferir, #btn-wa-fechar').removeClass('d-none');
 		setChatEnabled(true);
 
-		renderMensagens(res.mensagens || [], !silencioso);
+		const msgs = res.mensagens || [];
+		const pertoDoFim = (function(){
+			const el = $('#wa-mensagens')[0];
+			return !el || (el.scrollHeight - el.scrollTop - el.clientHeight) < 80;
+		})();
+		renderMensagens(msgs, !silencioso || pertoDoFim);
 		if(!silencioso){
 			carregarConversas();
 		}
-	}, silencioso);
+	}).fail(function(){
+		if(reqSeq !== waMsgReqSeq || silencioso){
+			return;
+		}
+		Swal.fire('Erro', 'Falha na requisição ao carregar mensagens.', 'error');
+	});
 }
 
 function atualizarInbox(){
@@ -530,6 +560,37 @@ $(function(){
 		waPost({ acao: 'fechar', conversa_id: waConversaId }, function(res){
 			Swal.fire(res && res.success ? 'OK' : 'Erro', (res && res.message) || '', res && res.success ? 'success' : 'error');
 			abrirConversa(waConversaId);
+		});
+	});
+	$('#btn-wa-fechar-todas').on('click', function(){
+		const escopo = waIsDiretor
+			? 'todas as conversas em andamento da escola'
+			: 'suas conversas e as da fila do seu setor';
+		Swal.fire({
+			title: 'Finalizar todas em andamento?',
+			html: 'Serão encerradas <strong>'+escopo+'</strong>.<br><br>Esta ação não pode ser desfeita.',
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonText: 'Sim, finalizar todas',
+			confirmButtonColor: '#dc3545',
+			cancelButtonText: 'Cancelar'
+		}).then(function(r){
+			if(!r.isConfirmed) return;
+			waPost({ acao: 'fechar_todas' }, function(res){
+				if(!res || !res.success){
+					Swal.fire('Erro', (res && res.message) || 'Falha ao encerrar.', 'error');
+					return;
+				}
+				Swal.fire('Concluído', (res.message || ''), (res.fechadas || 0) > 0 ? 'success' : 'info');
+				waConversaId = null;
+				waUltimaMsgId = null;
+				waUltimaMsgHash = null;
+				$('#wa-chat-titulo').text('Selecione uma conversa');
+				$('#wa-chat-sub').text('');
+				$('#wa-mensagens').empty();
+				$('#btn-wa-assumir, #btn-wa-transferir, #btn-wa-fechar').addClass('d-none');
+				carregarConversas();
+			});
 		});
 	});
 	$('#btn-wa-transferir').on('click', function(){

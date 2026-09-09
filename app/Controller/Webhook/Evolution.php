@@ -121,7 +121,7 @@ class Evolution {
 				continue;
 			}
 
-			$telefone = self::jidParaTelefone($remoteJid);
+			$telefone = self::resolverTelefoneContato($msg, $remoteJid);
 			if ($telefone === '') {
 				self::logWebhook($idAdmin, 'telefone_vazio', ['jid' => $remoteJid]);
 				continue;
@@ -243,6 +243,42 @@ class Evolution {
 		}
 
 		return '';
+	}
+
+	/** Prefere telefone real (senderPn) antes de cair no identificador @lid. */
+	private static function resolverTelefoneContato(array $msg, string $remoteJid): string {
+		$key = $msg['key'] ?? [];
+		$candidatos = [
+			$key['senderPn'] ?? null,
+			$key['remoteJidAlt'] ?? null,
+			$msg['senderPn'] ?? null,
+			$msg['remoteJidAlt'] ?? null,
+			$remoteJid,
+		];
+
+		foreach ($candidatos as $jid) {
+			if (!is_string($jid) || trim($jid) === '') {
+				continue;
+			}
+			$jid = trim($jid);
+			if (strpos($jid, '@g.us') !== false) {
+				continue;
+			}
+			if (strpos($jid, '@s.whatsapp.net') !== false) {
+				$tel = EvolutionApiService::normalizarTelefone(explode('@', $jid)[0] ?? '');
+				if ($tel !== '') {
+					return $tel;
+				}
+			}
+			if (strpos($jid, '@') === false) {
+				$tel = EvolutionApiService::normalizarTelefone($jid);
+				if ($tel !== '') {
+					return $tel;
+				}
+			}
+		}
+
+		return self::jidParaTelefone($remoteJid);
 	}
 
 	private static function jidParaTelefone(string $remoteJid): string {

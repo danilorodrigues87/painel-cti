@@ -78,6 +78,27 @@ class WhatsappConversa {
 			->fetchObject(self::class) ?: null;
 	}
 
+	/** Une thread @lid com telefone real quando o sufixo bate. */
+	public static function buscarConversaPorTelefoneReal(int $idAdmin, string $telefone): ?self {
+		if (!self::tabelaExiste()) {
+			return null;
+		}
+		$digitos = preg_replace('/\D+/', '', $telefone) ?? '';
+		if (strlen($digitos) < 10) {
+			return null;
+		}
+		$suf = addslashes(substr($digitos, -8));
+		$tel = addslashes($telefone);
+		return (new Database('whatsapp_conversas'))
+			->select(
+				'id_admin = '.(int)$idAdmin
+				.' AND (telefone = "'.$tel.'" OR telefone LIKE "%'.$suf.'" OR telefone LIKE "lid:%'.$suf.'%")',
+				'id DESC',
+				1
+			)
+			->fetchObject(self::class) ?: null;
+	}
+
 	public static function findOrCreate(int $idAdmin, string $telefone, ?string $nome = null, ?int $numeroId = null, bool $nomeDoCliente = false): ?self {
 		if (!self::tabelaExiste()) {
 			return null;
@@ -89,8 +110,15 @@ class WhatsappConversa {
 		}
 
 		$existente = self::getByIdAdminTelefone($idAdmin, $telefone);
+		if (!($existente instanceof self) && strpos($telefone, 'lid:') !== 0) {
+			$existente = self::buscarConversaPorTelefoneReal($idAdmin, $telefone);
+		}
 		if ($existente instanceof self) {
 			$upd = [];
+			if (strpos($telefone, 'lid:') !== 0 && strpos((string)$existente->telefone, 'lid:') === 0) {
+				$upd['telefone'] = $telefone;
+				$existente->telefone = $telefone;
+			}
 			if ($nome && ($nomeDoCliente || empty($existente->nome_contato))) {
 				$upd['nome_contato'] = $nome;
 				$existente->nome_contato = $nome;
@@ -281,6 +309,29 @@ class WhatsappConversa {
 	}
 
 	/**
+	 * Mesma regra de visibilidade usada na listagem do inbox e ao carregar mensagens.
+	 */
+	public static function usuarioPodeVerConversa(self $conv, string $nivel, int $usuarioId, array $setorIds): bool {
+		if ($nivel === 'Diretor') {
+			return true;
+		}
+		if ((int)$conv->id_atendente === $usuarioId) {
+			return true;
+		}
+		if ($conv->setor_id && in_array((int)$conv->setor_id, $setorIds, true) && !(int)$conv->id_atendente) {
+			return true;
+		}
+		$estado = (string)($conv->chatbot_estado ?? '');
+		if (in_array($estado, ['novo', 'aguardando_setor', 'fila'], true) && !(int)$conv->id_atendente) {
+			return true;
+		}
+		if ($conv->setor_id === null && !(int)$conv->id_atendente && in_array($estado, ['novo', 'aguardando_setor', 'fila', ''], true)) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Lista conversas visíveis ao usuário.
 	 * @param string $filtro todas|minhas|fila
 	 */
@@ -352,5 +403,46 @@ class WhatsappConversa {
 			LIMIT '.$limite;
 
 		return (new Database('whatsapp_conversas'))->execute($sql)->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+	}
+
+	/**
+	 * Encerra em lote conversas em andamento visíveis ao usuário (mesma regra do inbox).
+	 */
+	public static function fecharTodasEmAndamento(
+		int $idAdmin,
+		int $usuarioId,
+		string $nivel,
+		array $setorIds
+	): int {
+		if (!self::tabelaExiste()) {
+			return 0;
+		}
+
+		$where = 'id_admin = '.(int)$idAdmin;
+
+		if ($nivel !== 'Diretor') {
+			$parts = ['id_atendente = '.(int)$usuarioId];
+			if ($setorIds) {
+				$ids = implode(',', array_map('intval', $setorIds));
+				$parts[] = '(setor_id IN ('.$ids.') AND (id_atendente IS NULL OR id_atendente = 0))';
+			}
+			$parts[] = "(chatbot_estado IN ('novo','aguardando_setor') OR (setor_id IS NULL AND id_atendente IS NULL))";
+			$where .= ' AND ('.implode(' OR ', $parts).')';
+		}
+
+		$where .= " AND (status IS NULL OR status IN ('aberta','em_atendimento'))";
+		$where .= " AND IFNULL(chatbot_estado,'') IN ('humano','fila','aguardando_setor','novo')";
+
+		$sql = 'UPDATE whatsapp_conversas SET
+			status = "fechada",
+			chatbot_estado = "encerrado",
+			id_atendente = NULL,
+			setor_id = NULL,
+			assigned_at = NULL
+			WHERE '.$where;
+
+		$stmt = (new Database('whatsapp_conversas'))->execute($sql);
+
+		return (int)$stmt->rowCount();
 	}
 }

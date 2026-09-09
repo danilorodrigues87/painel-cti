@@ -48,6 +48,7 @@ class WhatsappInbox extends Page {
 			'transferir'       => 'transferir',
 			'atendentes_setor' => 'atendentesSetor',
 			'fechar'           => 'fechar',
+			'fechar_todas'     => 'fecharTodas',
 			'setores_listar'   => 'setoresListar',
 			'setor_salvar'     => 'setorSalvar',
 			'atendentes_listar'=> 'atendentesListar',
@@ -100,8 +101,11 @@ class WhatsappInbox extends Page {
 		$idAdmin = self::idAdmin();
 		$id = (int)($post['conversa_id'] ?? 0);
 		$conv = WhatsappConversa::getById($id, $idAdmin);
-		if (!$conv || !self::podeVer($conv)) {
+		if (!$conv) {
 			return self::json(['success' => false, 'message' => 'Conversa não encontrada.']);
+		}
+		if (!self::podeVer($conv)) {
+			return self::json(['success' => false, 'message' => 'Sem permissão para ver esta conversa.']);
 		}
 
 		$conv->marcarLida();
@@ -403,8 +407,11 @@ class WhatsappInbox extends Page {
 		$idAdmin = self::idAdmin();
 		$id = (int)($post['conversa_id'] ?? 0);
 		$conv = WhatsappConversa::getById($id, $idAdmin);
-		if (!$conv || !self::podeVer($conv)) {
-			return json_encode(['success' => false, 'message' => 'Conversa não encontrada.']);
+		if (!$conv) {
+			return self::json(['success' => false, 'message' => 'Conversa não encontrada.']);
+		}
+		if (!self::podeVer($conv)) {
+			return self::json(['success' => false, 'message' => 'Sem permissão para encerrar esta conversa.']);
 		}
 
 		$conv->atualizar([
@@ -415,7 +422,24 @@ class WhatsappInbox extends Page {
 			'assigned_at'    => null,
 		]);
 
-		return json_encode(['success' => true, 'message' => 'Conversa encerrada. Na próxima mensagem do cliente o menu reinicia.']);
+		return self::json(['success' => true, 'message' => 'Conversa encerrada. Na próxima mensagem do cliente o menu reinicia.']);
+	}
+
+	private static function fecharTodas(array $post): string {
+		$user = self::user();
+		$uid = (int)($user['usuario']['id'] ?? 0);
+		$nivel = (string)($user['usuario']['nivel'] ?? '');
+		$setores = WhatsappAtendente::setoresDoUsuario(self::idAdmin(), $uid);
+
+		$fechadas = WhatsappConversa::fecharTodasEmAndamento(self::idAdmin(), $uid, $nivel, $setores);
+
+		return self::json([
+			'success'  => true,
+			'fechadas' => $fechadas,
+			'message'  => $fechadas === 0
+				? 'Nenhuma conversa em andamento para encerrar.'
+				: $fechadas.' conversa(s) encerrada(s). Na próxima mensagem do cliente o menu reinicia.',
+		]);
 	}
 
 	private static function setoresListar(array $post): string {
@@ -507,22 +531,11 @@ class WhatsappInbox extends Page {
 	}
 
 	private static function podeVer(WhatsappConversa $conv): bool {
-		if (self::isDiretor()) {
-			return true;
-		}
 		$user = self::user();
 		$uid = (int)($user['usuario']['id'] ?? 0);
-		if ((int)$conv->id_atendente === $uid) {
-			return true;
-		}
+		$nivel = (string)($user['usuario']['nivel'] ?? '');
 		$setores = WhatsappAtendente::setoresDoUsuario(self::idAdmin(), $uid);
-		if ($conv->setor_id && in_array((int)$conv->setor_id, $setores, true) && !(int)$conv->id_atendente) {
-			return true;
-		}
-		$estado = (string)($conv->chatbot_estado ?? '');
-		if (in_array($estado, ['novo', 'aguardando_setor'], true) && !(int)$conv->id_atendente) {
-			return true;
-		}
-		return false;
+
+		return WhatsappConversa::usuarioPodeVerConversa($conv, $nivel, $uid, $setores);
 	}
 }
