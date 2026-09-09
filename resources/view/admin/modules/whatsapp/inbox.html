@@ -23,9 +23,15 @@
 <div class="tab-content">
 	<div class="tab-pane fade show active" id="tab-inbox">
 		<div class="row g-2 mb-2 align-items-center" id="wa-indicadores">
-			<div class="col-auto"><span class="badge bg-danger" id="wa-ind-nao-lidas">0 não lidas</span></div>
-			<div class="col-auto"><span class="badge bg-warning text-dark" id="wa-ind-fila">0 na fila</span></div>
-			<div class="col-auto"><span class="badge bg-primary" id="wa-ind-abertas">0 abertas</span></div>
+			<div class="col-auto">
+				<button type="button" class="badge bg-danger border-0 wa-ind-filtro" data-filtro="nao_lidas" id="wa-ind-nao-lidas" title="Filtrar não lidas">0 não lidas</button>
+			</div>
+			<div class="col-auto">
+				<button type="button" class="badge bg-warning text-dark border-0 wa-ind-filtro" data-filtro="fila" id="wa-ind-fila" title="Filtrar fila">0 na fila</button>
+			</div>
+			<div class="col-auto">
+				<button type="button" class="badge bg-primary border-0 wa-ind-filtro" data-filtro="abertas" id="wa-ind-abertas" title="Filtrar abertas">0 abertas</button>
+			</div>
 			<div class="col-auto small text-muted" id="wa-ind-setores"></div>
 			<div class="col-auto ms-auto">
 				<button type="button" class="btn btn-sm btn-outline-danger" id="btn-wa-fechar-todas" title="Encerrar todas as conversas em andamento">
@@ -163,4 +169,8 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260717b"></script>
+<style>
+.wa-ind-filtro { cursor: pointer; }
+.wa-ind-filtro.wa-ind-ativo { box-shadow: 0 0 0 2px #212529; }
+</style>
+<script src="{{URL}}/resources/js/whatsapp-inbox.js?v=20260909a"></script>

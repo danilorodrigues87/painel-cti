@@ -333,7 +333,7 @@ class WhatsappConversa {
 
 	/**
 	 * Lista conversas visíveis ao usuário.
-	 * @param string $filtro todas|minhas|fila
+	 * @param string $filtro todas|minhas|fila|nao_lidas|abertas
 	 */
 	public static function listarInbox(
 		int $idAdmin,
@@ -349,7 +349,7 @@ class WhatsappConversa {
 		}
 
 		$limite = max(1, min(200, $limite));
-		$filtro = in_array($filtro, ['minhas', 'fila', 'todas'], true) ? $filtro : 'todas';
+		$filtro = in_array($filtro, ['minhas', 'fila', 'todas', 'nao_lidas', 'abertas'], true) ? $filtro : 'todas';
 		$where = 'c.id_admin = '.(int)$idAdmin;
 
 		// Visibilidade base
@@ -367,6 +367,21 @@ class WhatsappConversa {
 			$where .= ' AND c.id_atendente = '.(int)$usuarioId;
 		} elseif ($filtro === 'fila') {
 			$where .= ' AND (c.id_atendente IS NULL OR c.id_atendente = 0)';
+			$where .= " AND c.status != 'fechada' AND IFNULL(c.chatbot_estado,'') != 'encerrado'";
+		} elseif ($filtro === 'nao_lidas') {
+			$where .= " AND c.status != 'fechada' AND IFNULL(c.chatbot_estado,'') != 'encerrado'";
+			if (self::temColunaNaoLida()) {
+				$where .= ' AND c.nao_lida = 1';
+			} elseif (WhatsappMensagem::tabelaExiste()) {
+				$where .= ' AND EXISTS (
+					SELECT 1 FROM whatsapp_mensagens m
+					WHERE m.conversa_id = c.id AND m.direction = "in"
+					  AND m.id = (
+					    SELECT MAX(m2.id) FROM whatsapp_mensagens m2 WHERE m2.conversa_id = c.id
+					  )
+				)';
+			}
+		} elseif ($filtro === 'abertas') {
 			$where .= " AND c.status != 'fechada' AND IFNULL(c.chatbot_estado,'') != 'encerrado'";
 		} else {
 			// todas: oculta encerradas antigas da lista principal (ainda aparecem na busca)
@@ -430,8 +445,8 @@ class WhatsappConversa {
 			$where .= ' AND ('.implode(' OR ', $parts).')';
 		}
 
-		$where .= " AND (status IS NULL OR status IN ('aberta','em_atendimento'))";
-		$where .= " AND IFNULL(chatbot_estado,'') IN ('humano','fila','aguardando_setor','novo')";
+		$where .= " AND (status IS NULL OR status != 'fechada')";
+		$where .= " AND IFNULL(chatbot_estado,'') != 'encerrado'";
 
 		$sql = 'UPDATE whatsapp_conversas SET
 			status = "fechada",

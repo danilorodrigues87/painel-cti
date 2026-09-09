@@ -13,6 +13,84 @@ let waAudioStream = null;
 let waFiltro = 'todas';
 let waBuscaTimer = null;
 
+function sincronizarFiltroWaUi(){
+	$('#wa-filtros button').removeClass('active');
+	const $btn = $('#wa-filtros button[data-filtro="'+waFiltro+'"]');
+	if($btn.length){
+		$btn.addClass('active');
+	}
+	$('.wa-ind-filtro').removeClass('wa-ind-ativo');
+	if(['nao_lidas','fila','abertas'].indexOf(waFiltro) >= 0){
+		$('.wa-ind-filtro[data-filtro="'+waFiltro+'"]').addClass('wa-ind-ativo');
+	}
+}
+
+function aplicarFiltroWa(filtro){
+	waFiltro = filtro || 'todas';
+	sincronizarFiltroWaUi();
+	carregarConversas();
+}
+
+function limparChatWaAberto(){
+	waConversaId = null;
+	waUltimaMsgId = null;
+	waUltimaMsgHash = null;
+	$('#wa-chat-titulo').text('Selecione uma conversa');
+	$('#wa-chat-sub').text('');
+	$('#wa-mensagens').empty();
+	$('#btn-wa-assumir, #btn-wa-transferir, #btn-wa-fechar').addClass('d-none');
+	$('#wa-texto, #btn-wa-enviar, #wa-input-img, #wa-input-doc, #btn-wa-audio, #btn-wa-audio-file').prop('disabled', true);
+	$('.wa-emoji').prop('disabled', true);
+}
+
+function executarFecharTodasWa(){
+	const $btn = $('#btn-wa-fechar-todas');
+	$btn.prop('disabled', true);
+	waPost({ acao: 'fechar_todas' }, function(res){
+		$btn.prop('disabled', false);
+		if(!res || !res.success){
+			if(typeof Swal !== 'undefined'){
+				Swal.fire('Erro', (res && res.message) || 'Falha ao encerrar.', 'error');
+			} else {
+				alert((res && res.message) || 'Falha ao encerrar.');
+			}
+			return;
+		}
+		if(typeof Swal !== 'undefined'){
+			Swal.fire('Concluído', (res.message || ''), (res.fechadas || 0) > 0 ? 'success' : 'info');
+		} else {
+			alert(res.message || 'Concluído.');
+		}
+		limparChatWaAberto();
+		carregarConversas();
+	});
+}
+
+function confirmarFecharTodasWa(){
+	const escopo = waIsDiretor
+		? 'todas as conversas em andamento da escola'
+		: 'suas conversas e as da fila do seu setor';
+	if(typeof Swal !== 'undefined' && Swal.fire){
+		Swal.fire({
+			title: 'Finalizar todas em andamento?',
+			html: 'Serão encerradas <strong>'+escopo+'</strong>.<br><br>Esta ação não pode ser desfeita.',
+			icon: 'warning',
+			showCancelButton: true,
+			confirmButtonText: 'Sim, finalizar todas',
+			confirmButtonColor: '#dc3545',
+			cancelButtonText: 'Cancelar'
+		}).then(function(r){
+			if(r.isConfirmed){
+				executarFecharTodasWa();
+			}
+		});
+		return;
+	}
+	if(window.confirm('Finalizar todas em andamento?\n\nSerão encerradas '+escopo+'.\n\nEsta ação não pode ser desfeita.')){
+		executarFecharTodasWa();
+	}
+}
+
 function waPost(data, cb, silentFail){
 	$.post(url_base + WA_URL, data, cb, 'json').fail(function(){
 		if(!silentFail){
@@ -562,36 +640,13 @@ $(function(){
 			abrirConversa(waConversaId);
 		});
 	});
-	$('#btn-wa-fechar-todas').on('click', function(){
-		const escopo = waIsDiretor
-			? 'todas as conversas em andamento da escola'
-			: 'suas conversas e as da fila do seu setor';
-		Swal.fire({
-			title: 'Finalizar todas em andamento?',
-			html: 'Serão encerradas <strong>'+escopo+'</strong>.<br><br>Esta ação não pode ser desfeita.',
-			icon: 'warning',
-			showCancelButton: true,
-			confirmButtonText: 'Sim, finalizar todas',
-			confirmButtonColor: '#dc3545',
-			cancelButtonText: 'Cancelar'
-		}).then(function(r){
-			if(!r.isConfirmed) return;
-			waPost({ acao: 'fechar_todas' }, function(res){
-				if(!res || !res.success){
-					Swal.fire('Erro', (res && res.message) || 'Falha ao encerrar.', 'error');
-					return;
-				}
-				Swal.fire('Concluído', (res.message || ''), (res.fechadas || 0) > 0 ? 'success' : 'info');
-				waConversaId = null;
-				waUltimaMsgId = null;
-				waUltimaMsgHash = null;
-				$('#wa-chat-titulo').text('Selecione uma conversa');
-				$('#wa-chat-sub').text('');
-				$('#wa-mensagens').empty();
-				$('#btn-wa-assumir, #btn-wa-transferir, #btn-wa-fechar').addClass('d-none');
-				carregarConversas();
-			});
-		});
+	$(document).on('click', '#btn-wa-fechar-todas', function(e){
+		e.preventDefault();
+		confirmarFecharTodasWa();
+	});
+	$(document).on('click', '.wa-ind-filtro', function(e){
+		e.preventDefault();
+		aplicarFiltroWa($(this).data('filtro') || 'todas');
 	});
 	$('#btn-wa-transferir').on('click', function(){
 		if(!waConversaId) return;
@@ -639,10 +694,7 @@ $(function(){
 	});
 
 	$('#wa-filtros').on('click', 'button[data-filtro]', function(){
-		$('#wa-filtros button').removeClass('active');
-		$(this).addClass('active');
-		waFiltro = $(this).data('filtro') || 'todas';
-		carregarConversas();
+		aplicarFiltroWa($(this).data('filtro') || 'todas');
 	});
 	$('#wa-busca').on('input', function(){
 		clearTimeout(waBuscaTimer);
