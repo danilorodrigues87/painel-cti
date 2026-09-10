@@ -13,6 +13,14 @@
 		});
 	}
 
+	function syncUploadFormatoUi() {
+		var ehImagem = bibFiltroTipo === 'image' || bibFiltroTipo === '';
+		$('#wrap-bib-upload-formato').toggleClass('d-none', !ehImagem || bibFiltroFormato === '');
+		if (bibFiltroFormato === 'feed' || bibFiltroFormato === 'story') {
+			$('#bib-upload-formato').val(bibFiltroFormato);
+		}
+	}
+
 	function loadBiblioteca() {
 		var payload = { acao: 'listar' };
 		if (bibFiltroTipo) payload.tipo = bibFiltroTipo;
@@ -21,6 +29,11 @@
 			if (!r || r.sql_ok === false) {
 				$('#bib-grid').html('<div class="col-12 text-warning">' + S.esc((r && r.message) || 'SQL pendente') + '</div>');
 				return;
+			}
+			if (r.formato_col_ok === false) {
+				$('#bib-alerta-formato').removeClass('d-none');
+			} else {
+				$('#bib-alerta-formato').addClass('d-none');
 			}
 			if (r.stats) {
 				$('#bib-stats').text(r.stats.total_itens + ' arquivo(s) · ' + (r.stats.total_bytes_fmt || S.formatBytes(r.stats.total_bytes)));
@@ -49,7 +62,8 @@
 		var ok = 0;
 		list.forEach(function (file) {
 			chain = chain.then(function () {
-				var fmt = S.guessTipo(file.type || file.name) === 'video' ? '' : ($('#bib-upload-formato').val() || 'feed');
+				var ehVideo = S.guessTipo(file.type || file.name) === 'video';
+				var fmt = ehVideo ? '' : ($('#bib-upload-formato').val() || bibFiltroFormato || 'feed');
 				return uploadOne(file, fmt).then(function (r) {
 					if (r && r.success) ok++;
 					return ok;
@@ -59,7 +73,51 @@
 		return chain;
 	}
 
+	function abrirEditarBib($btn) {
+		var id = parseInt($btn.data('id'), 10);
+		var titulo = String($btn.data('titulo') || '');
+		var tipo = String($btn.data('tipo') || 'image');
+		var formato = String($btn.data('formato') || 'feed');
+		var html = '<div class="text-start">'
+			+ '<label class="form-label small mb-1" for="swal-bib-titulo">Título</label>'
+			+ '<input id="swal-bib-titulo" class="form-control mb-2" value="' + S.esc(titulo) + '">';
+		if (tipo === 'image') {
+			html += '<label class="form-label small mb-1" for="swal-bib-formato">Categoria</label>'
+				+ '<select id="swal-bib-formato" class="form-select">'
+				+ '<option value="feed"' + (formato === 'feed' ? ' selected' : '') + '>Quadrado (feed)</option>'
+				+ '<option value="story"' + (formato === 'story' ? ' selected' : '') + '>Story (vertical)</option>'
+				+ '</select>';
+		}
+		html += '</div>';
+
+		Swal.fire({
+			title: 'Editar mídia',
+			html: html,
+			showCancelButton: true,
+			confirmButtonText: 'Salvar',
+			focusConfirm: false,
+			preConfirm: function () {
+				return {
+					titulo: ($('#swal-bib-titulo').val() || '').trim(),
+					formato: $('#swal-bib-formato').val() || formato
+				};
+			}
+		}).then(function (r) {
+			if (!r.isConfirmed) return;
+			var payload = { acao: 'salvar', id: id, titulo: r.value.titulo };
+			if (tipo === 'image') payload.formato = r.value.formato;
+			postApi(payload, function (res) {
+				if (!res || !res.success) {
+					Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
+					return;
+				}
+				loadBiblioteca();
+			});
+		});
+	}
+
 	$(function () {
+		syncUploadFormatoUi();
 		loadBiblioteca();
 
 		$('#bib-filtro-formato .nav-link').on('click', function () {
@@ -67,9 +125,7 @@
 			bibFiltroTipo = String($(this).data('tipo') || '');
 			$('#bib-filtro-formato .nav-link').removeClass('active');
 			$(this).addClass('active');
-			if (bibFiltroFormato === 'feed' || bibFiltroFormato === 'story') {
-				$('#bib-upload-formato').val(bibFiltroFormato);
-			}
+			syncUploadFormatoUi();
 			loadBiblioteca();
 		});
 
@@ -93,24 +149,7 @@
 		});
 
 		$(document).on('click', '.bib-edit', function () {
-			var id = parseInt($(this).data('id'), 10);
-			var atual = String($(this).data('titulo') || '');
-			Swal.fire({
-				title: 'Editar título',
-				input: 'text',
-				inputValue: atual,
-				showCancelButton: true,
-				confirmButtonText: 'Salvar'
-			}).then(function (r) {
-				if (!r.isConfirmed) return;
-				postApi({ acao: 'salvar', id: id, titulo: r.value || '' }, function (res) {
-					if (!res || !res.success) {
-						Swal.fire('Erro', (res && res.message) || 'Falha.', 'error');
-						return;
-					}
-					loadBiblioteca();
-				});
-			});
+			abrirEditarBib($(this));
 		});
 
 		$(document).on('click', '.bib-del', function () {

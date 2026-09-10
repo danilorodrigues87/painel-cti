@@ -194,7 +194,7 @@ class CampanhaFila {
 		$canal = $canal === 'whatsapp' ? 'whatsapp' : 'email';
 		$limite = max(1, (int)$limite);
 		$sql = '
-			SELECT f.*
+			SELECT f.id, f.campanha_id
 			FROM campanha_fila f
 			INNER JOIN campanhas c ON c.id = f.campanha_id AND c.id_admin = f.id_admin
 			WHERE f.id_admin = '.(int)$idAdmin.'
@@ -202,9 +202,48 @@ class CampanhaFila {
 			  AND c.status = "enviando"
 			  AND c.canal = "'.addslashes($canal).'"
 			ORDER BY f.id ASC
-			LIMIT '.$limite.'
 		';
-		return (new Database('campanha_fila'))->execute($sql);
+		$stmt = (new Database('campanha_fila'))->execute($sql);
+		$porCampanha = [];
+		while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+			$cid = (int)($row['campanha_id'] ?? 0);
+			if ($cid <= 0) {
+				continue;
+			}
+			if (!isset($porCampanha[$cid])) {
+				$porCampanha[$cid] = [];
+			}
+			$porCampanha[$cid][] = (int)$row['id'];
+		}
+
+		$ids = [];
+		$round = 0;
+		while (count($ids) < $limite) {
+			$added = false;
+			foreach ($porCampanha as $lista) {
+				if (!isset($lista[$round])) {
+					continue;
+				}
+				$ids[] = $lista[$round];
+				$added = true;
+				if (count($ids) >= $limite) {
+					break 2;
+				}
+			}
+			if (!$added) {
+				break;
+			}
+			$round++;
+		}
+
+		if (!$ids) {
+			return (new Database('campanha_fila'))->execute('SELECT * FROM campanha_fila WHERE 1=0');
+		}
+
+		$idList = implode(',', array_map('intval', $ids));
+		return (new Database('campanha_fila'))->execute(
+			'SELECT f.* FROM campanha_fila f WHERE f.id IN ('.$idList.') ORDER BY FIELD(f.id, '.$idList.')'
+		);
 	}
 
 	public function marcarEnviado(?string $mensagemEnviada = null): void {

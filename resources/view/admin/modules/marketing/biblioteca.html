@@ -6,6 +6,10 @@
 <div class="alert alert-info small">
 	Imagens até 8 MB · vídeos até 100 MB. Arquivos ficam em <code>uploads/social/</code> da escola.
 	Exclusão bloqueada se a mídia estiver em post agendado ou campanha.
+	Defina a categoria <strong>Quadrado</strong> ou <strong>Story</strong> no upload ou em <strong>Editar</strong>.
+</div>
+<div class="alert alert-warning small d-none" id="bib-alerta-formato">
+	Não foi possível ativar categorias no banco. Rode <code>database/social_biblioteca_formato.sql</code> no phpMyAdmin.
 </div>
 
 <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
@@ -25,10 +29,12 @@
 				<li class="nav-item"><button type="button" class="nav-link" data-formato="" data-tipo="">Todos</button></li>
 			</ul>
 			<div class="d-flex gap-2 align-items-center flex-wrap">
-				<select class="form-select form-select-sm" id="bib-upload-formato" style="width:auto;">
-					<option value="feed">Quadrado (feed)</option>
-					<option value="story">Story (vertical)</option>
-				</select>
+				<div id="wrap-bib-upload-formato">
+					<select class="form-select form-select-sm" id="bib-upload-formato" style="width:auto;" title="Categoria do upload">
+						<option value="feed">Quadrado (feed)</option>
+						<option value="story">Story (vertical)</option>
+					</select>
+				</div>
 				<label class="btn btn-sm btn-primary mb-0">
 					<i class="fas fa-upload"></i> Upload
 					<input type="file" id="bib-upload" class="d-none" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple>
@@ -61,5 +67,5 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/social-biblioteca-shared.js?v=20260909g"></script>
-<script src="{{URL}}/resources/js/marketing-biblioteca.js?v=20260909g"></script>
+<script src="{{URL}}/resources/js/social-biblioteca-shared.js?v=20260910a"></script>
+<script src="{{URL}}/resources/js/marketing-biblioteca.js?v=20260910a"></script>

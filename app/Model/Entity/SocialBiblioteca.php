@@ -66,9 +66,13 @@ class SocialBiblioteca {
 
 
 
-	public static function colunaFormatoExiste(): bool {
+	public static function colunaFormatoExiste(bool $forceRefresh = false): bool {
 
 		static $ok = null;
+
+		if ($forceRefresh) {
+			$ok = null;
+		}
 
 		if ($ok !== null) {
 
@@ -98,6 +102,31 @@ class SocialBiblioteca {
 
 		return $ok;
 
+	}
+
+	/** Cria coluna `formato` se a migration ainda não foi aplicada. */
+	public static function garantirColunaFormato(): bool {
+		if (!self::tabelaExiste()) {
+			return false;
+		}
+		if (self::colunaFormatoExiste()) {
+			return true;
+		}
+		try {
+			(new Database())->execute(
+				'ALTER TABLE `social_biblioteca`
+				 ADD COLUMN `formato` VARCHAR(16) NULL DEFAULT NULL
+				   COMMENT \'feed|story (imagens)\' AFTER `tipo`'
+			);
+			(new Database())->execute(
+				'UPDATE `social_biblioteca`
+				 SET `formato` = "feed"
+				 WHERE `tipo` = "image" AND (`formato` IS NULL OR `formato` = "")'
+			);
+		} catch (\Throwable $e) {
+			return false;
+		}
+		return self::colunaFormatoExiste(true);
 	}
 
 

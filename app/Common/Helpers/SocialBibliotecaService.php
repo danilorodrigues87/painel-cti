@@ -22,6 +22,7 @@ class SocialBibliotecaService {
 				'message' => 'Execute database/social_fase_a_produto.sql',
 			];
 		}
+		SocialBiblioteca::garantirColunaFormato();
 		$tipo = ($tipo === 'image' || $tipo === 'video') ? $tipo : null;
 		$formato = in_array($formato, ['feed', 'story'], true) ? $formato : null;
 		$itens = [];
@@ -31,7 +32,7 @@ class SocialBibliotecaService {
 				'id' => (int)$b->id,
 				'titulo' => (string)($b->titulo ?? ''),
 				'tipo' => $b->tipo,
-				'formato' => $b->formato ?? null,
+				'formato' => self::formatoExibicao($b),
 				'path' => $path,
 				'url' => $b->urlPublica(),
 				'mime' => $b->mime,
@@ -55,6 +56,7 @@ class SocialBibliotecaService {
 		if (!self::tabelaOk()) {
 			return ['success' => false, 'message' => 'Execute database/social_fase_a_produto.sql'];
 		}
+		SocialBiblioteca::garantirColunaFormato();
 		$saved = SocialMediaStorage::salvarUpload($idAdmin, $file);
 		if (!$saved) {
 			return ['success' => false, 'message' => 'Upload inválido (use imagem ≤8MB ou vídeo ≤100MB).'];
@@ -85,17 +87,35 @@ class SocialBibliotecaService {
 		];
 	}
 
-	public static function salvarTitulo(int $id, int $idAdmin, string $titulo): array {
+	public static function salvarTitulo(int $id, int $idAdmin, string $titulo, ?string $formato = null): array {
 		if (!self::tabelaOk()) {
 			return ['success' => false, 'message' => 'Biblioteca indisponível.'];
 		}
+		SocialBiblioteca::garantirColunaFormato();
 		$ob = SocialBiblioteca::getById($id, $idAdmin);
 		if (!$ob) {
 			return ['success' => false, 'message' => 'Mídia não encontrada.'];
 		}
 		$ob->titulo = trim($titulo) ?: null;
+		if ($formato !== null && ($ob->tipo ?? '') === 'image') {
+			$fmt = trim($formato);
+			$ob->formato = in_array($fmt, ['feed', 'story'], true) ? $fmt : 'feed';
+		}
 		$ob->salvar();
-		return ['success' => true, 'message' => 'Título atualizado.'];
+		return [
+			'success' => true,
+			'message' => 'Mídia atualizada.',
+			'formato' => self::formatoExibicao($ob),
+		];
+	}
+
+	/** Normaliza formato para API/UI (imagens sem valor = quadrado). */
+	public static function formatoExibicao(SocialBiblioteca $b): ?string {
+		if (($b->tipo ?? '') !== 'image') {
+			return null;
+		}
+		$fmt = trim((string)($b->formato ?? ''));
+		return in_array($fmt, ['feed', 'story'], true) ? $fmt : 'feed';
 	}
 
 	public static function excluir(int $id, int $idAdmin): array {

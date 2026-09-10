@@ -235,7 +235,7 @@ class CampanhaWorker {
 		return !empty($row['ultimo']) ? (string)$row['ultimo'] : null;
 	}
 
-	private static function esperaPacingCampanha(int $campanhaId, int $idAdmin, int $delay): int {
+	public static function esperaPacingCampanha(int $campanhaId, int $idAdmin, int $delay): int {
 		$sql = '
 			SELECT MAX(enviado_em) AS ultimo
 			FROM campanha_fila
@@ -395,32 +395,57 @@ class CampanhaWorker {
 			} else {
 				$lockEnvio = null;
 				if ($canal === 'whatsapp') {
-					if ($enviado1a1NestaRun) {
+					$pacingProprio = !empty($pacingCamp['personalizado']);
+					if ($enviado1a1NestaRun && !$pacingProprio) {
 						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
 						break;
 					}
-					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delayCampanha);
+					$espera1a1 = $pacingProprio
+						? self::esperaPacingCampanha((int)$campanha->id, $escolaId, WhatsappPacingHelper::delayCampanha1a1($delayCampanha))
+						: self::esperaPacing1a1Escola($escolaId, $delayCampanha);
 					if ($espera1a1 > 0) {
-						if ($aplicarDelay && $espera1a1 <= 120) {
+						if ($aplicarDelay && $espera1a1 <= 120 && !$pacingProprio) {
 							sleep($espera1a1);
 						} else {
 							$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+							if ($pacingProprio) {
+								continue;
+							}
 							break;
 						}
 					}
+					// Um número WA por escola — lock global no envio; pacing pode ser por campanha
 					$lockEnvio = 'cti_1a1_send_'.(int)$escolaId;
 					$lockRow = (new \App\Model\Db\Database('campanha_fila'))
 						->execute("SELECT GET_LOCK('".addslashes($lockEnvio)."', 5) AS l")
 						->fetch(\PDO::FETCH_ASSOC);
 					if ((int)($lockRow['l'] ?? 0) !== 1) {
 						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+						if ($pacingProprio) {
+							continue;
+						}
 						break;
 					}
-					$espera1a1 = self::esperaPacing1a1Escola($escolaId, $delayCampanha);
+					$espera1a1 = $pacingProprio
+						? self::esperaPacingCampanha((int)$campanha->id, $escolaId, WhatsappPacingHelper::delayCampanha1a1($delayCampanha))
+						: self::esperaPacing1a1Escola($escolaId, $delayCampanha);
 					if ($espera1a1 > 0) {
 						(new \App\Model\Db\Database('campanha_fila'))->execute("SELECT RELEASE_LOCK('".addslashes($lockEnvio)."')");
 						$stats['motivo'] = $stats['motivo'] ?: 'pacing_1a1';
+						if ($pacingProprio) {
+							continue;
+						}
 						break;
+					}
+				} elseif ($canal === 'email' && !empty($pacingCamp['personalizado'])) {
+					$esperaEmail = self::esperaPacingCampanha((int)$campanha->id, $escolaId, max(1, $delayCampanha));
+					if ($esperaEmail > 0) {
+						if ($aplicarDelay && $esperaEmail <= 120) {
+							sleep($esperaEmail);
+						} else {
+							$stats['motivo'] = $stats['motivo'] ?: 'pacing_email';
+							continue;
+						}
 					}
 				}
 			}

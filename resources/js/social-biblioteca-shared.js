@@ -14,10 +14,10 @@ window.SocialBibShared = window.SocialBibShared || {};
 		return 'image';
 	};
 
-	S.badgeFormato = function (fmt) {
+	S.badgeFormato = function (fmt, tipo) {
+		if ((tipo || '') === 'video') return '<span class="badge bg-dark">Vídeo</span> ';
 		if (fmt === 'story') return '<span class="badge bg-info">Story</span> ';
-		if (fmt === 'feed') return '<span class="badge bg-secondary">Quadrado</span> ';
-		return '';
+		return '<span class="badge bg-secondary">Quadrado</span> ';
 	};
 
 	S.formatBytes = function (bytes) {
@@ -52,12 +52,12 @@ window.SocialBibShared = window.SocialBibShared || {};
 			} else {
 				btn = '<div class="btn-group w-100">'
 					+ '<button type="button" class="btn btn-sm btn-outline-secondary bib-ver" data-url="' + S.esc(u) + '" data-tipo="' + S.esc(isVid ? 'video' : 'image') + '" data-titulo="' + S.esc(it.titulo || it.path || '') + '">Ver</button>'
-					+ '<button type="button" class="btn btn-sm btn-outline-primary bib-edit" data-id="' + it.id + '" data-titulo="' + S.esc(it.titulo || '') + '">Editar</button>'
+					+ '<button type="button" class="btn btn-sm btn-outline-primary bib-edit" data-id="' + it.id + '" data-titulo="' + S.esc(it.titulo || '') + '" data-formato="' + S.esc(it.formato || 'feed') + '" data-tipo="' + S.esc(it.tipo || 'image') + '">Editar</button>'
 					+ '<button type="button" class="btn btn-sm btn-outline-danger bib-del" data-id="' + it.id + '">Excluir</button>'
 					+ '</div>';
 			}
 			return '<div class="col-6 col-md-3 col-lg-2"><div class="border rounded p-1 h-100">' + media
-				+ '<div class="small text-truncate mt-1">' + S.badgeFormato(it.formato) + S.esc(it.titulo || it.path || '') + '</div>'
+				+ '<div class="small text-truncate mt-1">' + S.badgeFormato(it.formato, it.tipo) + S.esc(it.titulo || it.path || '') + '</div>'
 				+ meta + btn + '</div></div>';
 		}).join(''));
 	};

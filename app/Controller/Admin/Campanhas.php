@@ -165,13 +165,6 @@ class Campanhas extends Page {
 		if ($soGrupos && empty($pacing['pode_enviar'])) {
 			return;
 		}
-		if (!$soGrupos) {
-			$pacing1a1 = CampanhaWorker::infoPacing1a1($idAdmin);
-			if (empty($pacing1a1['pode_enviar'])) {
-				return;
-			}
-		}
-
 		CampanhaWorker::processar($idAdmin, 1, false);
 		$ativos = EntityCampanhas::get('id_admin = '.(int)$idAdmin.' AND status = "enviando"');
 		while ($c = $ativos->fetchObject(EntityCampanhas::class)) {

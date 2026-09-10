@@ -65,10 +65,14 @@ class MarketingBiblioteca extends Page {
 				$res['stats'] = SocialBibliotecaService::estatisticas($idAdmin);
 				return self::json($res);
 			case 'salvar':
+				$formato = array_key_exists('formato', $post)
+					? (string)($post['formato'] ?? '')
+					: null;
 				return self::json(SocialBibliotecaService::salvarTitulo(
 					(int)($post['id'] ?? 0),
 					$idAdmin,
-					(string)($post['titulo'] ?? '')
+					(string)($post['titulo'] ?? ''),
+					$formato
 				));
 			case 'excluir':
 				return self::json(SocialBibliotecaService::excluir(
