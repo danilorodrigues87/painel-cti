@@ -3,6 +3,7 @@
 namespace App\Common\Helpers;
 
 use App\Model\Entity\Caixa as EntityCaixa;
+use App\Common\Helpers\CaixaRecebimentoService;
 use App\Model\Entity\Estoque\Stq_Produtos;
 use App\Model\Entity\Estoque\Stq_VendaItens;
 use App\Model\Entity\Estoque\Stq_Vendas;
@@ -16,18 +17,24 @@ class EstoqueVendaHelper {
 	 * Finaliza venda PDV: valida estoque, grava venda/itens, baixa estoque, lança Entrada paga.
 	 *
 	 * @param array<int,array{id_produto:int,qtd:int,valor_unitario?:float}> $itens
+	 * @param string|array<int,array{tipo_pagamento:string,valor:float}> $tipoPagamentoOuLinhas
 	 * @return array{ok:bool,message:string,id_venda?:int,id_caixa?:int,total?:float}
 	 */
-	public static function finalizar(int $idAdmin, array $itens, string $tipoPagamento, string $observacao = ''): array {
-		$tipoPagamento = trim($tipoPagamento);
-		if (!in_array($tipoPagamento, self::$formas, true)) {
-			return ['ok' => false, 'message' => 'Forma de pagamento inválida.'];
+	public static function finalizar(int $idAdmin, array $itens, $tipoPagamentoOuLinhas, string $observacao = ''): array {
+		$pagamentos = is_array($tipoPagamentoOuLinhas)
+			? CaixaRecebimentoService::normalizarLinhas($tipoPagamentoOuLinhas)
+			: [];
+		$tipoLegado = is_string($tipoPagamentoOuLinhas) ? trim($tipoPagamentoOuLinhas) : '';
+		if (empty($pagamentos)) {
+			if ($tipoLegado === '' || !in_array($tipoLegado, self::$formas, true)) {
+				return ['ok' => false, 'message' => 'Forma de pagamento inválida.'];
+			}
 		}
 		if (empty($itens)) {
 			return ['ok' => false, 'message' => 'Inclua ao menos um produto.'];
 		}
 
-		$linhas = [];
+		$produtos = [];
 		$total = 0.0;
 
 		foreach ($itens as $raw) {
@@ -54,7 +61,7 @@ class EstoqueVendaHelper {
 			}
 			$sub = round($unit * $qtd, 2);
 			$total += $sub;
-			$linhas[] = [
+			$produtos[] = [
 				'produto' => $prod,
 				'qtd' => $qtd,
 				'valor_unitario' => $unit,
@@ -67,6 +74,16 @@ class EstoqueVendaHelper {
 			return ['ok' => false, 'message' => 'Total da venda deve ser maior que zero.'];
 		}
 
+		if (!empty($pagamentos)) {
+			$somaPag = 0.0;
+			foreach ($pagamentos as $p) {
+				$somaPag += $p['valor'];
+			}
+			if (abs($somaPag - $total) > FinanceiroAlunoHelper::TOLERANCIA_VALOR) {
+				return ['ok' => false, 'message' => 'Soma das formas de pagamento deve igualar o total da venda.'];
+			}
+		}
+
 		$user = SessionUser::getUserLogedData();
 		$idUsuario = (int)($user['usuario']['id'] ?? 0);
 
@@ -74,14 +91,16 @@ class EstoqueVendaHelper {
 		$venda->id_admin = $idAdmin;
 		$venda->id_usuario = $idUsuario > 0 ? $idUsuario : null;
 		$venda->total = $total;
-		$venda->tipo_pagamento = $tipoPagamento;
+		$venda->tipo_pagamento = !empty($pagamentos)
+			? CaixaRecebimentoService::resumoTipoPagamento($pagamentos)
+			: $tipoLegado;
 		$venda->id_caixa = null;
 		$venda->observacao = $observacao !== '' ? mb_substr($observacao, 0, 500) : null;
 		if (!$venda->cadastrar()) {
 			return ['ok' => false, 'message' => 'Falha ao registrar a venda.'];
 		}
 
-		foreach ($linhas as $linha) {
+		foreach ($produtos as $linha) {
 			$item = new Stq_VendaItens();
 			$item->id_venda = (int)$venda->id;
 			$item->id_produto = (int)$linha['produto']->id;
@@ -110,7 +129,7 @@ class EstoqueVendaHelper {
 		$desc = 'Venda PDV #' . (int)$venda->id;
 		$nomes = array_map(function ($l) {
 			return $l['produto']->nome . ' x' . $l['qtd'];
-		}, $linhas);
+		}, $produtos);
 		if (count($nomes) <= 3) {
 			$desc .= ' — ' . implode(', ', $nomes);
 		} else {
@@ -121,14 +140,14 @@ class EstoqueVendaHelper {
 		$caixa->id_admin = $idAdmin;
 		$caixa->descricao = mb_substr($desc, 0, 250);
 		$caixa->tipo_transacao = 'Entrada';
-		$caixa->tipo_pagamento = $tipoPagamento;
+		$caixa->tipo_pagamento = '';
 		$caixa->valor = $total;
-		$caixa->valor_pago = $total;
+		$caixa->valor_pago = 0;
 		$caixa->vencimento = $hoje;
-		$caixa->data_pagamento = $hoje;
+		$caixa->data_pagamento = '';
 		$caixa->referencia = 'venda_stq';
 		$caixa->id_ref = (int)$venda->id;
-		$caixa->status = \App\Common\Helpers\FinanceiroAlunoHelper::STATUS_PAGO;
+		$caixa->status = \App\Common\Helpers\FinanceiroAlunoHelper::STATUS_ABERTO;
 		$caixa->txt_id = '';
 		$caixa->pix_copia_cola = '';
 		$caixa->nosso_numero = '';
@@ -137,6 +156,26 @@ class EstoqueVendaHelper {
 		$idCaixa = (int)($caixa->id ?? 0);
 		if ($idCaixa > 0) {
 			$venda->atualizarCaixa($idCaixa);
+			if (!empty($pagamentos)) {
+				$resRec = CaixaRecebimentoService::registrar(
+					$idAdmin,
+					$idCaixa,
+					$pagamentos,
+					$hoje,
+					false,
+					$total
+				);
+				if (empty($resRec['ok'])) {
+					return ['ok' => false, 'message' => $resRec['message'] ?? 'Falha ao registrar pagamento.'];
+				}
+			} else {
+				$caixa->id = $idCaixa;
+				$caixa->valor_pago = $total;
+				$caixa->tipo_pagamento = $tipoLegado;
+				$caixa->data_pagamento = $hoje;
+				$caixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
+				$caixa->atualizar();
+			}
 		}
 
 		return [

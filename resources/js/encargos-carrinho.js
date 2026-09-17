@@ -29,6 +29,9 @@ function atualizarTotalCarrinhoEncargos() {
 	});
 
 	$('#valor_pagar_total').val(total.toFixed(2));
+	if ($('#valor_saldo_receber').length) {
+		$('#valor_saldo_receber').val(total.toFixed(2));
+	}
 	var $totalLabel = $('#carrinho-total-pagar');
 	if ($totalLabel.length) {
 		$totalLabel.text('R$ ' + formatMoedaCarrinho(total));
@@ -36,6 +39,9 @@ function atualizarTotalCarrinhoEncargos() {
 
 	if (typeof calcularTrocoCarrinho === 'function') {
 		calcularTrocoCarrinho();
+	}
+	if (typeof refreshPagamentoMultiplo === 'function') {
+		refreshPagamentoMultiplo('#body_carrinho_pagamento .pagamento-multiplo');
 	}
 }
 

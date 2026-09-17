@@ -134,6 +134,8 @@
 							t.id +
 							'" data-valor="' +
 							(t.total_com_encargos || t.valor) +
+							'" data-ja-pago="' +
+							(t.valor_pago || 0) +
 							'" data-desc="' +
 							esc(t.descricao) +
 							'">Só esta</button>'
@@ -251,6 +253,8 @@
 					t.id +
 					'" data-valor="' +
 					(t.total_com_encargos || t.valor) +
+					'" data-ja-pago="' +
+					(t.valor_pago || 0) +
 					'" data-desc="' +
 					esc(t.descricao) +
 					'">Só esta</button>'
@@ -308,7 +312,12 @@
 		$('#box-extrato')
 			.off('click', '.btn-dar-baixa')
 			.on('click', '.btn-dar-baixa', function () {
-				abrirBaixa($(this).data('id'), parseFloat($(this).data('valor')), String($(this).data('desc') || ''));
+				abrirBaixa(
+					$(this).data('id'),
+					parseFloat($(this).data('valor')),
+					String($(this).data('desc') || ''),
+					parseFloat($(this).data('ja-pago')) || 0
+				);
 			});
 		$('#box-extrato')
 			.off('click', '.btn-baixa-acordo')
@@ -328,7 +337,37 @@
 			});
 	}
 
-	function abrirBaixa(idTitulo, valor, desc) {
+	function htmlPagamentoExtratoSwal() {
+		var $src = $('#extrato-pm-source .pagamento-multiplo').first();
+		if (!$src.length) {
+			return '<p class="text-danger small">Formulário de pagamento indisponível.</p>';
+		}
+		var $clone = $src.clone(false);
+		$clone.removeData('pm-init');
+		$clone.attr('data-total-input', 'extrato-baixa-total-sw');
+		$clone.find('.pm-linhas').empty();
+		return (
+			'<input type="hidden" id="extrato-baixa-total-sw" value="0">' +
+			'<div id="extrato-pm-wrap">' +
+			$('<div>').append($clone).html() +
+			'</div>'
+		);
+	}
+
+	function syncPagamentoExtratoSwal(totalDevido, jaPago) {
+		$('#extrato-baixa-total-sw').val((Number(totalDevido) || 0).toFixed(2));
+		var $wrap = $('#extrato-pm-wrap .pagamento-multiplo');
+		$wrap.attr('data-ja-pago', Number(jaPago) || 0);
+		if (typeof initPagamentoMultiplo === 'function') {
+			initPagamentoMultiplo('#extrato-pm-wrap');
+		}
+		if (typeof refreshPagamentoMultiplo === 'function') {
+			refreshPagamentoMultiplo($wrap);
+		}
+	}
+
+	function abrirBaixa(idTitulo, valor, desc, jaPago) {
+		jaPago = Number(jaPago) || 0;
 		var hoje = new Date();
 		var yyyy = hoje.getFullYear();
 		var mm = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -355,27 +394,15 @@
 			var v0 = valorSugerido(enc);
 			Swal.fire({
 				title: 'Dar baixa',
-				width: 520,
+				width: 640,
 				html:
 					'<p class="small text-start mb-2">' +
 					esc(desc) +
 					'</p>' +
 					montarHtmlEncargos(enc) +
 					'<div class="text-start">' +
-					'<label class="form-label small mb-0">Valor pago (R$)</label>' +
-					'<input id="bx-valor" type="number" step="0.01" min="0.01" class="form-control form-control-sm mb-2" value="' +
-					v0.toFixed(2) +
-					'">' +
-					'<label class="form-label small mb-0">Forma de pagamento</label>' +
-					'<select id="bx-tipo" class="form-select form-select-sm mb-2">' +
-					'<option value="">Selecione</option>' +
-					'<option value="Dinheiro">Dinheiro</option>' +
-					'<option value="Pix">Pix</option>' +
-					'<option value="Cartão">Cartão</option>' +
-					'<option value="Transferência">Transferência</option>' +
-					'<option value="Boleto">Boleto</option>' +
-					'</select>' +
-					'<label class="form-label small mb-0">Data do pagamento</label>' +
+					htmlPagamentoExtratoSwal() +
+					'<label class="form-label small mb-0 mt-2">Data do pagamento</label>' +
 					'<input id="bx-data" type="date" class="form-control form-control-sm" value="' +
 					dataDefault +
 					'">' +
@@ -383,9 +410,7 @@
 				showCancelButton: true,
 				confirmButtonText: 'Confirmar baixa',
 				didOpen: function () {
-					if (typeof atualizarTotalEncargosPagamento === 'function') {
-						atualizarTotalEncargosPagamento();
-					}
+					syncPagamentoExtratoSwal(v0, jaPago);
 					$('#bx-data')
 						.off('change.extratoEnc')
 						.on('change.extratoEnc', function () {
@@ -405,43 +430,44 @@
 											'<ul class="list-group list-group-flush border rounded mb-2 text-start small"></ul>'
 										);
 										$wrap.html(r.html_bloco);
-										$('#bx-valor').closest('.text-start').before($wrap);
+										$('#extrato-pm-wrap').before($wrap);
 									}
 								} else if ($wrap.length) {
 									$wrap.remove();
 								}
-								$('#bx-valor').val(valorSugerido(r).toFixed(2));
-								if (typeof atualizarTotalEncargosPagamento === 'function') {
-									atualizarTotalEncargosPagamento();
-								}
+								syncPagamentoExtratoSwal(valorSugerido(r), jaPago);
 							});
 						});
 				},
 				preConfirm: function () {
-					var tipo = ($('#bx-tipo').val() || '').trim();
-					var v = parseFloat($('#bx-valor').val());
 					var data = $('#bx-data').val();
-					if (!tipo) {
-						Swal.showValidationMessage('Selecione a forma de pagamento.');
-						return false;
-					}
-					if (!(v > 0)) {
-						Swal.showValidationMessage('Informe o valor pago.');
-						return false;
-					}
 					if (!data) {
 						Swal.showValidationMessage('Informe a data.');
 						return false;
 					}
-					return { valor_pago: v, tipo_pagamento: tipo, data_pagamento: data };
+					var $pm = $('#extrato-pm-wrap .pagamento-multiplo');
+					if (typeof validatePagamentoMultiplo !== 'function') {
+						Swal.showValidationMessage('Script de pagamento não carregado.');
+						return false;
+					}
+					var val = validatePagamentoMultiplo($pm);
+					if (!val.ok) {
+						Swal.showValidationMessage(val.message);
+						return false;
+					}
+					return {
+						pagamentos_json: val.pagamentos_json,
+						valor_pago: val.soma,
+						data_pagamento: data,
+					};
 				},
 			}).then(function (r) {
 				if (!r.isConfirmed) return;
 				post({
 					acao: 'dar_baixa',
 					id_titulo: idTitulo,
+					pagamentos_json: r.value.pagamentos_json,
 					valor_pago: r.value.valor_pago,
-					tipo_pagamento: r.value.tipo_pagamento,
 					data_pagamento: r.value.data_pagamento,
 				}).done(function (res) {
 					if (!res || !res.success) {

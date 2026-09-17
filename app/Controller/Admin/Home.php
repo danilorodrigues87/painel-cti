@@ -10,6 +10,7 @@ use \App\Model\Entity\CrmLeads as EntityCrmLeads;
 use \App\Model\Entity\CrmHistorico as EntityCrmHistorico;
 use \App\Session\User\Login as SessionUser;
 use \App\Common\Helpers\NumeroHelper;
+use \App\Common\Helpers\CaixaRecebimentoService;
 use \App\Common\Helpers\DashboardEscolaHelper;
 use \App\Common\Helpers\AgentAnalyticsHelper;
 use PDO;
@@ -220,14 +221,9 @@ class Home extends Page{
 
 	public static function dinheiroEmCaixa(){
 
-		$id_admin = SessionUser::getUserLogedData()['usuario']['id_admin'];
+		$id_admin = (int)SessionUser::getUserLogedData()['usuario']['id_admin'];
 
-		$recebido = Caixa::getCaixa(
-			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Entrada"'
-			.' AND '.\App\Common\Helpers\FinanceiroAlunoHelper::sqlTituloPago('status')
-			.' AND tipo_pagamento = "Dinheiro"',
-			null, null, 'SUM(valor_pago) as recebe'
-		)->fetchObject()->recebe;
+		$recebido = CaixaRecebimentoService::totalEntradasPorForma($id_admin, 'Dinheiro');
 
 		$retirado = Caixa::getCaixa(
 			'id_admin = "'.$id_admin.'" AND tipo_transacao = "Saida"'

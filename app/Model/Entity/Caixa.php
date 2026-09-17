@@ -3,6 +3,7 @@
 namespace App\Model\Entity;
 use App\Model\Db\Database;
 use App\Session\User\Login as SessionUser;
+use App\Model\Entity\CaixaRecebimento;
 
 class Caixa{
  
@@ -122,7 +123,7 @@ class Caixa{
 			$where = 'id = '.(int)$this->id.($idAdmin > 0 ? ' AND id_admin = '.$idAdmin : '');
 		}
 
-		return (new Database('caixa'))->update($where, [
+		$ok = (new Database('caixa'))->update($where, [
 			'valor_pago' => $this->valor_pago,
 			'status' => \App\Common\Helpers\FinanceiroAlunoHelper::STATUS_PAGO,
 			'id_usuario' => 0,
@@ -131,6 +132,36 @@ class Caixa{
 			'ultima_alteracao' => $this->ultima_alteracao,
 			'txt_id' => $txtId,
 		]);
+
+		if ($ok && CaixaRecebimento::tabelaExiste()) {
+			$caixaId = (int)($this->id ?? 0);
+			if ($caixaId <= 0) {
+				$stmt = (new Database('caixa'))->select($where, null, '1');
+				$row = $stmt->fetchObject(self::class);
+				if ($row) {
+					$caixaId = (int)$row->id;
+					$idAdmin = $idAdmin > 0 ? $idAdmin : (int)($row->id_admin ?? 0);
+				}
+			}
+			if ($caixaId > 0) {
+				$existentes = CaixaRecebimento::listByCaixa($caixaId, $idAdmin);
+				if (empty($existentes)) {
+					$rec = new CaixaRecebimento();
+					$rec->id_admin = $idAdmin;
+					$rec->caixa_id = $caixaId;
+					$rec->tipo_pagamento = 'Pix';
+					$rec->valor = round((float)$this->valor_pago, 2);
+					$rec->data_pagamento = (string)$this->data_pagamento;
+					if (strpos($rec->data_pagamento, ':') === false) {
+						$rec->data_pagamento .= ' 12:00:00';
+					}
+					$rec->id_usuario = 0;
+					$rec->inserir();
+				}
+			}
+		}
+
+		return $ok;
 	}
 
 

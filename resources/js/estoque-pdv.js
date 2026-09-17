@@ -45,11 +45,19 @@
 		}, 0);
 	}
 
+	function syncPagamentoPdv(total) {
+		$('#pdv-total-hidden').val((Number(total) || 0).toFixed(2));
+		if (typeof refreshPagamentoMultiplo === 'function') {
+			refreshPagamentoMultiplo('.pagamento-multiplo[data-prefix="pdv"]');
+		}
+	}
+
 	function renderCarrinho() {
 		var tb = $('#pdv-carrinho');
 		if (!carrinho.length) {
 			tb.html('<tr><td colspan="4" class="text-muted p-3">Vazio</td></tr>');
 			$('#pdv-total').text(moeda(0));
+			syncPagamentoPdv(0);
 			return;
 		}
 		var html = '';
@@ -77,7 +85,9 @@
 				'</tr>';
 		});
 		tb.html(html);
-		$('#pdv-total').text(moeda(totalCarrinho()));
+		var tot = totalCarrinho();
+		$('#pdv-total').text(moeda(tot));
+		syncPagamentoPdv(tot);
 	}
 
 	function renderCatalogo() {
@@ -186,6 +196,30 @@
 			return;
 		}
 		var total = totalCarrinho();
+		var $pm = $('.pagamento-multiplo[data-prefix="pdv"]');
+		if (typeof validatePagamentoMultiplo === 'function') {
+			var chk = validatePagamentoMultiplo($pm);
+			if (!chk.ok) {
+				toastErr(chk.message);
+				return;
+			}
+		}
+		var pagJson = ($pm.find('.pm-json').val() || '').trim();
+		var resumoPgto = 'Combinado';
+		try {
+			var linhas = JSON.parse(pagJson || '[]');
+			if (linhas.length === 1) {
+				resumoPgto = linhas[0].tipo_pagamento;
+			} else if (linhas.length > 1) {
+				resumoPgto = linhas
+					.map(function (l) {
+						return l.tipo_pagamento + ' ' + moeda(l.valor);
+					})
+					.join(' + ');
+			}
+		} catch (e) {
+			resumoPgto = '—';
+		}
 		Swal.fire({
 			icon: 'question',
 			title: 'Confirmar venda?',
@@ -194,7 +228,7 @@
 				moeda(total) +
 				'</strong></p>' +
 				'<p class="small text-muted mb-0">Pagamento: ' +
-				esc($('#pdv-pagamento').val()) +
+				esc(resumoPgto) +
 				'</p>',
 			showCancelButton: true,
 			confirmButtonText: 'Confirmar',
@@ -211,7 +245,7 @@
 			post({
 				acao: 'finalizar',
 				itens: JSON.stringify(itens),
-				tipo_pagamento: $('#pdv-pagamento').val(),
+				pagamentos_json: pagJson,
 				observacao: ($('#pdv-obs').val() || '').trim(),
 			}).done(function (res) {
 				if (!res || !res.success) {

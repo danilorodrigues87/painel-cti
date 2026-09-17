@@ -8,6 +8,7 @@ use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\FinanceiroAlunoHelper;
 use App\Common\Helpers\EncargosContratoHelper;
+use App\Common\Helpers\CaixaRecebimentoService;
 use App\Model\Entity\User as EntityUser;
 
 class AlunoExtrato extends Page {
@@ -44,6 +45,12 @@ class AlunoExtrato extends Page {
 			'id_aluno' => (string)$idAluno,
 			'nome_aluno' => htmlspecialchars((string)$aluno->nome, ENT_QUOTES, 'UTF-8'),
 			'email_aluno' => htmlspecialchars((string)$aluno->email, ENT_QUOTES, 'UTF-8'),
+			'show-pagamento-extrato' => CaixaRecebimentoService::renderFormPagamento([
+				'prefix' => 'extrato',
+				'total_input_id' => 'extrato-baixa-total',
+				'permitir_parcial' => true,
+				'ja_pago' => 0,
+			]),
 		]);
 		return parent::getPanel('Carnês', $content, 'Financeiro', $request);
 	}
@@ -149,13 +156,15 @@ class AlunoExtrato extends Page {
 		}
 
 		if ($acao === 'dar_baixa') {
+			$pagamentos = \App\Common\Helpers\CaixaRecebimentoService::parseLinhasFromPost($post);
 			$res = FinanceiroAlunoHelper::darBaixa(
 				$idAdmin,
 				$idAluno,
 				(int)($post['id_titulo'] ?? 0),
 				(float)str_replace(',', '.', (string)($post['valor_pago'] ?? 0)),
 				(string)($post['tipo_pagamento'] ?? ''),
-				(string)($post['data_pagamento'] ?? '')
+				(string)($post['data_pagamento'] ?? ''),
+				$pagamentos ?: null
 			);
 			return json_encode([
 				'success' => !empty($res['ok']),

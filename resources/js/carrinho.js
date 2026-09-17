@@ -132,8 +132,12 @@ function abrirPagamentoCarrinho(){
 			$('#body_carrinho_pagamento').html(result);
 			if (typeof atualizarTotalCarrinhoEncargos === 'function') {
 				atualizarTotalCarrinhoEncargos();
-			} else if (typeof calcularTrocoCarrinho === 'function') {
-				calcularTrocoCarrinho();
+			}
+			if (typeof initPagamentoMultiplo === 'function') {
+				initPagamentoMultiplo('#body_carrinho_pagamento');
+			}
+			if (typeof refreshPagamentoMultiplo === 'function') {
+				refreshPagamentoMultiplo('#body_carrinho_pagamento .pagamento-multiplo');
 			}
 			abrirModalCarrinho();
 		},

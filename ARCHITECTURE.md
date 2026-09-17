@@ -164,6 +164,7 @@ dados pedagógicos / financeiros / CRM / agenda / comunicação
 - Higiene status legado (opt-in): `database/caixa_status_normalizar.sql`
 - Portal aluno: `GET /api/v1/student/finance` + página `/finance` (só leitura, menu se houver títulos)
 - Carrinho de pagamento + recibos (baixa manual dinheiro/cartão)
+- **Pagamento combinado / parcial:** tabela `caixa_recebimentos` (linhas por forma); helper `CaixaRecebimentoService` + UI `resources/js/pagamento-multiplo.js` — Carnês, Caixa Entrada, Carrinho, Extrato do aluno, PDV Estoque; `tipo_pagamento=Combinado` quando há mais de uma linha; SQL `database/caixa_recebimentos.sql` + `database/verificar_sql_caixa_recebimentos.sql`
 - Gateway **Mercado Pago** (PIX QR no carnê) em `app/Common/Gateways/MercadoPago/`
   - Credenciais por escola: `escola_integracoes` (`mp_*`) + tela `/painel/config/pagamentos`
   - Webhook: `POST /webhook/mercadopago/{idAdmin}/{token}` → baixa automática

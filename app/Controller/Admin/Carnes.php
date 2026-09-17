@@ -14,6 +14,7 @@
   use \App\Common\Helpers\BrandingHelper;
   use \App\Common\Helpers\MatriculaStatusHelper;
   use \App\Common\Helpers\FinanceiroAlunoHelper;
+  use \App\Common\Helpers\CaixaRecebimentoService;
   use \App\Common\Helpers\EncargosContratoHelper;
   use \App\Model\Entity\Responsaveis as EntityRes;
 
@@ -320,6 +321,12 @@
      }
    }
 
+   $obCaixa = Caixa::getCaixaById($caixaId);
+   $parc = ($obCaixa instanceof Caixa)
+     ? CaixaRecebimentoService::resumoParcialFormulario($valorPagar, $obCaixa)
+     : ['ja_pago' => 0.0, 'saldo' => $valorPagar, 'html' => '', 'total_exibir' => $valorPagar];
+   $rotuloTotal = $parc['ja_pago'] > FinanceiroAlunoHelper::TOLERANCIA_VALOR ? 'Saldo a pagar' : 'Total a pagar';
+
    if(($dados['vencimento'] ?? '') > DateTimeHelper::hoje()){
     $vencido = 'vence em';
   } else {
@@ -374,60 +381,48 @@
   </li>';
   }
 
+  if ($parc['html'] !== '') {
+    $form .= $parc['html'];
+  }
+
   if ($blocoEncargos !== '') {
     $form .= $blocoEncargos . '
   <li class="list-group-item d-flex justify-content-between enc-total-row">
-  <span>Total a pagar</span>
-  <strong id="enc_total_label">R$ '.NumeroHelper::moedaBr($valorPagar).'</strong>
+  <span>'.$rotuloTotal.'</span>
+  <strong id="enc_total_label">R$ '.NumeroHelper::moedaBr($parc['total_exibir']).'</strong>
   </li>';
   } elseif ($pont['elegivel']) {
     $form .= '
   <li class="list-group-item d-flex justify-content-between">
-  <span>Total a pagar</span>
-  <strong>R$ '.NumeroHelper::moedaBr($valorPagar).'</strong>
+  <span>'.$rotuloTotal.'</span>
+  <strong id="enc_total_label">R$ '.NumeroHelper::moedaBr($parc['total_exibir']).'</strong>
   </li>';
   } else {
     $form .= '
   <li class="list-group-item d-flex justify-content-between">
-  <span>Total a pagar</span>
-  <strong>R$ '.NumeroHelper::moedaBr($valorPagar).'</strong>
+  <span>'.$rotuloTotal.'</span>
+  <strong id="enc_total_label">R$ '.NumeroHelper::moedaBr($parc['total_exibir']).'</strong>
   </li>';
   }
 
   $form .= '
   </ul>
 
+  <input type="hidden" id="valor_devido_titulo" name="valor_devido_titulo" value="'.htmlspecialchars((string)$valorPagar, ENT_QUOTES, 'UTF-8').'">
+  <input type="hidden" id="valor_saldo_receber" name="valor_saldo_receber" value="'.htmlspecialchars((string)$parc['total_exibir'], ENT_QUOTES, 'UTF-8').'">
   <input value="' . @$valorPagar. '" type="hidden" id="valor_pagar" name="valor_pagar">
 
-  <div class="row">
-
-  <div class="form-group col-md-6">
-  <label>Forma de pagamento</label>
-  <select name="tipo_pagamento" class="form-control">
-  <option value="">Selecione o tipo</option>
-  <option value="Dinheiro">Dinheiro</option>  
-  <option value="Pix">Pix</option>    
-  <option value="Cartão">Cartão</option>    
-  <option value="Boleto">Boleto</option>                   
-  </select>
-  </div>
-
-  <div class="form-group col-md-6">
+  <div class="form-group col-md-12 mb-2">
   <label>Data de pagamento</label>
   <input type="datetime-local" name="data_pagamento" '.$habilitado.' value="'.DateTimeHelper::agora().'" class="form-control">
   </div>
-
-  <div class="form-group col-md-6">
-  <label>Valor recebido</label>
-  <input type="text" id="valor_recebido" name="valor_recebido" class="form-control" oninput="calcularTroco()" required>
-  </div>
-
-  <div class="form-group col-md-6">
-  <label>Troco</label>
-  <input type="text" id="troco" readonly class="form-control">
-  </div>
-
-  </div>
+  <input type="hidden" id="ja_pago_titulo" value="'.htmlspecialchars((string)$parc['ja_pago'], ENT_QUOTES, 'UTF-8').'">
+  '.CaixaRecebimentoService::renderFormPagamento([
+    'prefix' => 'carne',
+    'total_input_id' => 'valor_saldo_receber',
+    'permitir_parcial' => true,
+    'ja_pago' => 0,
+  ]).'
 
   </div>
   <div class="modal-footer">
@@ -600,7 +595,7 @@
             </tr>
             <tr>
                 <td class="small">Forma de Pgto:</td>
-                <td class="right small">'.$dados['tipo_pagamento'].'</td>
+                <td class="right small">'.htmlspecialchars(CaixaRecebimentoService::descricaoFormas((int)$dados['id'], $id_admin, (string)($dados['tipo_pagamento'] ?? '')), ENT_QUOTES, 'UTF-8').'</td>
             </tr>
         </table>
 
@@ -960,39 +955,42 @@ public static function registrarPagamento($request){
     "filtro" => $postVars['id_aluno']
   ];
 
-$valor_recebido = str_replace(',', '.', $postVars['valor_recebido']);
-$valor_recebido = filter_var($valor_recebido, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-$valor_recebido = floatval($valor_recebido);
-
-$valor_pagar = str_replace(',', '.', $postVars['valor_pagar']);
-$valor_pagar = filter_var($valor_pagar, FILTER_SANITIZE_NUMBER_FLOAT, FILTER_FLAG_ALLOW_FRACTION);
-$valor_pagar = floatval($valor_pagar);
-
-  if($valor_recebido < $valor_pagar){
-    $resposta ["erro"] = 'Valor recebido é menor que o valor a receber.';
-    return json_encode($resposta);
-  }
-  if($postVars['tipo_pagamento'] == ''){
-    $resposta ["erro"] = 'Selecione uma forma de pagamento.';
+  $id_admin = parent::getIdAdminInt();
+  $caixaId = (int)($postVars['id'] ?? 0);
+  if (!TenantHelper::pertenceCaixa($caixaId, $id_admin)) {
+    $resposta['erro'] = 'Título não encontrado.';
     return json_encode($resposta);
   }
 
-  if($postVars['tipo_pagamento'] == ''){
-    $resposta ["erro"] = 'Selecione uma forma de pagamento.';
+  $linhas = CaixaRecebimentoService::parseLinhasFromPost($postVars);
+  if (empty($linhas)) {
+    $resposta['erro'] = 'Informe ao menos uma forma de pagamento com valor.';
     return json_encode($resposta);
   }
 
-      //NOVA INSTANCIA
-  $obCaixa = new Caixa;
-  $obCaixa->id = $postVars['id'];
-  $obCaixa->valor_pago = $valor_pagar;
-  $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
-  $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
-  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
-  $obCaixa->atualizar();
+  $obTitulo = Caixa::getCaixaById($caixaId);
+  $dataPag = (string)($postVars['data_pagamento'] ?? '');
+  $dataCaixa = $dataPag !== '' ? date('Y-m-d', strtotime($dataPag) ?: time()) : date('Y-m-d');
+  $valorDevido = CaixaRecebimentoService::valorDevidoFromPost(
+    $postVars,
+    $obTitulo instanceof Caixa ? $obTitulo : null,
+    $dataCaixa
+  );
 
-  if(!$obCaixa){
-    $resposta ["erro"] = 'Erro ao registrar o pagamento';
+  $res = CaixaRecebimentoService::registrar(
+    $id_admin,
+    $caixaId,
+    $linhas,
+    $dataPag,
+    true,
+    $valorDevido > 0 ? $valorDevido : null
+  );
+  if (empty($res['ok'])) {
+    $resposta['erro'] = $res['message'] ?? 'Erro ao registrar o pagamento.';
+    return json_encode($resposta);
+  }
+  if (!empty($res['parcial'])) {
+    $resposta['aviso'] = $res['message'] ?? '';
   }
 
   return json_encode($resposta);

@@ -29,10 +29,15 @@
 <div id="totais-extrato" class="row g-2 mb-3"></div>
 <div id="box-extrato"><p class="text-muted">Carregando…</p></div>
 
+<div id="extrato-pm-source" class="d-none" aria-hidden="true">
+	<input type="hidden" id="extrato-baixa-total" value="0">
+	{{show-pagamento-extrato}}
+</div>
+
 <script>
 window.EXTRATO_ALUNO_ID = {{id_aluno}};
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="{{URL}}/resources/js/recibo-acoes.js"></script>
-<script src="{{URL}}/resources/js/encargos-financeiro.js?v=20260905"></script>
-<script src="{{URL}}/resources/js/aluno-extrato.js?v=20260908"></script>
+<script src="{{URL}}/resources/js/encargos-financeiro.js?v=20260917b"></script>
+<script src="{{URL}}/resources/js/aluno-extrato.js?v=20260917a"></script>

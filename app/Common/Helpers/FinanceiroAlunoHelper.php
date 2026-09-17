@@ -38,6 +38,13 @@ class FinanceiroAlunoHelper {
 		return (string)$status === 'Pago';
 	}
 
+	public static function tituloParcial($status, $valorPago): bool {
+		if (!self::tituloAberto($status)) {
+			return false;
+		}
+		return (float)$valorPago > self::TOLERANCIA_VALOR;
+	}
+
 	/**
 	 * Compara valor pago com face do título (com tolerância de centavos).
 	 */
@@ -558,13 +565,17 @@ class FinanceiroAlunoHelper {
 	 * Baixa manual de um título do aluno (matrícula ou acordo).
 	 * @return array{ok:bool,message:string}
 	 */
+	/**
+	 * @param array<int,array{tipo_pagamento:string,valor:float}>|null $pagamentos
+	 */
 	public static function darBaixa(
 		int $idAdmin,
 		int $idAluno,
 		int $idTitulo,
 		float $valorPago,
 		string $tipoPagamento,
-		string $dataPagamento = ''
+		string $dataPagamento = '',
+		?array $pagamentos = null
 	): array {
 		if ($idTitulo <= 0) {
 			return ['ok' => false, 'message' => 'Título inválido.'];
@@ -600,13 +611,17 @@ class FinanceiroAlunoHelper {
 			}
 		}
 
-		$tipoPagamento = trim($tipoPagamento);
-		if ($tipoPagamento === '') {
+		if ($pagamentos === null && $tipoPagamento !== '') {
+			$valorLinha = $valorPago > 0 ? $valorPago : (float)$c->valor;
+			$pagamentos = [['tipo_pagamento' => trim($tipoPagamento), 'valor' => round($valorLinha, 2)]];
+		}
+		if (empty($pagamentos) && CaixaRecebimento::tabelaExiste()) {
+			return ['ok' => false, 'message' => 'Informe as formas de pagamento.'];
+		}
+		if (empty($pagamentos)) {
 			return ['ok' => false, 'message' => 'Selecione a forma de pagamento.'];
 		}
-		if ($valorPago <= 0) {
-			$valorPago = (float)$c->valor;
-		}
+
 		if ($dataPagamento === '') {
 			$dataPagamento = date('Y-m-d');
 		}
@@ -614,30 +629,24 @@ class FinanceiroAlunoHelper {
 		if ($ts === false) {
 			return ['ok' => false, 'message' => 'Data de pagamento inválida.'];
 		}
-		$dataPagamento = date('Y-m-d', $ts);
 
-		$valsComEnc = EncargosContratoHelper::resolverValoresTituloCaixa($c, true, $dataPagamento);
-		$valsSemEnc = EncargosContratoHelper::resolverValoresTituloCaixa($c, false, $dataPagamento);
-		$okValor = self::valorCompativelComFace($valorPago, $valsComEnc['valor'])
-			|| self::valorCompativelComFace($valorPago, $valsSemEnc['valor']);
-		if (!$okValor) {
-			return [
-				'ok' => false,
-				'message' => 'Valor pago incompatível. Esperado face R$ '
-					.number_format($valsSemEnc['valor'], 2, ',', '.')
-					.($valsComEnc['elegivel_encargos']
-						? ' ou com encargos R$ '.number_format($valsComEnc['valor'], 2, ',', '.')
-						: ''),
-			];
+		$res = CaixaRecebimentoService::registrar(
+			$idAdmin,
+			$idTitulo,
+			$pagamentos,
+			date('Y-m-d H:i:s', $ts),
+			true
+		);
+		if (empty($res['ok'])) {
+			return ['ok' => false, 'message' => $res['message'] ?? 'Falha ao registrar.'];
 		}
 
-		$c->valor_pago = round($valorPago, 2);
-		$c->data_pagamento = date('Y-m-d', $ts);
-		$c->tipo_pagamento = $tipoPagamento;
-		$c->status = self::STATUS_PAGO;
-		$c->atualizar();
-
-		return ['ok' => true, 'message' => 'Baixa registrada.'];
+		return [
+			'ok' => true,
+			'message' => $res['message'] ?? 'Baixa registrada.',
+			'parcial' => !empty($res['parcial']),
+			'saldo' => $res['saldo'] ?? 0,
+		];
 	}
 
 	/**

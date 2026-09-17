@@ -9,6 +9,7 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\FinanceiroAlunoHelper;
 use \App\Common\Helpers\MatriculaStatusHelper;
+use \App\Model\Entity\CaixaRecebimento;
 use \App\Common\Helpers\BrandingHelper;
 use \App\Session\User\Login as SessionUser;
 
@@ -216,7 +217,12 @@ $acoesChbx = 'checked';
      // Filtro de tipo de pagamento
   if (!empty($postVars['tipo_pagamento'])) {
     $tipo_pagamento = filter_var($postVars['tipo_pagamento'], FILTER_SANITIZE_STRING);
-    $conditions[] = " tipo_pagamento = '$tipo_pagamento' ";
+    if (CaixaRecebimento::tabelaExiste()) {
+      $esc = addslashes($tipo_pagamento);
+      $conditions[] = " (tipo_pagamento = '$esc' OR id IN (SELECT caixa_id FROM caixa_recebimentos WHERE id_admin = ".(int)$id_admin." AND tipo_pagamento = '$esc')) ";
+    } else {
+      $conditions[] = " tipo_pagamento = '$tipo_pagamento' ";
+    }
   }
 
 // filtro periodo

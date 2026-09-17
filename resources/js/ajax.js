@@ -385,6 +385,12 @@ function darBaixa(id) {
         if (typeof atualizarTotalEncargosPagamento === 'function') {
             atualizarTotalEncargosPagamento();
         }
+        if (typeof initPagamentoMultiplo === 'function') {
+            initPagamentoMultiplo('#body_dar_baixa');
+        }
+        if (typeof refreshPagamentoMultiplo === 'function') {
+            refreshPagamentoMultiplo('#body_dar_baixa .pagamento-multiplo');
+        }
 
     },
 

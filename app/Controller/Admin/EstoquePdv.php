@@ -7,6 +7,7 @@ use App\Session\User\Login as SessionUser;
 use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\ModuleGateHelper;
 use App\Common\Helpers\EstoqueVendaHelper;
+use App\Common\Helpers\CaixaRecebimentoService;
 use App\Model\Entity\Estoque\Stq_Produtos;
 use App\Model\Entity\Estoque\Stq_VendaItens;
 use App\Model\Entity\Estoque\Stq_Vendas;
@@ -38,7 +39,14 @@ class EstoquePdv extends Page {
 		if (!self::assertAcesso($request)) {
 			return '';
 		}
-		$content = View::render('admin/modules/estoque/pdv', []);
+		$content = View::render('admin/modules/estoque/pdv', [
+			'show-pagamento' => CaixaRecebimentoService::renderFormPagamento([
+				'prefix' => 'pdv',
+				'total_input_id' => 'pdv-total-hidden',
+				'permitir_parcial' => false,
+				'ja_pago' => 0,
+			]),
+		]);
 		return parent::getPanel('PDV', $content, 'vendas', $request);
 	}
 
@@ -93,10 +101,12 @@ class EstoquePdv extends Page {
 		if (!is_array($itens)) {
 			$itens = [];
 		}
+		$pagamentos = \App\Common\Helpers\CaixaRecebimentoService::parseLinhasFromPost($post);
+		$tipoOuLinhas = !empty($pagamentos) ? $pagamentos : (string)($post['tipo_pagamento'] ?? '');
 		$res = EstoqueVendaHelper::finalizar(
 			$idAdmin,
 			$itens,
-			(string)($post['tipo_pagamento'] ?? ''),
+			$tipoOuLinhas,
 			(string)($post['observacao'] ?? '')
 		);
 		return self::json([

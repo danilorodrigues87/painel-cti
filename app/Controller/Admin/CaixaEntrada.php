@@ -8,6 +8,7 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\TenantHelper;
 use \App\Common\Helpers\FinanceiroAlunoHelper;
+use \App\Common\Helpers\CaixaRecebimentoService;
 use \App\Common\Helpers\EncargosContratoHelper;
 use \App\Model\Entity\Matriculas as EntityMatri;
 
@@ -146,6 +147,7 @@ private static function getForm($request) {
     $edicao = '';
     $data_vencimento_mostrar ='';
     $total_pagar='';
+    $parc = ['ja_pago' => 0.0, 'saldo' => 0.0, 'html' => '', 'total_exibir' => 0.0];
 
     $inputValorPagar = '<input id="valor_pagar" name="valor_pagar" class="form-control my-1" style="width: 100%" type="text" value="" oninput="valorPagar()" required>';
 
@@ -195,6 +197,12 @@ private static function getForm($request) {
             }
         }
 
+        $obCaixaParc = EntityCaixa::getCaixaById($id);
+        $parc = ($obCaixaParc instanceof EntityCaixa)
+            ? CaixaRecebimentoService::resumoParcialFormulario($valorPagar, $obCaixaParc)
+            : ['ja_pago' => 0.0, 'saldo' => $valorPagar, 'html' => '', 'total_exibir' => $valorPagar];
+        $rotuloTotal = $parc['ja_pago'] > FinanceiroAlunoHelper::TOLERANCIA_VALOR ? 'Saldo a pagar' : 'Total a pagar';
+
         if (($dados['vencimento'] ?? '') > DateTimeHelper::hoje()) {
             $vencido = 'vence em';
         } else {
@@ -216,16 +224,19 @@ private static function getForm($request) {
 
          $inputValorPagar = '
          <small class="text-muted">' .'R$ '. NumeroHelper::moedaBr(@$dados['valor']) . '</small>
+         <input type="hidden" id="valor_devido_titulo" name="valor_devido_titulo" value="' . htmlspecialchars((string)$valorPagar, ENT_QUOTES, 'UTF-8') . '">
+         <input type="hidden" id="valor_saldo_receber" name="valor_saldo_receber" value="' . htmlspecialchars((string)$parc['total_exibir'], ENT_QUOTES, 'UTF-8') . '">
          <input value="' . $valorPagar . '" type="hidden" id="valor_pagar" name="valor_pagar">';
 
+         $htmlParc = $parc['html'] ?? '';
          if ($blocoEncargos !== '') {
-            $total_pagar = $blocoEncargos . '
+            $total_pagar = $htmlParc . $blocoEncargos . '
             <li class="list-group-item d-flex justify-content-between enc-total-row">
-                <span>Total a pagar</span>
-                <strong id="enc_total_label">R$ ' . NumeroHelper::moedaBr($valorPagar) . '</strong>
+                <span>' . $rotuloTotal . '</span>
+                <strong id="enc_total_label">R$ ' . NumeroHelper::moedaBr($parc['total_exibir']) . '</strong>
             </li>';
          } elseif ($pont['elegivel']) {
-         $total_pagar = '<li class="list-group-item d-flex justify-content-between lh-sm">
+         $total_pagar = $htmlParc . '<li class="list-group-item d-flex justify-content-between lh-sm">
                 <div>
                     <h6 class="my-0">Desconto pontualidade</h6>
                     <small class="text-muted">R$ ' . NumeroHelper::moedaBr($valorComDesconto) . '</small>
@@ -233,13 +244,13 @@ private static function getForm($request) {
                 <span class="text-muted">Valor do desconto: R$ ' . NumeroHelper::moedaBr($desconto) . '</span>
             </li>
             <li class="list-group-item d-flex justify-content-between">
-                <span>Total a pagar</span>
-                <strong>R$ ' . NumeroHelper::moedaBr($valorPagar) . '</strong>
+                <span>' . $rotuloTotal . '</span>
+                <strong id="enc_total_label">R$ ' . NumeroHelper::moedaBr($parc['total_exibir']) . '</strong>
             </li>';
          } else {
-            $total_pagar = '<li class="list-group-item d-flex justify-content-between">
-                <span>Total a pagar</span>
-                <strong>R$ ' . NumeroHelper::moedaBr($valorPagar) . '</strong>
+            $total_pagar = $htmlParc . '<li class="list-group-item d-flex justify-content-between">
+                <span>' . $rotuloTotal . '</span>
+                <strong id="enc_total_label">R$ ' . NumeroHelper::moedaBr($parc['total_exibir']) . '</strong>
             </li>';
          }
     }
@@ -272,30 +283,17 @@ private static function getForm($request) {
 
         
 
-        <div class="row">
-            <div class="form-group col-md-6">
-                <label>Forma de pagamento</label>
-                <select name="tipo_pagamento" class="form-control">
-                    <option value="">Selecione o tipo</option>
-                    <option value="Dinheiro">Dinheiro</option>  
-                    <option value="Pix">Pix</option>    
-                    <option value="Cartão">Cartão</option>    
-                    <option value="Boleto">Boleto</option>                   
-                </select>
-            </div>
-            <div class="form-group col-md-6">
-                <label>Data de pagamento</label>
-                <input type="datetime-local" name="data_pagamento" ' . $habilitado . ' value="' . DateTimeHelper::agora() . '" class="form-control">
-            </div>
-            <div class="form-group col-md-6">
-                <label>Valor recebido</label>
-                <input type="text" id="valor_recebido" name="valor_recebido" class="form-control" oninput="calcularTroco()" required>
-            </div>
-            <div class="form-group col-md-6">
-                <label>Troco</label>
-                <input type="text" id="troco" readonly class="form-control">
-            </div>
+        <div class="form-group col-md-12 mb-2">
+            <label>Data de pagamento</label>
+            <input type="datetime-local" name="data_pagamento" ' . $habilitado . ' value="' . DateTimeHelper::agora() . '" class="form-control">
         </div>
+        <input type="hidden" id="ja_pago_titulo" value="' . htmlspecialchars((string)($parc['ja_pago'] ?? 0), ENT_QUOTES, 'UTF-8') . '">
+        ' . CaixaRecebimentoService::renderFormPagamento([
+            'prefix' => 'entrada',
+            'total_input_id' => 'valor_saldo_receber',
+            'permitir_parcial' => true,
+            'ja_pago' => 0,
+        ]) . '
     </div>
     <div class="modal-footer">
         <input value="' . ($dados['id'] ?? '') . '" type="hidden" name="id">
@@ -327,16 +325,10 @@ public static function registrarPagamento($request){
   $titulo = filter_var($postVars['titulo'] ?? '', FILTER_SANITIZE_STRING);
 
 $valor_pagar = (float) NumeroHelper::removerFormatacaoNumero($postVars['valor_pagar']);
-$valor_recebido = (float) NumeroHelper::removerFormatacaoNumero($postVars['valor_recebido']);
-
-	if($valor_recebido < $valor_pagar){
-    $resposta ["erro"] = 'Valor recebido é menor que o valor a receber.';
+  $linhas = CaixaRecebimentoService::parseLinhasFromPost($postVars);
+  if (empty($linhas)) {
+    $resposta['erro'] = 'Informe ao menos uma forma de pagamento com valor.';
     return json_encode($resposta);
-  }
-
-  if($postVars['tipo_pagamento'] == ''){
-    $resposta ["erro"] = 'Selecione uma forma de pagamento.';
-   return json_encode($resposta);
   }
 
   if($titulo == ''){
@@ -344,30 +336,45 @@ $valor_recebido = (float) NumeroHelper::removerFormatacaoNumero($postVars['valor
     return json_encode($resposta);
   }
 
-
-//DADOS DO USUARIO
   $id_admin = parent::getIdAdmin()['usuario']['id_admin'];
+  $dataPag = (string)($postVars['data_pagamento'] ?? '');
+  $obCaixa = null;
 
 if($postVars['id'] == ''){
 
-	//  INSERIR
   $obCaixa = new EntityCaixa;
   $obCaixa->id_admin = $id_admin;
   $obCaixa->descricao = $titulo;
   $obCaixa->valor = $valor_pagar;
-  $obCaixa->valor_pago = $valor_pagar;
-  $obCaixa->vencimento = $postVars['data_pagamento'] ?? '';
-  $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
-  $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
+  $obCaixa->valor_pago = 0;
+  $obCaixa->vencimento = $dataPag;
+  $obCaixa->data_pagamento = '';
+  $obCaixa->tipo_pagamento = '';
   $obCaixa->tipo_transacao = 'Entrada';
   $obCaixa->referencia = 'Entrada avulsa';
   $obCaixa->id_ref = 0;
   $obCaixa->txt_id = '';
   $obCaixa->pix_copia_cola = '';
   $obCaixa->nosso_numero = '';
-  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
+  $obCaixa->status = FinanceiroAlunoHelper::STATUS_ABERTO;
   $obCaixa->lancarMovimentacao();
-  
+  $caixaId = (int)($obCaixa->id ?? 0);
+  if ($caixaId <= 0) {
+    $resposta['erro'] = 'Erro ao criar movimentação.';
+    return json_encode($resposta);
+  }
+  $res = CaixaRecebimentoService::registrar(
+    (int)$id_admin,
+    $caixaId,
+    $linhas,
+    $dataPag,
+    true,
+    $valor_pagar
+  );
+  if (empty($res['ok'])) {
+    $resposta['erro'] = $res['message'] ?? 'Erro ao registrar pagamento.';
+    return json_encode($resposta);
+  }
 
 } else {
 
@@ -376,15 +383,26 @@ if($postVars['id'] == ''){
       $resposta['erro'] = 'Registro não encontrado.';
       return json_encode($resposta);
     }
-
-    // EDIÇÃO
-  $obCaixa = new EntityCaixa;
-  $obCaixa->id = $caixaId;
-  $obCaixa->valor_pago = $valor_pagar;
-  $obCaixa->data_pagamento = $postVars['data_pagamento'] ?? '';
-  $obCaixa->tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
-  $obCaixa->status = FinanceiroAlunoHelper::STATUS_PAGO;
-  $obCaixa->atualizar();
+  $obTitulo = EntityCaixa::getCaixaById($caixaId);
+  $dataCaixa = $dataPag !== '' ? date('Y-m-d', strtotime($dataPag) ?: time()) : date('Y-m-d');
+  $valorDevido = CaixaRecebimentoService::valorDevidoFromPost(
+    $postVars,
+    $obTitulo instanceof EntityCaixa ? $obTitulo : null,
+    $dataCaixa
+  );
+  $res = CaixaRecebimentoService::registrar(
+    (int)$id_admin,
+    $caixaId,
+    $linhas,
+    $dataPag,
+    true,
+    $valorDevido > 0 ? $valorDevido : null
+  );
+  if (empty($res['ok'])) {
+    $resposta['erro'] = $res['message'] ?? 'Erro ao registrar pagamento.';
+    return json_encode($resposta);
+  }
+  $obCaixa = EntityCaixa::getCaixaById($caixaId);
 
 }
 

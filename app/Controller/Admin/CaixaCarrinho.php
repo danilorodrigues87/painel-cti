@@ -9,6 +9,7 @@ use \App\Common\Helpers\DateTimeHelper;
 use \App\Common\Helpers\NumeroHelper;
 use \App\Common\Helpers\FinanceiroAlunoHelper;
 use \App\Common\Helpers\EncargosContratoHelper;
+use \App\Common\Helpers\CaixaRecebimentoService;
 
 class CaixaCarrinho extends Page{
 
@@ -41,14 +42,18 @@ class CaixaCarrinho extends Page{
 			$enc['total_com_encargos'] = $face;
 			$enc['total_sem_encargos'] = $face;
 		}
-		$valor = ($cobrarEncargos && !empty($enc['elegivel_encargos']))
+		$valorBruto = ($cobrarEncargos && !empty($enc['elegivel_encargos']))
 			? (float)$enc['total_com_encargos']
 			: $face;
+		$jaPago = CaixaRecebimentoService::valorJaRecebido($obCaixa);
+		$valorSaldo = max(0, round($valorBruto - $jaPago, 2));
 
 		return [
-			'face'  => round($face, 2),
-			'valor' => round($valor, 2),
-			'enc'   => $enc,
+			'face'    => round($face, 2),
+			'devido'  => round($valorBruto, 2),
+			'ja_pago' => $jaPago,
+			'valor'   => $valorSaldo,
+			'enc'     => $enc,
 		];
 	}
 
@@ -318,18 +323,27 @@ class CaixaCarrinho extends Page{
 					$temEncargos = true;
 				}
 				$encHtml = self::htmlEncargosLinhaCarrinho($idCaixa, $vals['enc']);
+				$jaLinha = (float)($vals['ja_pago'] ?? 0);
+				$htmlJaPago = '';
+				if ($jaLinha > FinanceiroAlunoHelper::TOLERANCIA_VALOR) {
+					$htmlJaPago = '<div class="small text-success">Já pago: R$ '.NumeroHelper::moedaBr($jaLinha).'</div>';
+				}
+				$comEncBruto = (float)($vals['enc']['total_com_encargos'] ?? $vals['face']);
+				$semEncSaldo = max(0, round((float)$vals['face'] - $jaLinha, 2));
+				$comEncSaldo = max(0, round($comEncBruto - $jaLinha, 2));
 				$itensHtml .= '
 			<li class="list-group-item carrinho-linha-item carrinho-linha-titulo" data-caixa-id="'.$idCaixa.'">
 				<div class="d-flex justify-content-between align-items-start gap-2">
 					<div class="flex-grow-1">
 						<strong>'.$obItem->descricao.'</strong>
 						<div class="small text-muted">Parcela: R$ '.NumeroHelper::moedaBr($vals['face']).'</div>
+						'.$htmlJaPago.'
 						'.$encHtml.'
 					</div>
 					<span class="carrinho-item-valor fw-semibold text-nowrap"
 						data-valor="'.htmlspecialchars((string)$vals['valor'], ENT_QUOTES, 'UTF-8').'"
-						data-sem-enc="'.htmlspecialchars((string)$vals['face'], ENT_QUOTES, 'UTF-8').'"
-						data-com-enc="'.htmlspecialchars((string)($vals['enc']['total_com_encargos'] ?? $vals['face']), ENT_QUOTES, 'UTF-8').'">
+						data-sem-enc="'.htmlspecialchars((string)$semEncSaldo, ENT_QUOTES, 'UTF-8').'"
+						data-com-enc="'.htmlspecialchars((string)$comEncSaldo, ENT_QUOTES, 'UTF-8').'">
 						R$ '.NumeroHelper::moedaBr($vals['valor']).'
 					</span>
 				</div>
@@ -394,34 +408,18 @@ class CaixaCarrinho extends Page{
 				</ul>
 
 				<input value="'.$total.'" type="hidden" id="valor_pagar_total" name="valor_pagar_total">
+				<input value="'.$total.'" type="hidden" id="valor_saldo_receber" name="valor_saldo_receber">
 
-				<div class="row">
-					<div class="form-group col-md-6">
-						<label>Forma de pagamento</label>
-						<select name="tipo_pagamento" class="form-control">
-							<option value="">Selecione o tipo</option>
-							<option value="Dinheiro">Dinheiro</option>  
-							<option value="Pix">Pix</option>    
-							<option value="Cartão">Cartão</option>    
-							<option value="Boleto">Boleto</option>                   
-						</select>
-					</div>
-
-					<div class="form-group col-md-6">
-						<label>Data de pagamento</label>
-						<input type="datetime-local" name="data_pagamento" value="'.$dataPagamento.'" class="form-control">
-					</div>
-
-					<div class="form-group col-md-6">
-						<label>Valor recebido</label>
-						<input type="text" id="valor_recebido_carrinho" name="valor_recebido" class="form-control" oninput="calcularTrocoCarrinho()" required>
-					</div>
-
-					<div class="form-group col-md-6">
-						<label>Troco</label>
-						<input type="text" id="troco_carrinho" readonly class="form-control">
-					</div>
+				<div class="form-group col-md-12 mb-2">
+					<label>Data de pagamento</label>
+					<input type="datetime-local" name="data_pagamento" value="'.$dataPagamento.'" class="form-control">
 				</div>
+				'.CaixaRecebimentoService::renderFormPagamento([
+					'prefix' => 'carrinho',
+					'total_input_id' => 'valor_saldo_receber',
+					'permitir_parcial' => true,
+					'ja_pago' => 0,
+				]).'
 			</div>
 			<div class="modal-footer">
 				<button type="button" id="btn-fechar-carrinho" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -439,28 +437,28 @@ class CaixaCarrinho extends Page{
 
 		$resposta = [];
 
-		$tipo_pagamento = $postVars['tipo_pagamento'] ?? '';
 		$data_pagamento = $postVars['data_pagamento'] ?? '';
 		$cobrarEncargosMap = is_array($postVars['cobrar_encargos'] ?? null) ? $postVars['cobrar_encargos'] : [];
+		$linhasPag = CaixaRecebimentoService::parseLinhasFromPost($postVars);
 
 		$valor_pagar_total = (float)($postVars['valor_pagar_total'] ?? 0);
-
-		$valor_recebido = (float) NumeroHelper::removerFormatacaoNumero($postVars['valor_recebido'] ?? '0');
 
 		if($valor_pagar_total <= 0){
 			$resposta['erro'] = 'Carrinho vazio ou total inválido.';
 			return json_encode($resposta);
 		}
 
-		if($valor_recebido < $valor_pagar_total){
-			$resposta['erro'] = 'Valor recebido é menor que o total a receber.';
+		if(empty($linhasPag)){
+			$resposta['erro'] = 'Informe ao menos uma forma de pagamento com valor.';
 			return json_encode($resposta);
 		}
 
-		if($tipo_pagamento == ''){
-			$resposta['erro'] = 'Selecione uma forma de pagamento.';
-			return json_encode($resposta);
+		$somaLinhas = 0.0;
+		foreach ($linhasPag as $ln) {
+			$somaLinhas += $ln['valor'];
 		}
+		$somaLinhas = round($somaLinhas, 2);
+		$tol = FinanceiroAlunoHelper::TOLERANCIA_VALOR;
 
 		$dadosUser = parent::getIdAdmin();
 		$id_admin  = $dadosUser['usuario']['id_admin'];
@@ -500,6 +498,7 @@ class CaixaCarrinho extends Page{
 					'tipo' => 'titulo',
 					'caixa_id' => $idCaixa,
 					'valor' => $valorItem,
+					'devido' => (float)($vals['devido'] ?? $valorItem),
 				];
 
 			} else {
@@ -525,38 +524,86 @@ class CaixaCarrinho extends Page{
 			return json_encode($resposta);
 		}
 
-		foreach ($pendentes as $item) {
-			if ($item['tipo'] === 'titulo') {
-				$obUpdate = new EntityCaixa;
-				$obUpdate->id             = $item['caixa_id'];
-				$obUpdate->valor_pago     = $item['valor'];
-				$obUpdate->data_pagamento = $data_pagamento;
-				$obUpdate->tipo_pagamento = $tipo_pagamento;
-				$obUpdate->status         = FinanceiroAlunoHelper::STATUS_PAGO;
-				$obUpdate->atualizar();
-				$idsPagos[] = (int)$item['caixa_id'];
-				continue;
+		$parcial = ($somaLinhas + $tol) < $valor_pagar_total;
+		if ($parcial) {
+			if (count($pendentes) !== 1 || ($pendentes[0]['tipo'] ?? '') !== 'titulo') {
+				$resposta['erro'] = 'Pagamento parcial só é permitido com uma única parcela no carrinho.';
+				return json_encode($resposta);
 			}
-
-			$valorItem = (float)$item['valor'];
-			$obCaixa = new EntityCaixa;
-			$obCaixa->id_admin       = $id_admin;
-			$obCaixa->descricao      = $item['descricao'];
-			$obCaixa->valor          = $valorItem;
-			$obCaixa->valor_pago     = $valorItem;
-			$obCaixa->vencimento     = $data_pagamento;
-			$obCaixa->data_pagamento = $data_pagamento;
-			$obCaixa->tipo_pagamento = $tipo_pagamento;
-			$obCaixa->tipo_transacao = 'Entrada';
-			$obCaixa->referencia     = 'Venda/serviço avulso';
-			$obCaixa->id_ref         = 0;
-			$obCaixa->txt_id         = '';
-			$obCaixa->pix_copia_cola = '';
-			$obCaixa->nosso_numero   = '';
-			$obCaixa->status         = FinanceiroAlunoHelper::STATUS_PAGO;
-			$obCaixa->lancarMovimentacao();
-			if (!empty($obCaixa->id)) {
-				$idsPagos[] = (int)$obCaixa->id;
+			$devidoTitulo = (float)($pendentes[0]['devido'] ?? 0);
+			$res = CaixaRecebimentoService::registrar(
+				(int)$id_admin,
+				(int)$pendentes[0]['caixa_id'],
+				$linhasPag,
+				(string)$data_pagamento,
+				true,
+				$devidoTitulo > 0 ? $devidoTitulo : null
+			);
+			if (empty($res['ok'])) {
+				$resposta['erro'] = $res['message'] ?? 'Erro ao registrar pagamento.';
+				return json_encode($resposta);
+			}
+			$idsPagos[] = (int)$pendentes[0]['caixa_id'];
+		} else {
+			if ($somaLinhas + $tol < $valor_pagar_total) {
+				$resposta['erro'] = 'Valor informado é menor que o total do carrinho.';
+				return json_encode($resposta);
+			}
+			$pesos = [];
+			$devidosTitulo = [];
+			foreach ($pendentes as $item) {
+				if ($item['tipo'] === 'titulo') {
+					$cid = (int)$item['caixa_id'];
+					$pesos[$cid] = (float)$item['valor'];
+					$devidosTitulo[$cid] = (float)($item['devido'] ?? $item['valor']);
+				}
+			}
+			foreach ($pendentes as $item) {
+				if ($item['tipo'] !== 'servico') {
+					continue;
+				}
+				$valorItem = (float)$item['valor'];
+				$obCaixa = new EntityCaixa;
+				$obCaixa->id_admin = $id_admin;
+				$obCaixa->descricao = $item['descricao'];
+				$obCaixa->valor = $valorItem;
+				$obCaixa->valor_pago = 0;
+				$obCaixa->vencimento = $data_pagamento;
+				$obCaixa->data_pagamento = '';
+				$obCaixa->tipo_pagamento = '';
+				$obCaixa->tipo_transacao = 'Entrada';
+				$obCaixa->referencia = 'Venda/serviço avulso';
+				$obCaixa->id_ref = 0;
+				$obCaixa->txt_id = '';
+				$obCaixa->pix_copia_cola = '';
+				$obCaixa->nosso_numero = '';
+				$obCaixa->status = FinanceiroAlunoHelper::STATUS_ABERTO;
+				$obCaixa->lancarMovimentacao();
+				$cid = (int)($obCaixa->id ?? 0);
+				if ($cid > 0) {
+					$pesos[$cid] = $valorItem;
+				}
+			}
+			$rateado = CaixaRecebimentoService::ratearLinhas($linhasPag, $pesos);
+			foreach ($pesos as $cid => $pesoSaldo) {
+				$linhasItem = $rateado[$cid] ?? [];
+				if (empty($linhasItem)) {
+					continue;
+				}
+				$devidoRegistro = (float)($devidosTitulo[$cid] ?? $pesoSaldo);
+				$res = CaixaRecebimentoService::registrar(
+					(int)$id_admin,
+					(int)$cid,
+					$linhasItem,
+					(string)$data_pagamento,
+					false,
+					$devidoRegistro > 0 ? $devidoRegistro : null
+				);
+				if (empty($res['ok'])) {
+					$resposta['erro'] = $res['message'] ?? 'Erro ao registrar item #'.$cid;
+					return json_encode($resposta);
+				}
+				$idsPagos[] = (int)$cid;
 			}
 		}
 

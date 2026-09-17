@@ -56,13 +56,8 @@
 					<strong id="pdv-total" class="fs-5">R$&nbsp;0,00</strong>
 				</div>
 				<label class="form-label small mb-1">Forma de pagamento</label>
-				<select id="pdv-pagamento" class="form-select form-select-sm mb-2">
-					<option value="Dinheiro">Dinheiro</option>
-					<option value="Pix">Pix</option>
-					<option value="Cartão">Cartão</option>
-					<option value="Transferência">Transferência</option>
-					<option value="Boleto">Boleto</option>
-				</select>
+				<input type="hidden" id="pdv-total-hidden" value="0">
+				{{show-pagamento}}
 				<label class="form-label small mb-1">Observação (opcional)</label>
 				<input type="text" id="pdv-obs" class="form-control form-control-sm mb-3" maxlength="500">
 				<button type="button" id="btn-pdv-finalizar" class="btn btn-success w-100">
@@ -81,4 +76,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/estoque-pdv.js?v=20260722a"></script>
+<script src="{{URL}}/resources/js/estoque-pdv.js?v=20260917a"></script>
