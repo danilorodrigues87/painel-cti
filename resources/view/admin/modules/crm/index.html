@@ -63,8 +63,7 @@
 			<option value="perdido">Perdido</option>
 		</select>
 		<button type="button" class="btn btn-primary btn-sm" id="btn-crm-aplicar-lote" disabled>Aplicar</button>
-		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna-pagina" title="Marca os leads da coluna nesta página">Coluna (página)</button>
-		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna-funil" title="Marca todos os leads da coluna no funil (filtros atuais)">Coluna (funil inteiro)</button>
+		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna" title="Seleciona todos os leads de uma coluna no funil (com filtros atuais)">Selecionar coluna</button>
 		<button type="button" class="btn btn-link btn-sm" id="btn-crm-limpar-selecao">Limpar</button>
 		<button type="button" class="btn btn-link btn-sm text-muted" id="btn-crm-sair-lote">Sair do modo seleção</button>
 	</div>
@@ -82,6 +81,7 @@
 				<small class="d-block opacity-75" id="total-novo">R$ 0,00</small>
 			</div>
 			<div class="card-body p-2 kanban-list" id="coluna-novo" data-status="novo"></div>
+			<div class="card-footer py-1 px-1 border-top-0" id="pagination-novo"></div>
 		</div>
 	</div>
 
@@ -95,6 +95,7 @@
 				<small class="d-block opacity-75" id="total-em_atendimento">R$ 0,00</small>
 			</div>
 			<div class="card-body p-2 kanban-list" id="coluna-em_atendimento" data-status="em_atendimento"></div>
+			<div class="card-footer py-1 px-1 border-top-0" id="pagination-em_atendimento"></div>
 		</div>
 	</div>
 
@@ -108,6 +109,7 @@
 				<small class="d-block opacity-75" id="total-matriculado">R$ 0,00</small>
 			</div>
 			<div class="card-body p-2 kanban-list" id="coluna-matriculado" data-status="matriculado"></div>
+			<div class="card-footer py-1 px-1 border-top-0" id="pagination-matriculado"></div>
 		</div>
 	</div>
 
@@ -121,15 +123,11 @@
 				<small class="d-block opacity-75" id="total-perdido">R$ 0,00</small>
 			</div>
 			<div class="card-body p-2 kanban-list" id="coluna-perdido" data-status="perdido"></div>
-			<div class="card-footer py-1 px-2"><small class="text-muted">Exibe até 200 perdidos mais recentes (fora da paginação).</small></div>
+			<div class="card-footer py-1 px-1 border-top-0" id="pagination-perdido"></div>
 		</div>
 	</div>
 
 </div>
-
-<nav class="container mt-3" aria-label="Paginação CRM">
-	<div id="pagination"></div>
-</nav>
 
 <!-- Modal Gerenciar Funis -->
 <div class="modal fade" id="modalGerenciarFunis" tabindex="-1" aria-hidden="true">
@@ -598,4 +596,4 @@
 	let excluirFunil  = 'painel/crm/funis/delete';
 </script>
 <script src="{{URL}}/resources/js/whatsapp-iniciar.js?v=20260728h"></script>
-<script src="{{URL}}/resources/js/crm.js?v=20260925c"></script>
+<script src="{{URL}}/resources/js/crm.js?v=20260925d"></script>

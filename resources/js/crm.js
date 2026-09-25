@@ -1,7 +1,6 @@
 const STATUS_COLUNAS = ['novo','em_atendimento','matriculado','perdido'];
 
 let crmArrastando = false;
-let crmPaginaAtual = 1;
 let crmFiltroTimer = null;
 let crmFunilAtivo  = null;
 let crmFunisCache  = [];
@@ -13,6 +12,24 @@ let crmSelecionados = {};
 let crmSortables = [];
 /** Coluna de origem ao mover "funil inteiro" (status_origem no backend). */
 let crmLoteColunaFunil = null;
+
+function paginasCrmIniciais(){
+	const p = {};
+	STATUS_COLUNAS.forEach(function(s){ p[s] = 1; });
+	return p;
+}
+
+let crmPaginas = paginasCrmIniciais();
+
+function resetPaginasCrm(){
+	crmPaginas = paginasCrmIniciais();
+}
+
+function irPaginaColuna(status, page){
+	if(STATUS_COLUNAS.indexOf(status) === -1) return;
+	crmPaginas[status] = Math.max(1, parseInt(page, 10) || 1);
+	carregarLeads();
+}
 
 function montarCardLead(lead){
 	const classeEsquecido = lead.esquecido ? ' lead-esquecido' : '';
@@ -39,7 +56,7 @@ function atualizarUiLote(){
 	const qtd = Object.keys(crmSelecionados).length;
 	const modoFunil = !!crmLoteColunaFunil;
 	if(modoFunil){
-		$('#crm-lote-qtd').text('Coluna: '+crmLoteColunaFunil+' (funil inteiro)');
+		$('#crm-lote-qtd').text('Coluna: '+crmLoteColunaFunil);
 	}else{
 		$('#crm-lote-qtd').text(qtd);
 	}
@@ -59,7 +76,7 @@ function definirModoSelecaoCrm(ativo){
 	}
 	crmSortables.forEach(function(s){ s.option('disabled', crmModoSelecao); });
 	atualizarUiLote();
-	carregarLeads(crmPaginaAtual || 1);
+	carregarLeads();
 }
 
 function toggleSelecaoLead(id, marcado){
@@ -87,15 +104,18 @@ function dadosFiltroCrm(){
 	};
 }
 
-function sincronizarPaginacaoCrm(result){
-	if(result.pagina_atual){
-		crmPaginaAtual = parseInt(result.pagina_atual, 10) || 1;
+function aplicarPaginacaoColunas(result){
+	const pag = result.paginacao_colunas || {};
+	STATUS_COLUNAS.forEach(function(status){
+		$('#pagination-'+status).html(pag[status] || '');
+	});
+	if(result.paginas_colunas){
+		STATUS_COLUNAS.forEach(function(status){
+			if(result.paginas_colunas[status]){
+				crmPaginas[status] = parseInt(result.paginas_colunas[status], 10) || 1;
+			}
+		});
 	}
-	if(result.itens_pagina === 0 && (result.total_kanban || 0) > 0 && crmPaginaAtual > 1){
-		carregarLeads(Math.max(1, crmPaginaAtual - 1));
-		return true;
-	}
-	return false;
 }
 
 function atualizarStatusLeadLote(ids, status, motivoPerda, callback, opts){
@@ -130,7 +150,8 @@ function atualizarStatusLeadLote(ids, status, motivoPerda, callback, opts){
 				crmSelecionados = {};
 				crmLoteColunaFunil = null;
 				atualizarUiLote();
-				carregarLeads(1);
+				resetPaginasCrm();
+				carregarLeads();
 				if(typeof callback === 'function'){
 					callback();
 				}
@@ -332,31 +353,25 @@ function renderizarKanban(colunas, totais, contagensGlobais){
 	}
 }
 
+/** Compatibilidade com paginação antiga (global). */
 function irPagina(page){
-	carregarLeads(page || 1);
+	resetPaginasCrm();
+	const p = Math.max(1, parseInt(page, 10) || 1);
+	STATUS_COLUNAS.forEach(function(s){ crmPaginas[s] = p; });
+	carregarLeads();
 }
 
 function listar(filtro=null, page=1){
-	carregarLeads(page);
+	irPagina(page);
 }
 
-function carregarLeads(page){
-	if(page === undefined || page === null){
-		page = crmPaginaAtual;
-	}
-
-	crmPaginaAtual = page;
-
+function carregarLeads(){
 	$.ajax({
 		url: url_base + listagemCrm,
 		method: 'post',
-		data: Object.assign({ page: page }, dadosFiltroCrm()),
+		data: Object.assign({ pages: JSON.stringify(crmPaginas) }, dadosFiltroCrm()),
 		dataType: 'json',
 		success: function(result){
-			if(sincronizarPaginacaoCrm(result)){
-				return;
-			}
-
 			if(Array.isArray(result.funis)){
 				atualizarTodosSelectsFunis(result.funis, result.funil_ativo);
 			}
@@ -366,9 +381,7 @@ function carregarLeads(page){
 				renderizarKanban(result.colunas, result.totais || {}, result.contagens_globais || {});
 			}
 
-			if(result.pagination !== undefined){
-				$('#pagination').html(result.pagination);
-			}
+			aplicarPaginacaoColunas(result);
 		},
 		error: function(xhr){
 			console.error('Erro ao carregar leads:', xhr.status, xhr.responseText);
@@ -647,29 +660,14 @@ function swalEscolherColunaCrm(titulo){
 	});
 }
 
-$(document).on('click', '#btn-crm-selecionar-coluna-pagina', function(){
-	swalEscolherColunaCrm('Selecionar coluna (página atual)').then(function(r){
-		if(!r.isConfirmed || !r.value) return;
-		crmLoteColunaFunil = null;
-		$('#coluna-'+r.value+' .kanban-card').each(function(){
-			const id = $(this).data('id');
-			crmSelecionados[String(id)] = true;
-			$(this).addClass('crm-card-selecionado');
-			$(this).find('.crm-check-lead').prop('checked', true);
-		});
-		atualizarUiLote();
-	});
-});
-
-$(document).on('click', '#btn-crm-selecionar-coluna-funil', function(){
-	swalEscolherColunaCrm('Selecionar coluna (funil inteiro)').then(function(r){
+$(document).on('click', '#btn-crm-selecionar-coluna', function(){
+	swalEscolherColunaCrm('Selecionar coluna').then(function(r){
 		if(!r.isConfirmed || !r.value) return;
 		crmSelecionados = {};
 		crmLoteColunaFunil = r.value;
 		$('.kanban-card').removeClass('crm-card-selecionado');
 		$('.crm-check-lead').prop('checked', false);
-		$('#crm-lote-qtd').text('Coluna: '+r.value+' (funil inteiro)');
-		$('#btn-crm-aplicar-lote').prop('disabled', !$('#crm-lote-status').val());
+		atualizarUiLote();
 	});
 });
 
@@ -715,24 +713,28 @@ $(document).on('click', '#btn-crm-aplicar-lote', function(){
 $(document).on('input', '#filtro-busca-lead', function(){
 	clearTimeout(crmFiltroTimer);
 	crmFiltroTimer = setTimeout(function(){
-		carregarLeads(1);
+		resetPaginasCrm();
+	carregarLeads();
 	}, 400);
 });
 
 $(document).on('change', '#filtro-funil', function(){
 	crmFunilAtivo = $(this).val();
 	sessionStorage.setItem(CRM_FUNIL_STORAGE, crmFunilAtivo);
-	carregarLeads(1);
+	resetPaginasCrm();
+	carregarLeads();
 });
 
 $(document).on('change', '#filtro-curso', function(){
-	carregarLeads(1);
+	resetPaginasCrm();
+	carregarLeads();
 });
 
 $(document).on('click', '#btn-limpar-filtros', function(){
 	$('#filtro-busca-lead').val('').removeAttr('readonly');
 	$('#filtro-curso').val('');
-	carregarLeads(1);
+	resetPaginasCrm();
+	carregarLeads();
 });
 
 $('#modalNovoLead').on('show.bs.modal', function(){
@@ -819,7 +821,8 @@ $(document).on('click', '.btn-excluir-funil', function(){
 					renderizarListaFunis(result.funis);
 				}
 
-				carregarLeads(1);
+				resetPaginasCrm();
+	carregarLeads();
 				Swal.fire({ title: 'Funil excluído!', icon: 'success', timer: 1200, showConfirmButton: false });
 			}
 		});
@@ -1046,7 +1049,8 @@ $(document).ready(function(){
 	if(typeof listagemCrm !== 'undefined'){
 		iniciarAntiAutofillFiltro();
 		$('#filtro-curso').val('');
-		carregarLeads(1);
+		resetPaginasCrm();
+	carregarLeads();
 		inicializarSortable();
 	}
 });

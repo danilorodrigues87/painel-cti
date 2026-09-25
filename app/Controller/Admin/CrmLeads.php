@@ -88,7 +88,6 @@ class CrmLeads extends Page{
 
 		$dadosUser = parent::getIdAdmin();
 		$id_admin  = (int)$dadosUser['usuario']['id_admin'];
-		$paginaAtual = $postVars['page'] ?? 1;
 		$limite = (int)(getenv('PAGINATION_LIMIT') ?: 10);
 
 		$funilAtivo = self::resolverFunilFiltro($postVars, $id_admin);
@@ -96,47 +95,25 @@ class CrmLeads extends Page{
 		$whereBase = self::montarWhereListagem($dadosUser);
 		$whereFiltro = $whereBase.self::montarFiltroFunil($funilAtivo).self::montarFiltrosBusca($postVars);
 
+		$paginasColunas = self::resolverPaginasColunas($postVars);
 		$colunas = [];
-		$totaisPagina  = [];
+		$paginacaoColunas = [];
+		$paginasSincronizadas = [];
 
-		foreach(self::$statusPermitidos as $status){
+		foreach (self::$statusPermitidos as $status) {
 			$colunas[$status] = [];
-			$totaisPagina[$status]  = 0;
 		}
 
 		$agregados = self::agregarPorStatus($whereFiltro);
 		$contagensGlobais = $agregados['contagens'];
 		$totaisGlobaisRaw = $agregados['totais'];
 
-		// Paginação só do funil ativo (novo / em atendimento / matriculado). Perdidos vão em consulta à parte.
-		$whereKanban = $whereFiltro.' AND status != "perdido"';
-		$quantidadeTotal = (int)EntityCrmLeads::getLeads($whereKanban, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
-		$obPagination = new Pagination($quantidadeTotal, $paginaAtual, $limite);
-		$itensPagina = 0;
-
-		$results = EntityCrmLeads::getLeads(
-			$whereKanban,
-			'data_cadastro DESC',
-			$obPagination->getLimit()
-		);
-
-		while ($obLead = $results->fetchObject(EntityCrmLeads::class)) {
-			$card = self::formatarCardKanban($obLead);
-			$status = $card['status'];
-			unset($card['status']);
-			$totaisPagina[$status] += (float)($obLead->valor_estimado ?? 0);
-			$colunas[$status][] = $card;
-			$itensPagina++;
-		}
-
-		$limitePerdidos = 200;
-		$resultsPerdido = EntityCrmLeads::getLeads(
-			$whereFiltro.' AND status = "perdido"',
-			'data_cadastro DESC',
-			(string)$limitePerdidos
-		);
-		while ($obLead = $resultsPerdido->fetchObject(EntityCrmLeads::class)) {
-			$colunas['perdido'][] = self::formatarCardKanban($obLead, false);
+		foreach (self::$statusPermitidos as $status) {
+			$paginaStatus = (int)($paginasColunas[$status] ?? 1);
+			$carregado = self::carregarLeadsColuna($whereFiltro, $status, $paginaStatus, $limite);
+			$colunas[$status] = $carregado['cards'];
+			$paginacaoColunas[$status] = $carregado['pagination_html'];
+			$paginasSincronizadas[$status] = $carregado['pagina_atual'];
 		}
 
 		$whereCursos = $whereBase.self::montarFiltroFunil($funilAtivo);
@@ -149,19 +126,95 @@ class CrmLeads extends Page{
 		}
 
 		return json_encode([
-			'colunas'            => $colunas,
-			'totais'             => $totaisFormatados,
-			'contagens_globais'  => $contagensGlobais,
-			'cursos'             => $cursos,
-			'funis'              => $funis,
-			'funil_ativo'        => $funilAtivo,
-			'pagination'         => parent::getPagination($request, $obPagination),
-			'pagina_atual'       => $obPagination->getCurrentPage(),
-			'total_paginas'      => $obPagination->getTotalPages(),
-			'total_kanban'       => $obPagination->getTotalResults(),
-			'itens_pagina'       => $itensPagina,
-			'perdidos_limite'    => $limitePerdidos,
+			'colunas'             => $colunas,
+			'totais'              => $totaisFormatados,
+			'contagens_globais'   => $contagensGlobais,
+			'cursos'              => $cursos,
+			'funis'               => $funis,
+			'funil_ativo'         => $funilAtivo,
+			'paginacao_colunas'   => $paginacaoColunas,
+			'paginas_colunas'     => $paginasSincronizadas,
 		]);
+	}
+
+	/** @return array<string,int> */
+	private static function resolverPaginasColunas(array $postVars): array {
+		$paginas = [];
+		foreach (self::$statusPermitidos as $status) {
+			$paginas[$status] = 1;
+		}
+
+		if (!empty($postVars['pages'])) {
+			$raw = $postVars['pages'];
+			$decoded = is_array($raw) ? $raw : json_decode((string)$raw, true);
+			if (is_array($decoded)) {
+				foreach (self::$statusPermitidos as $status) {
+					if (isset($decoded[$status])) {
+						$paginas[$status] = max(1, (int)$decoded[$status]);
+					}
+				}
+			}
+		} elseif (!empty($postVars['page'])) {
+			$legado = max(1, (int)$postVars['page']);
+			foreach (self::$statusPermitidos as $status) {
+				$paginas[$status] = $legado;
+			}
+		}
+
+		return $paginas;
+	}
+
+	/**
+	 * @return array{cards:array<int,array<string,mixed>>,pagination_html:string,pagina_atual:int,total_paginas:int}
+	 */
+	private static function carregarLeadsColuna(string $whereFiltro, string $status, int $pagina, int $limite): array {
+		$where = $whereFiltro.' AND status = "'.addslashes($status).'"';
+		$total = (int)EntityCrmLeads::getLeads($where, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+		$obPagination = new Pagination($total, $pagina, $limite);
+
+		$cards = [];
+		$results = EntityCrmLeads::getLeads(
+			$where,
+			'data_cadastro DESC',
+			$obPagination->getLimit()
+		);
+		while ($obLead = $results->fetchObject(EntityCrmLeads::class)) {
+			$cards[] = self::formatarCardKanban($obLead, false);
+		}
+
+		return [
+			'cards'            => $cards,
+			'pagination_html'  => self::htmlPaginacaoColuna($status, $obPagination),
+			'pagina_atual'     => $obPagination->getCurrentPage(),
+			'total_paginas'    => $obPagination->getTotalPages(),
+		];
+	}
+
+	private static function htmlPaginacaoColuna(string $statusColuna, Pagination $obPagination): string {
+		$totalPaginas = $obPagination->getTotalPages();
+		if ($totalPaginas <= 1) {
+			return '';
+		}
+
+		$cur = $obPagination->getCurrentPage();
+		$totalItens = $obPagination->getTotalResults();
+		$stJs = htmlspecialchars($statusColuna, ENT_QUOTES, 'UTF-8');
+
+		$html = '<nav class="crm-pag-col" aria-label="Paginação '.$stJs.'"><ul class="pagination pagination-sm mb-0 justify-content-center flex-wrap gap-1">';
+
+		if ($cur > 1) {
+			$html .= '<li class="page-item"><a class="page-link py-0 px-1" href="#" onclick="irPaginaColuna(\''.$stJs.'\','.($cur - 1).');return false;" aria-label="Anterior">&lsaquo;</a></li>';
+		}
+
+		$html .= '<li class="page-item disabled"><span class="page-link py-0 px-1 small border-0 bg-transparent">'.$cur.' / '.$totalPaginas.'</span></li>';
+
+		if ($cur < $totalPaginas) {
+			$html .= '<li class="page-item"><a class="page-link py-0 px-1" href="#" onclick="irPaginaColuna(\''.$stJs.'\','.($cur + 1).');return false;" aria-label="Próxima">&rsaquo;</a></li>';
+		}
+
+		$html .= '</ul><div class="text-center text-muted" style="font-size:0.65rem">'.$totalItens.' lead(s)</div></nav>';
+
+		return $html;
 	}
 
 	/**
