@@ -101,7 +101,13 @@
 								<option value="leads">Leads do CRM</option>
 								<option value="inadimplentes">Inadimplentes (mensalidades em atraso)</option>
 								<option value="whatsapp_grupos">Grupos e listas de transmissão (WhatsApp)</option>
+								<option value="planilha_contatos">Importar planilha (CSV / Excel)</option>
 							</select>
+						</div>
+						<div class="col-12" id="wrap-planilha-campanha" style="display:none;">
+							<label class="form-label" for="campanha_planilha">Planilha de contatos *</label>
+							<input type="file" class="form-control" id="campanha_planilha" name="planilha" accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv">
+							<div class="form-text" id="campanha-planilha-info">Mesmas colunas da importação de leads: Nome, WhatsApp, E-mail (opcional), Curso, Bairro, Cidade. Máx. 5MB.</div>
 						</div>
 						<div class="col-md-6" id="wrap-status-lead" style="display:none;">
 							<label class="form-label" for="status_lead">Status do lead</label>
@@ -383,4 +389,4 @@
 	</div>
 </div>
 
-<script src="{{URL}}/resources/js/campanhas.js?v=20260909g"></script>
+<script src="{{URL}}/resources/js/campanhas.js?v=20260925a"></script>

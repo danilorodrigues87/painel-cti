@@ -53,6 +53,16 @@ $obRouter->post('/painel/crm/status',[
 	}
 ]);
 
+//ROTA ATUALIZAR STATUS DE VÁRIOS LEADS (LOTE)
+$obRouter->post('/painel/crm/status-lote',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\CrmLeads::atualizarStatusLote($request));
+	}
+]);
+
 //ROTA DETALHES DO LEAD (MODAL)
 $obRouter->post('/painel/crm/detalhes',[
 	'middlewares' => [

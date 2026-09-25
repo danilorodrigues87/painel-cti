@@ -7,6 +7,7 @@ use App\Common\Helpers\TenantHelper;
 use App\Common\Helpers\CampanhaPacingHelper;
 use App\Common\Helpers\CampanhaSegmentoHelper;
 use App\Common\Helpers\EmailValidator;
+use App\Common\Helpers\PlanilhaHelper;
 use App\Common\Communication\CampanhaWorker;
 use App\Common\Communication\WhatsappEscolaService;
 use App\Common\Communication\WhatsappMediaStorage;
@@ -299,10 +300,22 @@ class Campanhas extends Page {
 				}
 				$segmento['destinos'] = $destinos;
 			}
+			$segAntigo = ($id > 0) ? (json_decode($ob->segmento ?? '{}', true) ?: []) : [];
+			if ($tipoSegmento === 'planilha_contatos') {
+				$contatosAnteriores = (($segAntigo['tipo'] ?? '') === 'planilha_contatos') ? ($segAntigo['contatos'] ?? []) : [];
+				$msgPlanilha = self::aplicarPlanilhaAoSegmento($segmento, $contatosAnteriores);
+				if ($msgPlanilha !== null) {
+					return json_encode(['success' => false, 'message' => $msgPlanilha]);
+				}
+				$destTeste = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, $canal);
+				if (count($destTeste) === 0) {
+					$rotulo = $canal === 'whatsapp' ? 'WhatsApp válido' : 'e-mail válido';
+					return json_encode(['success' => false, 'message' => 'Nenhum contato da planilha possui '.$rotulo.' para este canal.']);
+				}
+			}
 			$segmento['pacing'] = CampanhaPacingHelper::parseFromPost($postVars, $canal);
 
 			if ($id > 0) {
-				$segAntigo = json_decode($ob->segmento ?? '{}', true) ?: [];
 				if (!$removerMidia && empty($_FILES['arquivo']['tmp_name']) && empty($postVars['midia_biblioteca_path']) && !empty($segAntigo['midia'])) {
 					$segmento['midia'] = $segAntigo['midia'];
 				}
@@ -381,6 +394,13 @@ class Campanhas extends Page {
 		$idAdmin = TenantHelper::getIdAdmin();
 		$canal = self::normalizarCanal($postVars['canal'] ?? 'email') ?: 'email';
 		$segmento = self::montarSegmento($postVars);
+		if (($segmento['tipo'] ?? '') === 'planilha_contatos') {
+			$contatosAnteriores = self::contatosPlanilhaSalvos($postVars, $idAdmin);
+			$msgPlanilha = self::aplicarPlanilhaAoSegmento($segmento, $contatosAnteriores);
+			if ($msgPlanilha !== null) {
+				return json_encode(['success' => false, 'message' => $msgPlanilha]);
+			}
+		}
 		$destinatarios = CampanhaSegmentoHelper::resolverDestinatarios($idAdmin, $segmento, $canal);
 		$amostra = array_slice($destinatarios, 0, 5);
 
@@ -770,7 +790,60 @@ class Campanhas extends Page {
 		if (($seg['tipo'] ?? '') === 'whatsapp_grupos') {
 			$seg['destinos'] = self::parseDestinosGrupos($postVars);
 		}
+		if (($seg['tipo'] ?? '') === 'planilha_contatos') {
+			$contatosAnteriores = self::contatosPlanilhaSalvos($postVars, TenantHelper::getIdAdmin());
+			self::aplicarPlanilhaAoSegmento($seg, $contatosAnteriores);
+		}
 		return $seg;
+	}
+
+	/** Contatos já gravados na campanha (edição / preview sem reenviar arquivo). */
+	private static function contatosPlanilhaSalvos(array $postVars, int $idAdmin): array {
+		$id = (int)($postVars['id'] ?? 0);
+		if ($id <= 0) {
+			return [];
+		}
+		$ob = EntityCampanhas::getById($id, $idAdmin);
+		if (!$ob instanceof EntityCampanhas) {
+			return [];
+		}
+		$seg = json_decode($ob->segmento ?? '{}', true) ?: [];
+		if (($seg['tipo'] ?? '') !== 'planilha_contatos') {
+			return [];
+		}
+		return is_array($seg['contatos'] ?? null) ? $seg['contatos'] : [];
+	}
+
+	/**
+	 * Preenche $segmento['contatos'] a partir de upload ou mantém os anteriores.
+	 * @param array<string,mixed> $segmento
+	 * @param array<int,array<string,mixed>> $contatosAnteriores
+	 */
+	private static function aplicarPlanilhaAoSegmento(array &$segmento, array $contatosAnteriores): ?string {
+		$arquivo = $_FILES['planilha'] ?? null;
+		if ($arquivo && ($arquivo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+			$res = PlanilhaHelper::contatosDeUpload($arquivo);
+			if (!empty($res['erros']) && count($res['contatos']) === 0) {
+				return $res['erros'][0];
+			}
+			if (count($res['contatos']) === 0) {
+				return 'Nenhuma linha válida na planilha.';
+			}
+			$segmento['contatos'] = $res['contatos'];
+			$segmento['planilha_nome'] = basename((string)($arquivo['name'] ?? 'planilha'));
+			$segmento['planilha_importado_em'] = date('c');
+			if ($res['ignorados'] > 0) {
+				$segmento['planilha_ignorados'] = (int)$res['ignorados'];
+			}
+			return null;
+		}
+
+		if (!empty($contatosAnteriores)) {
+			$segmento['contatos'] = $contatosAnteriores;
+			return null;
+		}
+
+		return 'Envie uma planilha CSV ou XLSX com os contatos (mesmo formato da importação de leads).';
 	}
 
 	/** @deprecated use CampanhaSegmentoHelper::normalizarSegmentoInadimplentes */

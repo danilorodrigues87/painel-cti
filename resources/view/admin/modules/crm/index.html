@@ -46,6 +46,26 @@
 		<button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#modalGerenciarFunis">
 			<i class="fas fa-filter"></i> Gerenciar funis
 		</button>
+		<button type="button" class="btn btn-outline-dark btn-sm" id="btn-crm-modo-lote" title="Selecionar vários leads e mover de uma vez">
+			<i class="fas fa-check-double"></i> Selecionar vários
+		</button>
+	</div>
+</div>
+
+<div class="card shadow-sm mb-3 d-none" id="crm-barra-lote">
+	<div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+		<span class="small text-muted"><strong id="crm-lote-qtd">0</strong> selecionado(s)</span>
+		<select class="form-control form-control-sm" id="crm-lote-status" style="max-width:200px;">
+			<option value="">Mover para...</option>
+			<option value="novo">Novo</option>
+			<option value="em_atendimento">Em atendimento</option>
+			<option value="matriculado">Matriculado</option>
+			<option value="perdido">Perdido</option>
+		</select>
+		<button type="button" class="btn btn-primary btn-sm" id="btn-crm-aplicar-lote" disabled>Aplicar</button>
+		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna">Coluna visível</button>
+		<button type="button" class="btn btn-link btn-sm" id="btn-crm-limpar-selecao">Limpar</button>
+		<button type="button" class="btn btn-link btn-sm text-muted" id="btn-crm-sair-lote">Sair do modo seleção</button>
 	</div>
 </div>
 
@@ -435,8 +455,9 @@
 				<div class="modal-body">
 					<div id="response-motivo-perda"></div>
 					<input type="hidden" name="id" id="perda-lead-id" value="">
+					<input type="hidden" id="perda-ids-lote" value="">
 					<input type="hidden" name="status" value="perdido">
-					<p class="small text-muted mb-3">Selecione o motivo pelo qual este lead foi perdido:</p>
+					<p class="small text-muted mb-3" id="perda-texto-ajuda">Selecione o motivo pelo qual este lead foi perdido:</p>
 					<div class="d-grid gap-2">
 						<button type="button" class="btn btn-outline-secondary btn-sm btn-motivo" data-motivo="Preço Alto">Preço Alto</button>
 						<button type="button" class="btn btn-outline-secondary btn-sm btn-motivo" data-motivo="Horário Incompatível">Horário Incompatível</button>
@@ -483,6 +504,9 @@
 	transition: box-shadow 0.15s ease;
 }
 .kanban-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
+.kanban-card.crm-card-selecionado { outline: 2px solid #0d6efd; outline-offset: 1px; }
+.kanban-card .crm-check-lead { float: right; margin: 0 0 4px 4px; cursor: pointer; }
+.crm-modo-lote .kanban-card { cursor: pointer; }
 .kanban-card.sortable-drag { cursor: grabbing; }
 .kanban-card.lead-esquecido {
 	border-left: 3px solid #dc3545;
@@ -560,6 +584,7 @@
 	let listagemCrm = 'painel/crm';
 	let salvarLead  = 'painel/crm/save';
 	let statusLead  = 'painel/crm/status';
+	let statusLeadLote = 'painel/crm/status-lote';
 	let detalhesLead = 'painel/crm/detalhes';
 	let comentarioLead = 'painel/crm/comentario';
 	let atualizarLead = 'painel/crm/atualizar';
@@ -570,4 +595,4 @@
 	let excluirFunil  = 'painel/crm/funis/delete';
 </script>
 <script src="{{URL}}/resources/js/whatsapp-iniciar.js?v=20260728h"></script>
-<script src="{{URL}}/resources/js/crm.js?v=20260826b"></script>
+<script src="{{URL}}/resources/js/crm.js?v=20260925a"></script>

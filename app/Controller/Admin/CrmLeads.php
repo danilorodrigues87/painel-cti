@@ -500,7 +500,7 @@ class CrmLeads extends Page{
 		foreach($linhas as $indice => $linha){
 
 			$numeroLinha = $indice + 2;
-			$dadosLinha  = self::extrairDadosPlanilha($linha);
+			$dadosLinha  = PlanilhaHelper::extrairLinhaContato(is_array($linha) ? $linha : []);
 
 			if(!empty($dadosLinha['erro'])){
 				$ignorados++;
@@ -627,6 +627,120 @@ class CrmLeads extends Page{
 		self::dispararMensagemWhatsApp($obLead, $statusAnterior, $status, (int)$id_usuario);
 
 		$resposta['sucesso'] = true;
+		return json_encode($resposta);
+	}
+
+	public static function atualizarStatusLote($request){
+
+		$postVars = $request->getPostVars();
+		$resposta = [];
+
+		$idsRaw = $postVars['ids'] ?? [];
+		if (is_string($idsRaw)) {
+			$decoded = json_decode($idsRaw, true);
+			$idsRaw = is_array($decoded) ? $decoded : array_filter(array_map('trim', explode(',', $idsRaw)));
+		}
+		if (!is_array($idsRaw)) {
+			$idsRaw = [];
+		}
+
+		$ids = [];
+		foreach ($idsRaw as $id) {
+			$n = (int)$id;
+			if ($n > 0) {
+				$ids[$n] = true;
+			}
+		}
+		$ids = array_keys($ids);
+
+		$status      = $postVars['status'] ?? '';
+		$motivoPerda = trim($postVars['motivo_perda'] ?? '');
+
+		if (count($ids) === 0) {
+			$resposta['erro'] = 'Selecione ao menos um lead.';
+			return json_encode($resposta);
+		}
+
+		if (!in_array($status, self::$statusPermitidos, true)) {
+			$resposta['erro'] = 'Status inválido.';
+			return json_encode($resposta);
+		}
+
+		if ($status === 'perdido' && !in_array($motivoPerda, self::$motivosPerda, true)) {
+			$resposta['erro'] = 'Informe o motivo da perda.';
+			$resposta['requer_motivo'] = true;
+			return json_encode($resposta);
+		}
+
+		$dadosUser  = parent::getIdAdmin();
+		$id_admin   = (int)$dadosUser['usuario']['id_admin'];
+		$id_usuario = (int)$dadosUser['usuario']['id'];
+
+		$atualizados = 0;
+		$ignorados   = 0;
+		$erros       = [];
+
+		foreach ($ids as $id) {
+			$obLead = EntityCrmLeads::getLeads(
+				'id = '.(int)$id.' AND id_admin = '.$id_admin
+			)->fetchObject(EntityCrmLeads::class);
+
+			if (!$obLead instanceof EntityCrmLeads) {
+				$ignorados++;
+				continue;
+			}
+
+			if (!self::podeAcessarLead($obLead, $dadosUser)) {
+				$erros[] = 'Sem permissão para o lead #'.$id.'.';
+				$ignorados++;
+				continue;
+			}
+
+			$statusAnterior = $obLead->status;
+			if ($statusAnterior === $status) {
+				$ignorados++;
+				continue;
+			}
+
+			if ($status === 'em_atendimento') {
+				$obLead->usuario_id = $id_usuario;
+			}
+
+			$obLead->status = $status;
+			$obLead->motivo_perda = ($status === 'perdido') ? $motivoPerda : null;
+			$obLead->atualizarStatus();
+
+			$labelAnterior = self::$labelsStatus[$statusAnterior] ?? $statusAnterior;
+			$labelNovo     = self::$labelsStatus[$status] ?? $status;
+
+			$msgHistorico = 'Status alterado de "'.$labelAnterior.'" para "'.$labelNovo.'" (ação em lote).';
+			if ($status === 'perdido') {
+				$msgHistorico .= ' Motivo da perda: '.$motivoPerda.'.';
+			}
+			if ($status === 'em_atendimento') {
+				$msgHistorico .= ' Lead assumido para atendimento exclusivo.';
+			}
+
+			self::registrarHistorico($obLead->id, $id_usuario, 'status_alterado', $msgHistorico);
+			self::dispararMensagemWhatsApp($obLead, $statusAnterior, $status, $id_usuario);
+			$atualizados++;
+		}
+
+		if ($atualizados === 0) {
+			$resposta['erro'] = 'Nenhum lead foi movido.';
+			if (count($erros) > 0) {
+				$resposta['detalhes'] = array_slice($erros, 0, 5);
+			}
+			return json_encode($resposta);
+		}
+
+		$resposta['sucesso'] = true;
+		$resposta['atualizados'] = $atualizados;
+		$resposta['ignorados'] = $ignorados;
+		if (count($erros) > 0) {
+			$resposta['avisos'] = array_slice($erros, 0, 10);
+		}
+
 		return json_encode($resposta);
 	}
 

@@ -152,14 +152,27 @@ function resumoFiltroAniversariantes(seg){
 	return LABELS_ANIV_SITUACAO[st] || LABELS_ANIV_SITUACAO.todos;
 }
 
+function atualizarInfoPlanilhaCampanha(seg){
+	seg = seg || {};
+	const qtd = (seg.contatos && seg.contatos.length) ? seg.contatos.length : 0;
+	let txt = 'Mesmas colunas da importação de leads: Nome, WhatsApp, E-mail (opcional), Curso, Bairro, Cidade. Máx. 5MB.';
+	if(qtd > 0){
+		txt += ' Planilha salva: '+(seg.planilha_nome || 'arquivo')+' — '+qtd+' contato(s). Envie outro arquivo para substituir.';
+	}
+	const $info = $('#campanha-planilha-info');
+	if($info.length){ $info.text(txt); }
+}
+
 function atualizarUiSegmento(){
 	const tipo = $('#segmento_tipo').val();
 	const grupos = tipo === 'whatsapp_grupos';
+	const planilha = tipo === 'planilha_contatos';
 	const emailsInvalidos = tipo === 'emails_invalidos_alunos';
 	const aniv = segmentoEhAniversariantes(tipo);
 	$('#wrap-status-lead').toggle(tipo === 'leads');
 	$('#wrap-aniv-situacao').toggle(aniv);
 	$('#wrap-inadimplentes').toggle(tipo === 'inadimplentes');
+	$('#wrap-planilha-campanha').toggle(planilha);
 	$('#wrap-grupos-wa').toggleClass('d-none', !grupos);
 	if (tipo === 'inadimplentes') {
 		atualizarTextoAjudaInadimplentes();
@@ -491,6 +504,24 @@ function montarFormDataSalvar(){
 		fd.set('remover_midia', '0');
 		fd.set('midia_biblioteca_path', '');
 	}
+	const planilhaInput = document.getElementById('campanha_planilha');
+	if(planilhaInput && planilhaInput.files && planilhaInput.files[0]){
+		fd.append('planilha', planilhaInput.files[0]);
+	}
+	return fd;
+}
+
+function montarFormDataPreview(){
+	const dados = coletarFormulario();
+	dados.acao = 'preview';
+	const fd = new FormData();
+	Object.keys(dados).forEach(function(k){
+		fd.append(k, dados[k] == null ? '' : dados[k]);
+	});
+	const planilhaInput = document.getElementById('campanha_planilha');
+	if(planilhaInput && planilhaInput.files && planilhaInput.files[0]){
+		fd.append('planilha', planilhaInput.files[0]);
+	}
 	return fd;
 }
 
@@ -561,6 +592,9 @@ function limparFormulario(){
 	$('#inad_status_matricula').val('ativa');
 	$('#aniv_situacao').val('todos');
 	$('#preview-resultado').text('');
+	$('#campanha_planilha').val('');
+	window._campanhaSegmentoPlanilha = null;
+	atualizarInfoPlanilhaCampanha({});
 	$('#titulo-modal-campanha').text('Nova campanha');
 	$('#btn-salvar-campanha').html('<i class="fas fa-save"></i> Salvar rascunho');
 	$('#campanha_canal, #segmento_tipo, #status_lead, #parcelas_atraso_modo, #parcelas_atraso_qtd, #inad_status_matricula, #aniv_situacao').prop('disabled', false);
@@ -823,6 +857,15 @@ function salvarCampanha(){
 		Swal.fire('Atenção', 'Preencha assunto e mensagem do e-mail.', 'warning');
 		return;
 	}
+	if($('#segmento_tipo').val() === 'planilha_contatos'){
+		const elPlan = document.getElementById('campanha_planilha');
+		const temArquivoPlanilha = !!(elPlan && elPlan.files && elPlan.files.length);
+		const temSalva = !!(window._campanhaSegmentoPlanilha && window._campanhaSegmentoPlanilha.contatos && window._campanhaSegmentoPlanilha.contatos.length);
+		if(!temArquivoPlanilha && !temSalva){
+			Swal.fire('Atenção', 'Envie a planilha CSV ou XLSX com os contatos.', 'warning');
+			return;
+		}
+	}
 
 	$('#btn-salvar-campanha').prop('disabled', true);
 	$.ajax({
@@ -839,6 +882,9 @@ function salvarCampanha(){
 			return;
 		}
 		Swal.fire('Salvo', res.message, 'success');
+		if(res.campanha && res.campanha.segmento && res.campanha.segmento.tipo === 'planilha_contatos'){
+			window._campanhaSegmentoPlanilha = res.campanha.segmento;
+		}
 		$('#modalCampanha').modal('hide');
 		carregarCampanhas();
 	}).fail(function(){
@@ -848,10 +894,15 @@ function salvarCampanha(){
 }
 
 function previewPublico(){
-	const dados = coletarFormulario();
-	dados.acao = 'preview';
 	$('#btn-preview-campanha').prop('disabled', true);
-	$.post(url_base + CAMPANHAS_URL, dados, function(res){
+	$.ajax({
+		url: url_base + CAMPANHAS_URL,
+		method: 'POST',
+		data: montarFormDataPreview(),
+		processData: false,
+		contentType: false,
+		dataType: 'json'
+	}).done(function(res){
 		$('#btn-preview-campanha').prop('disabled', false);
 		if(!res || !res.success){
 			Swal.fire('Erro', (res && res.message) ? res.message : 'Falha no preview.', 'error');
@@ -866,7 +917,10 @@ function previewPublico(){
 			}).join(', ');
 		}
 		$('#preview-resultado').text(txt);
-	}, 'json');
+	}).fail(function(){
+		$('#btn-preview-campanha').prop('disabled', false);
+		Swal.fire('Erro', 'Falha no preview.', 'error');
+	});
 }
 
 function pararPollingProgressoCampanha(){
@@ -1414,6 +1468,9 @@ function editarCampanha(id){
 		$('#campanha_remover_midia').val('0');
 		$('#campanha_midia_tipo').val(window._campanhaMidiaExistente ? (window._campanhaMidiaExistente.tipo || '') : '');
 		$('#campanha_arquivo_img, #campanha_arquivo_doc, #campanha_arquivo_audio').val('');
+		window._campanhaSegmentoPlanilha = (seg.tipo === 'planilha_contatos') ? seg : null;
+		$('#campanha_planilha').val('');
+		atualizarInfoPlanilhaCampanha(seg.tipo === 'planilha_contatos' ? seg : {});
 		atualizarUiSegmento();
 		atualizarUiCanal();
 		atualizarInfoMidia();

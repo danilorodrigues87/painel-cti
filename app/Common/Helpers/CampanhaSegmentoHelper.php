@@ -19,6 +19,7 @@ class CampanhaSegmentoHelper {
 			'leads'                  => 'Leads do CRM',
 			'inadimplentes'          => 'Inadimplentes (mensalidades em atraso)',
 			'whatsapp_grupos'        => 'Grupos e listas de transmissão (WhatsApp)',
+			'planilha_contatos'      => 'Importar planilha (CSV / Excel)',
 		];
 	}
 
@@ -32,6 +33,13 @@ class CampanhaSegmentoHelper {
 		// Destinos manuais (JID de grupo/lista) — só WhatsApp
 		if ($tipo === 'whatsapp_grupos') {
 			return self::destinosGruposListas($segmento);
+		}
+
+		if ($tipo === 'planilha_contatos') {
+			$lista = self::contatosPlanilha($segmento);
+			return $canal === 'whatsapp'
+				? self::filtrarComWhatsapp($lista)
+				: self::filtrarComEmail($lista);
 		}
 
 		switch ($tipo) {
@@ -106,6 +114,33 @@ class CampanhaSegmentoHelper {
 				'nome'              => trim((string)($d['nome'] ?? '')) ?: $jid,
 				'contato'           => $jid,
 				'curso'             => '',
+			];
+		}
+		return $lista;
+	}
+
+	/** @param array{contatos?:array<int,array<string,mixed>>} $segmento */
+	private static function contatosPlanilha(array $segmento): array {
+		$lista = [];
+		foreach ($segmento['contatos'] ?? [] as $c) {
+			if (!is_array($c)) {
+				continue;
+			}
+			$nome = trim((string)($c['nome'] ?? ''));
+			if ($nome === '') {
+				continue;
+			}
+			$whatsapp = preg_replace('/\D/', '', (string)($c['whatsapp'] ?? ''));
+			$email = EmailValidator::normalizar((string)($c['email'] ?? ''));
+			$curso = trim((string)($c['curso'] ?? $c['curso_interesse'] ?? ''));
+			$lista[] = [
+				'destinatario_tipo' => 'planilha',
+				'destinatario_id'   => null,
+				'nome'              => $nome,
+				'contato'           => $email !== '' ? $email : $whatsapp,
+				'whatsapp'          => $whatsapp,
+				'email'             => $email,
+				'curso'             => $curso,
 			];
 		}
 		return $lista;
