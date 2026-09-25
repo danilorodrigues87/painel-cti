@@ -63,7 +63,8 @@
 			<option value="perdido">Perdido</option>
 		</select>
 		<button type="button" class="btn btn-primary btn-sm" id="btn-crm-aplicar-lote" disabled>Aplicar</button>
-		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna">Coluna visível</button>
+		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna-pagina" title="Marca os leads da coluna nesta página">Coluna (página)</button>
+		<button type="button" class="btn btn-outline-secondary btn-sm" id="btn-crm-selecionar-coluna-funil" title="Marca todos os leads da coluna no funil (filtros atuais)">Coluna (funil inteiro)</button>
 		<button type="button" class="btn btn-link btn-sm" id="btn-crm-limpar-selecao">Limpar</button>
 		<button type="button" class="btn btn-link btn-sm text-muted" id="btn-crm-sair-lote">Sair do modo seleção</button>
 	</div>
@@ -120,6 +121,7 @@
 				<small class="d-block opacity-75" id="total-perdido">R$ 0,00</small>
 			</div>
 			<div class="card-body p-2 kanban-list" id="coluna-perdido" data-status="perdido"></div>
+			<div class="card-footer py-1 px-2"><small class="text-muted">Exibe até 200 perdidos mais recentes (fora da paginação).</small></div>
 		</div>
 	</div>
 
@@ -456,6 +458,7 @@
 					<div id="response-motivo-perda"></div>
 					<input type="hidden" name="id" id="perda-lead-id" value="">
 					<input type="hidden" id="perda-ids-lote" value="">
+					<input type="hidden" id="perda-lote-funil" value="">
 					<input type="hidden" name="status" value="perdido">
 					<p class="small text-muted mb-3" id="perda-texto-ajuda">Selecione o motivo pelo qual este lead foi perdido:</p>
 					<div class="d-grid gap-2">
@@ -595,4 +598,4 @@
 	let excluirFunil  = 'painel/crm/funis/delete';
 </script>
 <script src="{{URL}}/resources/js/whatsapp-iniciar.js?v=20260728h"></script>
-<script src="{{URL}}/resources/js/crm.js?v=20260925a"></script>
+<script src="{{URL}}/resources/js/crm.js?v=20260925c"></script>

@@ -354,8 +354,10 @@ public static function getMenu($currentSessionMenu, $permittedModules) {
     // POST
 		$postVars = $request->getPostVars();
 
-    // PÁGINA ATUAL
-		$currentPage = $postVars['page'] ?? 1;
+    // PÁGINA ATUAL (usa valor já ajustado pelo componente de paginação)
+		$currentPage = method_exists($obPagination, 'getCurrentPage')
+			? $obPagination->getCurrentPage()
+			: ($postVars['page'] ?? 1);
 
     // LIMITE DE PÁGINA
 		$limit = getenv('PAGINATION_LIMIT');

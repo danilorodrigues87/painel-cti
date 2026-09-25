@@ -11,6 +11,8 @@ let crmFunisRequest = null;
 let crmModoSelecao = false;
 let crmSelecionados = {};
 let crmSortables = [];
+/** Coluna de origem ao mover "funil inteiro" (status_origem no backend). */
+let crmLoteColunaFunil = null;
 
 function montarCardLead(lead){
 	const classeEsquecido = lead.esquecido ? ' lead-esquecido' : '';
@@ -35,9 +37,14 @@ function montarCardLead(lead){
 
 function atualizarUiLote(){
 	const qtd = Object.keys(crmSelecionados).length;
-	$('#crm-lote-qtd').text(qtd);
+	const modoFunil = !!crmLoteColunaFunil;
+	if(modoFunil){
+		$('#crm-lote-qtd').text('Coluna: '+crmLoteColunaFunil+' (funil inteiro)');
+	}else{
+		$('#crm-lote-qtd').text(qtd);
+	}
 	const status = $('#crm-lote-status').val();
-	$('#btn-crm-aplicar-lote').prop('disabled', qtd === 0 || !status);
+	$('#btn-crm-aplicar-lote').prop('disabled', ((!modoFunil && qtd === 0) || !status));
 }
 
 function definirModoSelecaoCrm(ativo){
@@ -47,6 +54,7 @@ function definirModoSelecaoCrm(ativo){
 	$('#btn-crm-modo-lote').toggleClass('active', crmModoSelecao);
 	if(!crmModoSelecao){
 		crmSelecionados = {};
+		crmLoteColunaFunil = null;
 		$('#crm-lote-status').val('');
 	}
 	crmSortables.forEach(function(s){ s.option('disabled', crmModoSelecao); });
@@ -71,11 +79,43 @@ function idsSelecionadosCrm(){
 	return Object.keys(crmSelecionados).map(function(id){ return parseInt(id, 10); }).filter(function(n){ return n > 0; });
 }
 
-function atualizarStatusLeadLote(ids, status, motivoPerda, callback){
+function dadosFiltroCrm(){
+	return {
+		filtro_funil: obterFunilAtivo(),
+		filtro_nome: ($('#filtro-busca-lead').val() || '').trim(),
+		filtro_curso: ($('#filtro-curso').val() || '').trim()
+	};
+}
+
+function sincronizarPaginacaoCrm(result){
+	if(result.pagina_atual){
+		crmPaginaAtual = parseInt(result.pagina_atual, 10) || 1;
+	}
+	if(result.itens_pagina === 0 && (result.total_kanban || 0) > 0 && crmPaginaAtual > 1){
+		carregarLeads(Math.max(1, crmPaginaAtual - 1));
+		return true;
+	}
+	return false;
+}
+
+function atualizarStatusLeadLote(ids, status, motivoPerda, callback, opts){
+	opts = opts || {};
+	const payload = Object.assign({
+		status: status,
+		motivo_perda: motivoPerda || ''
+	}, dadosFiltroCrm());
+
+	if(opts.selecionarColunaCompleta && opts.statusOrigem){
+		payload.selecionar_coluna_completa = 1;
+		payload.status_origem = opts.statusOrigem;
+	}else{
+		payload.ids = ids;
+	}
+
 	$.ajax({
 		url: url_base + (typeof statusLeadLote !== 'undefined' ? statusLeadLote : 'painel/crm/status-lote'),
 		method: 'post',
-		data: { ids: ids, status: status, motivo_perda: motivoPerda || '' },
+		data: payload,
 		dataType: 'json',
 		success: function(result){
 			if(result.erro){
@@ -88,8 +128,9 @@ function atualizarStatusLeadLote(ids, status, motivoPerda, callback){
 				}
 				Swal.fire({ title: 'Pronto', text: msg, icon: 'success', timer: 1800, showConfirmButton: false });
 				crmSelecionados = {};
+				crmLoteColunaFunil = null;
 				atualizarUiLote();
-				carregarLeads();
+				carregarLeads(1);
 				if(typeof callback === 'function'){
 					callback();
 				}
@@ -309,14 +350,13 @@ function carregarLeads(page){
 	$.ajax({
 		url: url_base + listagemCrm,
 		method: 'post',
-		data: {
-			page: page,
-			filtro_funil: obterFunilAtivo(),
-			filtro_nome: ($('#filtro-busca-lead').val() || '').trim(),
-			filtro_curso: ($('#filtro-curso').val() || '').trim()
-		},
+		data: Object.assign({ page: page }, dadosFiltroCrm()),
 		dataType: 'json',
 		success: function(result){
+			if(sincronizarPaginacaoCrm(result)){
+				return;
+			}
+
 			if(Array.isArray(result.funis)){
 				atualizarTodosSelectsFunis(result.funis, result.funil_ativo);
 			}
@@ -375,6 +415,7 @@ function atualizarStatusLead(id, status, motivoPerda, callback){
 function abrirModalMotivoPerda(id){
 	$('#perda-lead-id').val(id);
 	$('#perda-ids-lote').val('');
+	$('#perda-lote-funil').val('');
 	$('#perda-texto-ajuda').text('Selecione o motivo pelo qual este lead foi perdido:');
 	$('#perda-motivo').val('');
 	$('#response-motivo-perda').html('');
@@ -383,10 +424,15 @@ function abrirModalMotivoPerda(id){
 	$('#modalMotivoPerda').modal('show');
 }
 
-function abrirModalMotivoPerdaLote(ids){
+function abrirModalMotivoPerdaLote(ids, opts){
+	opts = opts || {};
 	$('#perda-lead-id').val('');
 	$('#perda-ids-lote').val(JSON.stringify(ids || []));
-	$('#perda-texto-ajuda').text('Motivo da perda para '+ids.length+' lead(s) selecionado(s):');
+	$('#perda-lote-funil').val(opts.selecionarColunaCompleta ? (opts.statusOrigem || '') : '');
+	const txt = opts.selecionarColunaCompleta
+		? 'Motivo da perda para todos os leads da coluna "'+(opts.statusOrigem || '')+'" (funil / filtros):'
+		: 'Motivo da perda para '+ids.length+' lead(s) selecionado(s):';
+	$('#perda-texto-ajuda').text(txt);
 	$('#perda-motivo').val('');
 	$('#response-motivo-perda').html('');
 	$('.btn-motivo').removeClass('active');
@@ -576,6 +622,7 @@ $(document).on('click', '#btn-crm-sair-lote', function(){
 
 $(document).on('click', '#btn-crm-limpar-selecao', function(){
 	crmSelecionados = {};
+	crmLoteColunaFunil = null;
 	atualizarUiLote();
 	$('.kanban-card').removeClass('crm-card-selecionado');
 	$('.crm-check-lead').prop('checked', false);
@@ -583,9 +630,9 @@ $(document).on('click', '#btn-crm-limpar-selecao', function(){
 
 $(document).on('change', '#crm-lote-status', atualizarUiLote);
 
-$(document).on('click', '#btn-crm-selecionar-coluna', function(){
-	Swal.fire({
-		title: 'Selecionar coluna',
+function swalEscolherColunaCrm(titulo){
+	return Swal.fire({
+		title: titulo,
 		input: 'select',
 		inputOptions: {
 			novo: 'Novo',
@@ -595,10 +642,15 @@ $(document).on('click', '#btn-crm-selecionar-coluna', function(){
 		},
 		inputPlaceholder: 'Escolha a coluna',
 		showCancelButton: true,
-		confirmButtonText: 'Selecionar todos',
+		confirmButtonText: 'Continuar',
 		cancelButtonText: 'Cancelar'
-	}).then(function(r){
+	});
+}
+
+$(document).on('click', '#btn-crm-selecionar-coluna-pagina', function(){
+	swalEscolherColunaCrm('Selecionar coluna (página atual)').then(function(r){
 		if(!r.isConfirmed || !r.value) return;
+		crmLoteColunaFunil = null;
 		$('#coluna-'+r.value+' .kanban-card').each(function(){
 			const id = $(this).data('id');
 			crmSelecionados[String(id)] = true;
@@ -609,23 +661,54 @@ $(document).on('click', '#btn-crm-selecionar-coluna', function(){
 	});
 });
 
+$(document).on('click', '#btn-crm-selecionar-coluna-funil', function(){
+	swalEscolherColunaCrm('Selecionar coluna (funil inteiro)').then(function(r){
+		if(!r.isConfirmed || !r.value) return;
+		crmSelecionados = {};
+		crmLoteColunaFunil = r.value;
+		$('.kanban-card').removeClass('crm-card-selecionado');
+		$('.crm-check-lead').prop('checked', false);
+		$('#crm-lote-qtd').text('Coluna: '+r.value+' (funil inteiro)');
+		$('#btn-crm-aplicar-lote').prop('disabled', !$('#crm-lote-status').val());
+	});
+});
+
 $(document).on('click', '#btn-crm-aplicar-lote', function(){
-	const ids = idsSelecionadosCrm();
 	const status = $('#crm-lote-status').val();
-	if(!ids.length || !status) return;
+	if(!status) return;
+
+	const modoFunil = !!crmLoteColunaFunil;
+	const ids = idsSelecionadosCrm();
+	if(!modoFunil && !ids.length) return;
+
+	const rotuloQtd = modoFunil
+		? 'todos os leads da coluna "'+crmLoteColunaFunil+'" (funil / filtros atuais)'
+		: ids.length+' lead(s)';
+
 	if(status === 'perdido'){
-		abrirModalMotivoPerdaLote(ids);
+		if(modoFunil){
+			abrirModalMotivoPerdaLote([], { selecionarColunaCompleta: true, statusOrigem: crmLoteColunaFunil });
+		}else{
+			abrirModalMotivoPerdaLote(ids);
+		}
 		return;
 	}
 	Swal.fire({
-		title: 'Mover '+ids.length+' lead(s)?',
+		title: 'Mover '+rotuloQtd+'?',
 		icon: 'question',
 		showCancelButton: true,
 		confirmButtonText: 'Sim, mover',
 		cancelButtonText: 'Cancelar'
 	}).then(function(r){
 		if(!r.isConfirmed) return;
-		atualizarStatusLeadLote(ids, status);
+		if(modoFunil){
+			atualizarStatusLeadLote([], status, '', null, {
+				selecionarColunaCompleta: true,
+				statusOrigem: crmLoteColunaFunil
+			});
+		}else{
+			atualizarStatusLeadLote(ids, status);
+		}
 	});
 });
 
@@ -756,6 +839,7 @@ $(document).on('submit', '#form-motivo-perda', function(event){
 
 	const id     = $('#perda-lead-id').val();
 	const idsLoteRaw = $('#perda-ids-lote').val();
+	const colunaFunil = ($('#perda-lote-funil').val() || '').trim();
 	const motivo = $('#perda-motivo').val();
 
 	if(!motivo){
@@ -763,13 +847,19 @@ $(document).on('submit', '#form-motivo-perda', function(event){
 		return;
 	}
 
+	if(colunaFunil){
+		atualizarStatusLeadLote([], 'perdido', motivo, function(){
+			$('#modalMotivoPerda').modal('hide');
+			definirModoSelecaoCrm(false);
+		}, { selecionarColunaCompleta: true, statusOrigem: colunaFunil });
+		return;
+	}
+
+	let ids = [];
 	if(idsLoteRaw){
-		let ids = [];
 		try { ids = JSON.parse(idsLoteRaw); } catch(e) { ids = []; }
-		if(!ids.length){
-			$('#response-motivo-perda').html('<div class="alert alert-danger py-1">Nenhum lead selecionado.</div>');
-			return;
-		}
+	}
+	if(ids.length){
 		atualizarStatusLeadLote(ids, 'perdido', motivo, function(){
 			$('#modalMotivoPerda').modal('hide');
 			definirModoSelecaoCrm(false);

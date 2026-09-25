@@ -46,4 +46,20 @@ class Pagination{
 		return $paginas;
 
 	}
+
+	public function getCurrentPage(){
+		return (int)$this->currentPage;
+	}
+
+	public function getTotalPages(){
+		return (int)$this->pages;
+	}
+
+	public function getTotalResults(){
+		return (int)$this->results;
+	}
+
+	public function getLimitPerPage(){
+		return (int)$this->limit;
+	}
 }

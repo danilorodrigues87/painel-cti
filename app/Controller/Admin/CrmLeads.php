@@ -108,37 +108,35 @@ class CrmLeads extends Page{
 		$contagensGlobais = $agregados['contagens'];
 		$totaisGlobaisRaw = $agregados['totais'];
 
-		$quantidadeTotal = (int)EntityCrmLeads::getLeads($whereFiltro, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
+		// Paginação só do funil ativo (novo / em atendimento / matriculado). Perdidos vão em consulta à parte.
+		$whereKanban = $whereFiltro.' AND status != "perdido"';
+		$quantidadeTotal = (int)EntityCrmLeads::getLeads($whereKanban, null, null, 'COUNT(*) as qtd')->fetchObject()->qtd;
 		$obPagination = new Pagination($quantidadeTotal, $paginaAtual, $limite);
+		$itensPagina = 0;
 
 		$results = EntityCrmLeads::getLeads(
-			$whereFiltro,
+			$whereKanban,
 			'data_cadastro DESC',
 			$obPagination->getLimit()
 		);
 
 		while ($obLead = $results->fetchObject(EntityCrmLeads::class)) {
-			$status = in_array($obLead->status, self::$statusPermitidos) ? $obLead->status : 'novo';
+			$card = self::formatarCardKanban($obLead);
+			$status = $card['status'];
+			unset($card['status']);
+			$totaisPagina[$status] += (float)($obLead->valor_estimado ?? 0);
+			$colunas[$status][] = $card;
+			$itensPagina++;
+		}
 
-			$valorEstimado = (float)($obLead->valor_estimado ?? 0);
-			$totaisPagina[$status] += $valorEstimado;
-
-			$ultimaAtualizacao = self::getUltimaAtualizacao($obLead->id, $obLead->data_cadastro);
-			$horasSemContato   = self::horasDesde($ultimaAtualizacao);
-
-			$colunas[$status][] = [
-				'id'                 => $obLead->id,
-				'nome'               => $obLead->nome,
-				'whatsapp'           => $obLead->whatsapp,
-				'curso_interesse'    => $obLead->curso_interesse,
-				'valor_estimado'     => $valorEstimado,
-				'valor_estimado_br'  => $valorEstimado > 0 ? NumeroHelper::moedaBr($valorEstimado) : '',
-				'data_cadastro'      => DateTimeHelper::databr($obLead->data_cadastro),
-				'status_wa'          => $obLead->status_wa,
-				'motivo_perda'       => $obLead->motivo_perda,
-				'esquecido'          => $horasSemContato >= 48,
-				'ultima_atualizacao' => $ultimaAtualizacao
-			];
+		$limitePerdidos = 200;
+		$resultsPerdido = EntityCrmLeads::getLeads(
+			$whereFiltro.' AND status = "perdido"',
+			'data_cadastro DESC',
+			(string)$limitePerdidos
+		);
+		while ($obLead = $resultsPerdido->fetchObject(EntityCrmLeads::class)) {
+			$colunas['perdido'][] = self::formatarCardKanban($obLead, false);
 		}
 
 		$whereCursos = $whereBase.self::montarFiltroFunil($funilAtivo);
@@ -157,8 +155,93 @@ class CrmLeads extends Page{
 			'cursos'             => $cursos,
 			'funis'              => $funis,
 			'funil_ativo'        => $funilAtivo,
-			'pagination'         => parent::getPagination($request, $obPagination)
+			'pagination'         => parent::getPagination($request, $obPagination),
+			'pagina_atual'       => $obPagination->getCurrentPage(),
+			'total_paginas'      => $obPagination->getTotalPages(),
+			'total_kanban'       => $obPagination->getTotalResults(),
+			'itens_pagina'       => $itensPagina,
+			'perdidos_limite'    => $limitePerdidos,
 		]);
+	}
+
+	/**
+	 * @return array{ids?:array<int,int>,erro?:string}
+	 */
+	private static function resolverIdsLote(array $postVars, array $dadosUser): array {
+		$limiteLote = 2000;
+
+		if (!empty($postVars['selecionar_coluna_completa'])) {
+			$statusOrigem = $postVars['status_origem'] ?? '';
+			if (!in_array($statusOrigem, self::$statusPermitidos, true)) {
+				return ['erro' => 'Coluna de origem inválida.'];
+			}
+
+			$id_admin = (int)$dadosUser['usuario']['id_admin'];
+			$funilAtivo = self::resolverFunilFiltro($postVars, $id_admin);
+			$where = self::montarWhereListagem($dadosUser)
+				.self::montarFiltroFunil($funilAtivo)
+				.self::montarFiltrosBusca($postVars)
+				.' AND status = "'.addslashes($statusOrigem).'"';
+
+			$results = EntityCrmLeads::getLeads($where, 'data_cadastro DESC', (string)$limiteLote, 'id');
+			$ids = [];
+			while ($row = $results->fetchObject()) {
+				$n = (int)($row->id ?? 0);
+				if ($n > 0) {
+					$ids[$n] = $n;
+				}
+			}
+
+			if (count($ids) === 0) {
+				return ['erro' => 'Nenhum lead encontrado nesta coluna com os filtros atuais.'];
+			}
+
+			return ['ids' => array_values($ids)];
+		}
+
+		$idsRaw = $postVars['ids'] ?? [];
+		if (is_string($idsRaw)) {
+			$decoded = json_decode($idsRaw, true);
+			$idsRaw = is_array($decoded) ? $decoded : array_filter(array_map('trim', explode(',', $idsRaw)));
+		}
+		if (!is_array($idsRaw)) {
+			$idsRaw = [];
+		}
+
+		$ids = [];
+		foreach ($idsRaw as $id) {
+			$n = (int)$id;
+			if ($n > 0) {
+				$ids[$n] = $n;
+			}
+		}
+
+		return ['ids' => array_values($ids)];
+	}
+
+	private static function formatarCardKanban(EntityCrmLeads $obLead, bool $incluirStatus = true): array {
+		$status = in_array($obLead->status, self::$statusPermitidos) ? $obLead->status : 'novo';
+		$valorEstimado = (float)($obLead->valor_estimado ?? 0);
+		$ultimaAtualizacao = self::getUltimaAtualizacao($obLead->id, $obLead->data_cadastro);
+		$horasSemContato   = self::horasDesde($ultimaAtualizacao);
+
+		$card = [
+			'id'                 => $obLead->id,
+			'nome'               => $obLead->nome,
+			'whatsapp'           => $obLead->whatsapp,
+			'curso_interesse'    => $obLead->curso_interesse,
+			'valor_estimado'     => $valorEstimado,
+			'valor_estimado_br'  => $valorEstimado > 0 ? NumeroHelper::moedaBr($valorEstimado) : '',
+			'data_cadastro'      => DateTimeHelper::databr($obLead->data_cadastro),
+			'status_wa'          => $obLead->status_wa,
+			'motivo_perda'       => $obLead->motivo_perda,
+			'esquecido'          => $horasSemContato >= 48,
+			'ultima_atualizacao' => $ultimaAtualizacao,
+		];
+		if ($incluirStatus) {
+			$card['status'] = $status;
+		}
+		return $card;
 	}
 
 	/**
@@ -635,23 +718,16 @@ class CrmLeads extends Page{
 		$postVars = $request->getPostVars();
 		$resposta = [];
 
-		$idsRaw = $postVars['ids'] ?? [];
-		if (is_string($idsRaw)) {
-			$decoded = json_decode($idsRaw, true);
-			$idsRaw = is_array($decoded) ? $decoded : array_filter(array_map('trim', explode(',', $idsRaw)));
-		}
-		if (!is_array($idsRaw)) {
-			$idsRaw = [];
-		}
+		$dadosUser  = parent::getIdAdmin();
+		$id_admin   = (int)$dadosUser['usuario']['id_admin'];
+		$id_usuario = (int)$dadosUser['usuario']['id'];
 
-		$ids = [];
-		foreach ($idsRaw as $id) {
-			$n = (int)$id;
-			if ($n > 0) {
-				$ids[$n] = true;
-			}
+		$idsRes = self::resolverIdsLote($postVars, $dadosUser);
+		if (!empty($idsRes['erro'])) {
+			$resposta['erro'] = $idsRes['erro'];
+			return json_encode($resposta);
 		}
-		$ids = array_keys($ids);
+		$ids = $idsRes['ids'] ?? [];
 
 		$status      = $postVars['status'] ?? '';
 		$motivoPerda = trim($postVars['motivo_perda'] ?? '');
@@ -671,10 +747,6 @@ class CrmLeads extends Page{
 			$resposta['requer_motivo'] = true;
 			return json_encode($resposta);
 		}
-
-		$dadosUser  = parent::getIdAdmin();
-		$id_admin   = (int)$dadosUser['usuario']['id_admin'];
-		$id_usuario = (int)$dadosUser['usuario']['id'];
 
 		$atualizados = 0;
 		$ignorados   = 0;
