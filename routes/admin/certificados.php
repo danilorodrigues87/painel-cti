@@ -34,6 +34,16 @@ $obRouter->post('/painel/certificados/form',[
 	}
 ]);
 
+//ROTA CONTROLE IMPRESSO / RETIRADA (lista)
+$obRouter->post('/painel/certificados/controle',[
+	'middlewares' => [
+		'required-admin-login'
+	],
+	function($request){
+		return new Response(200,Admin\Certificados::atualizarControle($request));
+	}
+]);
+
 //ROTA DE SALVAMENTO DE DADOS
 $obRouter->post('/painel/certificados/save',[
 	'middlewares' => [

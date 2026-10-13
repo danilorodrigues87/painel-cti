@@ -7,11 +7,27 @@
 <div id="barra-filtros-lista" class="card shadow-sm mb-3">
 	<div class="card-body py-3">
 		<div class="row g-2 align-items-end">
-			<div class="col-md-5">
+			<div class="col-md-4">
 				<label class="form-label small mb-1" for="filtro-busca-cert">Aluno</label>
 				<input type="search" class="form-control form-control-sm" name="busca" id="filtro-busca-cert" placeholder="Nome, e-mail ou WhatsApp do aluno…">
 			</div>
-			<div class="col-md-7 d-flex flex-wrap gap-2">
+			<div class="col-md-3">
+				<label class="form-label small mb-1" for="filtro_impresso">Impresso</label>
+				<select class="form-control form-control-sm" name="filtro_impresso" id="filtro_impresso">
+					<option value="">Todos</option>
+					<option value="1">Sim (já impresso)</option>
+					<option value="0">Não (pendente impressão)</option>
+				</select>
+			</div>
+			<div class="col-md-3">
+				<label class="form-label small mb-1" for="filtro_retirada">Retirada</label>
+				<select class="form-control form-control-sm" name="filtro_retirada" id="filtro_retirada">
+					<option value="">Todos</option>
+					<option value="retirado">Já retirados</option>
+					<option value="pendente">Pendente retirada</option>
+				</select>
+			</div>
+			<div class="col-md-2 d-flex flex-wrap gap-2">
 				<button type="button" class="btn btn-sm btn-outline-secondary btn-limpar-filtros">Limpar</button>
 				<button type="button" class="btn btn-sm btn-success ms-auto" onclick="list_itens('','novo')">Nova certificação</button>
 			</div>
@@ -41,5 +57,7 @@
 	let formulario = 'painel/certificados/form';
 	let edicao = 'painel/certificados/save';
 	let deletar = 'painel/certificados/excluir';
+	let controleCertificadoUrl = 'painel/certificados/controle';
 </script>
 <script src="{{URL}}/resources/js/ajax.js?v=20260728g"></script>
+<script src="{{URL}}/resources/js/certificados-controle.js?v=20261013a"></script>

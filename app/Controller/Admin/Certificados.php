@@ -58,6 +58,21 @@ class Certificados extends Page{
     }
   }
 
+  $filtroImpresso = (string)($postVars['filtro_impresso'] ?? '');
+  if ($filtroImpresso === '1' || $filtroImpresso === '0') {
+    $where .= ' AND certificados.impresso = '.(int)$filtroImpresso;
+    $wherePagination .= ' AND impresso = '.(int)$filtroImpresso;
+  }
+
+  $filtroRetirada = (string)($postVars['filtro_retirada'] ?? '');
+  if ($filtroRetirada === 'retirado') {
+    $where .= ' AND certificados.data_retirada IS NOT NULL';
+    $wherePagination .= ' AND data_retirada IS NOT NULL';
+  } elseif ($filtroRetirada === 'pendente') {
+    $where .= ' AND certificados.data_retirada IS NULL';
+    $wherePagination .= ' AND data_retirada IS NULL';
+  }
+
   $itens = '';
 
     // Quantidade Total de Registros
@@ -79,6 +94,8 @@ class Certificados extends Page{
  certificados.conclusao,
  certificados.carga_h, 
  certificados.codigo,
+ certificados.impresso,
+ certificados.data_retirada,
  usuarios.nome,
  trilhas.nome as trilha
  ';
@@ -88,12 +105,34 @@ class Certificados extends Page{
 
     // Renderiza o Item
  while ($obDados = $results->fetchObject(EntityCertificados::class)) {
-    $itens .= '<tr>
+    $idCert = (int)$obDados->id;
+    $impresso = !empty($obDados->impresso);
+    $dataRetirada = trim((string)($obDados->data_retirada ?? ''));
+    if ($dataRetirada !== '' && preg_match('#^\d{4}-\d{2}-\d{2}$#', $dataRetirada)) {
+      $dataRetiradaInput = $dataRetirada;
+    } else {
+      $dataRetiradaInput = '';
+    }
+    $chkImpresso = $impresso ? ' checked' : '';
+    $badgeRetirada = $dataRetiradaInput !== ''
+      ? '<span class="badge bg-success cert-badge-retirada d-none d-xl-inline ms-1">Retirado</span>'
+      : '<span class="badge bg-secondary cert-badge-retirada d-none d-xl-inline ms-1">Pendente</span>';
+
+    $itens .= '<tr data-cert-id="'.$idCert.'">
     <td>' . htmlspecialchars($obDados->nome) . '</td>
     <td>' . htmlspecialchars($obDados->trilha) . '</td>
     <td class="text-center">' . htmlspecialchars($obDados->carga_h) . ' Horas</td>
     <td>' . htmlspecialchars($obDados->conclusao) . '</td>
-    <td><a class="btn btn-secondary" href="#" title="Copiar código" onclick="copiar(\'' . addslashes($obDados->codigo) . '\')"><i class="far fa-copy"></i></a></td>
+    <td class="text-center">
+      <div class="form-check form-check-inline m-0 justify-content-center">
+        <input type="checkbox" class="form-check-input cert-ctrl-impresso" data-id="'.$idCert.'" title="Já impresso / enviado à gráfica"'.$chkImpresso.'>
+      </div>
+    </td>
+    <td class="text-nowrap">
+      <input type="date" class="form-control form-control-sm cert-ctrl-retirada" data-id="'.$idCert.'" value="'.htmlspecialchars($dataRetiradaInput, ENT_QUOTES, 'UTF-8').'" style="max-width:150px">
+      '.$badgeRetirada.'
+    </td>
+    <td><a class="btn btn-secondary btn-sm" href="#" title="Copiar código" onclick="copiar(\'' . addslashes($obDados->codigo) . '\');return false;"><i class="far fa-copy"></i></a></td>
     <td>
     <div class="dropdown">
     <button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -113,7 +152,7 @@ class Certificados extends Page{
  }
 
  if ($itens === '') {
-   $itens = '<tr><td colspan="6" class="text-center text-muted py-4">Nenhum certificado encontrado com esses filtros.</td></tr>';
+   $itens = '<tr><td colspan="8" class="text-center text-muted py-4">Nenhum certificado encontrado com esses filtros.</td></tr>';
  }
 
     // Tabela HTML
@@ -126,6 +165,8 @@ class Certificados extends Page{
  <th>Trilha</th>
  <th>Carga Horária</th>
  <th>Conclusão</th>
+ <th class="text-center">Impresso</th>
+ <th>Retirada</th>
  <th>Código</th>
  <th>Ações</th>
  </tr>
@@ -248,6 +289,18 @@ private static function getForm($request) {
  <input type="text" name="conclusao" value="' . (isset($dados['conclusao']) ? $dados['conclusao'] : '') . '" class="form-control" required>
  </div>
  </div>
+ <div class="col-md-6 mt-2">
+ <div class="form-group form-check mt-4">
+ <input type="checkbox" class="form-check-input" name="impresso" id="cert-form-impresso" value="1"' . (!empty($dados['impresso']) ? ' checked' : '') . '>
+ <label class="form-check-label" for="cert-form-impresso">Certificado já impresso</label>
+ </div>
+ </div>
+ <div class="col-md-6 mt-2">
+ <div class="form-group">
+ <label>Data de retirada pelo aluno</label>
+ <input type="date" name="data_retirada" value="' . htmlspecialchars(self::dataRetiradaParaInput($dados['data_retirada'] ?? ''), ENT_QUOTES, 'UTF-8') . '" class="form-control">
+ </div>
+ </div>
  </div>
  </div>
 
@@ -303,6 +356,7 @@ public static function setNewCertificado($request){
    $obData->carga_h = $carga_h;
    $obData->modulos = $modulos;
    $obData->conclusao = $conclusao;
+   self::aplicarControlePost($obData, $postVars);
    $obData->atualizar();
 
 } else {
@@ -314,6 +368,7 @@ public static function setNewCertificado($request){
    $obData->carga_h = $carga_h;
    $obData->modulos = $modulos;
    $obData->conclusao = $conclusao;
+   self::aplicarControlePost($obData, $postVars);
    $obData->id_admin = $id_admin;
    $obData->cadastrar();
 }
@@ -356,6 +411,64 @@ public static function deleteCertificado($request){
  }
 
  return 'Erro ao excluir esse certificado';
+}
+
+public static function atualizarControle($request){
+  $postVars = $request->getPostVars();
+  $id = (int)($postVars['id'] ?? 0);
+  $id_admin = parent::getIdAdminInt();
+
+  if ($id <= 0 || !TenantHelper::pertence('certificados', $id, $id_admin)) {
+    return json_encode(['success' => false, 'message' => 'Registro não encontrado.']);
+  }
+
+  $ob = EntityCertificados::getCertificadoById($id);
+  if (!$ob instanceof EntityCertificados) {
+    return json_encode(['success' => false, 'message' => 'Registro não encontrado.']);
+  }
+
+  $ob->impresso = !empty($postVars['impresso']) ? 1 : 0;
+  $ob->data_retirada = self::normalizarDataRetirada($postVars['data_retirada'] ?? '');
+
+  if (!$ob->atualizarControle()) {
+    return json_encode(['success' => false, 'message' => 'Não foi possível salvar. Verifique se as colunas impresso/data_retirada existem no banco.']);
+  }
+
+  return json_encode([
+    'success' => true,
+    'impresso' => (int)$ob->impresso,
+    'data_retirada' => $ob->data_retirada,
+  ]);
+}
+
+private static function aplicarControlePost(EntityCertificados $ob, array $postVars): void {
+  $ob->impresso = !empty($postVars['impresso']) ? 1 : 0;
+  $ob->data_retirada = self::normalizarDataRetirada($postVars['data_retirada'] ?? '');
+}
+
+private static function normalizarDataRetirada($valor): ?string {
+  $valor = trim((string)$valor);
+  if ($valor === '') {
+    return null;
+  }
+  if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $valor)) {
+    return $valor;
+  }
+  if (preg_match('#^(\d{2})/(\d{2})/(\d{4})$#', $valor, $m)) {
+    return $m[3].'-'.$m[2].'-'.$m[1];
+  }
+  return null;
+}
+
+private static function dataRetiradaParaInput($valor): string {
+  $valor = trim((string)$valor);
+  if ($valor === '') {
+    return '';
+  }
+  if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $valor)) {
+    return $valor;
+  }
+  return '';
 }
 
 }

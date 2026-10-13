@@ -13,7 +13,9 @@ class Certificados{
 	$modulos,
 	$carga_h,
 	$codigo,
-	$conclusao;
+	$conclusao,
+	$impresso,
+	$data_retirada;
 
 	//RETORNA COM BASE NO ID
 	public static function getCertificadoById($id){
@@ -34,8 +36,9 @@ class Certificados{
 			'carga_h' => $this->carga_h,
 			'modulos' => $this->modulos,
 			'codigo' => ($this->codigo) ? $this->codigo : bin2hex(random_bytes(8)),
-			'conclusao' => $this->conclusao
-			
+			'conclusao' => $this->conclusao,
+			'impresso' => !empty($this->impresso) ? 1 : 0,
+			'data_retirada' => $this->data_retirada ?: null,
 		]);
 		
 		return true;
@@ -56,9 +59,18 @@ class Certificados{
 			'id_trilha' => $this->id_trilha,
 			'carga_h' => $this->carga_h,
 			'modulos' => $this->modulos,
-			'conclusao' => $this->conclusao
+			'conclusao' => $this->conclusao,
+			'impresso' => !empty($this->impresso) ? 1 : 0,
+			'data_retirada' => $this->data_retirada ?: null,
 		]);
 
+	}
+
+	public function atualizarControle(){
+		return (new Database('certificados'))->update('id = '.(int)$this->id, [
+			'impresso' => !empty($this->impresso) ? 1 : 0,
+			'data_retirada' => $this->data_retirada ?: null,
+		]);
 	}
 
 	//EXCLUI DO BANCO DE DADOS
