@@ -299,8 +299,20 @@ class ContratoVariaveisBuilder {
 			$html .= ' <b> Email: </b><span>'.htmlspecialchars((string)($responsavel['email'] ?? ''), ENT_QUOTES, 'UTF-8').'</span><br>';
 		}
 
-		$html .= '<b>Endereço: </b><span>'.htmlspecialchars((string)($aluno['endereco'] ?? ''), ENT_QUOTES, 'UTF-8').'</span><hr>';
+		$html .= '<b>Endereço: </b><span>'.htmlspecialchars(self::montarEnderecoPessoa($aluno), ENT_QUOTES, 'UTF-8').'</span><hr>';
 		return $html;
+	}
+
+	/**
+	 * Logradouro, número, bairro e cidade/UF do aluno (cidade e uf são IDs).
+	 * @param array<string,mixed> $pessoa
+	 */
+	private static function montarEnderecoPessoa(array $pessoa): string {
+		$cidadeUf = self::resolverCidadeUf(
+			(int)($pessoa['cidade'] ?? 0),
+			(int)($pessoa['uf'] ?? $pessoa['estado'] ?? 0)
+		);
+		return self::montarEnderecoEscola($pessoa, $cidadeUf);
 	}
 
 	/**

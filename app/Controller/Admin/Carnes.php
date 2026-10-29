@@ -1124,16 +1124,14 @@ public static function registrarPagamento($request){
       </tr>
 
       <tr>
-      <td colspan="1" class="tag"><b>Aluno</b>
+      <td class="tag"><b>Aluno</b>
       <br>
       <span>'.htmlspecialchars($nomeAluno, ENT_QUOTES, 'UTF-8').'</span>
       </td>
-      <!--
-      <td class="tag"><b>Responssável fianceito</b>
+      <td class="tag"><b>Parcela</b>
       <br>
-      <span>'.$responsavelFinanceiro.'</span>
+      <span>'.$count.' / '.$obMatricula['qtd_parcelas'].'</span>
       </td>
-      -->
       </tr>
 
       <tr>
