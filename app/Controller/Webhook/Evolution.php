@@ -51,8 +51,16 @@ class Evolution {
 		}
 
 		if (self::eventoEhMensagem($event, $data, $payload)) {
-			self::processarMensagens($idAdmin, $data, $instanceName);
-			self::logWebhook($idAdmin, 'msg_processada', ['instance' => $instanceName], true);
+			$resumo = self::processarMensagens($idAdmin, $data, $instanceName);
+			// Campanha em @g.us gera upsert sem salvar inbox — evita flood no error_log
+			if (($resumo['salvas'] ?? 0) > 0 || ($resumo['entrantes'] ?? 0) > 0) {
+				self::logWebhook($idAdmin, 'msg_processada', [
+					'instance' => $instanceName,
+					'salvas' => (int)($resumo['salvas'] ?? 0),
+					'entrantes' => (int)($resumo['entrantes'] ?? 0),
+					'ignoradas' => (int)($resumo['ignoradas'] ?? 0),
+				], true);
+			}
 		}
 
 		return json_encode(['success' => true]);
@@ -90,9 +98,11 @@ class Evolution {
 		error_log($linha);
 	}
 
-	private static function processarMensagens(int $idAdmin, $data, string $instanceName = ''): void {
+	/** @return array{salvas:int,entrantes:int,ignoradas:int} */
+	private static function processarMensagens(int $idAdmin, $data, string $instanceName = ''): array {
+		$resumo = ['salvas' => 0, 'entrantes' => 0, 'ignoradas' => 0];
 		if (!is_array($data)) {
-			return;
+			return $resumo;
 		}
 
 		$numeroId = null;
@@ -111,6 +121,7 @@ class Evolution {
 		$processadas = 0;
 		foreach ($itens as $msg) {
 			if (!is_array($msg)) {
+				$resumo['ignoradas']++;
 				continue;
 			}
 
@@ -118,16 +129,20 @@ class Evolution {
 			$fromMe = !empty($key['fromMe']);
 			$remoteJid = self::resolverRemoteJid($msg);
 			if ($remoteJid === '') {
+				// grupo @g.us e JIDs sem contato 1:1
+				$resumo['ignoradas']++;
 				continue;
 			}
 
 			$telefone = self::resolverTelefoneContato($msg, $remoteJid);
 			if ($telefone === '') {
 				self::logWebhook($idAdmin, 'telefone_vazio', ['jid' => $remoteJid]);
+				$resumo['ignoradas']++;
 				continue;
 			}
 
 			if (self::ignorarMensagemSistema($msg)) {
+				$resumo['ignoradas']++;
 				continue;
 			}
 
@@ -153,6 +168,7 @@ class Evolution {
 
 			// Evita bolha vazia de eventos sem conteúdo útil
 			if ($tipo === 'text' && ($corpo === null || trim((string)$corpo) === '') && $mediaUrl === null) {
+				$resumo['ignoradas']++;
 				continue;
 			}
 
@@ -174,10 +190,11 @@ class Evolution {
 
 			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId, !$fromMe);
 			if (!$conversa) {
+				$resumo['ignoradas']++;
 				continue;
 			}
 
-			WhatsappMensagem::registrar([
+			$reg = WhatsappMensagem::registrarComStatus([
 				'id_admin'      => $idAdmin,
 				'conversa_id'   => (int)$conversa->id,
 				'direction'     => $fromMe ? 'out' : 'in',
@@ -187,19 +204,50 @@ class Evolution {
 				'wa_message_id' => $waId,
 				'status'        => $fromMe ? 'sent' : 'received',
 			]);
+			$mensagemNova = !empty($reg['novo']);
+
+			// Webhook duplicado (mesmo wa_message_id): não reprocessa bot/notificação/handoff
+			if (!$mensagemNova) {
+				// #region agent log
+				self::agentDebugLog('H1', 'Evolution.php:dup', 'webhook_duplicado_ignorado', [
+					'conversaId' => (int)$conversa->id,
+					'fromMe' => $fromMe ? 1 : 0,
+					'waIdTail' => is_string($waId) ? substr($waId, -8) : null,
+					'idadeSeg' => $idadeSeg,
+				]);
+				// #endregion
+				$resumo['ignoradas']++;
+				continue;
+			}
 
 			$conversa->tocarUltimaMensagem(!$fromMe);
 
-			// Mensagem enviada pelo celular/WhatsApp Web: handoff humano (não eco do bot/inbox)
+			// fromMe: handoff só se for envio real do celular (não eco bot/campanha/painel)
 			if ($fromMe && !$ecoSistema && $tipo !== 'reaction') {
-				// #region agent log
-				self::agentDebugLog('H2', 'Evolution.php:handoff', 'handoff_humano_externo', [
-					'conversaId' => (int)$conversa->id,
-					'estadoAntes' => (string)($conversa->chatbot_estado ?? ''),
-					'waIdTail' => is_string($waId) ? substr($waId, -8) : null,
-				]);
-				// #endregion
-				WhatsappChatbotService::marcarHandoffHumanoExterno($conversa);
+				$atrasado = $idadeSeg !== null && $idadeSeg > 120;
+				$ecoRecente = WhatsappChatbotService::pareceEcoBotRecente($conversa, (string)$corpo);
+				$envioSistema = WhatsappEscolaService::houveEnvioSistemaRecente($idAdmin, $telefone);
+				if ($atrasado || $ecoRecente || $envioSistema) {
+					// #region agent log
+					self::agentDebugLog('H2', 'Evolution.php:handoff', 'handoff_pulado', [
+						'conversaId' => (int)$conversa->id,
+						'atrasado' => $atrasado ? 1 : 0,
+						'ecoRecente' => $ecoRecente ? 1 : 0,
+						'envioSistema' => $envioSistema ? 1 : 0,
+						'idadeSeg' => $idadeSeg,
+						'waIdTail' => is_string($waId) ? substr($waId, -8) : null,
+					]);
+					// #endregion
+				} else {
+					// #region agent log
+					self::agentDebugLog('H2', 'Evolution.php:handoff', 'handoff_humano_externo', [
+						'conversaId' => (int)$conversa->id,
+						'estadoAntes' => (string)($conversa->chatbot_estado ?? ''),
+						'waIdTail' => is_string($waId) ? substr($waId, -8) : null,
+					]);
+					// #endregion
+					WhatsappChatbotService::marcarHandoffHumanoExterno($conversa);
+				}
 			}
 
 			// Reações não disparam o chatbot de menu
@@ -207,13 +255,16 @@ class Evolution {
 				// #region agent log
 				self::agentDebugLog('H1_H4_H5', 'Evolution.php:before_bot', 'vai_chamar_chatbot', [
 					'conversaId' => (int)$conversa->id,
-					'duplicateWaId' => $jaExisteWaId ? 1 : 0,
+					'duplicateWaId' => 0,
 					'estado' => (string)($conversa->chatbot_estado ?? ''),
 					'status' => (string)($conversa->status ?? ''),
 					'idadeSeg' => $idadeSeg,
 				]);
 				// #endregion
-				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
+				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false, [
+					'idadeSeg' => $idadeSeg,
+					'msgTs' => $msgTs,
+				]);
 				$preview = trim((string)$corpo);
 				if ($preview === '' && $mediaUrl) {
 					$preview = $tipo === 'audio' ? '[áudio]' : ($tipo === 'image' ? '[imagem]' : '['.$tipo.']');
@@ -227,10 +278,15 @@ class Evolution {
 				);
 			}
 			$processadas++;
+			$resumo['salvas']++;
+			if (!$fromMe) {
+				$resumo['entrantes']++;
+			}
 		}
 		if ($processadas > 0) {
 			self::logWebhook($idAdmin, 'msgs_salvas', ['qtd' => $processadas, 'instance' => $instanceName], true);
 		}
+		return $resumo;
 	}
 
 	/** Resolve JID do contato (inclui fallback para @lid / privacidade). */
@@ -510,7 +566,6 @@ class Evolution {
 
 	/** @param array<string,mixed> $data */
 	private static function agentDebugLog(string $hypothesisId, string $location, string $message, array $data = []): void {
-		$path = 'C:\\Users\\Meu PC\\.cursor\\debug-logs\\debug-6b4d05.log';
 		$line = json_encode([
 			'sessionId' => '6b4d05',
 			'hypothesisId' => $hypothesisId,
@@ -522,7 +577,15 @@ class Evolution {
 		if ($line === false) {
 			return;
 		}
-		@file_put_contents($path, $line."\n", FILE_APPEND | LOCK_EX);
+		$linha = $line."\n";
+		// Local Cursor (dev)
+		@file_put_contents('C:\\Users\\Meu PC\\.cursor\\debug-logs\\debug-6b4d05.log', $linha, FILE_APPEND | LOCK_EX);
+		// Servidor / produção — baixar este arquivo
+		$dir = dirname(__DIR__, 3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		@file_put_contents($dir.DIRECTORY_SEPARATOR.'whatsapp-debug-6b4d05.log', $linha, FILE_APPEND | LOCK_EX);
 	}
 
 	private static function extrairTipo(array $msg): string {

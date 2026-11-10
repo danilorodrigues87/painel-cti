@@ -3,6 +3,8 @@
 namespace App\Common\Communication;
 
 use App\Model\Entity\EscolaIntegracoes;
+use App\Model\Entity\WhatsappConversa;
+use App\Model\Entity\WhatsappMensagem;
 use App\Model\Entity\WhatsappNumero;
 
 /**
@@ -879,6 +881,7 @@ class WhatsappEscolaService {
 		}
 
 		$api = EvolutionApiService::fromEnv();
+		self::marcarEnvioSistemaPendente($idAdmin, $telefone);
 		$res = $api->sendText($status['instance'], $telefone, $texto);
 
 		if ($res === null || $api->getLastHttpCode() >= 400) {
@@ -888,7 +891,75 @@ class WhatsappEscolaService {
 			];
 		}
 
+		self::registrarSaidaSistema($idAdmin, $telefone, 'text', $texto, $res);
 		return ['ok' => true, 'message' => 'Mensagem enviada.'];
+	}
+
+	/**
+	 * Marca envio do sistema (campanha etc.) antes do HTTP — cobre race com webhook fromMe.
+	 */
+	public static function marcarEnvioSistemaPendente(int $idAdmin, string $destino): void {
+		$tel = EvolutionApiService::normalizarTelefone($destino);
+		if ($tel === '') {
+			return;
+		}
+		$path = self::caminhoMarcadorEnvioSistema($idAdmin, $tel);
+		$dir = dirname($path);
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		@file_put_contents($path, (string)time(), LOCK_EX);
+	}
+
+	public static function houveEnvioSistemaRecente(int $idAdmin, string $telefone, int $janelaSeg = 180): bool {
+		$tel = EvolutionApiService::normalizarTelefone($telefone);
+		if ($tel === '') {
+			return false;
+		}
+		$path = self::caminhoMarcadorEnvioSistema($idAdmin, $tel);
+		if (!is_file($path)) {
+			return false;
+		}
+		$ts = (int)@file_get_contents($path);
+		if ($ts <= 0) {
+			$ts = (int)@filemtime($path);
+		}
+		return $ts > 0 && (time() - $ts) <= max(30, $janelaSeg);
+	}
+
+	private static function caminhoMarcadorEnvioSistema(int $idAdmin, string $tel): string {
+		$dir = dirname(__DIR__, 3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs'.DIRECTORY_SEPARATOR.'wa-out';
+		return $dir.DIRECTORY_SEPARATOR.$idAdmin.'_'.$tel.'.flag';
+	}
+
+	/**
+	 * Grava saída do sistema (campanha/cobrança) para o webhook reconhecer eco e não fazer handoff.
+	 * @param array<string,mixed>|null $res
+	 */
+	public static function registrarSaidaSistema(int $idAdmin, string $destino, string $tipo, ?string $corpo, $res = null): void {
+		$tel = EvolutionApiService::normalizarTelefone($destino);
+		if ($tel === '' || strpos($destino, '@g.us') !== false) {
+			return;
+		}
+		self::marcarEnvioSistemaPendente($idAdmin, $tel);
+		$conversa = WhatsappConversa::findOrCreate($idAdmin, $tel, null, null, false);
+		if (!$conversa) {
+			return;
+		}
+		$waId = null;
+		if (is_array($res)) {
+			$waId = $res['key']['id'] ?? ($res['message']['key']['id'] ?? null);
+		}
+		WhatsappMensagem::registrar([
+			'id_admin'      => $idAdmin,
+			'conversa_id'   => (int)$conversa->id,
+			'direction'     => 'out',
+			'tipo'          => $tipo !== '' ? $tipo : 'text',
+			'corpo'         => $corpo,
+			'wa_message_id' => is_string($waId) ? $waId : null,
+			'status'        => 'sent',
+		]);
+		$conversa->tocarUltimaMensagem(false);
 	}
 
 	/**
@@ -922,17 +993,24 @@ class WhatsappEscolaService {
 			}
 
 			if ($tipoMidia === 'audio') {
+				self::marcarEnvioSistemaPendente($idAdmin, $destino);
 				$res = $api->sendAudio($instance, $destino, $pathAbs, is_string($mime) ? $mime : null);
 				if ($res === null || $api->getLastHttpCode() >= 400) {
 					return ['ok' => false, 'message' => $api->getLastError() ?: 'Falha ao enviar áudio.'];
 				}
+				self::registrarSaidaSistema($idAdmin, $destino, 'audio', null, $res);
 				if ($texto !== '') {
-					$api->sendText($instance, $destino, $texto);
+					self::marcarEnvioSistemaPendente($idAdmin, $destino);
+					$resTxt = $api->sendText($instance, $destino, $texto);
+					if ($resTxt !== null && $api->getLastHttpCode() < 400) {
+						self::registrarSaidaSistema($idAdmin, $destino, 'text', $texto, $resTxt);
+					}
 				}
 				return ['ok' => true, 'message' => 'Áudio enviado.'];
 			}
 
 			$mediatype = $tipoMidia === 'document' ? 'document' : 'image';
+			self::marcarEnvioSistemaPendente($idAdmin, $destino);
 			$res = $api->sendMedia(
 				$instance,
 				$destino,
@@ -945,6 +1023,7 @@ class WhatsappEscolaService {
 			if ($res === null || $api->getLastHttpCode() >= 400) {
 				return ['ok' => false, 'message' => self::tratarFalhaEvolution($api, $idAdmin, $instance, 'Falha ao enviar mídia.')];
 			}
+			self::registrarSaidaSistema($idAdmin, $destino, $mediatype, $texto !== '' ? $texto : null, $res);
 			return ['ok' => true, 'message' => 'Mídia enviada.'];
 		}
 
@@ -952,6 +1031,7 @@ class WhatsappEscolaService {
 			return ['ok' => false, 'message' => 'Mensagem vazia.'];
 		}
 
+		self::marcarEnvioSistemaPendente($idAdmin, $destino);
 		$res = $api->sendText($instance, $destino, $texto);
 		if ($res === null || $api->getLastHttpCode() >= 400) {
 			return [
@@ -959,6 +1039,7 @@ class WhatsappEscolaService {
 				'message' => self::tratarFalhaEvolution($api, $idAdmin, $instance, 'Falha ao enviar mensagem.'),
 			];
 		}
+		self::registrarSaidaSistema($idAdmin, $destino, 'text', $texto, $res);
 		return ['ok' => true, 'message' => 'Mensagem enviada.'];
 	}
 

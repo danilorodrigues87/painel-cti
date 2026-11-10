@@ -19,7 +19,10 @@ class WhatsappChatbotService {
 		return self::$lastError;
 	}
 
-	public static function aoReceberMensagem(WhatsappConversa $conversa, ?string $texto, bool $fromMe): void {
+	/**
+	 * @param array{idadeSeg?:?int,msgTs?:?int} $ctx
+	 */
+	public static function aoReceberMensagem(WhatsappConversa $conversa, ?string $texto, bool $fromMe, array $ctx = []): void {
 		if ($fromMe) {
 			return;
 		}
@@ -27,140 +30,210 @@ class WhatsappChatbotService {
 			return;
 		}
 
-		$estado0 = (string)($conversa->chatbot_estado ?: 'novo');
-		$status0 = (string)($conversa->status ?: '');
-
-		// Conversa já iniciada pelo negócio (celular ou inbox): não mandar menu automático
-		if (self::conversaEmAtendimentoHumano($conversa)) {
+		$lockFp = self::trancarConversa((int)$conversa->id);
+		if ($lockFp === false) {
 			// #region agent log
-			self::agentDebugLog('H5', 'WhatsappChatbotService:humano', 'skip_atendimento_humano', [
+			self::agentDebugLog('H1', 'WhatsappChatbotService:lock', 'skip_concorrente', [
 				'conversaId' => (int)$conversa->id,
-				'estado' => $estado0,
-				'status' => $status0,
-				'atendente' => (int)($conversa->id_atendente ?? 0),
 			]);
 			// #endregion
 			return;
 		}
 
-		// Fluxos configuráveis (Fase A) — se tratar, não roda o menu de setores
-		if (WhatsappFlowRunner::aoReceberMensagem($conversa, $texto, $fromMe)) {
-			// #region agent log
-			self::agentDebugLog('H4_H5', 'WhatsappChatbotService:fluxo', 'tratado_por_fluxo', [
-				'conversaId' => (int)$conversa->id,
-				'estadoAntes' => $estado0,
-				'textoPreview' => mb_substr(trim((string)$texto), 0, 40),
-			]);
-			// #endregion
-			return;
-		}
+		try {
+			$fresh = WhatsappConversa::getById((int)$conversa->id, (int)$conversa->id_admin);
+			if ($fresh instanceof WhatsappConversa) {
+				$conversa = $fresh;
+			}
 
-		if (!WhatsappSetor::tabelaExiste()) {
-			return;
-		}
+			$estado0 = (string)($conversa->chatbot_estado ?: 'novo');
+			$status0 = (string)($conversa->status ?: '');
+			$idadeSeg = isset($ctx['idadeSeg']) && $ctx['idadeSeg'] !== null ? (int)$ctx['idadeSeg'] : null;
 
-		$estado = (string)($conversa->chatbot_estado ?: 'novo');
-		$status = (string)($conversa->status ?: '');
-
-		// Atendimento humano ativo: não interferir
-		if ($estado === 'humano' && $status !== 'fechada') {
-			return;
-		}
-		if ($conversa->id_atendente && $estado !== 'encerrado' && $status !== 'fechada') {
-			return;
-		}
-
-		$texto = trim((string)$texto);
-		$idAdmin = (int)$conversa->id_admin;
-		$menuCfg = WhatsappEscolaService::getConfigMenu($idAdmin);
-
-		// Fora do expediente: responde e não abre fila (exceto se já estava em fila)
-		if (in_array($estado, ['novo', '', 'aguardando_setor', 'encerrado'], true) || $status === 'fechada') {
-			$exp = WhatsappEscolaService::estaForaExpediente($idAdmin);
-			if (!empty($exp['fora'])) {
+			// Mensagem atrasada (sync/history): não dispara bot nem "fora do expediente"
+			if ($idadeSeg !== null && $idadeSeg > 900) {
 				// #region agent log
-				self::agentDebugLog('H3', 'WhatsappChatbotService:fora', 'envia_fora_expediente', [
+				self::agentDebugLog('H3', 'WhatsappChatbotService:stale', 'skip_mensagem_atrasada', [
 					'conversaId' => (int)$conversa->id,
-					'estado' => $estado,
-					'agora' => date('Y-m-d H:i'),
-					'menuAtivo' => !empty($menuCfg['menu_ativo']) ? 1 : 0,
-					'textoPreview' => mb_substr($texto, 0, 40),
+					'idadeSeg' => $idadeSeg,
+					'estado' => $estado0,
+					'textoPreview' => mb_substr(trim((string)$texto), 0, 40),
 				]);
 				// #endregion
-				self::enviarTexto($conversa, $exp['mensagem']);
-				$conversa->atualizar([
-					'chatbot_estado' => 'novo',
-					'status'         => 'aberta',
-				]);
 				return;
 			}
-		}
 
-		WhatsappSetor::garantirPadroes($idAdmin);
-		$setores = WhatsappSetor::listarAtivos($idAdmin);
+			// Conversa já iniciada pelo negócio (celular ou inbox): não mandar menu automático
+			if (self::conversaEmAtendimentoHumano($conversa)) {
+				// #region agent log
+				self::agentDebugLog('H5', 'WhatsappChatbotService:humano', 'skip_atendimento_humano', [
+					'conversaId' => (int)$conversa->id,
+					'estado' => $estado0,
+					'status' => $status0,
+					'atendente' => (int)($conversa->id_atendente ?? 0),
+				]);
+				// #endregion
+				return;
+			}
 
-		// Após encerrar: qualquer nova mensagem do cliente reinicia o fluxo
-		if ($estado === 'encerrado' || $status === 'fechada') {
-			self::reiniciarAtendimento($conversa, $setores, $menuCfg, $texto);
-			return;
-		}
+			// Fluxos configuráveis (Fase A) — se tratar, não roda o menu de setores
+			if (WhatsappFlowRunner::aoReceberMensagem($conversa, $texto, $fromMe)) {
+				// #region agent log
+				self::agentDebugLog('H4_H5', 'WhatsappChatbotService:fluxo', 'tratado_por_fluxo', [
+					'conversaId' => (int)$conversa->id,
+					'estadoAntes' => $estado0,
+					'textoPreview' => mb_substr(trim((string)$texto), 0, 40),
+				]);
+				// #endregion
+				return;
+			}
 
-		if ($estado === 'novo' || $estado === '' || $estado === 'aguardando_setor') {
-			if ($estado === 'aguardando_setor') {
-				// Imagem/áudio sem texto: só aguarda o número do setor
-				if ($texto === '') {
+			if (!WhatsappSetor::tabelaExiste()) {
+				return;
+			}
+
+			$estado = (string)($conversa->chatbot_estado ?: 'novo');
+			$status = (string)($conversa->status ?: '');
+
+			// Atendimento humano ativo: não interferir
+			if ($estado === 'humano' && $status !== 'fechada') {
+				return;
+			}
+			if ($conversa->id_atendente && $estado !== 'encerrado' && $status !== 'fechada') {
+				return;
+			}
+
+			$texto = trim((string)$texto);
+			$idAdmin = (int)$conversa->id_admin;
+			$menuCfg = WhatsappEscolaService::getConfigMenu($idAdmin);
+
+			// Fora do expediente: responde e não abre fila (exceto se já estava em fila)
+			if (in_array($estado, ['novo', '', 'aguardando_setor', 'encerrado'], true) || $status === 'fechada') {
+				$exp = WhatsappEscolaService::estaForaExpediente($idAdmin);
+				if (!empty($exp['fora'])) {
+					// #region agent log
+					self::agentDebugLog('H3', 'WhatsappChatbotService:fora', 'envia_fora_expediente', [
+						'conversaId' => (int)$conversa->id,
+						'estado' => $estado,
+						'agora' => date('Y-m-d H:i'),
+						'idadeSeg' => $idadeSeg,
+						'menuAtivo' => !empty($menuCfg['menu_ativo']) ? 1 : 0,
+						'textoPreview' => mb_substr($texto, 0, 40),
+					]);
+					// #endregion
+					self::enviarTexto($conversa, $exp['mensagem']);
+					$conversa->atualizar([
+						'chatbot_estado' => 'novo',
+						'status'         => 'aberta',
+					]);
 					return;
 				}
-				$escolha = self::interpretarEscolha($texto, $setores);
-				if ($escolha !== null) {
-					self::enviarParaSetor($conversa, $escolha);
-					return;
-				}
-				if (self::pedeMenu($texto, $menuCfg)) {
+			}
+
+			WhatsappSetor::garantirPadroes($idAdmin);
+			$setores = WhatsappSetor::listarAtivos($idAdmin);
+
+			// Após encerrar: qualquer nova mensagem do cliente reinicia o fluxo
+			if ($estado === 'encerrado' || $status === 'fechada') {
+				self::reiniciarAtendimento($conversa, $setores, $menuCfg, $texto);
+				return;
+			}
+
+			if ($estado === 'novo' || $estado === '' || $estado === 'aguardando_setor') {
+				if ($estado === 'aguardando_setor') {
+					// Imagem/áudio sem texto: só aguarda o número do setor
+					if ($texto === '') {
+						return;
+					}
+					$escolha = self::interpretarEscolha($texto, $setores);
+					if ($escolha !== null) {
+						self::enviarParaSetor($conversa, $escolha);
+						return;
+					}
+					if (self::pedeMenu($texto, $menuCfg)) {
+						self::enviarMenu($conversa, $setores, $menuCfg);
+						return;
+					}
+					// #region agent log
+					self::agentDebugLog('H1_H4', 'WhatsappChatbotService:invalida', 'opcao_invalida_reenvia_menu', [
+						'conversaId' => (int)$conversa->id,
+						'textoPreview' => mb_substr($texto, 0, 60),
+					]);
+					// #endregion
+					self::enviarTexto($conversa, $menuCfg['msg_invalida']);
 					self::enviarMenu($conversa, $setores, $menuCfg);
 					return;
 				}
+
+				if (!$menuCfg['menu_ativo']) {
+					// #region agent log
+					self::agentDebugLog('H5', 'WhatsappChatbotService:menu_off', 'menu_automatico_desligado', [
+						'conversaId' => (int)$conversa->id,
+						'estado' => $estado,
+					]);
+					// #endregion
+					self::manterSilencioso($conversa, $texto, $setores, $menuCfg);
+					return;
+				}
+
 				// #region agent log
-				self::agentDebugLog('H1_H4', 'WhatsappChatbotService:invalida', 'opcao_invalida_reenvia_menu', [
+				self::agentDebugLog('H1_H5', 'WhatsappChatbotService:menu', 'enviando_menu_inicial', [
 					'conversaId' => (int)$conversa->id,
-					'textoPreview' => mb_substr($texto, 0, 60),
+					'estado' => $estado,
+					'setores' => count($setores),
+					'textoPreview' => mb_substr($texto, 0, 40),
 				]);
 				// #endregion
-				self::enviarTexto($conversa, $menuCfg['msg_invalida']);
 				self::enviarMenu($conversa, $setores, $menuCfg);
 				return;
 			}
 
-			if (!$menuCfg['menu_ativo']) {
-				// #region agent log
-				self::agentDebugLog('H5', 'WhatsappChatbotService:menu_off', 'menu_automatico_desligado', [
-					'conversaId' => (int)$conversa->id,
-					'estado' => $estado,
+			if ($estado === 'fila' && self::pedeMenu($texto, $menuCfg)) {
+				$conversa->atualizar([
+					'chatbot_estado' => 'aguardando_setor',
+					'setor_id'       => null,
+					'status'         => 'aberta',
 				]);
-				// #endregion
-				self::manterSilencioso($conversa, $texto, $setores, $menuCfg);
-				return;
+				self::enviarMenu($conversa, $setores, $menuCfg);
 			}
+		} finally {
+			self::liberarTrava($lockFp);
+		}
+	}
 
-			// #region agent log
-			self::agentDebugLog('H1_H5', 'WhatsappChatbotService:menu', 'enviando_menu_inicial', [
-				'conversaId' => (int)$conversa->id,
-				'estado' => $estado,
-				'textoPreview' => mb_substr($texto, 0, 40),
-			]);
-			// #endregion
-			self::enviarMenu($conversa, $setores, $menuCfg);
+	/** Evita eco fromMe do bot/painel virar handoff humano. */
+	public static function pareceEcoBotRecente(WhatsappConversa $conversa, string $corpo): bool {
+		return WhatsappMensagem::saidaTextoRecente((int)$conversa->id, $corpo, 90);
+	}
+
+	/** @return resource|false */
+	private static function trancarConversa(int $conversaId) {
+		if ($conversaId <= 0) {
+			return false;
+		}
+		$dir = dirname(__DIR__, 3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		$path = $dir.DIRECTORY_SEPARATOR.'wa-bot-'.$conversaId.'.lock';
+		$fp = @fopen($path, 'c+');
+		if (!$fp) {
+			return false;
+		}
+		if (!@flock($fp, LOCK_EX | LOCK_NB)) {
+			fclose($fp);
+			return false;
+		}
+		return $fp;
+	}
+
+	/** @param resource|false $fp */
+	private static function liberarTrava($fp): void {
+		if (!is_resource($fp)) {
 			return;
 		}
-
-		if ($estado === 'fila' && self::pedeMenu($texto, $menuCfg)) {
-			$conversa->atualizar([
-				'chatbot_estado' => 'aguardando_setor',
-				'setor_id'       => null,
-				'status'         => 'aberta',
-			]);
-			self::enviarMenu($conversa, $setores, $menuCfg);
-		}
+		@flock($fp, LOCK_UN);
+		@fclose($fp);
 	}
 
 	private static function manterSilencioso(
@@ -236,6 +309,22 @@ class WhatsappChatbotService {
 
 	private static function enviarMenu(WhatsappConversa $conversa, array $setores, array $menuCfg): void {
 		if (!$setores) {
+			$estadoAtual = (string)($conversa->chatbot_estado ?: '');
+			// Já avisou / já está na fila sem setores — não spammar a cada webhook
+			if ($estadoAtual === 'fila') {
+				// #region agent log
+				self::agentDebugLog('H5', 'WhatsappChatbotService:enviarMenu', 'skip_sem_setores_ja_fila', [
+					'conversaId' => (int)$conversa->id,
+				]);
+				// #endregion
+				return;
+			}
+			// #region agent log
+			self::agentDebugLog('H5', 'WhatsappChatbotService:enviarMenu', 'sem_setores_para_fila', [
+				'conversaId' => (int)$conversa->id,
+				'estadoAntes' => $estadoAtual,
+			]);
+			// #endregion
 			self::enviarTexto($conversa, 'Olá! No momento não há setores configurados. Aguarde um atendente.');
 			$conversa->atualizar(['chatbot_estado' => 'fila', 'status' => 'aberta']);
 			return;
@@ -600,7 +689,6 @@ class WhatsappChatbotService {
 
 	/** @param array<string,mixed> $data */
 	private static function agentDebugLog(string $hypothesisId, string $location, string $message, array $data = []): void {
-		$path = 'C:\\Users\\Meu PC\\.cursor\\debug-logs\\debug-6b4d05.log';
 		$line = json_encode([
 			'sessionId' => '6b4d05',
 			'hypothesisId' => $hypothesisId,
@@ -612,6 +700,12 @@ class WhatsappChatbotService {
 		if ($line === false) {
 			return;
 		}
-		@file_put_contents($path, $line."\n", FILE_APPEND | LOCK_EX);
+		$linha = $line."\n";
+		@file_put_contents('C:\\Users\\Meu PC\\.cursor\\debug-logs\\debug-6b4d05.log', $linha, FILE_APPEND | LOCK_EX);
+		$dir = dirname(__DIR__, 3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		@file_put_contents($dir.DIRECTORY_SEPARATOR.'whatsapp-debug-6b4d05.log', $linha, FILE_APPEND | LOCK_EX);
 	}
 }
