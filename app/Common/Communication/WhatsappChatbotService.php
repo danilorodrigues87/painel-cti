@@ -27,13 +27,31 @@ class WhatsappChatbotService {
 			return;
 		}
 
+		$estado0 = (string)($conversa->chatbot_estado ?: 'novo');
+		$status0 = (string)($conversa->status ?: '');
+
 		// Conversa já iniciada pelo negócio (celular ou inbox): não mandar menu automático
 		if (self::conversaEmAtendimentoHumano($conversa)) {
+			// #region agent log
+			self::agentDebugLog('H5', 'WhatsappChatbotService:humano', 'skip_atendimento_humano', [
+				'conversaId' => (int)$conversa->id,
+				'estado' => $estado0,
+				'status' => $status0,
+				'atendente' => (int)($conversa->id_atendente ?? 0),
+			]);
+			// #endregion
 			return;
 		}
 
 		// Fluxos configuráveis (Fase A) — se tratar, não roda o menu de setores
 		if (WhatsappFlowRunner::aoReceberMensagem($conversa, $texto, $fromMe)) {
+			// #region agent log
+			self::agentDebugLog('H4_H5', 'WhatsappChatbotService:fluxo', 'tratado_por_fluxo', [
+				'conversaId' => (int)$conversa->id,
+				'estadoAntes' => $estado0,
+				'textoPreview' => mb_substr(trim((string)$texto), 0, 40),
+			]);
+			// #endregion
 			return;
 		}
 
@@ -60,6 +78,15 @@ class WhatsappChatbotService {
 		if (in_array($estado, ['novo', '', 'aguardando_setor', 'encerrado'], true) || $status === 'fechada') {
 			$exp = WhatsappEscolaService::estaForaExpediente($idAdmin);
 			if (!empty($exp['fora'])) {
+				// #region agent log
+				self::agentDebugLog('H3', 'WhatsappChatbotService:fora', 'envia_fora_expediente', [
+					'conversaId' => (int)$conversa->id,
+					'estado' => $estado,
+					'agora' => date('Y-m-d H:i'),
+					'menuAtivo' => !empty($menuCfg['menu_ativo']) ? 1 : 0,
+					'textoPreview' => mb_substr($texto, 0, 40),
+				]);
+				// #endregion
 				self::enviarTexto($conversa, $exp['mensagem']);
 				$conversa->atualizar([
 					'chatbot_estado' => 'novo',
@@ -93,16 +120,35 @@ class WhatsappChatbotService {
 					self::enviarMenu($conversa, $setores, $menuCfg);
 					return;
 				}
+				// #region agent log
+				self::agentDebugLog('H1_H4', 'WhatsappChatbotService:invalida', 'opcao_invalida_reenvia_menu', [
+					'conversaId' => (int)$conversa->id,
+					'textoPreview' => mb_substr($texto, 0, 60),
+				]);
+				// #endregion
 				self::enviarTexto($conversa, $menuCfg['msg_invalida']);
 				self::enviarMenu($conversa, $setores, $menuCfg);
 				return;
 			}
 
 			if (!$menuCfg['menu_ativo']) {
+				// #region agent log
+				self::agentDebugLog('H5', 'WhatsappChatbotService:menu_off', 'menu_automatico_desligado', [
+					'conversaId' => (int)$conversa->id,
+					'estado' => $estado,
+				]);
+				// #endregion
 				self::manterSilencioso($conversa, $texto, $setores, $menuCfg);
 				return;
 			}
 
+			// #region agent log
+			self::agentDebugLog('H1_H5', 'WhatsappChatbotService:menu', 'enviando_menu_inicial', [
+				'conversaId' => (int)$conversa->id,
+				'estado' => $estado,
+				'textoPreview' => mb_substr($texto, 0, 40),
+			]);
+			// #endregion
 			self::enviarMenu($conversa, $setores, $menuCfg);
 			return;
 		}
@@ -550,5 +596,22 @@ class WhatsappChatbotService {
 		return (int)($conversa->id_atendente ?? 0) > 0
 			&& $estado !== 'encerrado'
 			&& $status !== 'fechada';
+	}
+
+	/** @param array<string,mixed> $data */
+	private static function agentDebugLog(string $hypothesisId, string $location, string $message, array $data = []): void {
+		$path = 'C:\\Users\\Meu PC\\.cursor\\debug-logs\\debug-6b4d05.log';
+		$line = json_encode([
+			'sessionId' => '6b4d05',
+			'hypothesisId' => $hypothesisId,
+			'location' => $location,
+			'message' => $message,
+			'data' => $data,
+			'timestamp' => (int)round(microtime(true) * 1000),
+		], JSON_UNESCAPED_UNICODE);
+		if ($line === false) {
+			return;
+		}
+		@file_put_contents($path, $line."\n", FILE_APPEND | LOCK_EX);
 	}
 }

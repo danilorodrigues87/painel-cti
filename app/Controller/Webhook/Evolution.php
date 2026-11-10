@@ -140,7 +140,10 @@ class Evolution {
 			$tipo = self::extrairTipo($msg);
 			$corpo = self::extrairTexto($msg);
 			$waId = $key['id'] ?? ($msg['id'] ?? null);
-			$ecoSistema = $fromMe && WhatsappMensagem::existeWaMessageId(is_string($waId) ? $waId : null);
+			$jaExisteWaId = is_string($waId) && WhatsappMensagem::existeWaMessageId($waId);
+			$ecoSistema = $fromMe && $jaExisteWaId;
+			$msgTs = self::extrairMessageTimestamp($msg);
+			$idadeSeg = $msgTs > 0 ? (time() - $msgTs) : null;
 			$mediaUrl = self::salvarMidiaRecebida($idAdmin, $instanceName, $msg, $tipo);
 
 			// Reação sem emoji = remoção; ainda registramos com texto amigável
@@ -152,6 +155,22 @@ class Evolution {
 			if ($tipo === 'text' && ($corpo === null || trim((string)$corpo) === '') && $mediaUrl === null) {
 				continue;
 			}
+
+			// #region agent log
+			self::agentDebugLog('H1_H2_H3', 'Evolution.php:processarMensagens', 'webhook_msg', [
+				'idAdmin' => $idAdmin,
+				'fromMe' => $fromMe ? 1 : 0,
+				'ecoSistema' => $ecoSistema ? 1 : 0,
+				'jaExisteWaId' => $jaExisteWaId ? 1 : 0,
+				'tipo' => $tipo,
+				'corpoLen' => strlen(trim((string)$corpo)),
+				'corpoPreview' => mb_substr(trim((string)$corpo), 0, 40),
+				'waIdTail' => is_string($waId) ? substr($waId, -8) : null,
+				'msgTs' => $msgTs,
+				'idadeSeg' => $idadeSeg,
+				'telTail' => substr(preg_replace('/\D+/', '', $telefone) ?? '', -4),
+			]);
+			// #endregion
 
 			$conversa = WhatsappConversa::findOrCreate($idAdmin, $telefone, $nome, $numeroId, !$fromMe);
 			if (!$conversa) {
@@ -173,11 +192,27 @@ class Evolution {
 
 			// Mensagem enviada pelo celular/WhatsApp Web: handoff humano (não eco do bot/inbox)
 			if ($fromMe && !$ecoSistema && $tipo !== 'reaction') {
+				// #region agent log
+				self::agentDebugLog('H2', 'Evolution.php:handoff', 'handoff_humano_externo', [
+					'conversaId' => (int)$conversa->id,
+					'estadoAntes' => (string)($conversa->chatbot_estado ?? ''),
+					'waIdTail' => is_string($waId) ? substr($waId, -8) : null,
+				]);
+				// #endregion
 				WhatsappChatbotService::marcarHandoffHumanoExterno($conversa);
 			}
 
 			// Reações não disparam o chatbot de menu
 			if (!$fromMe && $tipo !== 'reaction') {
+				// #region agent log
+				self::agentDebugLog('H1_H4_H5', 'Evolution.php:before_bot', 'vai_chamar_chatbot', [
+					'conversaId' => (int)$conversa->id,
+					'duplicateWaId' => $jaExisteWaId ? 1 : 0,
+					'estado' => (string)($conversa->chatbot_estado ?? ''),
+					'status' => (string)($conversa->status ?? ''),
+					'idadeSeg' => $idadeSeg,
+				]);
+				// #endregion
 				WhatsappChatbotService::aoReceberMensagem($conversa, $corpo, false);
 				$preview = trim((string)$corpo);
 				if ($preview === '' && $mediaUrl) {
@@ -457,6 +492,37 @@ class Evolution {
 			return (string)$msg['body'];
 		}
 		return null;
+	}
+
+	/** Timestamp unix da mensagem Evolution (segundos), 0 se ausente. */
+	private static function extrairMessageTimestamp(array $msg): int {
+		$raw = $msg['messageTimestamp'] ?? $msg['message']['messageTimestamp'] ?? null;
+		if (is_numeric($raw)) {
+			$n = (int)$raw;
+			// milissegundos
+			if ($n > 20000000000) {
+				$n = (int)floor($n / 1000);
+			}
+			return $n > 0 ? $n : 0;
+		}
+		return 0;
+	}
+
+	/** @param array<string,mixed> $data */
+	private static function agentDebugLog(string $hypothesisId, string $location, string $message, array $data = []): void {
+		$path = 'C:\\Users\\Meu PC\\.cursor\\debug-logs\\debug-6b4d05.log';
+		$line = json_encode([
+			'sessionId' => '6b4d05',
+			'hypothesisId' => $hypothesisId,
+			'location' => $location,
+			'message' => $message,
+			'data' => $data,
+			'timestamp' => (int)round(microtime(true) * 1000),
+		], JSON_UNESCAPED_UNICODE);
+		if ($line === false) {
+			return;
+		}
+		@file_put_contents($path, $line."\n", FILE_APPEND | LOCK_EX);
 	}
 
 	private static function extrairTipo(array $msg): string {
