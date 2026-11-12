@@ -374,6 +374,10 @@ class WhatsappConversa {
 		if (!(int)$conv->id_atendente && (int)($conv->nao_lida ?? 0) === 1) {
 			return true;
 		}
+		// Sem atendente: a resposta do cliente precisa aparecer para a equipe
+		if (!(int)$conv->id_atendente) {
+			return true;
+		}
 		return false;
 	}
 
@@ -405,11 +409,7 @@ class WhatsappConversa {
 				$ids = implode(',', array_map('intval', $setorIds));
 				$parts[] = '(c.setor_id IN ('.$ids.') AND (c.id_atendente IS NULL OR c.id_atendente = 0))';
 			}
-			$parts[] = "(c.chatbot_estado IN ('novo','aguardando_setor','fila') OR (c.setor_id IS NULL AND (c.id_atendente IS NULL OR c.id_atendente = 0))";
-			if (self::temColunaNaoLida()) {
-				$parts[count($parts) - 1] .= ' OR c.nao_lida = 1';
-			}
-			$parts[count($parts) - 1] .= ')';
+			$parts[] = '(c.id_atendente IS NULL OR c.id_atendente = 0)';
 			$where .= ' AND ('.implode(' OR ', $parts).')';
 		}
 
@@ -460,7 +460,12 @@ class WhatsappConversa {
 			: '';
 		$camposSetor = WhatsappSetor::tabelaExiste() ? ', s.nome AS setor_nome' : ', NULL AS setor_nome';
 
-		$sql = 'SELECT c.*, u.nome AS atendente_nome'.$camposSetor.'
+		$preview = WhatsappMensagem::tabelaExiste()
+			? ', (SELECT m.corpo FROM whatsapp_mensagens m WHERE m.conversa_id = c.id ORDER BY m.id DESC LIMIT 1) AS ultima_preview
+			   , (SELECT m.direction FROM whatsapp_mensagens m WHERE m.conversa_id = c.id ORDER BY m.id DESC LIMIT 1) AS ultima_direction'
+			: ', NULL AS ultima_preview, NULL AS ultima_direction';
+
+		$sql = 'SELECT c.*, u.nome AS atendente_nome'.$camposSetor.$preview.'
 			FROM whatsapp_conversas c
 			LEFT JOIN usuarios u ON u.id = c.id_atendente
 			'.$joinSetor.'

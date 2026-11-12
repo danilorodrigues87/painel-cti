@@ -112,6 +112,22 @@ class EvolutionApiService {
 		return $this->request('GET', '/chat/findChats/'.rawurlencode($instance));
 	}
 
+	/**
+	 * Mensagens já recebidas na instância (não depende do webhook).
+	 * @param array<string,mixed> $where
+	 */
+	public function findMessages(string $instance, array $where = [], int $limit = 30): ?array {
+		$body = ['limit' => max(1, min(50, $limit))];
+		if ($where) {
+			$body['where'] = $where;
+		}
+		$res = $this->request('POST', '/chat/findMessages/'.rawurlencode($instance), $body);
+		if ($res !== null && $this->lastHttpCode < 400) {
+			return $res;
+		}
+		return null;
+	}
+
 	public function fetchInstances(): ?array {
 		return $this->request('GET', '/instance/fetchInstances');
 	}

@@ -8,6 +8,7 @@ use App\Common\Helpers\TenantHelper;
 use App\Common\Communication\WhatsappChatbotService;
 use App\Common\Communication\WhatsappMediaStorage;
 use App\Common\Communication\EvolutionApiService;
+use App\Controller\Webhook\Evolution;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
 use App\Model\Entity\WhatsappSetor;
@@ -66,7 +67,8 @@ class WhatsappInbox extends Page {
 	}
 
 	private static function json(array $data): string {
-		return json_encode($data, JSON_UNESCAPED_UNICODE);
+		$json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+		return $json === false ? '{"success":false,"message":"Falha ao montar a resposta."}' : $json;
 	}
 
 	private static function listar(array $post): string {
@@ -78,6 +80,11 @@ class WhatsappInbox extends Page {
 		$filtro = (string)($post['filtro'] ?? 'todas');
 		$busca = trim((string)($post['busca'] ?? ''));
 
+		try {
+			Evolution::sincronizarRecentes($idAdmin);
+		} catch (\Throwable $e) {
+			error_log('[WhatsApp] sync lista: '.$e->getMessage());
+		}
 		$lista = WhatsappConversa::listarInbox($idAdmin, $uid, $nivel, $setores, 80, $filtro, $busca);
 		$indicadores = WhatsappConversa::indicadores($idAdmin, $uid, $nivel, $setores);
 
@@ -107,6 +114,13 @@ class WhatsappInbox extends Page {
 		if (!self::podeVer($conv)) {
 			return self::json(['success' => false, 'message' => 'Sem permissão para ver esta conversa.']);
 		}
+
+		try {
+			Evolution::sincronizarRecentes($idAdmin, (string)$conv->telefone);
+		} catch (\Throwable $e) {
+			error_log('[WhatsApp] sync conversa: '.$e->getMessage());
+		}
+		$conv = WhatsappConversa::getById($id, $idAdmin) ?: $conv;
 
 		$conv->marcarLida();
 

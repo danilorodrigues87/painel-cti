@@ -236,11 +236,15 @@ function carregarConversas(){
 			const atend = c.atendente_nome ? ' · '+c.atendente_nome : '';
 			const st = c.chatbot_estado || c.status || '';
 			const unread = parseInt(c.nao_lida, 10) === 1 ? ' <span class="badge bg-danger">nova</span>' : '';
+			let preview = (c.ultima_preview || '').replace(/\s+/g, ' ').trim();
+			if(preview.length > 80) preview = preview.slice(0, 80)+'…';
+			const quem = c.ultima_direction === 'out' ? 'Você: ' : '';
 			$box.append(
 				'<a href="#" class="list-group-item list-group-item-action'+ativo+'" data-id="'+c.id+'">'
 				+'<div class="d-flex justify-content-between"><strong class="text-truncate">'+esc(nome)+'</strong>'
 				+'<span class="badge bg-secondary">'+esc(st)+'</span></div>'
 				+'<div class="small text-muted">'+esc(c.telefone)+esc(setor)+esc(atend)+unread+'</div>'
+				+(preview ? '<div class="small text-truncate">'+esc(quem+preview)+'</div>' : '')
 				+'</a>'
 			);
 		});

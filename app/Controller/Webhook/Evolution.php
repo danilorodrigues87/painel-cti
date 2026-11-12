@@ -8,6 +8,7 @@ use App\Common\Communication\WhatsappChatbotService;
 use App\Common\Communication\WhatsappMediaStorage;
 use App\Common\Helpers\StaffNotificacaoService;
 use App\Common\Environment;
+use App\Model\Entity\EscolaIntegracoes;
 use App\Model\Entity\WhatsappConversa;
 use App\Model\Entity\WhatsappMensagem;
 use App\Model\Entity\WhatsappNumero;
@@ -66,6 +67,97 @@ class Evolution {
 		return json_encode(['success' => true]);
 	}
 
+	/**
+	 * Busca na Evolution o que o webhook ainda não entregou e grava no inbox.
+	 * Não baixa mídia (evita travar a tela).
+	 */
+	public static function sincronizarRecentes(int $idAdmin, ?string $telefone = null): void {
+		$idAdmin = (int)$idAdmin;
+		if ($idAdmin <= 0) {
+			return;
+		}
+		$chave = $idAdmin.($telefone ? '-'.preg_replace('/\D+/', '', $telefone) : '-lista');
+		if (!self::podeSincronizar($chave, $telefone ? 8 : 15)) {
+			return;
+		}
+
+		$api = EvolutionApiService::fromEnv();
+		if (!$api->isConfigured()) {
+			return;
+		}
+		$int = EscolaIntegracoes::getByIdAdmin($idAdmin);
+		$instance = ($int && !empty($int->evolution_instance))
+			? (string)$int->evolution_instance
+			: EvolutionApiService::nomeInstancia($idAdmin);
+
+		$where = [];
+		if ($telefone) {
+			$jid = self::telefoneParaJid($telefone);
+			if ($jid === '') {
+				return;
+			}
+			$where = ['key' => ['remoteJid' => $jid]];
+		}
+
+		$res = $api->findMessages($instance, $where, $telefone ? 40 : 25);
+		$registros = self::extrairRegistrosMensagem($res);
+		if (!$registros) {
+			return;
+		}
+
+		self::processarMensagens($idAdmin, ['messages' => $registros], $instance, false);
+	}
+
+	private static function telefoneParaJid(string $telefone): string {
+		$telefone = trim($telefone);
+		if ($telefone === '') {
+			return '';
+		}
+		if (strpos($telefone, 'lid:') === 0) {
+			$digitos = preg_replace('/\D+/', '', substr($telefone, 4)) ?? '';
+			return $digitos !== '' ? $digitos.'@lid' : '';
+		}
+		$tel = EvolutionApiService::normalizarTelefone($telefone);
+		return $tel !== '' ? $tel.'@s.whatsapp.net' : '';
+	}
+
+	/** @param mixed $res */
+	private static function extrairRegistrosMensagem($res): array {
+		if (!is_array($res)) {
+			return [];
+		}
+		if (isset($res['messages']['records']) && is_array($res['messages']['records'])) {
+			return $res['messages']['records'];
+		}
+		if (isset($res['messages']) && is_array($res['messages']) && isset($res['messages'][0])) {
+			return $res['messages'];
+		}
+		if (isset($res[0]) && is_array($res[0])) {
+			return $res;
+		}
+		if (isset($res['key']) || isset($res['message'])) {
+			return [$res];
+		}
+		return [];
+	}
+
+	private static function podeSincronizar(string $chave, int $segundos): bool {
+		$chave = preg_replace('/[^a-zA-Z0-9_-]/', '', $chave) ?? '';
+		if ($chave === '') {
+			return false;
+		}
+		$dir = dirname(__DIR__, 3).DIRECTORY_SEPARATOR.'storage'.DIRECTORY_SEPARATOR.'logs';
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0755, true);
+		}
+		$path = $dir.DIRECTORY_SEPARATOR.'wa-sync-'.$chave.'.ts';
+		if (is_file($path) && (time() - (int)@filemtime($path)) < $segundos) {
+			return false;
+		}
+		@file_put_contents($path, (string)time());
+		return true;
+	}
+
 	private static function normalizarEvento(string $event): string {
 		$event = strtolower(trim($event));
 		return str_replace(['-', ' '], ['.', ''], $event);
@@ -99,7 +191,7 @@ class Evolution {
 	}
 
 	/** @return array{salvas:int,entrantes:int,ignoradas:int} */
-	private static function processarMensagens(int $idAdmin, $data, string $instanceName = ''): array {
+	private static function processarMensagens(int $idAdmin, $data, string $instanceName = '', bool $baixarMidia = true): array {
 		$resumo = ['salvas' => 0, 'entrantes' => 0, 'ignoradas' => 0];
 		if (!is_array($data)) {
 			return $resumo;
@@ -177,7 +269,7 @@ class Evolution {
 			$ecoSistema = $fromMe && $jaExisteWaId;
 			$msgTs = self::extrairMessageTimestamp($msg);
 			$idadeSeg = $msgTs > 0 ? (time() - $msgTs) : null;
-			$mediaUrl = self::salvarMidiaRecebida($idAdmin, $instanceName, $msg, $tipo);
+			$mediaUrl = $baixarMidia ? self::salvarMidiaRecebida($idAdmin, $instanceName, $msg, $tipo) : null;
 
 			// Reação sem emoji = remoção; ainda registramos com texto amigável
 			if ($tipo === 'reaction' && ($corpo === null || $corpo === '')) {
