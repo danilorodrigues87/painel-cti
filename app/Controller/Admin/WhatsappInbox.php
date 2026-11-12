@@ -110,9 +110,11 @@ class WhatsappInbox extends Page {
 
 		$conv->marcarLida();
 
+		// Últimas 200 (id DESC). ASC+LIMIT devolvia só as antigas e a mensagem nova sumia do painel.
 		$rows = (new Database('whatsapp_mensagens'))
-			->select('conversa_id = '.$id.' AND id_admin = '.$idAdmin, 'id ASC', '200')
+			->select('conversa_id = '.$id.' AND id_admin = '.$idAdmin, 'id DESC', '200')
 			->fetchAll(\PDO::FETCH_ASSOC);
+		$rows = array_reverse($rows ?: []);
 
 		foreach ($rows as &$row) {
 			if (!empty($row['media_url'])) {

@@ -370,6 +370,10 @@ class WhatsappConversa {
 		if ($conv->setor_id === null && !(int)$conv->id_atendente && in_array($estado, ['novo', 'aguardando_setor', 'fila', ''], true)) {
 			return true;
 		}
+		// Cliente respondeu e a conversa ainda não foi assumida
+		if (!(int)$conv->id_atendente && (int)($conv->nao_lida ?? 0) === 1) {
+			return true;
+		}
 		return false;
 	}
 
@@ -401,7 +405,11 @@ class WhatsappConversa {
 				$ids = implode(',', array_map('intval', $setorIds));
 				$parts[] = '(c.setor_id IN ('.$ids.') AND (c.id_atendente IS NULL OR c.id_atendente = 0))';
 			}
-			$parts[] = "(c.chatbot_estado IN ('novo','aguardando_setor') OR (c.setor_id IS NULL AND c.id_atendente IS NULL))";
+			$parts[] = "(c.chatbot_estado IN ('novo','aguardando_setor','fila') OR (c.setor_id IS NULL AND (c.id_atendente IS NULL OR c.id_atendente = 0))";
+			if (self::temColunaNaoLida()) {
+				$parts[count($parts) - 1] .= ' OR c.nao_lida = 1';
+			}
+			$parts[count($parts) - 1] .= ')';
 			$where .= ' AND ('.implode(' OR ', $parts).')';
 		}
 
@@ -428,7 +436,8 @@ class WhatsappConversa {
 		} else {
 			// todas: oculta encerradas antigas da lista principal (ainda aparecem na busca)
 			if ($busca === '') {
-				$where .= " AND (c.status IS NULL OR c.status != 'fechada' OR c.ultima_mensagem_em >= DATE_SUB(NOW(), INTERVAL 2 DAY))";
+				$extraNaoLida = self::temColunaNaoLida() ? ' OR c.nao_lida = 1' : '';
+				$where .= " AND (c.status IS NULL OR c.status != 'fechada' OR c.ultima_mensagem_em >= DATE_SUB(NOW(), INTERVAL 7 DAY)".$extraNaoLida.')';
 			}
 		}
 
