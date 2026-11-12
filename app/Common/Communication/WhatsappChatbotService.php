@@ -50,13 +50,14 @@ class WhatsappChatbotService {
 			$status0 = (string)($conversa->status ?: '');
 			$idadeSeg = isset($ctx['idadeSeg']) && $ctx['idadeSeg'] !== null ? (int)$ctx['idadeSeg'] : null;
 
-			// Mensagem atrasada (sync/history): não dispara bot nem "fora do expediente"
+			// Sync/history atrasado: não responde automaticamente, mas conversa já foi reaberta no webhook
 			if ($idadeSeg !== null && $idadeSeg > 900) {
 				// #region agent log
-				self::agentDebugLog('H3', 'WhatsappChatbotService:stale', 'skip_mensagem_atrasada', [
+				self::agentDebugLog('H3', 'WhatsappChatbotService:stale', 'skip_auto_resposta_atrasada', [
 					'conversaId' => (int)$conversa->id,
 					'idadeSeg' => $idadeSeg,
 					'estado' => $estado0,
+					'status' => $status0,
 					'textoPreview' => mb_substr(trim((string)$texto), 0, 40),
 				]);
 				// #endregion

@@ -194,6 +194,48 @@ class WhatsappConversa {
 			$dados['nao_lida'] = 1;
 		}
 		(new Database('whatsapp_conversas'))->update('id = '.(int)$this->id, $dados);
+		$this->ultima_mensagem_em = $dados['ultima_mensagem_em'];
+		if (isset($dados['nao_lida'])) {
+			$this->nao_lida = 1;
+		}
+	}
+
+	/**
+	 * Cliente mandou mensagem nova: tira da lista de encerradas para aparecer no inbox.
+	 * Não mexe em atendimento humano ativo.
+	 */
+	public function reabrirParaInbox(): bool {
+		if (!self::temColunasChatbot()) {
+			$status = (string)($this->status ?? '');
+			if ($status === 'fechada') {
+				$this->atualizar(['status' => 'aberta']);
+				$this->status = 'aberta';
+				return true;
+			}
+			return false;
+		}
+
+		$status = (string)($this->status ?? '');
+		$estado = (string)($this->chatbot_estado ?? '');
+
+		if ($estado === 'humano' && $status !== 'fechada') {
+			return false;
+		}
+
+		$upd = [];
+		if ($status === 'fechada') {
+			$upd['status'] = 'aberta';
+			$this->status = 'aberta';
+		}
+		if ($estado === 'encerrado') {
+			$upd['chatbot_estado'] = 'novo';
+			$this->chatbot_estado = 'novo';
+		}
+		if (!$upd) {
+			return false;
+		}
+		$this->atualizar($upd);
+		return true;
 	}
 
 	public static function temColunaNaoLida(): bool {

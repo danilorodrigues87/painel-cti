@@ -130,6 +130,17 @@ class Evolution {
 			$remoteJid = self::resolverRemoteJid($msg);
 			if ($remoteJid === '') {
 				// grupo @g.us e JIDs sem contato 1:1
+				// #region agent log
+				$keyJid = (string)(($msg['key']['remoteJid'] ?? $msg['remoteJid'] ?? ''));
+				if ($keyJid !== '' && strpos($keyJid, '@g.us') === false) {
+					self::agentDebugLog('H6', 'Evolution.php:jid', 'remote_jid_vazio', [
+						'idAdmin' => $idAdmin,
+						'fromMe' => $fromMe ? 1 : 0,
+						'keyJidTail' => substr($keyJid, -20),
+						'waIdTail' => is_string($msg['key']['id'] ?? null) ? substr((string)$msg['key']['id'], -8) : null,
+					]);
+				}
+				// #endregion
 				$resumo['ignoradas']++;
 				continue;
 			}
@@ -137,6 +148,13 @@ class Evolution {
 			$telefone = self::resolverTelefoneContato($msg, $remoteJid);
 			if ($telefone === '') {
 				self::logWebhook($idAdmin, 'telefone_vazio', ['jid' => $remoteJid]);
+				// #region agent log
+				self::agentDebugLog('H6', 'Evolution.php:tel', 'telefone_vazio', [
+					'idAdmin' => $idAdmin,
+					'fromMe' => $fromMe ? 1 : 0,
+					'jidTail' => substr($remoteJid, -24),
+				]);
+				// #endregion
 				$resumo['ignoradas']++;
 				continue;
 			}
@@ -194,6 +212,15 @@ class Evolution {
 				continue;
 			}
 
+			// Eco do painel/bot/campanha: checar ANTES de inserir (senão casa consigo mesmo)
+			$atrasado = $idadeSeg !== null && $idadeSeg > 120;
+			$ecoRecente = false;
+			$envioSistema = false;
+			if ($fromMe && !$ecoSistema && $tipo !== 'reaction') {
+				$ecoRecente = WhatsappChatbotService::pareceEcoBotRecente($conversa, (string)$corpo);
+				$envioSistema = WhatsappEscolaService::houveEnvioSistemaRecente($idAdmin, $telefone);
+			}
+
 			$reg = WhatsappMensagem::registrarComStatus([
 				'id_admin'      => $idAdmin,
 				'conversa_id'   => (int)$conversa->id,
@@ -220,13 +247,25 @@ class Evolution {
 				continue;
 			}
 
+			// Entrante: sempre reabre encerrada para aparecer no painel (mesmo se sync atrasado)
+			if (!$fromMe) {
+				$reaberta = $conversa->reabrirParaInbox();
+				// #region agent log
+				if ($reaberta) {
+					self::agentDebugLog('H3', 'Evolution.php:reabrir', 'conversa_reaberta_inbox', [
+						'conversaId' => (int)$conversa->id,
+						'estado' => (string)($conversa->chatbot_estado ?? ''),
+						'status' => (string)($conversa->status ?? ''),
+						'idadeSeg' => $idadeSeg,
+					]);
+				}
+				// #endregion
+			}
+
 			$conversa->tocarUltimaMensagem(!$fromMe);
 
 			// fromMe: handoff só se for envio real do celular (não eco bot/campanha/painel)
 			if ($fromMe && !$ecoSistema && $tipo !== 'reaction') {
-				$atrasado = $idadeSeg !== null && $idadeSeg > 120;
-				$ecoRecente = WhatsappChatbotService::pareceEcoBotRecente($conversa, (string)$corpo);
-				$envioSistema = WhatsappEscolaService::houveEnvioSistemaRecente($idAdmin, $telefone);
 				if ($atrasado || $ecoRecente || $envioSistema) {
 					// #region agent log
 					self::agentDebugLog('H2', 'Evolution.php:handoff', 'handoff_pulado', [
